@@ -1,11 +1,12 @@
-from collections.abc import Callable
 from typing import Annotated
+lazy from collections.abc import Callable
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
+from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.jobs import own
-from ofmhelpers.schemas import Job, JobStatusPayload
+from ofmhelpers.features.jobs.schema import JobStatusPayload
 from ofmhelpers.web.dependencies import Actors
 from ofmhelpers.web.routers.task_helpers.responses import (
     job_assets,
@@ -40,13 +41,13 @@ def add_job_routes(
     @router.get("/jobs/{job_id}")
     def job_status(request: Request, job_id: str, actors: Actors) -> Response:
         job = own.own(job_id, actors)
-        assets, failed_sources = job_assets(job, files_prefix)
+        found = job_assets(job, files_prefix)
         return render(
             request,
             "job_status.html",
             job=job,
-            assets=assets,
-            failed_sources=failed_sources,
+            assets=found.assets,
+            failed_sources=found.failed_sources,
             job_inputs=job_inputs(job) if show_inputs else None,
             title=title,
             pending_message=_pending_text(pending_message, job),

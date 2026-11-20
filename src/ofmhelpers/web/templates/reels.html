@@ -45,20 +45,20 @@
 <div class="reels-filters">
     <span class="reels-filter-label" id="reels-filter-group">Group</span>
     <nav class="reels-filter" aria-labelledby="reels-filter-group">
-        {% for label, href, current in group_links %}
-        <a href="{{ href }}" {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% for link in group_links %}
+        <a href="{{ link.href }}" {% if link.current %}aria-current="page"{% endif %}>{{ link.label }}</a>
         {% endfor %}
     </nav>
     <span class="reels-filter-label" id="reels-filter-rank">Rank</span>
     <nav class="reels-filter reels-ranks" aria-labelledby="reels-filter-rank">
-        {% for label, tier, href, current in rank_links %}
-        <a href="{{ href }}" {% if tier %}data-tier="{{ tier }}"{% endif %} {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% for link in rank_links %}
+        <a href="{{ link.href }}" {% if link.tier %}data-tier="{{ link.tier }}"{% endif %} {% if link.current %}aria-current="page"{% endif %}>{{ link.label }}</a>
         {% endfor %}
     </nav>
     <span class="reels-filter-label" id="reels-filter-reach">Views ÷ followers</span>
     <nav class="reels-filter" aria-labelledby="reels-filter-reach">
-        {% for label, href, current in ratio_links %}
-        <a href="{{ href }}" {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% for link in ratio_links %}
+        <a href="{{ link.href }}" {% if link.current %}aria-current="page"{% endif %}>{{ link.label }}</a>
         {% endfor %}
     </nav>
 </div>

@@ -1,8 +1,8 @@
 import inspect
-from collections.abc import Iterator
 from datetime import date
 from typing import Annotated
 from unittest.mock import MagicMock
+lazy from collections.abc import Iterator
 
 import pytest
 from fastapi import FastAPI, Form, HTTPException
@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.telemetry import _request_attributes
+from ofmhelpers.monitoring.telemetry import _request_attributes
 from ofmhelpers.web.exceptions import REFUSALS, exception_handlers
 from ofmhelpers.web.forms import Files, FormModel, PaidForm, Stripped, Upper
 from ofmhelpers.web.gallery import GalleryQuery
@@ -32,7 +32,7 @@ class _Required(FormModel):
 
 
 def _client() -> TestClient:
-    app = FastAPI(exception_handlers=exception_handlers())
+    app = FastAPI(exception_handlers=exception_handlers().model_dump())
 
     @app.post("/form")
     def form(sent: Annotated[_Form, Form()]):
@@ -133,7 +133,9 @@ def test_only_the_phone_routes_that_use_a_secret_answer_the_vault_reason():
 
 
 def _logged(**values) -> dict:
-    return _request_attributes(MagicMock(), {"values": values, "errors": []})["values"]
+    return _request_attributes(
+        MagicMock(), {"values": values, "errors": []}
+    ).model_dump()["values"]
 
 
 def test_a_form_is_logged_field_by_field_and_its_key_stays_hidden():

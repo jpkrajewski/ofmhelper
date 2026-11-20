@@ -2,11 +2,10 @@ import importlib
 import pickle
 
 import pytest
+from rq.utils import import_attribute
 
-from ofmhelpers.db import repositories
+from ofmhelpers.db.jobs import store
 from ofmhelpers.web.routers import task_helpers
-
-REPOSITORIES = ("ApplicationRepository", "JobRepository")
 
 TASK_HELPERS = (
     "assets_root",
@@ -45,11 +44,6 @@ TASK_HELPERS = (
     "serve_job_file",
     "strip_asset_hash_prefix",
 )
-
-
-@pytest.mark.parametrize("name", REPOSITORIES)
-def test_repositories_package_re_exports(name):
-    assert hasattr(repositories, name)
 
 
 @pytest.mark.parametrize("name", TASK_HELPERS)
@@ -103,8 +97,6 @@ def test_a_run_function_pickled_under_its_router_path_is_the_features(old, new):
 
 
 def test_run_job_still_answers_at_the_stores_path_rq_looks_up():
-    from rq.utils import import_attribute
-
     old = import_attribute("ofmhelpers.db.stores.jobs.run_job")
 
     assert callable(old)
@@ -112,8 +104,6 @@ def test_run_job_still_answers_at_the_stores_path_rq_looks_up():
 
 
 def test_the_stores_run_job_hands_the_job_to_the_registered_runner(monkeypatch):
-    from ofmhelpers.db.stores import jobs as store
-
     seen = []
     monkeypatch.setattr(store, "_runners", lambda: [lambda *args: seen.append(args)])
 
@@ -123,8 +113,6 @@ def test_the_stores_run_job_hands_the_job_to_the_registered_runner(monkeypatch):
 
 
 def test_the_stores_run_job_refuses_loudly_with_no_runner(monkeypatch):
-    from ofmhelpers.db.stores import jobs as store
-
     monkeypatch.setattr(store, "_runners", list)
 
     with pytest.raises(RuntimeError, match="no job runner registered"):

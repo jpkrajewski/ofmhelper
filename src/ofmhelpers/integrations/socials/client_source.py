@@ -4,6 +4,7 @@ from typing import ClassVar
 lazy from collections.abc import Callable
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.outbound import ProxyPool
 from ofmhelpers.integrations.socials.errors import (
     RateLimitedError,
     RetryableError,
@@ -16,7 +17,6 @@ from ofmhelpers.integrations.socials.sources import (
     ScanTarget,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils.proxy_pool import ProxyPool
 lazy from ofmhelpers.integrations.socials.models import AccountStats
 
 type Fetch = Callable[[str, str | None, str | None], AccountStats]

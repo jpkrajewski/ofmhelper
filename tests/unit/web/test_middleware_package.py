@@ -1,8 +1,12 @@
+import importlib
+
 import pytest
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
+lazy from ofmhelpers.web.api_keys import get_api_key
+lazy from ofmhelpers.web.main import app
 
 
 def test_both_middlewares_are_importable_from_the_package():
@@ -11,16 +15,12 @@ def test_both_middlewares_are_importable_from_the_package():
 
 
 def test_request_passes_session_then_rate_limit_then_auth():
-    from ofmhelpers.web.main import app
-
     added = [m.cls for m in app.user_middleware]
     assert added.index(SessionMiddleware) < added.index(WriteRateLimitMiddleware)
     assert added.index(WriteRateLimitMiddleware) < added.index(AuthMiddleware)
 
 
 def test_auth_policy_lives_on_the_middleware():
-    import importlib
-
     assert callable(AuthMiddleware.is_public)
     assert callable(AuthMiddleware.is_fetch)
     assert callable(AuthMiddleware.sign_in)
@@ -41,6 +41,4 @@ def test_allowlist_comes_from_settings():
 
 
 def test_api_key_prefills_are_not_in_the_auth_module():
-    from ofmhelpers.web.api_keys import get_api_key
-
     assert get_api_key.__module__ == "ofmhelpers.web.api_keys"

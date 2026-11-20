@@ -1,5 +1,9 @@
 import base64
+import hashlib
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from cryptography.exceptions import InvalidSignature
@@ -7,7 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
-from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.signin import SignInError, passwords
 from ofmhelpers.integrations.signin.apple import client_secret
 from ofmhelpers.integrations.signin.base import checked, claims
 from ofmhelpers.integrations.signin.passwords import (
@@ -104,12 +108,6 @@ def test_id_token_claims_apples_string_true_and_the_nonce_check():
 
 
 def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
-    import threading
-    import time
-    from concurrent.futures import ThreadPoolExecutor
-
-    from ofmhelpers.integrations.signin import passwords
-
     monkeypatch.setenv("OFM_PASSWORD_HASH_CONCURRENCY", "2")
     passwords._slots.cache_clear()
     lock = threading.Lock()
@@ -137,11 +135,8 @@ def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
 
 
 def test_a_hash_made_with_other_parameters_still_verifies():
-    import base64 as b64
-    import hashlib
-
     salt = b"0123456789abcdef"
     key = hashlib.scrypt(b"older password", salt=salt, n=2**14, r=8, p=1, dklen=32)
-    stored = f"scrypt${2**14}$8$1${b64.b64encode(salt).decode()}${b64.b64encode(key).decode()}"
+    stored = f"scrypt${2**14}$8$1${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}"
     assert verify_password("older password", stored)
     assert not verify_password("other password", stored)

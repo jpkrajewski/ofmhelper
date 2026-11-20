@@ -1,6 +1,6 @@
 import pytest
 
-from ofmhelpers.integrations.downloaders.cookies import CookieFileError, load_jar
+from ofmhelpers.integrations.cookie_jar import CookieFileError, load_jar
 from ofmhelpers.integrations.pinterest import (
     PinterestClient,
     only_pinterest,

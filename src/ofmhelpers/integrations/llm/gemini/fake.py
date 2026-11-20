@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import parse_qs
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.integrations.llm.fakes import example, field
 
@@ -41,6 +42,16 @@ def _error(
     if details:
         body["error"]["details"] = details
     return httpx.Response(code, json=body)
+
+
+class PublicFile(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    name: str
+    uri: str
+    mime_type: str = Field(alias="mimeType")
+    size_bytes: str = Field(alias="sizeBytes")
+    state: str
 
 
 class FakeGemini:
@@ -204,7 +215,7 @@ class FakeGemini:
                 "state": "PROCESSING" if self.polls_until_active else "ACTIVE",
                 "polls": 0,
             }
-            made = self._public(self.files[name])
+            made = self._public(self.files[name]).model_dump(by_alias=True)
         return httpx.Response(
             200, json={"file": made}, headers={"x-goog-upload-status": "final"}
         )
@@ -217,7 +228,9 @@ class FakeGemini:
             found["polls"] += 1
             if found["polls"] >= self.polls_until_active:
                 found["state"] = "FAILED" if self.processing_fails else "ACTIVE"
-            return httpx.Response(200, json=self._public(found))
+            return httpx.Response(
+                200, json=self._public(found).model_dump(by_alias=True)
+            )
 
     def _delete(self, name: str) -> httpx.Response:
         with self._lock:
@@ -227,8 +240,8 @@ class FakeGemini:
         return httpx.Response(200, json={})
 
     @staticmethod
-    def _public(file: dict[str, Any]) -> dict[str, Any]:
-        return {k: v for k, v in file.items() if k != "polls"}
+    def _public(file: dict[str, Any]) -> PublicFile:
+        return PublicFile.model_validate(file)
 
 
 @lru_cache(maxsize=1)

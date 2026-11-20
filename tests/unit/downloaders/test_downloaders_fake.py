@@ -3,6 +3,7 @@ import io
 import pytest
 from PIL import Image
 
+from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.downloaders import generic, images, media
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
@@ -14,6 +15,7 @@ from ofmhelpers.media import fake_media
 def fakes_on(monkeypatch, tmp_path):
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
     monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path / "fakes"))
+    install_fakes()
 
 
 def test_a_video_url_downloads_to_a_playable_mp4(tmp_path):

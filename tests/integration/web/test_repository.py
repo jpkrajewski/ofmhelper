@@ -1,12 +1,18 @@
 import os
 import threading
 
+from fastapi.testclient import TestClient
 from redis import Redis
-from signin import make_user
+from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.repositories import JobRepository
-from ofmhelpers.db.repositories.cached_repository import RepositoryCache
+from ofmhelpers.db.cached_repository import RepositoryCache
+from ofmhelpers.db.devices.repository import DeviceRepository
+from ofmhelpers.db.drive_folders.repository import DriveFolderRepository
+from ofmhelpers.db.jobs.repository import JobRepository
+from ofmhelpers.db.models import JobRow
+from ofmhelpers.db.session import session_scope
+from ofmhelpers.web.main import app
 
 
 def test_job_create_get_round_trip():
@@ -60,9 +66,6 @@ def test_update_status_failure_path_records_error_not_result():
 
 
 def test_job_get_is_served_from_cache_until_a_write_invalidates_it():
-    from ofmhelpers.db.models import JobRow
-    from ofmhelpers.db.session import session_scope
-
     namespace = "test-job-cache"
     cache = RepositoryCache(get_redis(), namespace)
     repo = JobRepository(cache=cache)
@@ -101,6 +104,35 @@ def test_repository_cache_bump_invalidates_all_prior_reads():
     assert third != first
 
 
+def test_a_bump_of_a_namespace_it_depends_on_invalidates_the_cache():
+    redis = get_redis()
+    folders = RepositoryCache(redis, "test-folders", depends_on=("test-phones",))
+    phones = RepositoryCache(redis, "test-phones")
+    calls = []
+
+    def loader():
+        calls.append(1)
+        return len(calls)
+
+    folders.get_or_set("targets", (), loader)
+    folders.get_or_set("targets", (), loader)
+    phones.bump()
+    folders.get_or_set("targets", (), loader)
+
+    assert calls == [1, 1]
+
+
+def test_a_logins_change_on_a_phone_drops_the_drive_targets_cache():
+    folders = DriveFolderRepository()
+    redis = get_redis()
+    before = redis.get("cache:device:v")
+
+    DeviceRepository().logins_changed()
+
+    assert redis.get("cache:device:v") != before
+    assert folders._cache._depends_on == ("device",)
+
+
 def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):
     suite_url = os.environ["OFM_REDIS_URL"]
     other_url = suite_url.rsplit("/", 1)[0] + "/14"
@@ -129,16 +161,9 @@ def test_an_unreachable_cache_reads_and_writes_through_to_the_database():
 
 
 def test_pages_answer_while_the_cache_is_down(monkeypatch):
-    from fastapi.testclient import TestClient
-    from signin import sign_in
-
-    from ofmhelpers.web.main import app
-
     client = TestClient(app)
     sign_in(client, "ann@example.com")
     dead = _dead_redis()
-    monkeypatch.setattr(
-        "ofmhelpers.db.repositories.cached_repository.get_redis", lambda: dead
-    )
+    monkeypatch.setattr("ofmhelpers.db.cached_repository.get_redis", lambda: dead)
     assert client.get("/generate").status_code == 200
     assert client.get("/generate/gallery?hidden=1").status_code == 200

@@ -1,7 +1,7 @@
 import math
-import random
-from pathlib import Path
 from typing import Annotated, Self
+lazy import random
+lazy from pathlib import Path
 
 from pydantic import BaseModel, StringConstraints
 
@@ -30,6 +30,7 @@ class VideoSettings(BaseModel, frozen=True):
     speed: Value | None = None
     mirror: float | None = None
     rotate: Value | None = None
+    rotate_both_ways: bool = False
     zoom: Value | None = None
     shift_y: Value | None = None
     corner_zoom: Value | None = None
@@ -111,7 +112,22 @@ class VideoDraws(BaseModel, frozen=True):
     adjust: AdjustDraws | None
 
 
-def _cuts(s: VideoSettings, src: Source, rng: random.Random) -> tuple[float, float]:
+class _Cuts(BaseModel, frozen=True):
+    head: float
+    tail: float
+
+
+class _Stretch(BaseModel, frozen=True):
+    x: float
+    y: float
+
+
+class _Shift(BaseModel, frozen=True):
+    x: int
+    y: int
+
+
+def _cuts(s: VideoSettings, src: Source, rng: random.Random) -> _Cuts:
     head = (draw(s.trim_head_s, rng) or 0.0) + (
         draw(s.cut_head, rng) or 0.0
     ) * src.duration
@@ -122,11 +138,12 @@ def _cuts(s: VideoSettings, src: Source, rng: random.Random) -> tuple[float, flo
     if head + tail > limit:
         scale = limit / (head + tail)
         head, tail = head * scale, tail * scale
-    return head, tail
+    return _Cuts(head=head, tail=tail)
 
 
 def _timeline(s: VideoSettings, src: Source, rng: random.Random) -> Timeline:
-    head, tail = _cuts(s, src, rng)
+    cuts = _cuts(s, src, rng)
+    head, tail = cuts.head, cuts.tail
     return Timeline(
         start_s=round(head, 3),
         duration_s=round(src.duration - head - tail, 3),
@@ -140,49 +157,47 @@ def _handheld(
     if not any((s.tilt, s.perspective, s.shake, s.drift)):
         return Handheld()
 
-    def span(v: Value | None) -> tuple[float, float]:
-        if v is None:
-            return (0.0, 0.0)
-        return v if isinstance(v, tuple) else (v, v)
-
     return Handheld.sample(
         rng,
-        tilt=span(s.tilt),
-        perspective=span(s.perspective),
-        shake=span(s.shake),
-        drift=span(s.drift),
+        tilt=s.tilt,
+        perspective=s.perspective,
+        shake=s.shake,
+        drift=s.drift,
         seconds=seconds,
         aspect=src.aspect,
     )
 
 
-def _sized(size: tuple[int, int], factor: float | None) -> tuple[int, int]:
-    if factor is None:
-        return size
+def _sized(size: tuple[int, int], factor: float | None) -> Size:
     w, h = size
+    if factor is None:
+        return Size(width=w, height=h)
     out_w = even(w * factor)
-    return out_w, even(h * out_w / w)
+    return Size(width=out_w, height=even(h * out_w / w))
 
 
 def _sign(rng: random.Random) -> int:
     return rng.choice((1, -1))
 
 
-def _stretch(s: VideoSettings, rng: random.Random) -> tuple[float, float] | None:
+def _stretch(s: VideoSettings, rng: random.Random) -> _Stretch | None:
     if s.stretch is None:
         return None
-    return (draw(s.stretch, rng) or 1.0, draw(s.stretch, rng) or 1.0)
+    return _Stretch(x=draw(s.stretch, rng) or 1.0, y=draw(s.stretch, rng) or 1.0)
 
 
-def _chroma(s: VideoSettings, rng: random.Random) -> tuple[int, int] | None:
+def _chroma(s: VideoSettings, rng: random.Random) -> _Shift | None:
     x, y = draw_int(s.chroma_px, rng), draw_int(s.chroma_px, rng)
     if not x:
         return None
-    return (_sign(rng) * x, _sign(rng) * (y or 0))
+    return _Shift(x=_sign(rng) * x, y=_sign(rng) * (y or 0))
 
 
 def _rotate(s: VideoSettings, rng: random.Random) -> float | None:
-    return draw(s.rotate, rng)
+    angle = draw(s.rotate, rng)
+    if angle is None or not s.rotate_both_ways:
+        return angle
+    return angle * _sign(rng)
 
 
 def _rotate_cover(rotate: float | None, aspect: float) -> float | None:
@@ -198,41 +213,68 @@ def _draw(
     timeline = _timeline(s, src, rng)
     tone_mid, tone_shoulder = draw_int(s.tone_mid, rng), draw_int(s.tone_shoulder, rng)
     rotate = _rotate(s, rng)
+    output_size = _sized(size, draw(s.size, rng))
+    mirror = chance(s.mirror, rng)
+    rotate_cover = _rotate_cover(rotate, src.aspect)
+    zoom = draw(s.zoom, rng)
+    shift_y = draw(s.shift_y, rng)
+    corner = (rng.randrange(2), rng.randrange(2)) if s.corner_zoom is not None else None
+    corner_zoom = draw(s.corner_zoom, rng)
+    stretch = _stretch(s, rng)
+    handheld = _handheld(s, src, timeline.duration_s, rng)
+    saturation = draw(s.saturation, rng)
+    contrast = draw(s.contrast, rng)
+    brightness = draw(s.brightness, rng)
+    gamma = draw(s.gamma, rng)
+    colortemp = draw_int(s.colortemp, rng)
+    tint = draw(s.tint, rng)
+    sharpen = draw(s.sharpen, rng)
+    black_and_white = chance(s.black_and_white, rng)
+    vignette = draw(s.vignette, rng)
+    chroma = _chroma(s, rng)
+    noise = draw(s.noise, rng)
+    noise_seed = rng.randrange(1 << 31)
+    exposure = draw(s.exposure, rng)
+    look = pick(s.look, rng) or "any"
+    border = draw(s.border, rng)
+    pattern = pick(s.pattern, rng)
+    pattern_seed = rng.randrange(1 << 31)
+    pattern_opacity = draw(s.pattern_opacity, rng)
+    sharpen_late = draw(s.sharpen_late, rng)
+    particles = draw(s.particles, rng)
     return VideoDraws(
         timeline=timeline,
-        output_size=_sized(size, draw(s.size, rng)),
-        mirror=chance(s.mirror, rng),
+        output_size=(output_size.width, output_size.height),
+        mirror=mirror,
         rotate=rotate,
-        rotate_cover=_rotate_cover(rotate, src.aspect),
-        zoom=draw(s.zoom, rng),
-        shift_y=draw(s.shift_y, rng),
-        corner=(rng.randrange(2), rng.randrange(2))
-        if s.corner_zoom is not None
-        else None,
-        corner_zoom=draw(s.corner_zoom, rng),
-        stretch=_stretch(s, rng),
-        handheld=_handheld(s, src, timeline.duration_s, rng),
-        saturation=draw(s.saturation, rng),
-        contrast=draw(s.contrast, rng),
-        brightness=draw(s.brightness, rng),
-        gamma=draw(s.gamma, rng),
-        colortemp=draw_int(s.colortemp, rng),
+        rotate_cover=rotate_cover,
+        zoom=zoom,
+        shift_y=shift_y,
+        corner=corner,
+        corner_zoom=corner_zoom,
+        stretch=(stretch.x, stretch.y) if stretch else None,
+        handheld=handheld,
+        saturation=saturation,
+        contrast=contrast,
+        brightness=brightness,
+        gamma=gamma,
+        colortemp=colortemp,
         tone=(tone_mid or 0, tone_shoulder or 0) if s.tone_mid is not None else None,
-        tint=draw(s.tint, rng),
-        sharpen=draw(s.sharpen, rng),
-        black_and_white=chance(s.black_and_white, rng),
-        vignette=draw(s.vignette, rng),
-        chroma=_chroma(s, rng),
-        noise=draw(s.noise, rng),
-        noise_seed=rng.randrange(1 << 31),
-        exposure=draw(s.exposure, rng),
-        look=pick(s.look, rng) or "any",
-        border=draw(s.border, rng),
-        pattern=pick(s.pattern, rng),
-        pattern_seed=rng.randrange(1 << 31),
-        pattern_opacity=draw(s.pattern_opacity, rng),
-        sharpen_late=draw(s.sharpen_late, rng),
-        particles=draw(s.particles, rng),
+        tint=tint,
+        sharpen=sharpen,
+        black_and_white=black_and_white,
+        vignette=vignette,
+        chroma=(chroma.x, chroma.y) if chroma else None,
+        noise=noise,
+        noise_seed=noise_seed,
+        exposure=exposure,
+        look=look,
+        border=border,
+        pattern=pattern,
+        pattern_seed=pattern_seed,
+        pattern_opacity=pattern_opacity,
+        sharpen_late=sharpen_late,
+        particles=particles,
         adjust=AdjustDraws.sample(s.adjust, rng) if s.adjust else None,
     )
 

@@ -6,8 +6,9 @@ from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import cookies as login_cookies
-from ofmhelpers.db.stores.tracked_accounts import (
+from ofmhelpers.db.cookies import store as login_cookies
+from ofmhelpers.db.devices.catalog import services
+from ofmhelpers.db.tracked_accounts.store import (
     claim_due,
     get_account,
     list_accounts,
@@ -23,8 +24,7 @@ from ofmhelpers.integrations.socials import (
     scan_through,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.phone_catalog import services
-lazy from ofmhelpers.schemas import TrackedAccount
+lazy from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 
 logger = get_logger(__name__)
 
@@ -119,7 +119,12 @@ def scan_accounts(platform_key: str, account_ids: list[int], start: int = 0) -> 
     )
 
 
-def _batches(due: list[int]) -> list[tuple[str, list[int]]]:
+class _Batch(BaseModel, frozen=True):
+    platform: str
+    ids: list[int]
+
+
+def _batches(due: list[int]) -> list[_Batch]:
     platform_of = {a.id: a.platform for a in list_accounts()}
     by_platform: dict[str, list[int]] = {}
     for account_id in due:
@@ -127,7 +132,7 @@ def _batches(due: list[int]) -> list[tuple[str, list[int]]]:
             by_platform.setdefault(platform_of[account_id], []).append(account_id)
     size = settings.accounts.batch_size
     return [
-        (platform, ids[i : i + size])
+        _Batch(platform=platform, ids=ids[i : i + size])
         for platform, ids in by_platform.items()
         for i in range(0, len(ids), size)
     ]
@@ -138,8 +143,8 @@ def queue_due_scans() -> list[int]:
     due = claim_due(_rescan_interval_s(), s.claim_ttl_s, s.max_rescan_interval_s)
     if due:
         logger.info("rescanning %d tracked account(s)", len(due))
-        for start, (platform, ids) in enumerate(_batches(due)):
-            enqueue(scan_accounts, platform, ids, start)
+        for start, batch in enumerate(_batches(due)):
+            enqueue(scan_accounts, batch.platform, batch.ids, start)
     return due
 
 

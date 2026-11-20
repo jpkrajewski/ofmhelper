@@ -1,14 +1,14 @@
 import asyncio
 import threading
-from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
+lazy from collections.abc import Coroutine
 
+from ofmhelpers.background import sweeps
+from ofmhelpers.background.sweeps import Sweep, running
 from ofmhelpers.cache import QueueName
 from ofmhelpers.config import settings
+from ofmhelpers.db.chats.schema import ChatPlatform
 from ofmhelpers.features.chatting import sync as chat_history
-from ofmhelpers.features.jobs import sweeps
-from ofmhelpers.features.jobs.sweeps import Sweep, running
-from ofmhelpers.schemas.chatting import ChatPlatform
 
 
 def _run(scenario: Coroutine) -> None:
@@ -83,6 +83,34 @@ def test_a_closed_gate_skips_the_round_and_keeps_checking():
     )
 
     assert ran[0] == 3
+
+
+def test_a_sweep_that_waits_first_runs_only_after_its_interval():
+    ran = []
+    asked = []
+
+    def interval() -> float:
+        asked.append(len(ran))
+        return 0
+
+    _until(
+        ran,
+        1,
+        Sweep(
+            name="late",
+            run=lambda: ran.append("run"),
+            interval_s=interval,
+            waits_first=True,
+        ),
+    )
+
+    assert asked[0] == 0
+
+
+def test_the_worker_check_gives_the_workers_a_round_to_start_after_a_deploy():
+    alive = next(s for s in sweeps.sweeps() if s.run is sweeps.report_alive)
+
+    assert alive.waits_first
 
 
 def test_a_sweep_without_an_interval_runs_once():

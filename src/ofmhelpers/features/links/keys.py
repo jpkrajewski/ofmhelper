@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import short_links as store
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.short_links import store
+from ofmhelpers.db.users import store as users
 from ofmhelpers.integrations.short_links.providers import (
     get_link_provider,
     link_providers,
 )
+lazy from ofmhelpers.db.short_links.schema import ProviderState
 lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
-lazy from ofmhelpers.schemas import ProviderState
 
 
 class KeyedProvider(BaseModel, frozen=True):
@@ -34,7 +34,7 @@ def client(user_id: int, provider: str) -> LinkProvider | None:
 
 
 def keyed_providers(user_id: int) -> list[str]:
-    return [key for key in link_providers().names() if api_key(user_id, key)]
+    return [key for key in link_providers() if api_key(user_id, key)]
 
 
 def keyed() -> list[KeyedProvider]:

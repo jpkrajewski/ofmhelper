@@ -2,10 +2,10 @@ from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlencode
 
-from ofmhelpers.db.stores.jobs import get_job
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.assets.store import register_generated_asset
-from ofmhelpers.features.downloads.service import Redirect
+from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.redirect import Redirect
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 
 

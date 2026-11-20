@@ -1,17 +1,30 @@
+import json
 import re
 import time
+from base64 import b64encode
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
+from itsdangerous import TimestampSigner
 from signin import make_user, make_user_with_password, sign_in, sign_in_admin
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.features.signin import credentials
+from ofmhelpers.config import settings
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.users import credentials
+from ofmhelpers.integrations.signin import Identity
+from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
+from ofmhelpers.integrations.signin.google import Google
+from ofmhelpers.integrations.signin.owner import owner_code
 from ofmhelpers.integrations.signin.passwords import hash_password
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 PASSWORD = "correct horse battery"
@@ -129,8 +142,6 @@ def test_a_wrong_owner_password_signs_nobody_in_and_is_counted(client, caplog):
 
 
 def test_an_owner_code_opens_only_its_own_sign_in(client):
-    from ofmhelpers.integrations.signin.owner import owner_code
-
     started = client.get("/auth/owner/start", follow_redirects=False)
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
     r = client.get(
@@ -213,13 +224,6 @@ def test_a_role_change_applies_at_once(client):
 
 
 def test_a_session_from_before_users_must_sign_in_again(client):
-    import json
-    from base64 import b64encode
-
-    from itsdangerous import TimestampSigner
-
-    from ofmhelpers.config import settings
-
     old = b64encode(json.dumps({"authenticated": True, "role": "admin"}).encode())
     cookie = TimestampSigner(settings.session.session_secret).sign(old).decode()
     client.cookies.set("ofm_session", cookie)
@@ -438,8 +442,6 @@ def test_an_apple_sign_in_never_detours_to_drive(client):
 
 
 def test_googles_consent_url_asks_drive_only_when_connecting(monkeypatch):
-    from ofmhelpers.integrations.signin.google import Google
-
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "client")
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
 
@@ -478,8 +480,6 @@ def test_a_forged_or_stale_callback_is_refused(client):
 
 @pytest.mark.usefixtures("providers_on")
 def test_a_reply_with_another_nonce_is_refused(client):
-    from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
-
     make_user("friend@example.com")
     started = client.get("/auth/google/start", follow_redirects=False)
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
@@ -723,9 +723,6 @@ def test_account_password_change_needs_the_current_one(client):
 
 @pytest.mark.usefixtures("providers_on")
 def test_the_first_admin_email_takes_over_the_password_account_and_its_data(client):
-    from ofmhelpers.db.stores import devices
-    from ofmhelpers.schemas import DeviceFields
-
     agency = users.agency_id()
     phone = devices.add_device(DeviceFields(label="Agency 01"))
 
@@ -773,9 +770,6 @@ def _signed_in_as(client: TestClient) -> int:
 
 
 def _together(count: int, call):
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Barrier
-
     barrier = Barrier(count)
 
     def run():
@@ -815,8 +809,6 @@ def test_concurrent_links_of_one_account_go_to_one_user_only():
 
 
 def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
-    from ofmhelpers.integrations.signin import Identity
-
     monkeypatch.setenv("OFM_ADMIN_EMAILS", "owner@example.com, racer@example.com")
     identity = Identity(
         provider="google",
@@ -889,8 +881,6 @@ def test_an_email_with_a_quote_never_reaches_inline_script(client):
 def test_connecting_google_drive_syncs_that_persons_folders_right_away(
     client, monkeypatch
 ):
-    from ofmhelpers.features.drive import folders as drive_folders
-
     synced: list[int | None] = []
     monkeypatch.setattr(drive_folders, "sync", synced.append)
     user = make_user("friend@example.com")

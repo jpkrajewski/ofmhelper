@@ -3,7 +3,7 @@ from pydantic import BaseModel, ValidationError
 from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas.chatting import ChatPlatform
+lazy from ofmhelpers.db.chats.schema import ChatPlatform
 
 logger = get_logger(__name__)
 

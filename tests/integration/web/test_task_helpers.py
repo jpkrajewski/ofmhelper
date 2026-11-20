@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException, UploadFile
 
+from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.assets import ref_usage
-from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     build_ordered_paths,

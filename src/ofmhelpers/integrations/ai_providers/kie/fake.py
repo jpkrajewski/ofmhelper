@@ -10,6 +10,7 @@ lazy import requests
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
+lazy from ofmhelpers.integrations.ai_providers.catalog import catalog
 
 FAKE_KEY = "fake-kie-key"
 RESULT_HOST = "fake-results.kie.ai"
@@ -104,8 +105,6 @@ class FakeKie:
 
 
 def _kind(model: str) -> str:
-    from ofmhelpers.integrations.ai_providers.catalog import catalog
-
     spec = catalog().get(f"kie:{model}")
     return spec.kind if spec else "image"
 

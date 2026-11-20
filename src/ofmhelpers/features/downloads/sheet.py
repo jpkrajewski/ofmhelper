@@ -1,6 +1,6 @@
 from datetime import date, datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
+lazy from pathlib import Path
 
 import logfire
 from pydantic import BaseModel
@@ -8,8 +8,9 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.downloads.schema import SheetQueued
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.downloads import media
 from ofmhelpers.features.downloads.service import Links
 from ofmhelpers.features.drive.folders import find_root, person_drive, root_name
@@ -23,7 +24,6 @@ from ofmhelpers.features.refusals import (
 from ofmhelpers.integrations.downloaders.urls import NotALinkError, read_links
 from ofmhelpers.integrations.gdrive import RECONNECT, DriveAuthError, DriveError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.downloads import SheetQueued
 lazy from ofmhelpers.integrations.gdrive.models import DriveSheet
 
 logger = get_logger(__name__)

@@ -4,7 +4,6 @@ from typing import Any
 import requests
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
-from ofmhelpers.errors import AppError
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.apify.models import (
     ActorRun,
@@ -28,7 +27,7 @@ _READ_TRIES = 5
 _READ_RETRY_WAIT_S = 3.0
 
 
-class ApifyError(AppError): ...
+class ApifyError(Exception): ...
 
 
 class ApifyAuthError(ApifyError): ...
@@ -53,7 +52,7 @@ class ApifyClient:
 
     def remaining_usd(self) -> float:
         r = self._session.get(f"{API}/users/me/limits", timeout=_READ_TIMEOUT_S)
-        return LimitsEnvelope.model_validate(self._ok(r)).data.remaining_usd
+        return LimitsEnvelope.model_validate(self._ok(r).json()).data.remaining_usd
 
     def run(
         self, actor: str, run_input: BaseModel | dict[str, Any], timeout_s: int
@@ -66,7 +65,7 @@ class ApifyClient:
             json=run_input,
             timeout=_READ_TIMEOUT_S,
         )
-        run = RunEnvelope.model_validate(self._ok(r)).data
+        run = RunEnvelope.model_validate(self._ok(r).json()).data
         logger.info("apify %s run %s started (%s)", actor, run.id, self.key_hint)
         deadline = time.monotonic() + timeout_s + _WAIT_S
         while not run.status.finished:
@@ -78,7 +77,7 @@ class ApifyClient:
                 params={"waitForFinish": _WAIT_S},
                 timeout=_WAIT_S + _READ_TIMEOUT_S,
             )
-            run = RunEnvelope.model_validate(self._ok(r)).data
+            run = RunEnvelope.model_validate(self._ok(r).json()).data
         logger.info("apify run %s %s, $%.4f", run.id, run.status, run.cost_usd)
         return run
 
@@ -88,7 +87,7 @@ class ApifyClient:
             params={"clean": "true", "format": "json"},
             timeout=_READ_TIMEOUT_S,
         )
-        found = self._ok(r)
+        found = self._ok(r).json()
         if not isinstance(found, list):
             msg = "Apify answered a dataset that is not a list"
             raise ApifyError(msg)
@@ -112,9 +111,9 @@ class ApifyClient:
         return self._session.get(url, **kwargs)
 
     @staticmethod
-    def _ok(r: requests.Response) -> Any:
+    def _ok(r: requests.Response) -> requests.Response:
         if r.ok:
-            return r.json()
+            return r
         try:
             error = ErrorEnvelope.model_validate_json(r.content).error
         except ValidationError:  # silent: not Apify's error envelope

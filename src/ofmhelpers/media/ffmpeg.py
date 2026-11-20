@@ -1,8 +1,8 @@
 import shutil
 import subprocess
-from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+lazy from collections.abc import Generator
 
 
 def binary(name: str) -> str:

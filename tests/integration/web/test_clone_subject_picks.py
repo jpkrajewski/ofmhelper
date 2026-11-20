@@ -1,16 +1,16 @@
 import re
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.clone.service import subject_picks
 from ofmhelpers.features.users.viewing import viewer_for
-from ofmhelpers.schemas import Role, User
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import assets_root_for_user
 

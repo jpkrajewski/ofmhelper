@@ -15,7 +15,7 @@ class Usage(BaseModel):
 class Host(BaseModel):
     cpus: int
     cpu_percent: float
-    load: tuple[float, float, float]
+    load: list[float]
     memory: Usage
     swap: Usage
     disk: Usage

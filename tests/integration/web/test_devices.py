@@ -9,22 +9,27 @@ from pydantic import ValidationError
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, select, table, text
 
-from ofmhelpers.db.encrypted import VaultError
-from ofmhelpers.db.repositories import DuplicateError
-from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import devices as store
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
-from ofmhelpers.features.phones.catalog.render import render
-from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
-from ofmhelpers.schemas.devices import AddedLogin
-from ofmhelpers.schemas.phone_catalog import (
+from ofmhelpers.cache import get_redis
+from ofmhelpers.db.devices import store
+from ofmhelpers.db.devices.catalog import (
     ServiceKind,
     catalog,
     find_model,
     get_service,
     services,
 )
-from ofmhelpers.schemas.phone_catalog.models import CameraLayout
+from ofmhelpers.db.devices.catalog.schema import CameraLayout
+from ofmhelpers.db.devices.repository import DuplicateError
+from ofmhelpers.db.devices.schema import (
+    AddedLogin,
+    DeviceFields,
+    LoginFields,
+    PhoneQuery,
+)
+from ofmhelpers.db.encrypted import VaultError
+from ofmhelpers.db.session import session_scope
+from ofmhelpers.db.tracked_accounts.store import list_accounts, track
+from ofmhelpers.features.phones.catalog.render import render
 from ofmhelpers.web.main import app
 
 
@@ -175,7 +180,7 @@ def test_drawing_route_serves_a_cached_svg(va):
 
 
 def test_every_service_has_a_hosted_icon():
-    for service in services().all():
+    for service in list(services().values()):
         assert service.icon_url.startswith("https://api.iconify.design/")
     assert get_service("gmail").icon_url == (
         "https://api.iconify.design/logos/google-gmail.svg"
@@ -196,7 +201,7 @@ def test_phone_form_only_takes_what_the_model_came_in():
 
 
 def test_services_include_mail_providers_socials_and_custom():
-    keys = services().names()
+    keys = list(services())
     for key in (
         "icloud",
         "gmail",
@@ -425,8 +430,6 @@ def test_instagram_login_links_to_its_tracked_account():
 
 
 def test_secrets_never_reach_the_redis_cache():
-    from ofmhelpers.cache import get_redis
-
     login_id = _add_login(_phone(), "gmail", "a@b.c", password="redis-must-not-see")
     store.list_devices()
     store.secrets(login_id)

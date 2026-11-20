@@ -1,10 +1,9 @@
 from typing import Protocol, runtime_checkable
 
-from ofmhelpers.errors import AppError
-lazy from ofmhelpers.schemas.events import Event
+lazy from ofmhelpers.integrations.senders.schema import Event
 
 
-class SendError(AppError):
+class SendError(Exception):
     def __init__(
         self, message: str, *, retry_after: float | None = None, permanent: bool = False
     ) -> None:

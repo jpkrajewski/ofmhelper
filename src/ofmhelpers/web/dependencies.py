@@ -1,16 +1,19 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any
+from types import MappingProxyType
+from typing import Annotated
 
-from fastapi import Depends, Request, WebSocket
+from fastapi import Cookie, Depends, Request, WebSocket, params
 from pydantic import BaseModel
 
-from ofmhelpers.auth.access import Action, Area
-from ofmhelpers.schemas import SessionUser
-from ofmhelpers.schemas.users import Viewer
+from ofmhelpers.db.users.schema import SessionUser, Viewer
+from ofmhelpers.features.assets.store import assets_root_for_user
+from ofmhelpers.features.notifications.schema import Reader
+from ofmhelpers.web.access import Action, Area, opens
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.time_zones import TimeZone, time_zone
 
 
 async def _viewer(request: Request) -> Viewer:
@@ -44,34 +47,46 @@ class Allowed(BaseModel, frozen=True):
         AuthMiddleware.require(request, self.what)
 
 
-def Access(area: Area) -> Any:  # noqa: N802
+def Access(area: Area) -> params.Depends:  # noqa: N802
     return Depends(Allowed(what=area))
 
 
-def Can(action: Action) -> Any:  # noqa: N802
+def Can(action: Action) -> params.Depends:  # noqa: N802
     return Depends(Allowed(what=action))
 
 
 def _assets_root(request: Request) -> Path:
-    from ofmhelpers.web.routers.task_helpers import assets_root_for
-
-    return assets_root_for(request)
+    return assets_root_for_user(AuthMiddleware.user(request).id)
 
 
-def _signed_in(websocket: WebSocket) -> Callable[[], Viewer | None]:
-    return partial(AuthMiddleware.socket_viewer, websocket)
+def _reader(websocket: WebSocket) -> Reader | None:
+    viewer = AuthMiddleware.socket_viewer(websocket)
+    if viewer is None:
+        return None
+    return Reader(user_id=viewer.user.id, chats=opens(viewer, Area.CHATTING))
 
 
-def _api_keys(request: Request) -> dict[str, str]:
+def _signed_in(websocket: WebSocket) -> Callable[[], Reader | None]:
+    return partial(_reader, websocket)
+
+
+def _api_keys(request: Request) -> MappingProxyType[str, str]:
     return get_api_keys(request)
 
 
 Viewing = Annotated[Viewer, Depends(_viewer)]
 CurrentUser = Annotated[SessionUser, Depends(_current_user)]
-SignedIn = Annotated[Callable[[], Viewer | None], Depends(_signed_in)]
+SignedIn = Annotated[Callable[[], Reader | None], Depends(_signed_in)]
 Actor = Annotated[str, Depends(_actor)]
 Actors = Annotated[frozenset[str], Depends(_actors)]
 OwnerId = Annotated[int, Depends(_owner_id)]
 Scope = Annotated[int, Depends(_scope)]
 AssetsRoot = Annotated[Path, Depends(_assets_root)]
-ApiKeys = Annotated[dict[str, str], Depends(_api_keys)]
+
+
+def _chosen_zone(ofm_timezone: Annotated[str | None, Cookie()] = None) -> TimeZone:
+    return time_zone(ofm_timezone)
+
+
+Zone = Annotated[TimeZone, Depends(_chosen_zone)]
+ApiKeys = Annotated[MappingProxyType[str, str], Depends(_api_keys)]

@@ -2,12 +2,12 @@ import secrets
 
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
-from ofmhelpers.errors import AppError
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatAccount, ChatPlatform
 from ofmhelpers.features.chatting.webhooks import sync_done_key
+from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.integrations.fanvue import FanvueClient, oauth
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatAccount, ChatPlatform
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,7 @@ def finish(code: str, state: str) -> bool:
     try:
         tokens = oauth.exchange(code, _redirect_uri(), verifier)
         me = FanvueClient(lambda: tokens.access_token).me()
-    except AppError:
+    except ChatSourceError:
         logger.warning("fanvue connect failed", exc_info=True)
         return False
     chats.save_account(

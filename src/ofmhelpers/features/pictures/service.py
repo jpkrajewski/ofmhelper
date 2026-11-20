@@ -1,20 +1,22 @@
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import picture_presets
+from ofmhelpers.db.picture_presets import store as picture_presets
+from ofmhelpers.db.picture_presets.schema import PicturePreset
 from ofmhelpers.features.account.keys import Keys
-from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import build_ordered_paths
 from ofmhelpers.features.assets.store import save_asset
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.features.generate.service import run_ai
 from ofmhelpers.features.jobs.runner import start_job
+from ofmhelpers.features.jobs.schema import JobsQueued
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.pictures.targets import (
     PICTURE_TARGETS,
     PRESET_ASPECTS,
@@ -24,9 +26,16 @@ from ofmhelpers.features.pictures.targets import (
     values,
 )
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
-from ofmhelpers.features.refusals import ForbiddenError, NotFoundError, RefusedError
+from ofmhelpers.features.refusals import (
+    ForbiddenError,
+    NotFoundError,
+    RefusedError,
+    duplicate_refused,
+    input_refused,
+)
+from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import JobsQueued, PicturePreset, ProviderChoice, ResultFile
+lazy from ofmhelpers.db.jobs.schema import ResultFile
 
 logger = get_logger(__name__)
 
@@ -131,7 +140,8 @@ def create_preset(
 ) -> PicturePreset:
     aspect = _preset_aspect(form.aspect_ratio)
     paths = _checked(_saved_images(form.images, assets_root))
-    return picture_presets.create(owner_id, form.name, form.prompt, paths, aspect)
+    with duplicate_refused():
+        return picture_presets.create(owner_id, form.name, form.prompt, paths, aspect)
 
 
 def update_preset(
@@ -147,14 +157,15 @@ def update_preset(
         raise ForbiddenError(msg)
     kept = [preset.images[i] for i in keep if 0 <= i < len(preset.images)]
     paths = _checked(kept + _saved_images(form.images, assets_root))
-    saved = picture_presets.update(
-        preset_id,
-        preset.owner_id,
-        form.name,
-        form.prompt,
-        paths,
-        _preset_aspect(form.aspect_ratio),
-    )
+    with duplicate_refused():
+        saved = picture_presets.update(
+            preset_id,
+            preset.owner_id,
+            form.name,
+            form.prompt,
+            paths,
+            _preset_aspect(form.aspect_ratio),
+        )
     if saved is None:
         msg = "No such preset"
         raise NotFoundError(msg)
@@ -206,9 +217,19 @@ def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
     return paths
 
 
+class PictureRun(BaseModel):
+    prompt: str
+    preset: int
+    preset_name: str
+    pictures: list[str]
+    reference_images: list[str]
+    aspect_ratio: str
+    resolution: str
+
+
 def _runs(
     chosen: PicturePreset, target: PictureTarget, paths: list[str]
-) -> list[dict[str, Any]]:
+) -> list[PictureRun]:
     if len(chosen.images) + 1 > target.max_images:
         msg = (
             f"{chosen.name} has {len(chosen.images)} pictures; Nano Banana Pro"
@@ -217,24 +238,25 @@ def _runs(
         raise RefusedError(msg)
     spec = target.spec
     runs = [
-        {
-            "prompt": chosen.prompt,
-            "preset": chosen.id,
-            "preset_name": chosen.name,
-            "pictures": [path],
-            "reference_images": [*chosen.images, path],
-            "aspect_ratio": run_aspect(
+        PictureRun(
+            prompt=chosen.prompt,
+            preset=chosen.id,
+            preset_name=chosen.name,
+            pictures=[path],
+            reference_images=[*chosen.images, path],
+            aspect_ratio=run_aspect(
                 chosen.aspect_ratio or settings.pictures.aspect_ratio or None,
                 path,
                 spec,
                 target.aspect,
             ),
-            "resolution": resolution(spec, target.resolution),
-        }
+            resolution=resolution(spec, target.resolution),
+        )
         for path in paths
     ]
-    for params in runs:
-        spec.check(values(target, params).model_dump())
+    with input_refused():
+        for run in runs:
+            spec.check(values(target, run.model_dump()).model_dump())
     return runs
 
 
@@ -250,8 +272,12 @@ def start(
     api_key = _key(form, target, owner_id)
     runs = _runs(chosen, target, _pictures(form, owner_id, assets_root))
     job_ids = []
-    for params in runs:
-        job_params = {"provider": form.provider, "model": target.model, **params}
+    for picture_run in runs:
+        job_params = {
+            "provider": form.provider,
+            "model": target.model,
+            **picture_run.model_dump(),
+        }
         kwargs = {
             "api_key": api_key,
             "assets_root": str(assets_root),

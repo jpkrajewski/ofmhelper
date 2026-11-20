@@ -7,10 +7,10 @@ from ofmhelpers.features.clone.export import (
     export_results,
     exported_file,
 )
-from ofmhelpers.features.clone.targets import clone_targets, clone_values
+from ofmhelpers.features.clone_pricing.targets import clone_targets, clone_values
 from ofmhelpers.features.generate.service import run_ai
 from ofmhelpers.media.exports import ExportOptions
-lazy from ofmhelpers.schemas import ResultFile
+lazy from ofmhelpers.db.jobs.schema import ResultFile
 
 
 def run_clone(

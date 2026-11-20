@@ -4,11 +4,11 @@ import re
 import subprocess
 import tempfile
 import threading
-from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 from redis.exceptions import RedisError
@@ -17,15 +17,19 @@ lazy from fastapi import UploadFile
 from ofmhelpers.cache.queue import JobQueue
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import QueueName
-from ofmhelpers.db.stores.jobs import drop_job, get_job, list_jobs_page
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.jobs.store import drop_job, get_job, list_jobs_page
 from ofmhelpers.features.assets.manifests import keep_files
-from ofmhelpers.features.assets.store import register_generated_asset, save_asset
+from ofmhelpers.features.assets.store import (
+    EDIT_STAGING,
+    register_generated_asset,
+    save_asset,
+)
 from ofmhelpers.features.edit.clips import Clip, checked
-from ofmhelpers.features.edit.errors import EditRefusedError
 from ofmhelpers.features.edit.options import Framing
 from ofmhelpers.features.jobs.runner import start_job
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews.render import previews_dir
+from ofmhelpers.features.refusals import EditRefusedError
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim
 from ofmhelpers.media.uniqify import has_audio
@@ -35,15 +39,15 @@ from ofmhelpers.media.video_probe import (
     frame_times,
     video_size,
 )
+lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.media.size import Size
-lazy from ofmhelpers.schemas import Job
 
 logger = get_logger(__name__)
 
 PREFIX = "/edit"
 TASK = "edit_cut"
 PREPARE_TASK = "edit_prepare"
-STAGING = ".edit"
+STAGING = EDIT_STAGING
 
 _FFMPEG_ERRORS = (OSError, ValueError, RuntimeError, subprocess.SubprocessError)
 
@@ -193,16 +197,28 @@ def _key(path: Path) -> str:
     return hashlib.sha256(where.encode()).hexdigest()
 
 
-def _prepared_files(path: Path) -> dict[PreparedKind, Path]:
+class _PreparedPaths(BaseModel, frozen=True):
+    proxy: Path
+    strip: Path
+    frames: Path
+
+    def all(self) -> list[Path]:
+        return [self.proxy, self.strip, self.frames]
+
+    def of(self, kind: PreparedKind) -> Path:
+        return Path(getattr(self, kind))
+
+
+def _prepared_files(path: Path) -> _PreparedPaths:
     web = settings.web
     digest = _key(path)
     folder = prepared_dir()
     strip = f"{digest}_{web.edit_strip_frames}x{web.edit_strip_height}.jpg"
-    return {
-        "proxy": folder / f"{digest}_{web.edit_proxy_short_side}p.mp4",
-        "strip": folder / strip,
-        "frames": folder / f"{digest}_frames.json",
-    }
+    return _PreparedPaths(
+        proxy=folder / f"{digest}_{web.edit_proxy_short_side}p.mp4",
+        strip=folder / strip,
+        frames=folder / f"{digest}_frames.json",
+    )
 
 
 class PreparedFiles(BaseModel, frozen=True):
@@ -212,7 +228,7 @@ class PreparedFiles(BaseModel, frozen=True):
 
 
 def _ready(path: Path) -> Prepared | None:
-    files = _prepared_files(path).values()
+    files = _prepared_files(path).all()
     if not all(f.is_file() for f in files):
         return None
     for f in files:
@@ -322,7 +338,7 @@ class Asked(BaseModel, frozen=True):
 
 
 def prepared_file(video: str, assets_root: Path, kind: PreparedKind) -> Path | None:
-    found = _prepared_files(_stored_video(video, assets_root))[kind]
+    found = _prepared_files(_stored_video(video, assets_root)).of(kind)
     return found if found.is_file() else None
 
 
@@ -343,7 +359,7 @@ def run_prepare(
 ) -> PreparedFiles:
     path = _stored_video(video, Path(assets_root))
     files = _prepared_files(path)
-    proxy, strip = files["proxy"], files["strip"]
+    proxy, strip = files.proxy, files.strip
     web = settings.web
     try:
         if not proxy.is_file():
@@ -368,15 +384,15 @@ def run_prepare(
                 threads=web.edit_threads,
                 timeout_s=web.edit_strip_timeout_s,
             )
-        if not files["frames"].is_file():
-            _write_frame_times(proxy, files["frames"])
+        if not files.frames.is_file():
+            _write_frame_times(proxy, files.frames)
     except _FFMPEG_ERRORS as exc:
         logger.warning("could not prepare %s", path, exc_info=True)
         raise EditRefusedError(_why_not_prepared(path, exc)) from exc
     return PreparedFiles(
-        proxy=str(files["proxy"]),
-        strip=str(files["strip"]),
-        frames=str(files["frames"]),
+        proxy=str(files.proxy),
+        strip=str(files.strip),
+        frames=str(files.frames),
     )
 
 

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from signin import make_user_with_password, sign_in
 from starlette.middleware.sessions import SessionMiddleware
 
-from ofmhelpers.db.stores.jobs import list_jobs
+from ofmhelpers.db.jobs.store import list_jobs
 from ofmhelpers.web.main import app
 
 

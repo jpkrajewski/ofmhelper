@@ -1,7 +1,7 @@
 import math
 import mmap
 import random
-from pathlib import Path
+lazy from pathlib import Path
 
 from ofmhelpers.media.capcut import SourceInfo, probe
 from ofmhelpers.media.ffmpeg import binary, run

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
-from ofmhelpers.auth.access import Area
+from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.jobs import audit
-from ofmhelpers.schemas import Job
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor
 from ofmhelpers.web.routers.registry import TOOLS
 from ofmhelpers.web.templates_config import render

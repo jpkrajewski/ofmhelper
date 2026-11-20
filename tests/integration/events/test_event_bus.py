@@ -12,7 +12,7 @@ from rq.registry import FailedJobRegistry, ScheduledJobRegistry
 import ofmhelpers.features.events.dispatch as dispatch_module
 from ofmhelpers.cache import QueueName, get_queue, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.features.events import Event, emit, emits
+from ofmhelpers.features.events import Event, emit, emits, listening
 from ofmhelpers.integrations.senders.telegram import TelegramClient
 from ofmhelpers.integrations.senders.telegram.fake import (
     TOKEN,
@@ -440,8 +440,6 @@ def test_an_older_one_arriving_late_never_replaces_the_newer():
 
 
 def test_nobody_listening_is_told_apart(monkeypatch):
-    from ofmhelpers.features.events import listening
-
     assert listening()
     monkeypatch.setenv("OFM_EVENTS_SENDERS_OFF", "telegram")
     assert not listening()

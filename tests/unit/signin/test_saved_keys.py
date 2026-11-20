@@ -1,4 +1,4 @@
-from ofmhelpers.schemas.users import SavedKey, SavedKeys
+from ofmhelpers.db.users.schema import SavedKey, SavedKeys
 
 
 def test_a_saved_key_is_found_by_its_provider():

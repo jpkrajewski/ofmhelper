@@ -5,6 +5,7 @@ import requests
 
 from ofmhelpers.integrations import egress
 from ofmhelpers.integrations.downloaders import generic, kvs, media
+from ofmhelpers.integrations.downloaders.models import YtDlpInfo
 
 INTERNAL = {
     "postgres": "172.18.0.2",
@@ -101,7 +102,7 @@ def test_the_preview_read_refuses_an_internal_link(real_network, url):
 def test_the_preview_never_probes_an_internal_stream_named_by_the_page(
     real_network, monkeypatch
 ):
-    page_info = {"url": "http://169.254.169.254/latest/meta-data/", "vcodec": "h264"}
+    page_info = YtDlpInfo(url="http://169.254.169.254/latest/meta-data/", vcodec="h264")
     monkeypatch.setattr(generic._Reading, "try_peek", lambda *_a: page_info)
 
     def never(*_a, **_k):

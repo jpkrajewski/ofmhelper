@@ -5,14 +5,14 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 from sqlalchemy import select
 
+from ofmhelpers.background.sweeps import sweeps
 from ofmhelpers.config import settings
 from ofmhelpers.db.models import JobRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import users
-from ofmhelpers.features.jobs.sweeps import sweeps
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.signin.outcome import signed_in, signed_out
 from ofmhelpers.features.users import idle, presence
-from ofmhelpers.schemas import Role, User
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.filterwarnings("ignore")

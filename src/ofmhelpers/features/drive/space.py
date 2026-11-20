@@ -4,8 +4,8 @@ from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.integrations.gdrive import (
     RECONNECT,
     DriveAuthError,

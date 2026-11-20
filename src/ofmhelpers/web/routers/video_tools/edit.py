@@ -5,9 +5,8 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import Field, model_validator
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
-from ofmhelpers.features.clone.targets import clone_targets
+from ofmhelpers.features.clone_pricing.targets import clone_targets
 from ofmhelpers.features.edit import service
 from ofmhelpers.features.edit.clips import Clip
 from ofmhelpers.features.edit.options import SPEEDS, Aspect, Framing, Size, Speed
@@ -19,7 +18,8 @@ from ofmhelpers.features.edit.service import (
     run_cut,
     run_prepare,
 )
-from ofmhelpers.schemas import JobQueued
+from ofmhelpers.features.jobs.schema import JobQueued
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot
 from ofmhelpers.web.templates_config import render
 
@@ -49,7 +49,7 @@ class FrameQuery(Framing):
 
 
 def _limit_s() -> int:
-    return min(t.max_reference_s for t in clone_targets().all())
+    return min(t.max_reference_s for t in clone_targets().values())
 
 
 @router.get("")

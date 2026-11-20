@@ -2,13 +2,13 @@ import asyncio
 import functools
 import inspect
 from typing import Any, ParamSpec, TypeVar, cast
-lazy from collections.abc import Callable
+lazy from collections.abc import Awaitable, Callable
 
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.features.events.dispatch import dispatch
+from ofmhelpers.integrations.senders.schema import Event
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.events import Event
 
 logger = get_logger(__name__)
 
@@ -71,8 +71,8 @@ def emits(
         if inspect.iscoroutinefunction(fn):
 
             @functools.wraps(fn)
-            async def run_async(*args: P.args, **kwargs: P.kwargs) -> Any:
-                result = await fn(*args, **kwargs)
+            async def run_async(*args: P.args, **kwargs: P.kwargs) -> R:
+                result = await cast("Awaitable[R]", fn(*args, **kwargs))
                 await asyncio.to_thread(_emit_built, fn, build, result, args, kwargs)
                 return result
 

@@ -20,6 +20,9 @@ class Retired(BaseModel):
     def areas(self) -> frozenset[str]:
         return frozenset(m.area for m in self.modules)
 
+    def has(self, area: str) -> bool:
+        return area in self.areas
+
     @property
     def routers(self) -> frozenset[str]:
         return frozenset(r for m in self.modules for r in m.routers)

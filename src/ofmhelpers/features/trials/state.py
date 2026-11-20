@@ -1,10 +1,9 @@
 import tempfile
-from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from redis.exceptions import LockError, RedisError
@@ -13,6 +12,9 @@ from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.gdrive.models import folder_url
 from ofmhelpers.log import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 logger = get_logger(__name__)
 

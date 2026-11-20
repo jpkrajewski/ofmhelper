@@ -6,9 +6,10 @@ from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.log import configure_logging
-from ofmhelpers.sentry import configure_sentry
-from ofmhelpers.telemetry import configure_telemetry, instrument_app
+from ofmhelpers.monitoring.sentry import configure_sentry
+from ofmhelpers.monitoring.telemetry import configure_telemetry, instrument_app
 from ofmhelpers.web.exceptions import exception_handlers
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
@@ -26,13 +27,14 @@ configure_logging()
 
 
 def create_app() -> FastAPI:
+    install_fakes()
     infra = settings.infra
     app = FastAPI(
         title="Ascend Global LLC — Content Ops",
         version=settings.telemetry.release,
         debug=infra.debug,
         openapi_url=None if infra.production else "/openapi.json",
-        exception_handlers=exception_handlers(),
+        exception_handlers=exception_handlers().model_dump(),  # type: ignore[arg-type]
         middleware=_middleware(),
     )
     _monitoring(app)

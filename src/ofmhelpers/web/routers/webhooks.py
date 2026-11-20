@@ -3,10 +3,10 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.chats.schema import ChatPlatform
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.webhooks import receive
 from ofmhelpers.features.generate import callbacks
-from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.web.middleware.ratelimit import record_refused_webhook, webhook_blocked
 
 router = APIRouter(prefix="/events", tags=["events"])

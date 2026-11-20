@@ -3,7 +3,7 @@ import re
 import pytest
 from fastapi import HTTPException
 
-from ofmhelpers.schemas import Job
+from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.web.routers.task_helpers import job_assets, serve_job_file
 
 
@@ -25,7 +25,8 @@ def _grouped_job(tmp_path):
 
 
 def test_grouped_result_numbers_files_across_groups(tmp_path):
-    assets, failed = job_assets(_grouped_job(tmp_path), "/dl/files")
+    found = job_assets(_grouped_job(tmp_path), "/dl/files")
+    assets, failed = found.assets, found.failed_sources
     assert [(a.name, a.source) for a in assets] == [
         ("a.mp4", "u1"),
         ("b.jpg", "u3"),
@@ -53,10 +54,12 @@ def test_flat_result_keeps_the_remote_url():
         status="done",
         result=[{"name": "x.png", "path": None, "remote_url": "https://r/x.png"}],
     )
-    [asset], failed = job_assets(job, "/nb/files")
+    found = job_assets(job, "/nb/files")
+    [asset], failed = found.assets, found.failed_sources
     assert asset.view_url == "https://r/x.png"
     assert failed == []
 
 
 def test_unfinished_job_has_no_assets():
-    assert job_assets(Job(id="j3", task="wan3", created_at=0.0), "/x/files") == ([], [])
+    found = job_assets(Job(id="j3", task="wan3", created_at=0.0), "/x/files")
+    assert (found.assets, found.failed_sources) == ([], [])

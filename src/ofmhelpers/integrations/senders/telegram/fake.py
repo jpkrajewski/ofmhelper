@@ -110,7 +110,13 @@ class FakeTelegram:
             self.sent.append(sent)
             message_id = self._last_id
             self._by_id[(chat_id, message_id)] = sent
-        return _ok({"message_id": message_id, "chat": _chat(chat_id), "text": text})
+        return _ok(
+            {
+                "message_id": message_id,
+                "chat": _chat(chat_id).model_dump(exclude_none=True),
+                "text": text,
+            }
+        )
 
 
 def _delete_reply(found: SentMessage | None) -> FakeReply:
@@ -119,11 +125,17 @@ def _delete_reply(found: SentMessage | None) -> FakeReply:
     return _ok(result=True)
 
 
-def _chat(chat_id: str) -> dict[str, Any]:
+class FakeChat(BaseModel):
+    id: int
+    type: str
+    username: str | None = None
+
+
+def _chat(chat_id: str) -> FakeChat:
     if chat_id.startswith("@"):
-        return {"id": -1001, "type": "channel", "username": chat_id[1:]}
+        return FakeChat(id=-1001, type="channel", username=chat_id[1:])
     kind = "group" if chat_id.startswith("-") else "private"
-    return {"id": int(chat_id), "type": kind}
+    return FakeChat(id=int(chat_id), type=kind)
 
 
 def _ok(result: Any) -> FakeReply:

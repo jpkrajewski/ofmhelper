@@ -3,7 +3,7 @@ import json
 import random
 import subprocess
 import zipfile
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient

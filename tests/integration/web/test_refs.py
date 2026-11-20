@@ -1,7 +1,10 @@
 import io
 import os
 import subprocess
-from pathlib import Path
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -250,10 +253,6 @@ def test_list_refs_rejects_an_out_of_range_limit(client, assets_dir, limit):
 def test_a_burst_for_one_new_thumb_decodes_the_original_once(
     client, assets_dir, monkeypatch
 ):
-    import threading
-    import time
-    from concurrent.futures import ThreadPoolExecutor
-
     original = assets_dir / "abc123__photo.png"
     original.write_bytes(_png_bytes())
     made: list[Path] = []

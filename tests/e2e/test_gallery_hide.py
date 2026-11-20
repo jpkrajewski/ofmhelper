@@ -1,8 +1,11 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from e2e_session import Session
 from playwright.sync_api import expect
+
+lazy from ofmhelpers.db.jobs.store import create_job
+lazy from ofmhelpers.features.jobs.runner import run_job
 
 pytestmark = pytest.mark.e2e
 
@@ -17,8 +20,6 @@ PAGES = [
 
 
 def _done(task: str, out: Path) -> str:
-    from ofmhelpers.db.stores.jobs import create_job
-    from ofmhelpers.features.jobs.runner import run_job
 
     out.write_bytes(b"png")
     job_id = create_job(task, {"prompt": out.stem}, actor=str(VA_ID))
@@ -27,8 +28,6 @@ def _done(task: str, out: Path) -> str:
 
 
 def _failed(task: str) -> str:
-    from ofmhelpers.db.stores.jobs import create_job
-    from ofmhelpers.features.jobs.runner import run_job
 
     job_id = create_job(task, {"prompt": "failed"}, actor=str(VA_ID))
 

@@ -1,16 +1,16 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job
-from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.db.jobs.store import create_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
+from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.gdrive.fake import fake_drive
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 PHONE = {

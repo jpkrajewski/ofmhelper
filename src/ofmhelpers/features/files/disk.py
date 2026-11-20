@@ -1,16 +1,17 @@
 import shutil
 from pathlib import Path
+from types import MappingProxyType
 lazy from collections.abc import Sequence
 
 from pydantic import BaseModel
 lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.store import safe_filename
+from ofmhelpers.features.files.schema import DirEntry, FileEntry
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import ConflictError, NotFoundError, RefusedError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import DirEntry, FileEntry
 
 logger = get_logger(__name__)
 
@@ -29,12 +30,14 @@ class Folder(BaseModel):
     files: list[FileEntry]
 
 
-def _roots() -> dict[str, Path]:
-    return {
-        "uploads": Path(settings.infra.uploads_root).resolve(),
-        "downloads": Path("downloads").resolve(),
-        "kieai_out": Path(settings.aigen.out_dir).resolve(),
-    }
+def _roots() -> MappingProxyType[str, Path]:
+    return MappingProxyType(
+        {
+            "uploads": Path(settings.infra.uploads_root).resolve(),
+            "downloads": Path("downloads").resolve(),
+            "kieai_out": Path(settings.aigen.out_dir).resolve(),
+        }
+    )
 
 
 def _get_root(root_name: str) -> Path:

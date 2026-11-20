@@ -604,3 +604,9 @@ def test_a_command_that_only_mentions_a_merge_is_no_deploy(hooks: Hooks) -> None
     hooks.send("PostToolUse", tool_name="Bash", tool_input={"command": text})
 
     assert hooks.send("Stop").decision == "allow"
+
+
+def test_a_doc_edit_under_src_needs_no_review(hooks: Hooks) -> None:
+    hooks.edit("src/ofmhelpers/integrations/gdrive/CLAUDE.md", when="PostToolUse")
+
+    assert hooks.send("Stop").decision == "allow"

@@ -3,8 +3,8 @@ import hmac
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.users.schema import Identity
 from ofmhelpers.integrations.signin.base import SignInError, TokenReply
-from ofmhelpers.schemas.users import Identity
 
 _CODE_TTL_S = 60
 SUBJECT = "app-owner"

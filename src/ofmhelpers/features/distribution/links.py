@@ -1,11 +1,12 @@
-from ofmhelpers.db.stores import distribution as store
-from ofmhelpers.db.stores import self_links, short_links
+from ofmhelpers.db.distribution import store
+from ofmhelpers.db.self_links import store as self_links
+from ofmhelpers.db.short_links import store as short_links
+from ofmhelpers.db.short_links.catalog import provider_infos
+from ofmhelpers.db.short_links.schema import PlannedLink
 from ofmhelpers.features.links import sync
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.link_catalog import provider_infos
-from ofmhelpers.schemas.links import PlannedLink
-lazy from ofmhelpers.schemas.distribution import ModelPreset
+lazy from ofmhelpers.db.distribution.schema import ModelPreset
 
 logger = get_logger(__name__)
 

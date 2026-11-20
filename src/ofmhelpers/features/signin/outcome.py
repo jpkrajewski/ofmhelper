@@ -2,12 +2,12 @@ import time
 
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import log_event
+from ofmhelpers.db.jobs.store import log_event
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import User
 from ofmhelpers.features.signin.state import HOME, safe_next
 from ofmhelpers.features.users.idle import end_if_idle
 from ofmhelpers.features.vas import notices
-from ofmhelpers.schemas import User
 
 
 class Outcome(BaseModel):

@@ -3,6 +3,7 @@ lazy import httpx
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.base import register_llm
 from ofmhelpers.integrations.llm.chat_completions import ChatCompletionsLLM
+lazy from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
 
 
 @register_llm
@@ -23,6 +24,4 @@ class CerebrasLLM(ChatCompletionsLLM):
 
     @classmethod
     def fake_transport(cls) -> httpx.BaseTransport:
-        from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
-
         return fake_cerebras().transport()

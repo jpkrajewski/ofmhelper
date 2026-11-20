@@ -2,13 +2,13 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import days, get_job
+from ofmhelpers.db.jobs.store import days, get_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.events import Event, emit
 from ofmhelpers.features.vas.service import REEL_TASKS
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.users import Role, User
-lazy from ofmhelpers.schemas.persistence import Job, UserDay
+lazy from ofmhelpers.db.jobs.schema import Job, UserDay
 
 logger = get_logger(__name__)
 

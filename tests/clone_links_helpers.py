@@ -4,8 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.integrations.downloaders import media as downloader

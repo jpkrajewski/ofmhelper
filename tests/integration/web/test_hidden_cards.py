@@ -1,12 +1,12 @@
 import re
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from signin import sign_in
 
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
 

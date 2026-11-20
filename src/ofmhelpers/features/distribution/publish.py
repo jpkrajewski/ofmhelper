@@ -7,8 +7,9 @@ from PIL import Image
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import distribution as store
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.distribution import store
+from ofmhelpers.db.distribution.schema import Channel, Post, PostKind, PostStatus
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.assets.store import uploads_root
 from ofmhelpers.features.distribution.presets import preset_of
 from ofmhelpers.features.drive.folders import review_target
@@ -24,7 +25,6 @@ from ofmhelpers.integrations.pinterest import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim, video_probe
-from ofmhelpers.schemas.distribution import Channel, Post, PostKind, PostStatus
 
 logger = get_logger(__name__)
 

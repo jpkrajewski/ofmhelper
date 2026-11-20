@@ -1,6 +1,7 @@
-from ofmhelpers.db.stores.jobs import Readers, get_job, hide_job
+from ofmhelpers.db.jobs.store import Readers, get_job, hide_job
+from ofmhelpers.features.jobs.schema import JobVisibility
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.schemas import Job, JobVisibility
+lazy from ofmhelpers.db.jobs.schema import Job
 
 NO_JOB = "Job not found"
 

@@ -7,7 +7,7 @@ from ofmhelpers.integrations.senders.telegram.client import (
 )
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas.events import Event
+lazy from ofmhelpers.integrations.senders.schema import Event
 
 logger = get_logger(__name__)
 

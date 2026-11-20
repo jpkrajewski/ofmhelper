@@ -1,29 +1,29 @@
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import tracked_accounts as store
-from ofmhelpers.db.stores.devices import phones_by_account
-from ofmhelpers.db.stores.short_links import links_by_account
-from ofmhelpers.features.accounts.tracker import queue_due_scans
-from ofmhelpers.features.cookies import jar as cookie_jar
-from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.integrations.socials import platforms
-from ofmhelpers.integrations.socials.platforms.base import Platform
-from ofmhelpers.schemas import (
+from ofmhelpers.db.devices.catalog import tracked_services
+from ofmhelpers.db.devices.schema import PhonesByAccount
+from ofmhelpers.db.devices.store import phones_by_account
+from ofmhelpers.db.short_links.schema import LinkPeriod, ShortLink
+from ofmhelpers.db.short_links.store import links_by_account
+from ofmhelpers.db.tracked_accounts import store
+from ofmhelpers.db.tracked_accounts.schema import (
     AccountPage,
     AccountQuery,
     AccountSort,
     AccountSummary,
     AddAccounts,
     AddResult,
-    LinkPeriod,
+    FollowerChart,
     Period,
-    ShortLink,
+    TopPosts,
     TrackedAccount,
 )
-from ofmhelpers.schemas.accounts import FollowerChart, TopPosts
-from ofmhelpers.schemas.devices import PhonesByAccount
-from ofmhelpers.schemas.phone_catalog import tracked_services
+from ofmhelpers.features.accounts.tracker import queue_due_scans
+from ofmhelpers.features.cookies import jar as cookie_jar
+from ofmhelpers.features.refusals import NotFoundError, RefusedError
+from ofmhelpers.integrations.socials import platforms
+from ofmhelpers.integrations.socials.platforms.base import Platform
 
 
 class ListView(BaseModel):
@@ -80,7 +80,7 @@ def list_view(query: AccountQuery, scope: int) -> ListView:
     return ListView(
         page=page,
         phones=phones_by_account(page.rows, scope),
-        phone_platforms=tracked_services().names(),
+        phone_platforms=list(tracked_services()),
         links={x.account_id: x.links for x in links_by_account(scope)},
         link_period=LinkPeriod(days=period.days),
         summary=summary,
@@ -89,7 +89,7 @@ def list_view(query: AccountQuery, scope: int) -> ListView:
         period=period,
         periods=_periods(),
         sorts=AccountSort,
-        platforms=platforms().entries,
+        platforms=dict(platforms()),
         creators=store.list_creators(scope),
         page_sizes=s.page_sizes,
         max_add=s.max_add,

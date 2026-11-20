@@ -4,7 +4,10 @@ import json
 import time
 lazy from collections.abc import Mapping
 
+from pydantic import BaseModel
+
 from ofmhelpers.config import settings
+from ofmhelpers.db.chats.schema import ChatDelivery, ChatEvent, ChatRead, DeliveryKind
 from ofmhelpers.integrations.fanvue.models import (
     MassMessageEvent,
     MessageEvent,
@@ -14,12 +17,6 @@ from ofmhelpers.integrations.fanvue.models import (
     WebhookEnvelope,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import (
-    ChatDelivery,
-    ChatEvent,
-    ChatRead,
-    DeliveryKind,
-)
 
 logger = get_logger(__name__)
 
@@ -58,7 +55,12 @@ def is_probe(raw: bytes, headers: Mapping[str, str]) -> bool:
         return False
 
 
-def _signature_parts(header: str) -> tuple[str, list[str]]:
+class _Signature(BaseModel, frozen=True):
+    timestamp: str
+    macs: list[str]
+
+
+def _signature_parts(header: str) -> _Signature:
     timestamp = ""
     macs: list[str] = []
     key = ""
@@ -72,7 +74,7 @@ def _signature_parts(header: str) -> tuple[str, list[str]]:
             timestamp = value.strip()
         elif key == "v0":
             macs.append(value.strip())
-    return timestamp, macs
+    return _Signature(timestamp=timestamp, macs=macs)
 
 
 def _fresh(timestamp: str) -> bool:
@@ -84,12 +86,12 @@ def _fresh(timestamp: str) -> bool:
 
 
 def verified(secret: str, raw: bytes, headers: Mapping[str, str]) -> bool:
-    timestamp, macs = _signature_parts(headers.get(_SIGNATURE, ""))
-    if not macs or not _fresh(timestamp):
+    signature = _signature_parts(headers.get(_SIGNATURE, ""))
+    if not signature.macs or not _fresh(signature.timestamp):
         return False
-    signed = f"{timestamp}.".encode() + raw
+    signed = f"{signature.timestamp}.".encode() + raw
     expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest().encode()
-    return any(hmac.compare_digest(mac.encode(), expected) for mac in macs)
+    return any(hmac.compare_digest(mac.encode(), expected) for mac in signature.macs)
 
 
 def _message_read(event: MessageEvent, *, from_fan: bool) -> ChatRead:

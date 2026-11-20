@@ -4,11 +4,7 @@ lazy from collections.abc import Iterator, Mapping
 lazy from datetime import datetime
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.fanvue import webhooks
-from ofmhelpers.integrations.fanvue.client import FanvueClient
-from ofmhelpers.integrations.fanvue.errors import FanvueError, FanvueRefusedError
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import (
+from ofmhelpers.db.chats.schema import (
     ChatAccount,
     ChatDelivery,
     ChatEvent,
@@ -20,6 +16,10 @@ from ofmhelpers.schemas.chatting import (
     ReadScope,
     Subscription,
 )
+from ofmhelpers.integrations.fanvue import webhooks
+from ofmhelpers.integrations.fanvue.client import FanvueClient
+from ofmhelpers.integrations.fanvue.errors import FanvueError, FanvueRefusedError
+from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.fanvue.models import FanvueChat, FanvueMessage
 
 logger = get_logger(__name__)

@@ -1,6 +1,6 @@
 # signin
 
-How people sign in (`settings.signin`, `OFM_*` in config/settings.py `SignInSettings`). Used by `web/routers/auth.py`, `web/routers/account.py`, `db/stores/users.py`.
+How people sign in (`settings.signin`, `OFM_*` in config/settings.py `SignInSettings`). Used by `web/routers/auth.py`, `web/routers/account.py`, `db/users/store.py`.
 
 - `SignInError` messages are safe to show.
 - Sign-in chains Drive: a provider with `connects_drive` (Google) signing into an account without a Drive token goes straight on to `/auth/<p>/start?link=1&next=<page>` (one flow, no "Connect" to find); with a token on file, straight in. A link that worked returns to its `next` page (else /account); a failed one while signed in -> `/account?<p>=failed`.

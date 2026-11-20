@@ -43,7 +43,9 @@ def _not_strict(node: Any) -> str | None:
 
 
 class FakeChatCompletions:
-    def __init__(self, host: str, key: str, models: frozenset[str], max_images: int):
+    def __init__(
+        self, host: str, key: str, models: frozenset[str], max_images: int
+    ) -> None:
         self.host = host
         self.key = key
         self.models = models

@@ -1,12 +1,17 @@
 import io
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.features.assets import manifests, store
 from ofmhelpers.features.files import disk
-from ofmhelpers.features.refusals import ConflictError, RefusedError
+from ofmhelpers.features.refusals import (
+    AssetRefusedError,
+    ConflictError,
+    RefusedError,
+)
 from ofmhelpers.features.signin.state import HOME, safe_next
 from ofmhelpers.integrations.downloaders.images import ImageDownloadConfig
 from ofmhelpers.integrations.pinterest import only_pinterest
@@ -28,17 +33,19 @@ def test_safe_next_keeps_a_path_on_this_site():
 
 
 def test_a_nul_in_an_upload_name_is_a_refusal():
-    with pytest.raises(store.AssetRefusedError):
+    with pytest.raises(AssetRefusedError):
         store.safe_filename("clip" + NUL + ".mp4")
 
 
 def test_a_nul_in_a_reference_path_is_a_refusal(tmp_path):
-    with pytest.raises(store.AssetRefusedError):
+    with pytest.raises(AssetRefusedError):
         manifests.resolve_existing_ref("a" + NUL + "b", tmp_path)
 
 
 def test_a_nul_in_a_disk_path_is_a_refusal(tmp_path, monkeypatch):
-    monkeypatch.setattr(disk, "_roots", lambda: {"uploads": tmp_path.resolve()})
+    monkeypatch.setattr(
+        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+    )
     with pytest.raises(RefusedError):
         disk.safe_path("uploads", "a" + NUL + "b")
 
@@ -48,7 +55,9 @@ def _upload(name: str, body: bytes) -> UploadFile:
 
 
 def test_a_disk_upload_is_refused_over_a_file_and_keeps_it(tmp_path, monkeypatch):
-    monkeypatch.setattr(disk, "_roots", lambda: {"uploads": tmp_path.resolve()})
+    monkeypatch.setattr(
+        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+    )
     (tmp_path / "a.txt").write_bytes(b"first")
 
     with pytest.raises(ConflictError, match="a.txt already exists"):
@@ -58,7 +67,9 @@ def test_a_disk_upload_is_refused_over_a_file_and_keeps_it(tmp_path, monkeypatch
 
 
 def test_a_disk_upload_is_refused_over_a_dangling_symlink(tmp_path, monkeypatch):
-    monkeypatch.setattr(disk, "_roots", lambda: {"uploads": tmp_path.resolve()})
+    monkeypatch.setattr(
+        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+    )
     try:
         (tmp_path / "a.txt").symlink_to(tmp_path / "nowhere.txt")
     except OSError:
@@ -71,7 +82,9 @@ def test_a_disk_upload_is_refused_over_a_dangling_symlink(tmp_path, monkeypatch)
 
 
 def test_a_disk_upload_writes_a_new_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(disk, "_roots", lambda: {"uploads": tmp_path.resolve()})
+    monkeypatch.setattr(
+        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+    )
     disk.upload("uploads", "", [_upload("a.txt", b"hello")])
     assert (tmp_path / "a.txt").read_bytes() == b"hello"
 

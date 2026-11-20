@@ -1,6 +1,7 @@
 import pytest
 import requests
 
+from ofmhelpers.db.tracked_accounts.schema import platform_names
 from ofmhelpers.integrations.instagram import (
     InstagramError,
     InstagramRateLimitedError,
@@ -21,7 +22,6 @@ from ofmhelpers.integrations.socials import (
     platforms,
 )
 from ofmhelpers.integrations.socials.platforms import instagram as ig_platform
-from ofmhelpers.schemas.socials import platform_names
 
 NOW = 1_800_000_000.0
 DAY = 86400
@@ -251,6 +251,6 @@ def test_capped_scan_does_not_cover_windows_it_did_not_reach():
 
 
 def test_every_platform_has_its_names_under_the_same_key():
-    assert platform_names().names() == platforms().names()
-    for key, platform in platforms().entries.items():
+    assert list(platform_names()) == list(platforms())
+    for key, platform in platforms().items():
         assert isinstance(platform, type(platform_names()[key]))

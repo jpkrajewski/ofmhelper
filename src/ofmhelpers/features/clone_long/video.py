@@ -1,5 +1,7 @@
 lazy from pathlib import Path
 
+from pydantic import BaseModel
+
 from ofmhelpers.features.clone_long.models import Shape
 from ofmhelpers.media.ffmpeg import binary, run, run_bytes
 from ofmhelpers.media.video_probe import duration_s
@@ -85,7 +87,7 @@ class VideoTools:
         )
         return dst
 
-    def _mean_rgb(self, src: Path) -> tuple[float, float, float]:
+    def _mean_rgb(self, src: Path) -> _Rgb:
         raw = run_bytes(
             [
                 binary("ffmpeg"),
@@ -102,7 +104,9 @@ class VideoTools:
             self.timeout_s,
         )
         n = max(1, len(raw) // 3)
-        return sum(raw[0::3]) / n, sum(raw[1::3]) / n, sum(raw[2::3]) / n
+        return _Rgb(
+            red=sum(raw[0::3]) / n, green=sum(raw[1::3]) / n, blue=sum(raw[2::3]) / n
+        )
 
     def _colour_matched(
         self, parts: list[Path], dests: list[Path], *, audio: bool
@@ -111,10 +115,7 @@ class VideoTools:
         keep = ["-c:a", "copy"] if audio else ["-an"]
         for part, dst in zip(parts[1:], dests, strict=True):
             m = self._mean_rgb(part)
-            gains = ":".join(
-                f"{c}={_gain(ref[j], m[j]):.4f}"
-                for j, c in enumerate(("rr", "gg", "bb"))
-            )
+            gains = ref.gains_to(m)
             self._write(
                 [
                     "-i",
@@ -197,6 +198,20 @@ class VideoTools:
         finally:
             tmp.unlink(missing_ok=True)
         return dest
+
+
+class _Rgb(BaseModel, frozen=True):
+    red: float
+    green: float
+    blue: float
+
+    def gains_to(self, other: _Rgb) -> str:
+        pairs = (
+            ("rr", self.red, other.red),
+            ("gg", self.green, other.green),
+            ("bb", self.blue, other.blue),
+        )
+        return ":".join(f"{c}={_gain(ref, m):.4f}" for c, ref, m in pairs)
 
 
 def _gain(ref: float, mean: float) -> float:

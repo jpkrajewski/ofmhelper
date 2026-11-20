@@ -2,9 +2,11 @@ import random
 import time
 from itertools import groupby
 
+from pydantic import BaseModel
+
 from ofmhelpers.cache.queue import active_job_ids
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import distribution as store
+from ofmhelpers.db.distribution import store
 from ofmhelpers.features.distribution.links import model_link
 from ofmhelpers.features.distribution.presets import preset_of, presets_of
 from ofmhelpers.features.distribution.publish import TASK, publish_post
@@ -12,7 +14,7 @@ from ofmhelpers.features.distribution.sources import Sources
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas.distribution import Channel, ModelPreset
+lazy from ofmhelpers.db.distribution.schema import Channel, ModelPreset
 
 logger = get_logger(__name__)
 
@@ -115,12 +117,23 @@ def _after(now: float) -> float:
     return now + slot_s() * random.uniform(1 - j, 1 + j)  # noqa: S311
 
 
-def _what(model: ModelPreset, link: str) -> tuple[str, str, str]:
+class _Pin(BaseModel, frozen=True):
+    title: str
+    caption: str
+    link: str
+
+
+def _what(model: ModelPreset, link: str) -> _Pin:
     pick = random.random
     if model.instagram and pick() < settings.distribution.handle_share:
         prefix = random.choice(_HANDLE_PREFIXES)  # noqa: S311
-        return f"{prefix} {random.choice(model.instagram)}", "", ""  # noqa: S311
-    return model.title, random.choice(model.descriptions), link  # noqa: S311
+        title = f"{prefix} {random.choice(model.instagram)}"  # noqa: S311
+        return _Pin(title=title, caption="", link="")
+    return _Pin(
+        title=model.title,
+        caption=random.choice(model.descriptions),  # noqa: S311
+        link=link,
+    )
 
 
 def start_next(channel: Channel) -> str | None:
@@ -142,8 +155,8 @@ def start_next(channel: Channel) -> str | None:
     except RefusedError:
         logger.exception("distribution: %s has no link; pinning it without", model.key)
         link = ""
-    title, caption, link = _what(model, link)
-    if not repo.claim(post.id, title, caption, link):
+    pin = _what(model, link)
+    if not repo.claim(post.id, pin.title, pin.caption, pin.link):
         return None
     try:
         job_id = start_job(
@@ -164,7 +177,7 @@ def start_next(channel: Channel) -> str | None:
         post.kind,
         post.name,
         model.key,
-        title,
+        pin.title,
         job_id,
     )
     return job_id

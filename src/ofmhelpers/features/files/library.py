@@ -5,9 +5,8 @@ lazy from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict
 lazy from starlette.datastructures import UploadFile
 
-from ofmhelpers.db.stores.jobs import get_job, job_counts, list_jobs_page
-from ofmhelpers.db.stores.users import list_users
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.jobs.store import get_job, job_counts, list_jobs_page
+from ofmhelpers.db.users.store import list_users
 from ofmhelpers.features.assets.refs import StoredFile, stored_files
 from ofmhelpers.features.assets.store import (
     assets_root_for_user,
@@ -15,10 +14,12 @@ from ofmhelpers.features.assets.store import (
     save_asset,
     strip_asset_hash_prefix,
 )
+from ofmhelpers.features.files.schema import FileTile, UserFiles
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import FileTile, Job, UserFiles
+lazy from ofmhelpers.db.jobs.schema import Job
 
 logger = get_logger(__name__)
 

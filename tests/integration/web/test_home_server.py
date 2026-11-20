@@ -1,4 +1,4 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,7 +105,7 @@ def test_the_host_numbers_come_from_proc(tmp_path, monkeypatch):
     assert box.memory.used == 6000000 * 1024
     assert box.memory.percent == pytest.approx(75)
     assert box.swap.used == 0
-    assert box.load == (1.5, 1.0, 0.5)
+    assert box.load == [1.5, 1.0, 0.5]
     assert box.uptime_s == pytest.approx(7200.55)
     assert box.cpu_percent == 0
     assert box.disk.total > 0

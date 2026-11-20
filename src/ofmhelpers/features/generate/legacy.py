@@ -1,10 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, model_serializer
-
-from ofmhelpers.utils.registry import Registry
 
 
 class AiParams(BaseModel):
@@ -60,7 +59,7 @@ class LegacyTool(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def legacy_tools() -> Registry[LegacyTool]:
+def legacy_tools() -> MappingProxyType[str, LegacyTool]:
     raw = Path(__file__).with_name("legacy_tools.json").read_text(encoding="utf-8")
     rows = TypeAdapter(dict[str, LegacyTool]).validate_json(raw)
-    return Registry[LegacyTool](entries=rows)
+    return MappingProxyType(rows)

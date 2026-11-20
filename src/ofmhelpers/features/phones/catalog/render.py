@@ -1,9 +1,9 @@
-from collections.abc import Callable
 from functools import lru_cache
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, SkipValidation
 
-from ofmhelpers.schemas.phone_catalog.models import (
+from ofmhelpers.db.devices.catalog.schema import (
     CameraLayout,
     Finish,
     PhoneModel,
@@ -21,19 +21,32 @@ _UNKNOWN = "#4b4b57"
 _LIGHT_LUMA = 150
 
 
-def _rgb(hex_color: str) -> tuple[int, int, int]:
-    return int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+class _Rgb(BaseModel, frozen=True):
+    r: int
+    g: int
+    b: int
+
+    @classmethod
+    def parse(cls, hex_color: str) -> _Rgb:
+        return cls(
+            r=int(hex_color[1:3], 16),
+            g=int(hex_color[3:5], 16),
+            b=int(hex_color[5:7], 16),
+        )
+
+
+def _blend(x: int, y: int, t: float) -> int:
+    return round(x + (y - x) * t)
 
 
 def _mix(a: str, b: str, t: float) -> str:
-    ca, cb = _rgb(a), _rgb(b)
-    mixed = (round(x + (y - x) * t) for x, y in zip(ca, cb, strict=True))
-    return "#{:02x}{:02x}{:02x}".format(*mixed)
+    ca, cb = _Rgb.parse(a), _Rgb.parse(b)
+    return f"#{_blend(ca.r, cb.r, t):02x}{_blend(ca.g, cb.g, t):02x}{_blend(ca.b, cb.b, t):02x}"
 
 
 def _light(hex_color: str) -> bool:
-    r, g, b = _rgb(hex_color)
-    return 0.299 * r + 0.587 * g + 0.114 * b > _LIGHT_LUMA
+    c = _Rgb.parse(hex_color)
+    return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b > _LIGHT_LUMA
 
 
 class _Pen:

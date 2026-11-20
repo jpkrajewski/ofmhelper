@@ -1,17 +1,18 @@
 import re
 import time
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 import time_machine
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores import drive_folders as folder_store
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, record_scan
-from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.db.drive_folders import store as folder_store
+from ofmhelpers.db.jobs.store import create_job, history
+from ofmhelpers.db.tracked_accounts.store import list_accounts, record_scan
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
+from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import uploads as drive_uploads
 from ofmhelpers.features.jobs.runner import run_job
@@ -19,7 +20,6 @@ from ofmhelpers.integrations.gdrive import DriveError, DriveFile
 from ofmhelpers.integrations.gdrive.fake import fake_drive
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import AccountProfile, AccountStats
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 ROOT = "upload-root-folder"
@@ -404,8 +404,6 @@ def test_a_revoked_google_token_refuses_the_remove_with_a_reason(
 
 
 def test_an_upload_leaves_a_job_row_naming_what_went_up(drive, tmp_path):
-    from ofmhelpers.db.stores.jobs import history
-
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     state = _upload(ann, _finished_run("ann@example.com", tmp_path), login)

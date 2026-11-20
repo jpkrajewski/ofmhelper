@@ -1,8 +1,8 @@
 import base64
 import mimetypes
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NoReturn
+lazy from collections.abc import Callable
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field

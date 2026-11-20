@@ -23,25 +23,25 @@ class SampleTables(BaseModel):
             if ctts
             else [0] * len(durations)
         )
-        sync = list(_entries(stss.payload, ">I")) if stss else []
-        return cls(
-            durations=durations, offsets=offsets, sync_samples=[s for (s,) in sync]
-        )
+        sync = _entries(stss.payload, ">I") if stss else []
+        return cls(durations=durations, offsets=offsets, sync_samples=sync)
 
 
-def _entries(payload: bytes, fmt: str) -> list[tuple[int, ...]]:
+def _entries(payload: bytes, fmt: str) -> list[int]:
     count = struct.unpack(">I", payload[4:8])[0]
     size = struct.calcsize(fmt)
-    return [
-        struct.unpack(fmt, payload[8 + i * size : 8 + (i + 1) * size])
-        for i in range(count)
-    ]
+    body = payload[8 : 8 + count * size]
+    if len(body) != count * size:
+        msg = f"sample table cut short: {len(body)} of {count * size} bytes"
+        raise struct.error(msg)
+    return [value for chunk in struct.iter_unpack(fmt, body) for value in chunk]
 
 
 def _runs(payload: bytes, *, signed: bool) -> list[int]:
+    flat = _entries(payload, ">Ii" if signed else ">II")
     return [
         value
-        for count, value in _entries(payload, ">Ii" if signed else ">II")
+        for count, value in zip(flat[0::2], flat[1::2], strict=True)
         for _ in range(count)
     ]
 

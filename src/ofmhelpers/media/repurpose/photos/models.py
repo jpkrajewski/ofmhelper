@@ -17,11 +17,10 @@ class _Strict(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-def _ordered(span: Span, low: float) -> Span:
+def _ordered(span: Span, low: float) -> None:
     if not low <= span[0] <= span[1]:
         msg = f"{list(span)}: needs {low} <= lo <= hi"
         raise ValueError(msg)
-    return span
 
 
 class Lens(_Strict):
@@ -73,7 +72,8 @@ class Stills(_Strict):
     @field_validator("gap_s")
     @classmethod
     def _gap(cls, found: Span) -> Span:
-        return _ordered(found, 0)
+        _ordered(found, 0)
+        return found
 
 
 class Retouch(_Strict):

@@ -1,3 +1,4 @@
+import importlib.util
 import random
 import subprocess
 from functools import lru_cache
@@ -6,13 +7,16 @@ from typing import Any, Protocol
 from urllib.parse import urlsplit
 lazy from collections.abc import Callable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+lazy import yt_dlp
+lazy from yt_dlp import YoutubeDL
 lazy from yt_dlp.extractor import gen_extractor_classes
+lazy from yt_dlp.extractor.common import InfoExtractor
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import egress
+from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders import fake
-from ofmhelpers.integrations.downloaders.cookies import cookie_file
 from ofmhelpers.integrations.downloaders.models import (
     DownloadResult,
     ExtractorArgs,
@@ -20,10 +24,10 @@ from ofmhelpers.integrations.downloaders.models import (
     YtDlpInfo,
     YtDlpOptions,
 )
+from ofmhelpers.integrations.outbound import ProxyPool
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 from ofmhelpers.media.video_probe import duration_s
-from ofmhelpers.utils.proxy_pool import ProxyPool
 
 logger = get_logger(__name__)
 
@@ -54,8 +58,8 @@ def _proxies_for(url: str) -> list[str]:
 def _default_extractor_args() -> ExtractorArgs:
     pot_url = settings.downloaders.bgutil_pot_provider_url
     if not pot_url:
-        return {}
-    return {"youtubepot-bgutilhttp": {"base_url": [pot_url]}}
+        return ExtractorArgs()
+    return ExtractorArgs(values={"youtubepot-bgutilhttp": {"base_url": [pot_url]}})
 
 
 SITE_EXTRACTORS_ONLY = ("default", "-generic")
@@ -103,10 +107,10 @@ class DownloadConfig(BaseModel):
             if cookiefile or not self.cookies_from_browser
             else (self.cookies_from_browser, None, None, None)
         )
-        extractor_args: ExtractorArgs = {}
+        extractor_args: dict[str, dict[str, list[str]]] = {}
         if self.youtube_player_clients:
             extractor_args["youtube"] = {"player_client": self.youtube_player_clients}
-        extractor_args.update(self.extractor_args)
+        extractor_args.update(self.extractor_args.values)
         return YtDlpOptions(
             format=self.format,
             merge_output_format=self.merge_output_format,
@@ -118,7 +122,7 @@ class DownloadConfig(BaseModel):
             socket_timeout=self.socket_timeout,
             cookiefile=cookiefile,
             cookiesfrombrowser=browser,
-            extractor_args=extractor_args,
+            extractor_args=ExtractorArgs(values=extractor_args),
         )
 
     def ffmpeg_cmd(self, src: Path, dst: Path) -> list[str]:
@@ -171,8 +175,8 @@ def is_tiktok_url(url: str) -> bool:
 
 
 @lru_cache(maxsize=1)
-def _site_extractors() -> tuple[Any, ...]:
-    return tuple(ie for ie in gen_extractor_classes() if ie.ie_key() != "Generic")
+def _site_extractors() -> list[type[InfoExtractor]]:
+    return [ie for ie in gen_extractor_classes() if ie.ie_key() != "Generic"]
 
 
 def site_of(url: str) -> str | None:
@@ -208,10 +212,8 @@ def download(
     if settings.infra.fake_externals:
         return fake.video(url, config.output_dir)
 
-    try:
-        import yt_dlp
-    except ImportError:
-        logger.warning("yt-dlp: not installed", exc_info=True)
+    if importlib.util.find_spec("yt_dlp") is None:
+        logger.warning("yt-dlp: not installed")
         return DownloadResult(
             url=url,
             success=False,
@@ -226,6 +228,11 @@ def download(
         try:
             info = reading.fetch(proxy)
             break
+        except ValidationError as exc:
+            logger.warning(
+                "download %s: its files could not be read", url, exc_info=True
+            )
+            return DownloadResult(url=url, success=False, error=str(exc))
         except Exception as exc:
             logger.warning(
                 "download %s failed (%s)",
@@ -238,7 +245,7 @@ def download(
         return DownloadResult(url=url, success=False, error=errors[0])
 
     try:
-        paths = YtDlpInfo.model_validate(info).output_paths()
+        paths = info.output_paths()
         if not paths:
             return DownloadResult(
                 url=url,
@@ -267,8 +274,6 @@ def video_info(
     except egress.NotPublicError:
         logger.warning("video_info %s refused: not public", url, exc_info=True)
         return VideoInfo(url=url, error="This link is not on the public internet")
-    import yt_dlp
-
     config = DownloadConfig.single_post(socket_timeout=socket_timeout)
     reading = _Reading(yt_dlp=yt_dlp, url=url, opts=config.ydl_opts(cookiefile))
     errors: list[str] = []
@@ -285,7 +290,7 @@ def video_info(
             error=errors[-1],
             logged_out_error=errors[0] if len(errors) > 1 else None,
         )
-    entry = YtDlpInfo.model_validate(info).first_video()
+    entry = info.first_video()
     if entry is None:
         return VideoInfo(url=url, error="No video at this link (a photo post?)")
     seconds = entry.duration
@@ -320,12 +325,14 @@ class _Reading(BaseModel, frozen=True):
     url: str
     opts: YtDlpOptions
 
-    def _ydl(self, opts: YtDlpOptions) -> Any:
+    def _ydl(self, opts: YtDlpOptions) -> YoutubeDL:
         return self.yt_dlp.YoutubeDL(opts.model_dump(exclude_none=True))
 
-    def try_peek(self, proxy: str | None, errors: list[str]) -> Any | None:
+    def try_peek(self, proxy: str | None, errors: list[str]) -> YtDlpInfo | None:
         try:
             return self.peek(proxy)
+        except ValidationError:
+            raise
         except Exception as exc:
             logger.warning(
                 "video info %s failed (%s)",
@@ -336,26 +343,28 @@ class _Reading(BaseModel, frozen=True):
             errors.append(str(exc))
             return None
 
-    def peek(self, proxy: str | None) -> Any:
+    def peek(self, proxy: str | None) -> YtDlpInfo:
         opts = self.opts
         if proxy is not None:
             opts = opts.model_copy(
                 update={"cookiefile": None, "cookiesfrombrowser": None, "proxy": proxy}
             )
         with self._ydl(opts) as ydl:
-            return ydl.extract_info(self.url, download=False)
+            return YtDlpInfo.model_validate(ydl.extract_info(self.url, download=False))
 
-    def fetch(self, proxy: str | None) -> Any:
+    def fetch(self, proxy: str | None) -> YtDlpInfo:
         if proxy is None:
             with self._ydl(self.opts) as ydl:
-                return ydl.extract_info(self.url, download=True)
+                return YtDlpInfo.model_validate(
+                    ydl.extract_info(self.url, download=True)
+                )
         anon = self.opts.model_copy(
             update={"cookiefile": None, "cookiesfrombrowser": None}
         )
         with self._ydl(anon.model_copy(update={"proxy": proxy})) as ydl:
             info = ydl.sanitize_info(ydl.extract_info(self.url, download=False))
         with self._ydl(anon) as ydl:
-            return ydl.process_ie_result(info, download=True)
+            return YtDlpInfo.model_validate(ydl.process_ie_result(info, download=True))
 
 
 def download_all(

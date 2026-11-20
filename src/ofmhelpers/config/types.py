@@ -1,5 +1,6 @@
 import math
-import random
+from enum import StrEnum
+lazy import random
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -64,3 +65,10 @@ class PlaceSample(_Frozen):
 class StackedKey(_Frozen):
     name: str
     key: str
+
+
+class AccountFolder(StrEnum):
+    POSTED = "POSTED"
+    TRIALS = "TRIALS"
+    THREADS = "THREADS"
+    SPOOFED = "SPOOFED"

@@ -1,9 +1,9 @@
 import json
-from collections.abc import Iterator
 from functools import cached_property
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any
+lazy from collections.abc import Iterator
+lazy from pathlib import Path
 
 import requests
 from pydantic import BaseModel
@@ -11,9 +11,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
-from ofmhelpers.errors import AppError
 from ofmhelpers.integrations import outbound
-from ofmhelpers.integrations.downloaders.cookies import CookieFileError, load_jar
+from ofmhelpers.integrations.cookie_jar import CookieFileError, load_jar
 from ofmhelpers.integrations.instagram import pages
 from ofmhelpers.integrations.instagram.models import (
     ClipsPage,
@@ -53,7 +52,7 @@ _PROFILE_FLAGS = {
 }
 
 
-class InstagramError(AppError): ...
+class InstagramError(Exception): ...
 
 
 class InstagramRateLimitedError(InstagramError): ...

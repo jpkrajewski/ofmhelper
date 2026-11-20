@@ -4,16 +4,16 @@ import os
 import subprocess
 import sys
 import threading
-from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
+lazy from collections.abc import Iterator
 
 import pytest
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
     ExportTraceServiceRequest,
 )
 
-from ofmhelpers import telemetry
+from ofmhelpers.monitoring import telemetry
 
 _FORK_DURING_AN_EXPORT = r"""
 import gc, os, threading
@@ -21,7 +21,7 @@ import gc, os, threading
 import logfire
 from logfire._internal.exporters.otlp import OTLPExporterHttpSession
 
-from ofmhelpers import telemetry
+from ofmhelpers.monitoring import telemetry
 
 telemetry.configure_telemetry("ascend-fork-test")
 

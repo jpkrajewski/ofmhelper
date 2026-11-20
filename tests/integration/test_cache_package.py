@@ -5,6 +5,7 @@ from redis import Redis
 from redis.exceptions import RedisError
 from repo_paths import SRC
 
+import ofmhelpers.cache.queue as queue_module
 from ofmhelpers.cache import delete_text, get_queue, get_redis, get_text, set_text
 
 
@@ -57,8 +58,6 @@ def test_text_helpers_report_a_miss_when_the_broker_is_down(monkeypatch):
 
 
 def test_a_job_can_carry_its_own_time_limit(monkeypatch):
-    import ofmhelpers.cache.queue as queue_module
-
     monkeypatch.setenv("OFM_RQ_ASYNC", "true")
     monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
 
@@ -70,8 +69,6 @@ def test_a_job_can_carry_its_own_time_limit(monkeypatch):
 
 
 def test_inline_mode_never_hands_the_time_limit_to_the_function(monkeypatch):
-    import ofmhelpers.cache.queue as queue_module
-
     monkeypatch.setenv("OFM_RQ_ASYNC", "false")
     seen = []
     queue_module.enqueue(lambda *a, **k: seen.append((a, k)), 1, job_timeout=9, x=2)

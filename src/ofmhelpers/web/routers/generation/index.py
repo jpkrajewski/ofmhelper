@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.generate.page import form_view
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, ApiKeys, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.responses import NO_STORE

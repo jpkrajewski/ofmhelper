@@ -1,9 +1,9 @@
 import io
 import json
-from collections.abc import Callable, Mapping
 from functools import lru_cache
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 from urllib.parse import urlsplit
+lazy from collections.abc import Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,7 +12,6 @@ from requests.structures import CaseInsensitiveDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils.registry import Registry
 
 logger = get_logger(__name__)
 
@@ -39,50 +38,33 @@ class FakeReply(BaseModel):
         )
 
 
-FakeHandler = Callable[[requests.PreparedRequest, Mapping[str, str]], FakeReply]
+@runtime_checkable
+class FakeHandler(Protocol):
+    def __call__(
+        self, request: requests.PreparedRequest, proxies: Mapping[str, str], /
+    ) -> FakeReply: ...
 
 
 class FakeRoute(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     host: str
     handler: FakeHandler
 
 
-@lru_cache(maxsize=1)
-def _routes() -> Registry[FakeHandler]:
-    from ofmhelpers.integrations.ai_providers.apiyi.fake import routes as apiyi_routes
-    from ofmhelpers.integrations.ai_providers.elyum.fake import routes as elyum_routes
-    from ofmhelpers.integrations.ai_providers.higgsfield.fake import routes as hf_routes
-    from ofmhelpers.integrations.ai_providers.kie.fake import routes as kie_routes
-    from ofmhelpers.integrations.ai_providers.runninghub.fake import routes as rh_routes
-    from ofmhelpers.integrations.apify.fake import routes as apify_routes
-    from ofmhelpers.integrations.downloaders.savers_fake import routes as savers_routes
-    from ofmhelpers.integrations.fanvue.fake import routes as fanvue_routes
-    from ofmhelpers.integrations.instagram.fake import routes as instagram_routes
-    from ofmhelpers.integrations.pinterest.fake import routes as pinterest_routes
-    from ofmhelpers.integrations.senders.telegram.fake import routes as telegram_routes
-    from ofmhelpers.integrations.short_links.fake import routes as links_routes
-    from ofmhelpers.integrations.signin.fake import routes as signin_routes
-    from ofmhelpers.integrations.stacked.fake import routes as stacked_routes
+class _Fakes(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    routes = [
-        *instagram_routes(),
-        *kie_routes(),
-        *hf_routes(),
-        *signin_routes(),
-        *links_routes(),
-        *savers_routes(),
-        *apify_routes(),
-        *stacked_routes(),
-        *fanvue_routes(),
-        *rh_routes(),
-        *elyum_routes(),
-        *apiyi_routes(),
-        *telegram_routes(),
-        *pinterest_routes(),
-    ]
-    return Registry[FakeHandler](entries={r.host: r.handler for r in routes})
+    handlers: dict[str, FakeHandler] = Field(default_factory=dict)
+
+
+@lru_cache(maxsize=1)
+def _fakes() -> _Fakes:
+    return _Fakes()
+
+
+def register_fakes(routes: list[FakeRoute]) -> None:
+    _fakes().handlers.update({route.host: route.handler for route in routes})
 
 
 class FakeAdapter(BaseAdapter):
@@ -96,7 +78,7 @@ class FakeAdapter(BaseAdapter):
         proxies: Mapping[str, str] | None = None,
     ) -> requests.Response:
         host = urlsplit(request.url or "").hostname or ""
-        handler = _routes().get(host)
+        handler = _fakes().handlers.get(host)
         if handler is None:
             msg = f"OFM_FAKE_EXTERNALS: no fake for {host!r}, request refused"
             logger.warning("%s (%s %s)", msg, request.method, request.url)
@@ -140,3 +122,27 @@ def head(url: str, **kwargs: Any) -> requests.Response:
     if settings.infra.fake_externals:
         return mount(requests.Session()).head(url, **kwargs)
     return requests.head(url, **kwargs)  # noqa: S113
+
+
+class ProxyPool:
+    def __init__(self, urls: list[str], start: int = 0) -> None:
+        self._live = list(urls)
+        self._turn = start % len(self._live) if self._live else 0
+
+    def __len__(self) -> int:
+        return len(self._live)
+
+    def next(self) -> str | None:
+        if not self._live:
+            return None
+        self._turn %= len(self._live)
+        proxy = self._live[self._turn]
+        self._turn += 1
+        return proxy
+
+    def drop(self, proxy: str | None) -> None:
+        if proxy in self._live:
+            if self._live.index(proxy) < self._turn:
+                self._turn -= 1
+            self._live.remove(proxy)
+            logger.warning("dead proxy skipped for this job; %d left", len(self))

@@ -1,6 +1,6 @@
 import os
 import subprocess
-from collections.abc import Iterator
+lazy from collections.abc import Iterator
 
 import pytest
 from alembic.config import Config

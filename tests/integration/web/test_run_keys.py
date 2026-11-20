@@ -2,13 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
-from ofmhelpers.db.stores import jobs, users
+from ofmhelpers.db.jobs import store as jobs
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.account.keys import Keys, keep_used
 from ofmhelpers.features.jobs import runner
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY, fake_apiyi
 from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 WAN = "apiyi:wan3.0-video"

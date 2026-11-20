@@ -7,7 +7,7 @@ from PIL import Image
 lazy from e2e_session import Session
 lazy from playwright.sync_api import Response
 
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.jobs import runner as jobs_store
 from ofmhelpers.features.jobs.runner import run_job
 

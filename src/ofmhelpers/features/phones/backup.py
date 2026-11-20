@@ -4,10 +4,10 @@ from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.encrypted import decrypt, encrypt
-from ofmhelpers.db.stores import phone_revisions as store
+from ofmhelpers.db.phone_revisions import store
+from ofmhelpers.db.phone_revisions.schema import DumpLoaded, DumpWritten, PhoneDump
 from ofmhelpers.features.assets.store import uploads_root
 from ofmhelpers.log import configure_logging, get_logger
-from ofmhelpers.schemas.phone_revisions import DumpLoaded, DumpWritten, PhoneDump
 
 logger = get_logger(__name__)
 

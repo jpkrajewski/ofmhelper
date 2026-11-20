@@ -10,7 +10,7 @@ from redis.exceptions import RedisError
 from signin import make_user, sign_in
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
+from ofmhelpers.db.jobs.store import create_job, get_job, list_jobs_page
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.edit import service as edit_service
 from ofmhelpers.web.main import app

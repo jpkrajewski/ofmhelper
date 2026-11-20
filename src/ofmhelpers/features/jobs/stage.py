@@ -1,5 +1,5 @@
+from ofmhelpers.db.jobs.schema import Job, JobStatus
 from ofmhelpers.media.exports import exports
-from ofmhelpers.schemas.persistence import Job, JobStatus
 
 SAVING = "Generated. Saving…"
 _ORIGINAL = "original"

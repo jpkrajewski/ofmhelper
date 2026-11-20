@@ -3,11 +3,11 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.chats.schema import ChatPlatform
+from ofmhelpers.db.users import store as users
+from ofmhelpers.features.account.stacked_keys import StackedKeys
 from ofmhelpers.features.chatting import sources
-from ofmhelpers.features.chatting.stacked_keys import StackedKeys
 from ofmhelpers.integrations.stacked.fake import AGENCY_KEY, CREATOR, CREATOR_KEY
-from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.web.main import app
 
 

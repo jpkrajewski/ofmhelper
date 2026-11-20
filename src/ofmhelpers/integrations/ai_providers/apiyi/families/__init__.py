@@ -1,11 +1,18 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from pathlib import Path
 from typing import ClassVar
+lazy from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
+lazy from ofmhelpers.integrations.ai_providers.apiyi.families import (
+    dashscope,
+    gemini,
+    images,
+    seedance,
+    veo,
+)
 lazy from ofmhelpers.integrations.ai_providers.base import TaskState
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
@@ -36,14 +43,6 @@ class Family(ABC):
 
 @lru_cache(maxsize=1)
 def families() -> list[Family]:
-    from ofmhelpers.integrations.ai_providers.apiyi.families import (
-        dashscope,
-        gemini,
-        images,
-        seedance,
-        veo,
-    )
-
     return [
         dashscope.DashScope(),
         seedance.Seedance(),

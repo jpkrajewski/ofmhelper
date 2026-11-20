@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.edit.errors import EditRefusedError
+from ofmhelpers.features.refusals import EditRefusedError
 
 
 class Clip(BaseModel):

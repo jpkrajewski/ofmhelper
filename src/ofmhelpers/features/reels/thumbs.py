@@ -1,5 +1,5 @@
 import io
-from pathlib import Path
+lazy from pathlib import Path
 
 import requests
 from PIL import Image, UnidentifiedImageError

@@ -1,10 +1,10 @@
 import time
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatAccount, ChatPlatform
 from ofmhelpers.integrations.fanvue import oauth
 from ofmhelpers.integrations.fanvue.errors import FanvueAuthError
-from ofmhelpers.schemas.chatting import ChatAccount, ChatPlatform
 
 
 class FanvueTokens:

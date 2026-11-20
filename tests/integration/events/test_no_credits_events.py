@@ -1,9 +1,10 @@
 import pytest
 from signin import make_user
 
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
+from ofmhelpers.background import recovery
+from ofmhelpers.db.jobs.store import create_job, fail_job, get_job
 from ofmhelpers.features.events import Event
-from ofmhelpers.features.jobs import notices, recovery
+from ofmhelpers.features.jobs import notices
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import TaskState

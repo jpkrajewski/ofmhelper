@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.features.applications import service
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render

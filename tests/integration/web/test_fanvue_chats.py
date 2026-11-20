@@ -13,8 +13,9 @@ from signin import sign_in_admin
 from sqlalchemy import text
 
 from ofmhelpers.cache import delete_text, get_text
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatPlatform
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import chats
 from ofmhelpers.features.chatting.fanvue_connect import connect_url, finish
 from ofmhelpers.features.chatting.fanvue_tokens import FanvueTokens
 from ofmhelpers.features.chatting.sync import run_when_due, sync
@@ -26,7 +27,6 @@ from ofmhelpers.features.chatting.webhooks import (
 from ofmhelpers.integrations.fanvue import fake as fanvue_fake
 from ofmhelpers.integrations.fanvue.errors import FanvueAuthError, FanvueError
 from ofmhelpers.integrations.outbound import FakeReply
-from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.usefixtures("fake_externals")

@@ -1,5 +1,3 @@
-from typing import Any
-
 from pydantic import Field
 
 from ofmhelpers.config import settings
@@ -10,7 +8,7 @@ from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
 from ofmhelpers.media.image_fit import ImageLimits
 lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
-lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.spec import Fields, ModelSpec, Payload
 
 GENERATIONS = "/v1/images/generations"
 EDITS = "/v1/images/edits"
@@ -40,12 +38,14 @@ def _refs(payload: Payload) -> list[str]:
     return [str(r) for r in (refs if isinstance(refs, list) else [refs]) if r]
 
 
-def _api_fields(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
+def _api_fields(spec: ModelSpec, payload: Payload) -> Fields:
     values = with_defaults(spec, payload)
-    return {
-        "model": spec.model_id,
-        **{k: v for k, v in values.values.items() if k not in _OURS},
-    }
+    return Fields(
+        values={
+            "model": spec.model_id,
+            **{k: v for k, v in values.values.items() if k not in _OURS},
+        }
+    )
 
 
 class GptImage(SyncImages):
@@ -54,7 +54,7 @@ class GptImage(SyncImages):
 
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
         official = not spec.model_id.endswith(("-all", "-vip"))
-        fields = _api_fields(spec, payload)
+        fields = _api_fields(spec, payload).values
         if not official:
             fields["response_format"] = "b64_json"
         timeout = settings.apiyi.image_timeout_s
@@ -81,7 +81,7 @@ class Seedream(SyncImages):
 
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
         body = {
-            **_api_fields(spec, payload),
+            **_api_fields(spec, payload).values,
             "response_format": "url",
             "watermark": False,
         }
@@ -101,7 +101,7 @@ class Flux(SyncImages):
     _LIMITS = ImageLimits(max_bytes=20 * 1000 * 1000, max_side=1920)
 
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
-        fields = _api_fields(spec, payload)
+        fields = _api_fields(spec, payload).values
         refs = _refs(payload)
         if refs:
             fields.pop("size", None)

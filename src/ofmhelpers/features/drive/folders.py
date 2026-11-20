@@ -13,10 +13,20 @@ from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache import get_redis, get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import drive_folders as store
-from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores import users
-from ofmhelpers.features.clone_links.folders import review_folders
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.drive_folders import store
+from ofmhelpers.db.drive_folders.schema import (
+    AccountScan,
+    DriveBoard,
+    DriveCard,
+    DriveTarget,
+    StoredFolder,
+    SyncReport,
+    UploadedToday,
+)
+from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.tracked_accounts.store import untrack
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive import va_folders
 from ofmhelpers.features.previews.render import previews_dir, write_atomic
 from ofmhelpers.integrations.gdrive import (
@@ -38,18 +48,9 @@ from ofmhelpers.integrations.gdrive.models import (
 )
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import (
-    AccountScan,
-    DriveBoard,
-    DriveCard,
-    DriveTarget,
-    StoredFolder,
-    SyncReport,
-)
-from ofmhelpers.schemas.drive import UploadedToday
-from ofmhelpers.telemetry import in_this_trace
-lazy from ofmhelpers.schemas.drive import StoredFolders
-lazy from ofmhelpers.schemas.gdrive import AccountFolder
+from ofmhelpers.monitoring.telemetry import in_this_trace
+lazy from ofmhelpers.config.types import AccountFolder
+lazy from ofmhelpers.db.drive_folders.schema import StoredFolders
 
 logger = get_logger(__name__)
 
@@ -267,11 +268,16 @@ def review_folder(refresh_token: str, user_id: int, name: str) -> ReviewPlace:
         )
 
 
-def _by_owner(targets: list[DriveTarget]) -> dict[int, list[DriveTarget]]:
+class _OwnerTargets(BaseModel):
+    user_id: int
+    targets: list[DriveTarget]
+
+
+def _by_owner(targets: list[DriveTarget]) -> list[_OwnerTargets]:
     grouped: dict[int, list[DriveTarget]] = defaultdict(list)
     for target in targets:
         grouped[target.device.user_id].append(target)
-    return dict(grouped)
+    return [_OwnerTargets(user_id=u, targets=t) for u, t in grouped.items()]
 
 
 def now() -> datetime.datetime:
@@ -298,14 +304,31 @@ def _missing(targets: list[DriveTarget], folders: StoredFolders) -> list[DriveTa
     ]
 
 
-def _deleted_by_hand(target: DriveTarget) -> None:
-    from ofmhelpers.features.accounts.removal import folder_deleted
+def review_folders() -> set[str]:
+    s = settings.clone_links
+    return {s.good_folder, s.trial_folder}
 
+
+def _deleted_by_hand(target: DriveTarget) -> None:
     logger.warning(
         "drive: folder of %s deleted by hand: removing the account", target.handle
     )
     store.forget_account_folder(target.login_id)
-    folder_deleted(target.device.user_id, target.login_id)
+    owner, login_id = target.device.user_id, target.login_id
+    tracked = sorted(
+        {
+            login.tracked_account_id
+            for phone in devices.list_devices(owner)
+            for login in phone.logins
+            if login.id == login_id and login.tracked_account_id
+        }
+    )
+    devices.archive_logins([login_id], owner)
+    if tracked:
+        untrack(tracked, owner)
+    logger.info(
+        "drive folder of login %s deleted by hand: removed everywhere", login_id
+    )
 
 
 def trash_folders(user_id: int, login_ids: list[int]) -> None:
@@ -341,13 +364,18 @@ def _gone_meanwhile(target: DriveTarget) -> Never:
     raise _LoginGoneError
 
 
+class _AccountFolder(BaseModel, frozen=True):
+    folder_id: str
+    kept: bool
+
+
 def _account_folder(
     drive: DriveApi,
     root: str,
     target: DriveTarget,
     stored: StoredFolder | None,
     report: SyncReport,
-) -> tuple[str, bool]:
+) -> _AccountFolder:
     if stored is not None:
         try:
             current = drive.folder(stored.folder_id)
@@ -362,7 +390,7 @@ def _account_folder(
                 target.login_id, current.id, target.folder_name, root
             ):
                 _gone_meanwhile(target)
-            return current.id, True
+            return _AccountFolder(folder_id=current.id, kept=True)
     found = drive.find_folder(root, target.folder_name)
     adopted = found is not None
     if found is None:
@@ -372,7 +400,7 @@ def _account_folder(
     ):
         _gone_meanwhile(target)
     (report.adopted if adopted else report.created).append(target.folder_name)
-    return found.id, False
+    return _AccountFolder(folder_id=found.id, kept=False)
 
 
 def _find_posted(drive: DriveApi, account_id: str) -> DriveFile | None:
@@ -429,11 +457,11 @@ def _sync_one(
     report: SyncReport,
 ) -> None:
     try:
-        account_id, kept = _account_folder(drive, root, target, stored, report)
+        account = _account_folder(drive, root, target, stored, report)
     except _RemovedByHandError, _LoginGoneError:  # silent: handled where raised
         return
-    posted_id = stored.posted_folder_id if kept and stored else None
-    _posted_folder(drive, target, account_id, posted_id, report)
+    posted_id = stored.posted_folder_id if account.kept and stored else None
+    _posted_folder(drive, target, account.folder_id, posted_id, report)
 
 
 def _files(items: list[DriveFile]) -> list[DriveFile]:
@@ -574,7 +602,7 @@ def sync(owner: int | None = None) -> SyncReport:
         if not held:
             report.busy = True
             return report
-        by_owner = _by_owner(store.targets(owner))
+        by_owner = {o.user_id: o.targets for o in _by_owner(store.targets(owner))}
         for va_owner in va_folders.owners(owner):
             by_owner.setdefault(va_owner, [])
         for user_id, targets in by_owner.items():
@@ -669,6 +697,10 @@ def _list_each(user_id: int, cards: list[DriveCard], seen_at: float) -> None:
                 card.error = "Could not read this folder from Drive"
 
 
+class _RootListing(BaseModel, frozen=True):
+    names: dict[str, str]
+
+
 def _list_root(
     result: DriveBoard,
     user_id: int,
@@ -677,7 +709,7 @@ def _list_root(
     cards: list[DriveCard],
     known: set[str] | None,
     seen_at: float,
-) -> dict[str, str] | None:
+) -> _RootListing | None:
     try:
         listed = _root_folders(user_id, drive, root)
     except FolderGoneError:
@@ -688,7 +720,7 @@ def _list_root(
         return None
     except Exception:
         logger.exception("drive: root of %s not listed, listing one by one", user_id)
-        return {}
+        return _RootListing(names={})
     in_root = {f.id: f.name for f in listed}
     if known is not None:
         ours = {name.casefold() for name in review_folders()}
@@ -709,8 +741,8 @@ def _list_root(
         )
     except Exception:
         logger.exception("drive: batched listing failed, listing one by one")
-        return {}
-    return in_root
+        return _RootListing(names={})
+    return _RootListing(names=in_root)
 
 
 def _list_owner(
@@ -733,14 +765,14 @@ def _list_owner(
         return
     user = users.get_user(user_id)
     root = user.drive_root_id if user else None
-    in_root = (
+    listing = (
         _list_root(
             result, user_id, drive, root, cards, known if others else None, seen_at
         )
         if root
-        else {}
+        else _RootListing(names={})
     )
-    if in_root is None:
+    if listing is None:
         for card in cards:
             card.account_folder_id = card.posted_folder_id = None
         return
@@ -749,7 +781,8 @@ def _list_owner(
         [
             c
             for c in cards
-            if c.account_folder_id is not None and c.account_folder_id not in in_root
+            if c.account_folder_id is not None
+            and c.account_folder_id not in listing.names
         ],
         seen_at,
     )

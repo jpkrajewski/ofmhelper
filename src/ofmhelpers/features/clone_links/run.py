@@ -2,32 +2,33 @@ import math
 import re
 import subprocess
 import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import cookies as login_cookies
-from ofmhelpers.db.stores.jobs import get_job, merge_params
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.cookies import store as login_cookies
+from ofmhelpers.db.jobs.schema import Job, ResultFile
+from ofmhelpers.db.jobs.store import get_job, merge_params
 from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
     export_choice,
     export_results,
 )
-from ofmhelpers.features.clone.pricing import clip_duration
-from ofmhelpers.features.clone.targets import (
+from ofmhelpers.features.clone_links.review import start_reviews
+from ofmhelpers.features.clone_links.stop import stopped
+from ofmhelpers.features.clone_pricing.pricing import clip_duration
+from ofmhelpers.features.clone_pricing.targets import (
     CloneTarget,
     clone_targets,
     clone_values,
 )
-from ofmhelpers.features.clone_links.review import start_reviews
-from ofmhelpers.features.clone_links.stop import stopped
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import (
     Provider,
@@ -40,12 +41,11 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderNoCreditsError,
     ProviderUnavailableError,
 )
-from ofmhelpers.integrations.downloaders.cookies import cookie_file
+from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders.media import downloaded
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions
 from ofmhelpers.media.video_probe import duration_s
-from ofmhelpers.schemas import Job, ResultFile
 
 logger = get_logger(__name__)
 
@@ -157,7 +157,7 @@ def _why_not(error: str, *, has_cookies: bool) -> str:
     return COULD_NOT_DOWNLOAD
 
 
-def _download(url: str, assets_root: str, user_id: int | None) -> tuple[str, float]:
+def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
     cookies = login_cookies.for_user(user_id)
     with (
         cookie_file(cookies) as cookiefile,
@@ -184,7 +184,7 @@ def _download(url: str, assets_root: str, user_id: int | None) -> tuple[str, flo
             logger.warning("clone-links: %s unreadable", kept, exc_info=True)
             raise LinkFetchError(UNREADABLE) from exc
     logger.info("clone-links: %s -> %s (%.1f s)", url, kept.name, seconds)
-    return str(kept.resolve()), seconds
+    return _Source(source_video=str(kept.resolve()), source_seconds=seconds)
 
 
 def _refuse_too_long(seconds: float, target: CloneTarget) -> None:
@@ -207,13 +207,13 @@ def _source(
     saved: _Source | None,
     *,
     paid: bool,
-) -> tuple[str, float]:
+) -> _Source:
     if paid and saved is not None and Path(saved.source_video).is_file():
         logger.info("clone-links %s resumes on %s", job_id, saved.source_video)
-        return saved.source_video, saved.source_seconds
+        return saved
     try:
-        video, seconds = _download(link, assets_root, owner)
-        _refuse_too_long(seconds, target)
+        found = _download(link, assets_root, owner)
+        _refuse_too_long(found.source_seconds, target)
     except Exception as exc:
         if not paid:
             raise
@@ -224,10 +224,8 @@ def _source(
             exc_info=True,
         )
         raise ProviderUnavailableError(REFETCH) from exc
-    merge_params(
-        job_id, _Source(source_video=video, source_seconds=seconds).model_dump()
-    )
-    return video, seconds
+    merge_params(job_id, found.model_dump())
+    return found
 
 
 def _hosted_dest(provider: str, job_id: str, url: str, index: int) -> Path:
@@ -316,7 +314,8 @@ def run_clone_link(
     if not paid:
         _refuse_if_halted(job_id, batch, provider)
     target = clone_targets()[provider]
-    video, seconds = _source(job_id, link, assets_root, owner, target, saved, paid=paid)
+    source = _source(job_id, link, assets_root, owner, target, saved, paid=paid)
+    video, seconds = source.source_video, source.source_seconds
     duration = clip_duration(target.spec, seconds)
     target.spec.check(
         clone_values(

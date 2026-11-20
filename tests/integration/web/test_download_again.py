@@ -15,14 +15,14 @@ from download_files import (
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.jobs.store import create_job, get_job, list_jobs_page
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.downloads import cleanup, media
 from ofmhelpers.features.jobs import restart
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 A = "https://x.example/video/a"

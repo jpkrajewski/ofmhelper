@@ -1,10 +1,10 @@
-import datetime
 import random
 import tempfile
 import time
 from pathlib import Path
 from typing import Self
 from zoneinfo import ZoneInfo
+lazy import datetime
 
 import logfire
 from pydantic import BaseModel
@@ -41,6 +41,11 @@ class EncodeStep(BaseModel):
     audio: AudioDraws
     encode: EncodeDraws
     makeup_db: float
+
+
+class _Recorded(BaseModel):
+    step: EncodeStep | None
+    recording: Recording
 
 
 class RunResult(BaseModel):
@@ -112,7 +117,8 @@ class Repurpose:
             step = self._encode(source, self.device, self.dst, rng)
             recording = None
         else:
-            step, recording = self._record(source, recorder, rng)
+            recorded = self._record(source, recorder, rng)
+            step, recording = recorded.step, recorded.recording
         return RunResult(
             output=self.dst,
             source=source,
@@ -163,7 +169,7 @@ class Repurpose:
 
     def _record(
         self, source: Source, recorder: Recorder, rng: random.Random
-    ) -> tuple[EncodeStep | None, Recording]:
+    ) -> _Recorded:
         edited = self.video != VideoSettings() or self.audio != AudioSettings()
         recording = self._recording(recorder, rng)
         with tempfile.TemporaryDirectory(prefix="repurpose_rec_") as work:
@@ -182,7 +188,7 @@ class Repurpose:
                     recording,
                     self.timeout_s,
                 )
-        return step, recording
+        return _Recorded(step=step, recording=recording)
 
     def _recording(self, recorder: Recorder, rng: random.Random) -> Recording:
         seed = rng.getrandbits(32)

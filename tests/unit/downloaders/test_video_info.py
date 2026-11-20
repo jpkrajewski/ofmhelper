@@ -1,7 +1,7 @@
-import sys
 from types import SimpleNamespace
 
 import pytest
+lazy import yt_dlp
 
 from ofmhelpers.integrations.downloaders import generic
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
@@ -54,9 +54,7 @@ def real_externals(monkeypatch):
 
 def _install(monkeypatch, answer) -> FakeYtDlp:
     fake = FakeYtDlp(answer)
-    monkeypatch.setitem(
-        sys.modules, "yt_dlp", SimpleNamespace(YoutubeDL=fake.YoutubeDL)
-    )
+    monkeypatch.setattr(generic, "yt_dlp", SimpleNamespace(YoutubeDL=fake.YoutubeDL))
     return fake
 
 
@@ -166,8 +164,6 @@ def test_a_proxy_that_reads_it_ends_the_tries(monkeypatch):
 
 
 def _real_ydl(config: DownloadConfig):
-    import yt_dlp
-
     return yt_dlp.YoutubeDL(config.ydl_opts().model_dump(exclude_none=True))
 
 
@@ -180,8 +176,6 @@ def test_yt_dlp_takes_the_one_post_options_and_drops_generic():
 
 
 def test_a_redirector_link_cannot_chain_into_any_host():
-    import yt_dlp
-
     link = "https://www.facebook.com/flx/warn/?u=http%3A%2F%2F127.0.0.1%3A9%2F"
     with (
         _real_ydl(DownloadConfig.single_post()) as ydl,

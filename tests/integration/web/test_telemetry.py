@@ -1,13 +1,21 @@
 import logging
 
 import pytest
+import sqlalchemy
 from fastapi.testclient import TestClient
 from logfire.testing import CaptureLogfire
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from rq.worker import Worker
 from signin import make_user, sign_in
 
-from ofmhelpers import log, telemetry
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers import log
+from ofmhelpers.background import worker
+from ofmhelpers.cache import QueueJob, QueueName
+from ofmhelpers.config import settings
+from ofmhelpers.db import session
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.monitoring import telemetry
 from ofmhelpers.web.main import app
 
 
@@ -89,11 +97,6 @@ def test_health_checks_and_static_files_make_no_spans(capfire: CaptureLogfire, p
 
 
 def test_a_work_horse_flushes_its_spans_before_it_exits(monkeypatch):
-    from rq.worker import Worker
-
-    from ofmhelpers import worker
-    from ofmhelpers.cache import QueueJob, QueueName
-
     flushed: list[bool] = []
     monkeypatch.setattr(worker, "flush_telemetry", lambda: flushed.append(True))
     taken = QueueJob(
@@ -136,11 +139,6 @@ def test_a_blank_token_is_off(monkeypatch):
 
 
 def test_a_query_is_a_span_but_a_pool_checkout_is_not(capfire: CaptureLogfire):
-    import sqlalchemy
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-
-    from ofmhelpers.config import settings
-
     telemetry.logfire.instrument_sqlalchemy()
     telemetry._drop_connect_spans()
     try:
@@ -157,11 +155,6 @@ def test_a_query_is_a_span_but_a_pool_checkout_is_not(capfire: CaptureLogfire):
 
 
 def test_the_apps_own_engine_traces_its_queries(capfire: CaptureLogfire, monkeypatch):
-    import sqlalchemy
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-
-    from ofmhelpers.db import session
-
     telemetry.logfire.instrument_sqlalchemy()
     telemetry._drop_connect_spans()
     monkeypatch.setattr(session, "_engine", None)

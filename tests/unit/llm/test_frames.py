@@ -1,4 +1,4 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from PIL import Image, ImageStat

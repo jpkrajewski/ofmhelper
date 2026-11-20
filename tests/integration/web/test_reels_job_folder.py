@@ -7,10 +7,10 @@ import requests
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
+from ofmhelpers.db.watched_profiles.schema import WatchedProfile
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.reels import page as reels
 from ofmhelpers.integrations.instagram.models import Profile, ProfileReels, Reel
-from ofmhelpers.schemas import WatchedProfile
 from ofmhelpers.web.main import app
 
 CDN = "https://scontent.cdninstagram.com/{}.mp4"

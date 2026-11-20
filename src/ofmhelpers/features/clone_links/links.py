@@ -1,6 +1,6 @@
 import re
-from collections.abc import Callable
 from urllib.parse import SplitResult, parse_qsl, urlencode, urlsplit
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, field_validator
 

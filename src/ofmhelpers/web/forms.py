@@ -1,9 +1,10 @@
 from typing import Annotated, Any
 
 from fastapi import UploadFile
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.monitoring.telemetry import LoggedFields
 
 Stripped = Annotated[str, StringConstraints(strip_whitespace=True)]
 Upper = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True)]
@@ -15,9 +16,6 @@ def at_most[N: (int, float)](value: N, limit: N) -> N:
         msg = f"Input should be less than or equal to {limit}"
         raise ValueError(msg)
     return value
-
-
-class LoggedFields(BaseModel): ...
 
 
 class FormModel(LoggedFields):

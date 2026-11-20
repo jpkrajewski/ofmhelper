@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from ofmhelpers.schemas.clone_ai_checks import (
+from ofmhelpers.db.clone_ai_checks.schema import (
     CloneAiCheck,
     ErrorKind,
     Glitch,

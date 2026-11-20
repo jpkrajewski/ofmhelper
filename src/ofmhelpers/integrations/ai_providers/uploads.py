@@ -1,6 +1,6 @@
 import hashlib
-from collections.abc import Callable
 from pathlib import Path
+lazy from collections.abc import Callable
 
 import requests
 

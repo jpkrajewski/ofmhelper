@@ -1,9 +1,15 @@
 from urllib.parse import urlencode
 
-lazy from google.oauth2.credentials import Credentials
+from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive.client import SCOPES as DRIVE_SCOPES
+from ofmhelpers.db.users.schema import Identity
+from ofmhelpers.integrations.gdrive.client import (
+    GOOGLE_TOKEN_URL,
+)
+from ofmhelpers.integrations.gdrive.client import (
+    SCOPES as DRIVE_SCOPES,
+)
 from ofmhelpers.integrations.signin.base import (
     SignInError,
     TokenReply,
@@ -11,20 +17,27 @@ from ofmhelpers.integrations.signin.base import (
     claims,
     token_request,
 )
-from ofmhelpers.schemas.users import Identity
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
+TOKEN_URL = GOOGLE_TOKEN_URL
 SIGN_IN_SCOPES = ("openid", "email", "profile")
 CONNECT_SCOPES = (*SIGN_IN_SCOPES, *DRIVE_SCOPES)
 
 
-def _client() -> tuple[str, str]:
+class _OAuthClient(BaseModel):
+    client_id: str
+    client_secret: str
+
+
+def _client() -> _OAuthClient:
     s = settings.signin
     if not s.google_configured or s.google_client_secret is None:
         msg = "Sign in with Google is not set up"
         raise SignInError(msg)
-    return s.google_client_id, s.google_client_secret.get_secret_value()
+    return _OAuthClient(
+        client_id=s.google_client_id,
+        client_secret=s.google_client_secret.get_secret_value(),
+    )
 
 
 class Google:
@@ -41,7 +54,7 @@ class Google:
     def consent_url(
         self, redirect_uri: str, state: str, nonce: str, *, connect: bool
     ) -> str:
-        client_id, _secret = _client()
+        client_id = _client().client_id
         query = {
             "client_id": client_id,
             "redirect_uri": redirect_uri,
@@ -61,13 +74,13 @@ class Google:
         return f"{AUTH_URL}?{urlencode(query)}"
 
     def exchange(self, code: str, redirect_uri: str) -> TokenReply:
-        client_id, secret = _client()
+        oauth = _client()
         return token_request(
             TOKEN_URL,
             {
                 "code": code,
-                "client_id": client_id,
-                "client_secret": secret,
+                "client_id": oauth.client_id,
+                "client_secret": oauth.client_secret,
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             },
@@ -84,14 +97,3 @@ class Google:
             name=found.name,
             refresh_token=reply.refresh_token,
         )
-
-
-def drive_credentials(refresh_token: str) -> Credentials:
-    client_id, secret = _client()
-    return Credentials(
-        token=None,
-        refresh_token=refresh_token,
-        token_uri=TOKEN_URL,
-        client_id=client_id,
-        client_secret=secret,
-    )

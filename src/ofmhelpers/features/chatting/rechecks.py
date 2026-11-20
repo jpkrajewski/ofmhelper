@@ -11,7 +11,7 @@ lazy from redis.lock import Lock
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas.chatting import ChatPlatform, ChatRead, OpenWait
+lazy from ofmhelpers.db.chats.schema import ChatPlatform, ChatRead, OpenWait
 
 logger = get_logger(__name__)
 

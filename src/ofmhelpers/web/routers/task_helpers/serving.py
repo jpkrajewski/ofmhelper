@@ -4,12 +4,13 @@ from pathlib import Path
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
+from pydantic import BaseModel
 
+from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.downloads import again as downloads
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers.uploads import MEDIA_KINDS, classify_kind
 
 logger = get_logger(__name__)
@@ -98,11 +99,16 @@ def serve_job_file(
     return response
 
 
-def _result_media(job: Job | None, index: int, kinds: set[str]) -> tuple[Job, Path]:
+class _ResultMedia(BaseModel):
+    job: Job
+    path: Path
+
+
+def _result_media(job: Job | None, index: int, kinds: set[str]) -> _ResultMedia:
     path = job_file_path(job, index)
     if job is None or classify_kind(path.name) not in kinds:
         raise HTTPException(status_code=404, detail="No preview for this file")
-    return job, path
+    return _ResultMedia(job=job, path=path)
 
 
 def serve_job_preview(
@@ -111,7 +117,8 @@ def serve_job_preview(
     kept = _kept_thumbnail(job, index, "image")
     if kept is not None:
         return kept
-    job, path = _result_media(job, index, {"image", "video"})
+    media = _result_media(job, index, {"image", "video"})
+    job, path = media.job, media.path
     kind = classify_kind(path.name)
     if kind == "video" and not previews.preview_path(job.id, index, kind).is_file():
         return RedirectResponse(
@@ -136,7 +143,8 @@ def serve_job_poster(job: Job | None, index: int) -> FileResponse:
     kept = _kept_thumbnail(job, index, "video")
     if kept is not None:
         return kept
-    job, path = _result_media(job, index, {"video"})
+    media = _result_media(job, index, {"video"})
+    job, path = media.job, media.path
     try:
         dest = previews.ResultPreview(source=path, job_id=job.id, index=index).poster()
     except previews.PREVIEW_ERRORS:

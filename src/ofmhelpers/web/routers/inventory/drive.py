@@ -2,12 +2,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, Response
 
-from ofmhelpers.auth.access import Area
+from ofmhelpers.db.drive_folders.schema import SyncReport
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import page
 from ofmhelpers.features.handmade import service as handmade
 from ofmhelpers.features.repurpose import service as repurpose
-from ofmhelpers.schemas import SyncReport
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actors, CurrentUser, Scope
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import FILES_PREFIX as CLONE_FILES

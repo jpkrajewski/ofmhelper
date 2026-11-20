@@ -6,9 +6,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from ofmhelpers.cache.queue import QueueLoad, queue_loads
 from ofmhelpers.cache.redis import used_bytes
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.database import database_bytes
-from ofmhelpers.db.stores.jobs import running_jobs
-from ofmhelpers.db.stores.users import list_users
+from ofmhelpers.db.database.store import database_bytes
+from ofmhelpers.db.jobs.store import running_jobs
+from ofmhelpers.db.users.store import list_users
 from ofmhelpers.features.server import host
 from ofmhelpers.features.server.models import Host, RunningJob, ServerStatus
 from ofmhelpers.log import get_logger

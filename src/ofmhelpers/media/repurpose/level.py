@@ -1,5 +1,5 @@
 import re
-from pathlib import Path
+lazy from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run_log
 from ofmhelpers.media.repurpose.command import input_args

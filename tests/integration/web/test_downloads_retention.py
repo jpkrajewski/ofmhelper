@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 from download_files import DAY, backdate, fake_downloads, fake_posters, row
 
+from ofmhelpers.background import sweeps
 from ofmhelpers.cache import QueueName, get_queue, get_redis
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.jobs.store import create_job, get_job, reopen_job
 from ofmhelpers.db.models import DownloadRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores.jobs import create_job, get_job, reopen_job
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.downloads import cleanup, media
-from ofmhelpers.features.jobs import sweeps
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews import render as previews
 

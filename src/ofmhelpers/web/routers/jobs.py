@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
-from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.features.jobs import own
-from ofmhelpers.schemas import JobVisibility
+from ofmhelpers.features.jobs.schema import JobVisibility
+from ofmhelpers.web.access import Action, Area
 from ofmhelpers.web.dependencies import Access, Actors, Can
 
 router = APIRouter(prefix="/jobs", tags=["jobs"], dependencies=[Access(Area.JOBS)])

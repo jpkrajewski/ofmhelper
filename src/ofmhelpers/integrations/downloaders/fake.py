@@ -4,6 +4,7 @@ lazy from pathlib import Path
 from ofmhelpers.integrations.downloaders.models import DownloadResult, VideoInfo
 from ofmhelpers.integrations.downloaders.sites import images_first
 from ofmhelpers.media import fake_media
+lazy from ofmhelpers.integrations.instagram.fake import CDN
 
 _FAIL = "fake-fail"
 _LONG = "fake-long"
@@ -36,8 +37,6 @@ def info(url: str) -> VideoInfo:
 
 
 def _thumbnail(url: str) -> str:
-    from ofmhelpers.integrations.instagram.fake import CDN
-
     return f"{CDN}/{_stem(url)}.jpg"
 
 

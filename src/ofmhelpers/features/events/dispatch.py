@@ -8,10 +8,11 @@ from rq import Retry, get_current_job
 
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import event_targets, users
+from ofmhelpers.db.event_targets import store as event_targets
+from ofmhelpers.db.users import store as users
 from ofmhelpers.integrations.senders import SendError, senders
+from ofmhelpers.integrations.senders.schema import Event
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.events import Event
 lazy from ofmhelpers.integrations.senders import Sender
 
 logger = get_logger(__name__)
@@ -22,9 +23,9 @@ _SLOT_S = 48 * 3600
 
 def _off() -> set[str]:
     if not settings.events.sending(settings.infra.production):
-        return set(senders().names())
+        return set(senders().keys())
     off = set(settings.events.senders_off_list())
-    unknown = off - set(senders().names())
+    unknown = off - set(senders().keys())
     if unknown:
         logger.warning("OFM_EVENTS_SENDERS_OFF names no sender: %s", sorted(unknown))
     return off
@@ -56,7 +57,7 @@ def _targets(sender: Sender, event: Event) -> list[str]:
 def dispatch(event: dict[str, Any]) -> None:
     found = Event.model_validate(event)
     off = _off()
-    for sender in senders().all():
+    for sender in senders().values():
         if sender.name in off:
             continue
         for target in _targets(sender, found):
@@ -179,7 +180,7 @@ class Delivery(BaseModel, frozen=True, arbitrary_types_allowed=True):
 
 def listening() -> bool:
     off = _off()
-    return any(s.targets() for s in senders().all() if s.name not in off)
+    return any(s.targets() for s in senders().values() if s.name not in off)
 
 
 def _last_try() -> bool:

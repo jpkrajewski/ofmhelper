@@ -15,12 +15,12 @@ def _q(value: float) -> IFDRational:
     return IFDRational(Fraction(value).limit_denominator(1_000_000))
 
 
-def _dms(value: float) -> tuple[IFDRational, IFDRational, IFDRational]:
+def _put_dms(ifd: dict[int, object], tag: int, value: float) -> None:
     value = abs(value)
     degrees = int(value)
     minutes = int((value - degrees) * 60)
     seconds = ((value - degrees) * 60 - minutes) * 60
-    return (_q(degrees), _q(minutes), _q(round(seconds, 4)))
+    ifd[tag] = (_q(degrees), _q(minutes), _q(round(seconds, 4)))
 
 
 def _without_jfif(jpeg: bytes) -> bytes:
@@ -99,9 +99,9 @@ def exif_for(
         gps = exif.get_ifd(ExifTags.IFD.GPSInfo)
         gps[ExifTags.GPS.GPSVersionID] = b"\x02\x02\x00\x00"
         gps[ExifTags.GPS.GPSLatitudeRef] = "N" if point.latitude >= 0 else "S"
-        gps[ExifTags.GPS.GPSLatitude] = _dms(point.latitude)
+        _put_dms(gps, ExifTags.GPS.GPSLatitude, point.latitude)
         gps[ExifTags.GPS.GPSLongitudeRef] = "E" if point.longitude >= 0 else "W"
-        gps[ExifTags.GPS.GPSLongitude] = _dms(point.longitude)
+        _put_dms(gps, ExifTags.GPS.GPSLongitude, point.longitude)
         gps[ExifTags.GPS.GPSAltitudeRef] = b"\x00"
         gps[ExifTags.GPS.GPSAltitude] = _q(round(max(point.altitude_m, 0.0), 3))
         gps[ExifTags.GPS.GPSHPositioningError] = _q(shot.place.accuracy_m)

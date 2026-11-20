@@ -1,17 +1,16 @@
-from collections.abc import Mapping
+lazy from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict, SkipValidation
 
-from ofmhelpers.auth.access import Area, allowed
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.features.account import telegram
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import ApiKeysForm, LinkedAccount, User
+from ofmhelpers.features.account import stacked_keys, telegram
 from ofmhelpers.features.account.keys import key_tail
-from ofmhelpers.features.chatting import stacked_keys
 from ofmhelpers.features.links.sync import sync_now
 from ofmhelpers.features.refusals import NotFoundError, UnavailableError
-from ofmhelpers.features.reports import asks
-from ofmhelpers.features.signin import credentials, passwords
+from ofmhelpers.features.signin import passwords
+from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.integrations.signin import Provider, linkable, providers
@@ -22,8 +21,6 @@ from ofmhelpers.integrations.stacked import (
     StackedForbiddenError,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import ApiKeysForm, User
-from ofmhelpers.schemas.users import LinkedAccount
 
 logger = get_logger(__name__)
 
@@ -76,10 +73,10 @@ class KeyedProvider(BaseModel):
 def keyed_providers() -> list[KeyedProvider]:
     labels = {
         slot.id: slot.label
-        for cls in provider_classes().all()
+        for cls in provider_classes().values()
         if cls.needs_key
         for slot in cls.key_slots()
-    } | {cls.key: cls.label() for cls in link_providers().all()}
+    } | {cls.key: cls.label() for cls in link_providers().values()}
     return [KeyedProvider(name=name, label=label) for name, label in labels.items()]
 
 
@@ -87,9 +84,9 @@ def _stacked() -> KeyedProvider:
     return KeyedProvider(name=stacked_keys.SLOT, label="Stacked")
 
 
-def keyed_for(user: User | None) -> list[KeyedProvider]:
+def keyed_for(*, chats: bool) -> list[KeyedProvider]:
     found = keyed_providers()
-    if user is not None and allowed(user.role, Area.CHATTING):
+    if chats:
         found.append(_stacked())
     return found
 
@@ -105,7 +102,7 @@ def _stacked_refusal(api_key: str) -> str | None:
     return None
 
 
-def page_view(user_id: int, notice: Notice) -> PageView:
+def page_view(user_id: int, notice: Notice, *, chats: bool) -> PageView:
     saved = users.api_keys(user_id)
     user = users.get_user(user_id)
     return PageView(
@@ -114,13 +111,13 @@ def page_view(user_id: int, notice: Notice) -> PageView:
         providers=linkable(),
         keys={
             p.name: (p.label, key_tail(saved.get(p.name) or ""))
-            for p in keyed_for(user)
+            for p in keyed_for(chats=chats)
         },
         min_length=settings.signin.password_min_length,
         message=notice.message,
         error=notice.error,
         telegram=TelegramCard(linked=telegram.linked(user_id))
-        if asks.enabled()
+        if telegram.enabled()
         else None,
     )
 
@@ -171,8 +168,8 @@ def keys_form(fields: Mapping[str, object]) -> ApiKeysForm:
     return form
 
 
-def save_keys(user_id: int, form: ApiKeysForm) -> Notice:
-    known = {p.name: p.label for p in keyed_for(users.get_user(user_id))}
+def save_keys(user_id: int, form: ApiKeysForm, *, chats: bool) -> Notice:
+    known = {p.name: p.label for p in keyed_for(chats=chats)}
     if (set(form.keys) | {form.remove} - {None}) - set(known):
         raise NotFoundError(UNKNOWN_PROVIDER)
     if form.remove is not None:
@@ -185,7 +182,7 @@ def save_keys(user_id: int, form: ApiKeysForm) -> Notice:
         return Notice(error=refused, status_code=400)
     for name, key in form.keys.items():
         users.set_api_key(user_id, name, key)
-    if set(form.keys) & set(link_providers().names()):
+    if set(form.keys) & set(link_providers().keys()):
         sync_now(user_id)
     saved = " and ".join(known[name] for name in form.keys)
     return Notice(message=f"{saved} {'key' if len(form.keys) == 1 else 'keys'} saved.")

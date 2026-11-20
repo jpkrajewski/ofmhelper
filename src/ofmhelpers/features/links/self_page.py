@@ -2,11 +2,16 @@ from datetime import date, timedelta
 
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import self_links
-from ofmhelpers.features.refusals import NotFoundError, RefusedError
+from ofmhelpers.db.self_links import store as self_links
+from ofmhelpers.db.short_links.schema import (
+    STAT_PERIODS,
+    SelfDomain,
+    SelfRange,
+    SelfStats,
+    utc_today,
+)
+from ofmhelpers.features.refusals import NotFoundError, RefusedError, duplicate_refused
 from ofmhelpers.integrations.short_links import RemoteLink
-from ofmhelpers.schemas.links import utc_today
-from ofmhelpers.schemas.self_links import STAT_PERIODS, SelfDomain, SelfRange, SelfStats
 
 _STATUSES = ("active", "disabled")
 
@@ -35,7 +40,8 @@ def add_domain(host: str, owner_id: int) -> None:
     if host in {d.host for d in self_links.domains(owner_id)}:
         msg = f"{host} is already added"
         raise RefusedError(msg)
-    self_links.add_domain(host, owner_id, status="active")
+    with duplicate_refused():
+        self_links.add_domain(host, owner_id, status="active")
 
 
 def _own_domain(domain_id: int, owner: int) -> None:

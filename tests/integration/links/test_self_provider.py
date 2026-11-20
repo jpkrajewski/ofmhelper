@@ -3,13 +3,13 @@ from datetime import UTC, datetime, timedelta
 from signin import make_user
 
 from ofmhelpers.db.models import SelfLinkClickRow
+from ofmhelpers.db.self_links import store as self_store
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import self_links as self_store
-from ofmhelpers.db.stores import short_links
+from ofmhelpers.db.short_links import store as short_links
+from ofmhelpers.db.short_links.schema import PlannedLink, utc_today
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links import NewLink
 from ofmhelpers.integrations.short_links.providers import get_link_provider
-from ofmhelpers.schemas.links import PlannedLink, utc_today
 lazy from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 
 

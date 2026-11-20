@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+lazy from collections.abc import Iterator
 
 import pytest
 
@@ -17,7 +17,7 @@ from ofmhelpers.config.settings import (
     TelegramSettings,
     ViralSettings,
 )
-from ofmhelpers.integrations import outbound
+from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
 from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
 from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
@@ -58,7 +58,6 @@ _REAL_SETTINGS = (
 
 def _reset_fakes() -> None:
     for cached in (
-        outbound._routes,
         fake_instagram,
         _fake_oopsie,
         _fake_bouncy,
@@ -101,6 +100,7 @@ def _switched(which: str, monkeypatch, tmp_path) -> Iterator[str]:
         use_real_env(monkeypatch)
     assert app_settings.infra.fake_externals == (which == FAKE)
     _reset_fakes()
+    install_fakes()
     yield which
     _reset_fakes()
 

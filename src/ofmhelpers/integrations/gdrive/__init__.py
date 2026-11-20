@@ -4,6 +4,7 @@ from ofmhelpers.integrations.gdrive.base import (
     DriveAuthError,
     DriveError,
     DriveFullError,
+    DriveNotSetUpError,
     FolderGoneError,
 )
 from ofmhelpers.integrations.gdrive.client import (
@@ -26,6 +27,7 @@ __all__ = [
     "DriveFile",
     "DriveFolder",
     "DriveFullError",
+    "DriveNotSetUpError",
     "FolderGoneError",
     "ReadOnlyDrive",
     "ScopedDrive",

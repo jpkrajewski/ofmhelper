@@ -6,8 +6,9 @@ from itsdangerous import TimestampSigner
 lazy from fastapi.testclient import TestClient
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.schemas import Role, User, UserForm
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User, UserForm
+lazy from ofmhelpers.integrations.signin.passwords import hash_password
 
 SESSION_COOKIE = "ofm_session"
 USER_EMAIL = "user@example.com"
@@ -28,11 +29,8 @@ def make_user_with_password(
     password: str = "a long test password",
     role: Role = Role.USER,
 ) -> User:
-    from ofmhelpers.db.stores.users import _repository
-    from ofmhelpers.integrations.signin.passwords import hash_password
-
     user = make_user(email, role)
-    _repository().set_password_hash(user.id, hash_password(password))
+    users._repository().set_password_hash(user.id, hash_password(password))
     return user
 
 

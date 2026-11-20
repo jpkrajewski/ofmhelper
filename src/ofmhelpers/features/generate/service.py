@@ -1,18 +1,20 @@
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ValidationError
 from starlette.datastructures import FormData, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, set_job_preview
+from ofmhelpers.db.jobs.schema import Job, JobPreview, ResultFile
+from ofmhelpers.db.jobs.store import create_job, set_job_preview
 from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.manifests import build_ordered_paths
 from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.refusals import NotFoundError
+from ofmhelpers.features.jobs.schema import JobsQueued
+from ofmhelpers.features.refusals import NotFoundError, input_refused
 from ofmhelpers.integrations.ai_providers import runner
 from ofmhelpers.integrations.ai_providers.base import (
     get_provider,
@@ -22,8 +24,7 @@ from ofmhelpers.integrations.ai_providers.base import (
 from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import Job, JobPreview, JobsQueued, ResultFile
-lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
+lazy from ofmhelpers.integrations.ai_providers.spec import Fields, ModelSpec
 
 logger = get_logger(__name__)
 
@@ -69,18 +70,21 @@ def _spec_for(head: AiRunForm) -> ModelSpec:
     return spec
 
 
-def _settings(form: FormData, spec: ModelSpec) -> dict[str, Any]:
+def _settings(form: FormData, spec: ModelSpec) -> Fields:
     raw = {
         f.name: str(values[-1])
         for f in spec.form_fields
         if (values := form.getlist(f.name))
     }
-    return spec.parse_form(raw).model_dump()
+    with input_refused():
+        return spec.parse_form(raw)
 
 
-def _media(
-    form: FormData, spec: ModelSpec, assets_root: Path, user_id: int
-) -> dict[str, list[str]]:
+class _Media(BaseModel, frozen=True):
+    by_field: dict[str, list[str]]
+
+
+def _media(form: FormData, spec: ModelSpec, assets_root: Path, user_id: int) -> _Media:
     media = {}
     for field in spec.media_fields:
         files = [v for v in form.getlist(field.name) if isinstance(v, UploadFile)]
@@ -88,7 +92,7 @@ def _media(
         paths = build_ordered_paths(manifest, files, assets_root, user_id=user_id)
         if paths:
             media[field.name] = paths
-    return media
+    return _Media(by_field=media)
 
 
 def model_spec(model: str) -> ModelSpec:
@@ -108,8 +112,8 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
         raise GenerateRefusedError(msg)
     try:
         values = {
-            **_settings(form, spec),
-            **_media(form, spec, assets_root, user_id),
+            **_settings(form, spec).model_dump(),
+            **_media(form, spec, assets_root, user_id).by_field,
         }
         spec.check(values)
     except InvalidInputError as exc:

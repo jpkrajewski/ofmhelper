@@ -9,11 +9,11 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.db.jobs.store import create_job, fail_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import UserForm
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.schemas import UserForm
 from ofmhelpers.web.main import app
 
 

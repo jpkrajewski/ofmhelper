@@ -1,10 +1,12 @@
 import re
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
+from ofmhelpers.integrations.ai_providers.apiyi import provider as apiyi_provider
 from ofmhelpers.web.main import app
 
 CLONE_PAGES = ["/clone", "/clone-long"]
@@ -27,17 +29,13 @@ SLOW = "APIYI can be slow right now. Fastest from {17:00Z} to {11:00Z}, {zone} t
 
 @pytest.fixture
 def slow_hours(monkeypatch):
-    from datetime import UTC, datetime
-
-    from ofmhelpers.integrations.ai_providers.apiyi import provider
-
     class Clock(datetime):
         @classmethod
         def now(cls, tz=None):
             del tz
             return cls(2026, 11, 12, 15, 18, tzinfo=UTC)
 
-    monkeypatch.setattr(provider, "datetime", Clock)
+    monkeypatch.setattr(apiyi_provider, "datetime", Clock)
 
 
 @pytest.mark.parametrize("page", ["/clone", "/clone-long", "/generate"])

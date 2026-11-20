@@ -5,17 +5,19 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin
 
-from ofmhelpers.auth.access import RETIRED, Area, areas_of
 from ofmhelpers.config.retired import retired
-from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.jobs.store import create_job, get_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.account.keys import Keys, keep_used
 from ofmhelpers.features.assets.store import assets_root_for_user
 from ofmhelpers.features.users import service
 from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.signin.passwords import hash_password
-from ofmhelpers.schemas import DeviceFields, LoginFields, Role
+from ofmhelpers.web.access import RETIRED, Area, areas_of
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"

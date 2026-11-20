@@ -1,13 +1,13 @@
 import time
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.jobs.store import get_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.events import Event, emit
+from ofmhelpers.features.jobs.schema import error_line
 from ofmhelpers.integrations.ai_providers.errors import ProviderNoCreditsError
 from ofmhelpers.integrations.apify import ApifyCreditError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.errors import error_line
 
 logger = get_logger(__name__)
 

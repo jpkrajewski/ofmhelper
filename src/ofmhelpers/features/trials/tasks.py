@@ -2,13 +2,13 @@ import random
 import zlib
 from functools import partial
 from pathlib import Path
-from typing import Any
 lazy from collections.abc import Callable
 
 import logfire
 from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.cache import JobQueue, QueueName
+from ofmhelpers.config.types import AccountFolder
 from ofmhelpers.features.drive.folders import (
     ReviewPlace,
     account_subfolder,
@@ -39,7 +39,6 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import (
     run as pipeline_run,
 )
-from ofmhelpers.schemas.gdrive import AccountFolder
 lazy from ofmhelpers.media.repurpose.repurpose import RunResult
 
 logger = get_logger(__name__)
@@ -113,13 +112,18 @@ def _why(exc: Exception, had_source: bool) -> str:
     return MAKE_FAILED
 
 
-def _draws(ran: RunResult | None) -> dict[str, Any] | None:
+class Draws(BaseModel, extra="allow"): ...
+
+
+def _draws(ran: RunResult | None) -> Draws | None:
     if ran is None or ran.step is None:
         return None
-    return {
-        **ran.step.model_dump(mode="json", exclude={"command"}),
-        "seconds": ran.seconds,
-    }
+    return Draws.model_validate(
+        {
+            **ran.step.model_dump(mode="json", exclude={"command"}),
+            "seconds": ran.seconds,
+        }
+    )
 
 
 def _recipe(reel: ReelState) -> Recipe:
@@ -296,7 +300,10 @@ class Folder(BaseModel, frozen=True):
                     src, making, caption=recipe.caption, seed=recipe.seed
                 )
             if not restore:
-                recipe = recipe.model_copy(update={"draws": _draws(ran)})
+                drew = _draws(ran)
+                recipe = recipe.model_copy(
+                    update={"draws": drew.model_dump() if drew else None}
+                )
             making.replace(out)
             with logfire.span("trials page media {key}", key=key):
                 _page_media(out)

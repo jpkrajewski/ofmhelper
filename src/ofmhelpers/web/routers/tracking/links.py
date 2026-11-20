@@ -4,15 +4,15 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ofmhelpers.auth.access import Area
-from ofmhelpers.features.links import page
-from ofmhelpers.schemas import (
+from ofmhelpers.db.short_links.schema import (
     AssignLinkCreator,
     GenerateLinks,
     LinkQuery,
     LinksQueued,
     SelectedLinks,
 )
+from ofmhelpers.features.links import page
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 

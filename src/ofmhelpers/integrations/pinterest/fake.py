@@ -7,16 +7,55 @@ from urllib.parse import parse_qs, urlsplit
 lazy from collections.abc import Mapping
 
 from pydantic import BaseModel
+from pydantic_core import to_jsonable_python
 lazy import requests
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 
 HOST = "www.pinterest.com"
 UPLOAD_HOST = "pinterest-media-upload.s3.amazonaws.com"
-ACCOUNT = {"id": "722053890000000001", "username": "fake_pinner"}
+
+
+class FakeAccount(BaseModel):
+    id: str
+    username: str
+
+
+class FakeBoard(BaseModel):
+    id: str
+    name: str
+    privacy: str = "public"
+
+
+class FakeSlot(BaseModel):
+    upload_id: str
+    upload_url: str
+    upload_parameters: dict[str, str]
+
+
+class FakeUpload(BaseModel):
+    upload_id: str
+    status: str
+
+
+class FakeUploadFailed(FakeUpload):
+    failure_code: int
+
+
+class FakeUploadSucceeded(FakeUpload):
+    signature: str
+    failure_code: None = None
+
+
+class FakePinMade(BaseModel):
+    id: str
+    node_id: str
+
+
+ACCOUNT = FakeAccount(id="722053890000000001", username="fake_pinner")
 BOARDS = [
-    {"id": "722053821446932302", "name": "Daily", "privacy": "public"},
-    {"id": "722053821447306957", "name": "Reels", "privacy": "public"},
+    FakeBoard(id="722053821446932302", name="Daily"),
+    FakeBoard(id="722053821447306957", name="Reels"),
 ]
 
 
@@ -31,8 +70,8 @@ class FakePinterest:
         self.uploaded: list[str] = []
         self.logged_out = False
         self.broken_uploads = False
-        self.account: dict[str, str] = dict(ACCOUNT)
-        self.boards: list[dict[str, str]] = [dict(b) for b in BOARDS]
+        self.account = ACCOUNT.model_copy()
+        self.boards = [b.model_copy() for b in BOARDS]
         self.fail_next: list[FakeReply] = []
         self._uploads: dict[str, int] = {}
         self._next = 0
@@ -58,61 +97,59 @@ class FakePinterest:
             body = request.body.decode() if isinstance(request.body, bytes) else ""
             raw = parse_qs(body or str(request.body or "")).get("data", ["{}"])[0]
         session = re.search(r"_pinterest_sess=([^;]+)", cookies)
-        self.account = {
-            **ACCOUNT,
-            "username": f"pin_{session.group(1) if session else 'x'}",
-        }
+        self.account = ACCOUNT.model_copy(
+            update={"username": f"pin_{session.group(1) if session else 'x'}"}
+        )
         options = json.loads(raw).get("options", {})
         if "/BoardResource/create/" in parts.path:
             return _ok(self._board(options["name"]))
-        return _ok(self._resource(options.get("url", ""), options.get("data", {})))
+        return self._resource(options.get("url", ""), options.get("data", {}))
 
-    def _board(self, name: str) -> dict[str, str]:
+    def _board(self, name: str) -> FakeBoard:
         with self._lock:
-            board = {"id": self._id(), "name": name, "privacy": "public"}
+            board = FakeBoard(id=self._id(), name=name)
             self.boards.append(board)
             return board
 
-    def _resource(self, path: str, data: dict[str, Any]) -> object:
+    def _resource(self, path: str, data: dict[str, Any]) -> FakeReply:
         with self._lock:
             if path == "/v3/users/me/":
-                return self.account
+                return _ok(self.account)
             if path == "/v3/users/me/boards/":
-                return self.boards
+                return _ok(self.boards)
             if path == "/v3/media/uploads/register/batch/":
-                found = {}
+                found: dict[str, FakeSlot] = {}
                 for info in json.loads(data["media_info_list"]):
                     upload_id = self._id()
                     self._uploads[upload_id] = 0
-                    found[info["id"]] = {
-                        "upload_id": upload_id,
-                        "upload_url": f"https://{UPLOAD_HOST}/",
-                        "upload_parameters": {"key": upload_id, "policy": "fake"},
-                    }
-                return found
+                    found[info["id"]] = FakeSlot(
+                        upload_id=upload_id,
+                        upload_url=f"https://{UPLOAD_HOST}/",
+                        upload_parameters={"key": upload_id, "policy": "fake"},
+                    )
+                return _ok(found)
             if path == "/v3/media/uploads/":
-                return {u: self._state(u) for u in data["upload_ids"]}
+                return _ok({u: self._state(u) for u in data["upload_ids"]})
             if path == "/v3/storypins/":
                 pin = FakePin(id=self._id(), body=data)
                 self.pins.append(pin)
-                return {"id": pin.id, "node_id": "fake"}
-        return None
+                return _ok(FakePinMade(id=pin.id, node_id="fake"))
+        return _ok(None)
 
-    def _state(self, upload_id: str) -> dict[str, Any]:
+    def _state(self, upload_id: str) -> FakeUpload:
         asked = self._uploads.get(upload_id)
         if asked is None or upload_id not in self.uploaded:
-            return {"upload_id": upload_id, "status": "registered"}
+            return FakeUpload(upload_id=upload_id, status="registered")
         self._uploads[upload_id] = asked + 1
         if self.broken_uploads:
-            return {"upload_id": upload_id, "status": "failed", "failure_code": 3}
+            return FakeUploadFailed(
+                upload_id=upload_id, status="failed", failure_code=3
+            )
         if asked == 0:
-            return {"upload_id": upload_id, "status": "processing"}
-        return {
-            "upload_id": upload_id,
-            "status": "succeeded",
-            "signature": f"sig{upload_id}",
-            "failure_code": None,
-        }
+            return FakeUpload(upload_id=upload_id, status="processing")
+        return FakeUploadSucceeded(
+            upload_id=upload_id, status="succeeded", signature=f"sig{upload_id}"
+        )
 
     def _put(self, request: requests.PreparedRequest) -> FakeReply:
         body = request.body if isinstance(request.body, bytes) else b""
@@ -126,7 +163,13 @@ class FakePinterest:
 
 def _ok(data: object) -> FakeReply:
     return FakeReply.json_body(
-        {"resource_response": {"status": "success", "code": 0, "data": data}}
+        {
+            "resource_response": {
+                "status": "success",
+                "code": 0,
+                "data": to_jsonable_python(data),
+            }
+        }
     )
 
 

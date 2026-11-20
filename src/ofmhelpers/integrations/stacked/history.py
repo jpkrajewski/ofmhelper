@@ -2,9 +2,9 @@ lazy from collections.abc import Collection, Iterator, Mapping
 lazy from datetime import datetime
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.chats.schema import ChatEvent, ChatRead
 from ofmhelpers.integrations.stacked.errors import StackedError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatEvent, ChatRead
 lazy from ofmhelpers.integrations.stacked.client import StackedClient
 lazy from ofmhelpers.integrations.stacked.models import Message
 

@@ -1,6 +1,11 @@
 import pytest
 
-from ofmhelpers.schemas.errors import ErrorText, error_line, error_reason, error_text
+from ofmhelpers.features.jobs.schema import (
+    ErrorText,
+    error_line,
+    error_reason,
+    error_text,
+)
 
 
 @pytest.mark.parametrize(

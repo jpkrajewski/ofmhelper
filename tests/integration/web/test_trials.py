@@ -10,18 +10,20 @@ import worker_tasks
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 
+from ofmhelpers.background import recovery, sweeps
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
-from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job, history
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.jobs.store import create_job, fail_job, get_job, history
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.jobs import recovery, runner, sweeps
+from ofmhelpers.features.jobs import runner
 from ofmhelpers.features.previews.render import write_video_thumb
 from ofmhelpers.features.trials import cleanup, folder, media, tasks
 from ofmhelpers.features.trials import state as trial_state
 from ofmhelpers.features.trials.captions import ReelNotes
 from ofmhelpers.integrations.gdrive import DriveError, DriveFile
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
-from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.video_tools import trials as trials_router
 
@@ -1216,7 +1218,7 @@ def test_a_generate_cut_off_by_a_deploy_goes_on_where_it_stopped(drive, made):
     drive.add_file(_posted(drive), "b.mp4", "video/mp4")
     job_id = _cut_off(login)
 
-    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+    assert recovery.run_recovery_once() == {job_id: "restarted"}
 
     assert made == ["caption 0", "caption 1"]
     job = get_job(job_id)
@@ -1234,7 +1236,7 @@ def test_a_restarted_generate_waits_on_the_media_queue_with_its_time_limit(
     job_id = _cut_off(login)
     real_queue()
 
-    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+    assert recovery.run_recovery_once() == {job_id: "restarted"}
 
     (queued,) = get_queue(QueueName.MEDIA).get_jobs()
     assert queued.args[0] == job_id
@@ -1271,7 +1273,7 @@ def test_an_upload_cut_off_by_a_deploy_goes_up_after_all(drive, made):
     first, second = _state(login).reels
     job_id = _upload_cut_off(login, first.key, second.key)
 
-    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+    assert recovery.run_recovery_once() == {job_id: "restarted"}
 
     job = get_job(job_id)
     assert (job.status, job.params["restarts"]) == ("done", 1)
@@ -1279,6 +1281,33 @@ def test_an_upload_cut_off_by_a_deploy_goes_up_after_all(drive, made):
     (trials,) = drive.named("TRIALS", account)
     assert len(drive.names_in(trials)) == 2
     assert [r.status for r in _state(login).reels] == ["uploaded", "uploaded"]
+
+
+@pytest.mark.usefixtures("nobody_holds")
+def test_a_regenerate_cut_off_by_a_deploy_is_made_after_all(drive, made):
+    login = _login(drive, "a.mp4", "b.mp4")
+    _client().post(f"/trials/{login}/generate")
+    first, second = _state(login).reels
+    job_id = create_job(
+        "trials",
+        {"label": "Making one trial", "login": login, "args": {"keys": [first.key]}},
+        actor=str(users.agency_id()),
+    )
+    trial_state.change_reel(
+        users.agency_id(),
+        login,
+        first.key,
+        lambda r: r.claim_remake(job_id, "a new caption"),
+    )
+
+    assert recovery.run_recovery_once() == {job_id: "restarted"}
+
+    job = get_job(job_id)
+    assert (job.status, job.params["restarts"]) == ("done", 1)
+    assert made[-1] == "a new caption"
+    remade = next(r for r in _state(login).reels if r.key == first.key)
+    assert (remade.made, remade.job_id, remade.status) == (2, None, "generated")
+    assert next(r for r in _state(login).reels if r.key == second.key).made == 1
 
 
 @pytest.mark.usefixtures("nobody_holds")
@@ -1311,7 +1340,7 @@ def test_a_job_that_cannot_start_over_still_fails_as_interrupted(
     login = _login(drive, "a.mp4")
     job_id = _cut_off(login, label, **params)
 
-    assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
+    assert recovery.run_recovery_once() == {job_id: "interrupted"}
 
     job = get_job(job_id)
     assert job.status == "failed"

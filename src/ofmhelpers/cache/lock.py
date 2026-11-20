@@ -1,5 +1,5 @@
-from collections.abc import Iterator
 from contextlib import contextmanager
+lazy from collections.abc import Iterator
 
 from redis.exceptions import LockError, RedisError
 

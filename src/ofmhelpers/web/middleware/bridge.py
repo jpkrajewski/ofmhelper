@@ -12,9 +12,9 @@ lazy from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import self_links
+from ofmhelpers.db.short_links.schema import SelfClick
+from ofmhelpers.features.links import bridge as self_links
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.self_links import SelfClick
 from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)

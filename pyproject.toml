@@ -52,11 +52,11 @@ dependencies = [
     # takes real video). 2.29.0: the newest release at least two weeks old.
     "google-genai>=2.29.0",
     # Traces, logs and metrics (OpenTelemetry) to Pydantic Logfire
-    # (ofmhelpers/telemetry.py): web requests, Postgres, Redis, outbound
+    # (ofmhelpers/monitoring/telemetry.py): web requests, Postgres, Redis, outbound
     # HTTP (kie.ai, Higgsfield, Instagram, Google) and every RQ job.
     # Sends nothing without LOGFIRE_TOKEN.
     "logfire[fastapi,sqlalchemy,requests,httpx]>=4.41.0",
-    # Crashes and logged errors grouped into issues (ofmhelpers/sentry.py);
+    # Crashes and logged errors grouped into issues (ofmhelpers/monitoring/sentry.py);
     # errors only, traces stay Logfire's. Sends nothing without SENTRY_DSN.
     "sentry-sdk==2.74.0",
     "imagehash>=4.3.2",
@@ -154,16 +154,17 @@ ignore = [
     "E501",
     # No copyright headers in this repo.
     "CPY001",
-    # Docstrings and annotations are used where they earn their keep; this
-    # codebase documents modules/classes, not every helper signature.
+    # No docstrings at all (CLAUDE.md). Parameters may go unannotated; every
+    # function in src/ declares what it returns (ANN201-206 stay on), and
+    # tests/unit/architecture checks that it is never a dict, a tuple or Any.
     "D",
-    "ANN",
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN401",
     # stdout IS the log here (Docker captures it). Note ruff's T201 fix
     # DELETES the print rather than converting it -- never autofix this.
     "T201",
-    # Deferred imports are deliberate: heavy deps (yt-dlp) must
-    # not be paid for at module import time, and a few break an import cycle.
-    "PLC0415",
     # ffmpeg/ffprobe/yt-dlp run with fixed argv lists, never shell=True.
     "S603",
     "S607",
@@ -220,9 +221,9 @@ ignore-variadic-names = true
     "INP001",            # pytest collects these without __init__.py
     "S105", "S106", "S107", "S108",  # dummy creds and fake /tmp paths
     "N806",              # `MockClient = ...` locals hold classes
-    "PLC0415",           # deferred imports inside tests are deliberate
     "PT011", "PT019", "RUF043",
     "BLE001", "PTH123", "RUF012", "S603", "S607", "SIM117", "FBT002",
+    "ANN",               # return types are a rule for src/, not for tests
 ]
 # FastAPI reads route signatures when the route is declared: these imports are
 # used at import time, whatever the annotation looks like to ruff.
@@ -251,10 +252,10 @@ ignore-variadic-names = true
 # DSP helpers share one (audio, sr, ...) positional shape by design.
 "src/ofmhelpers/media/radio_comms_fx.py" = ["ARG001"]
 # Standalone scripts and migrations aren't importable packages.
-"scripts/**" = ["INP001"]
-"alembic/**" = ["INP001"]
+"scripts/**" = ["INP001", "ANN"]
+"alembic/**" = ["INP001", "ANN"]
 # Claude Code hooks: standalone scripts the harness runs.
-".claude/**" = ["INP001"]
+".claude/**" = ["INP001", "ANN"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

@@ -31,10 +31,10 @@ image and video output only. Operator CLI: prints a report.
 import json
 import re
 import sys
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Iterator
 
 import yaml
 from pydantic import BaseModel

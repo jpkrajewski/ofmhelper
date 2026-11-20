@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterator
+lazy from collections.abc import Iterator
 
 import httpx
 import pytest

@@ -6,10 +6,11 @@ import time
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import ClassVar
 lazy from collections.abc import Callable
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.errors import (
@@ -30,11 +31,15 @@ from ofmhelpers.integrations.llm.models import (
     Usage,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils.registry import Registry
 
 logger = get_logger(__name__)
 
 _MIN_REQUEST_S = 1.0
+
+
+class Attempt[A: BaseModel](BaseModel):
+    reply: Reply
+    parsed: A
 
 
 class Answered[A: BaseModel](BaseModel):
@@ -90,23 +95,23 @@ class LLMProvider(ABC):
         attempts = 0
         replies: list[Reply] = []
 
-        def attempt(readable: Prompt, timeout_s: float) -> tuple[Reply, A]:
+        def attempt(readable: Prompt, timeout_s: float) -> Attempt[A]:
             nonlocal attempts
             attempts += 1
             reply = self._ask(readable, answer, timeout_s)
             replies.append(reply)
-            return reply, self._parsed(reply.text, answer)
+            return Attempt(reply=reply, parsed=self._parsed(reply.text, answer))
 
         with tempfile.TemporaryDirectory(prefix="llm-") as work:
             readable = self._readable(prompt, Path(work))
-            reply, parsed = self._reasked(
+            made = self._reasked(
                 lambda: self._with_retries(lambda t: attempt(readable, t), deadline),
                 deadline,
             )
         used = Usage.summed(r.usage for r in replies)
         return Answered(
-            answer=parsed,
-            text=reply.text,
+            answer=made.parsed,
+            text=made.reply.text,
             provider=self.label,
             model=self.model,
             attempts=attempts,
@@ -240,13 +245,19 @@ def _videos_as_sheets(prompt: Prompt, work: Path) -> Prompt:
     return prompt.model_copy(update={"parts": parts})
 
 
+class _Registered(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    classes: dict[str, type[LLMProvider]] = Field(default_factory=dict)
+
+
 @lru_cache(maxsize=1)
-def _registry() -> dict[str, type[LLMProvider]]:
-    return {}
+def _registered() -> _Registered:
+    return _Registered()
 
 
 def register_llm[P: type[LLMProvider]](cls: P) -> P:
-    _registry()[cls.name] = cls
+    _registered().classes[cls.name] = cls
     return cls
 
 
@@ -262,13 +273,13 @@ def _import_providers() -> None:
                     raise
 
 
-def llm_classes() -> Registry[type[LLMProvider]]:
+def llm_classes() -> MappingProxyType[str, type[LLMProvider]]:
     _import_providers()
-    return Registry[type[LLMProvider]](entries=dict(sorted(_registry().items())))
+    return MappingProxyType(dict(sorted(_registered().classes.items())))
 
 
 def llm_names() -> list[str]:
-    return llm_classes().names()
+    return list(llm_classes())
 
 
 def llm_class(name: str) -> type[LLMProvider]:

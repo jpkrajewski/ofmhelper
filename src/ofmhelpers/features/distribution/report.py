@@ -2,8 +2,8 @@ import datetime
 
 from pydantic import BaseModel, computed_field
 
-from ofmhelpers.db.stores import distribution as store
-from ofmhelpers.db.stores import self_links
+from ofmhelpers.db.distribution import store
+from ofmhelpers.db.self_links import store as self_links
 
 
 class ModelDay(BaseModel):

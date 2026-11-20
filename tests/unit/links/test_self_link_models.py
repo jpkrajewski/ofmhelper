@@ -3,7 +3,12 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from ofmhelpers.schemas.self_links import MAX_STAT_DAYS, DateSpan, SelfLink, SelfRange
+from ofmhelpers.db.short_links.schema import (
+    MAX_STAT_DAYS,
+    DateSpan,
+    SelfLink,
+    SelfRange,
+)
 
 TODAY = date(2026, 11, 11)
 

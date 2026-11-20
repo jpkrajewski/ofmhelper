@@ -3,10 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Area
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.users import service, viewing
 from ofmhelpers.features.users.service import Shown
-from ofmhelpers.schemas import Role, User
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, CurrentUser
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import see_other

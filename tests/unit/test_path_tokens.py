@@ -3,8 +3,8 @@ import logging
 import pytest
 
 from ofmhelpers.log import _HideLoginCodes
+from ofmhelpers.monitoring.telemetry import _masked_attributes
 from ofmhelpers.redact import MASK, redact
-from ofmhelpers.telemetry import _masked_attributes
 
 TOKEN = "s3cretT0kenValue"
 
@@ -36,7 +36,7 @@ def test_span_attributes_carry_no_path_token():
         "http.url": f"https://x.test/files/ai/{TOKEN}/v.mp4",
         "logfire.msg": f"GET /password/{TOKEN}",
     }
-    out = _masked_attributes(attributes)
+    out = _masked_attributes(attributes).model_dump()
     assert TOKEN not in "".join(out.values())
 
 

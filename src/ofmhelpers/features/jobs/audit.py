@@ -1,11 +1,12 @@
-from collections.abc import Callable
 from datetime import UTC, datetime
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores.jobs import history
-from ofmhelpers.db.stores.users import list_users
-from ofmhelpers.schemas import ActionLogEntry, Job
+from ofmhelpers.db.jobs.store import history
+from ofmhelpers.db.users.store import list_users
+from ofmhelpers.features.jobs.schema import ActionLogEntry
+lazy from ofmhelpers.db.jobs.schema import Job
 
 
 class AuditView(BaseModel):

@@ -3,10 +3,11 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from signin import sign_in_admin
 
-from ofmhelpers.db.stores import cookies, users
-from ofmhelpers.db.stores import devices as store
+from ofmhelpers.db.cookies import store as cookies
+from ofmhelpers.db.devices import store
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.cookies import jar as cookie_jar
-from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 
 USER = "keeps-secrets@example.com"

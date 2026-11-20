@@ -3,7 +3,8 @@ import time
 import pytest
 
 from ofmhelpers.cache.redis import get_redis
-from ofmhelpers.db.stores import tracked_accounts as store
+from ofmhelpers.db.tracked_accounts import store
+from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.integrations.apify.fake import (
     BROKE_KEY,
@@ -14,7 +15,6 @@ from ofmhelpers.integrations.apify.fake import (
 from ofmhelpers.integrations.instagram.fake import fake_instagram
 from ofmhelpers.integrations.socials.client_source import ProxySource
 from ofmhelpers.integrations.socials.platforms import instagram_apify
-from ofmhelpers.schemas import TrackedAccount
 
 KEY_A, KEY_B = "fake-apify-a", "fake-apify-b"
 PUBLIC = ("sheep_love33", "brookslockvip", "yuki_kanasiva")

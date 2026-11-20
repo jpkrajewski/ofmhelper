@@ -2,8 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.db.repositories import ApplicationRepository
-from ofmhelpers.db.stores import applications as applications_store
+from ofmhelpers.db.applications import store as applications_store
+from ofmhelpers.db.applications.repository import ApplicationRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.apply import form_token
 

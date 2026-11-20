@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.background.registry import RESUMABLE
+from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.assets import store as task_helper_uploads
-from ofmhelpers.features.jobs.registry import RESUMABLE
 from ofmhelpers.features.pictures import targets as picture_targets
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient

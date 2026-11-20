@@ -3,11 +3,11 @@ import re
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, RouteContext, iter_route_contexts
 
-from ofmhelpers.auth.access import ACTIONS, RETIRED, Action, Area
-from ofmhelpers.schemas.nav import NAV
+from ofmhelpers.web.access import ACTIONS, RETIRED, Action, Area
 from ofmhelpers.web.dependencies import Allowed
 from ofmhelpers.web.main import app
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.nav import NAV
 
 PATH_PARAMETER = re.compile(r"\{[^}]*\}")
 

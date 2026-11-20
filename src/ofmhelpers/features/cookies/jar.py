@@ -1,9 +1,10 @@
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import cookies
-from ofmhelpers.integrations.downloaders.cookies import CookieFileError, summarize
+from ofmhelpers.db.cookies import store as cookies
+from ofmhelpers.db.cookies.schema import SavedCookies
+from ofmhelpers.db.devices.catalog import cookie_sites
+from ofmhelpers.integrations.cookie_jar import CookieFileError
+from ofmhelpers.integrations.downloaders.cookies import summarize
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import SavedCookies
-from ofmhelpers.schemas.phone_catalog import cookie_sites
 
 logger = get_logger(__name__)
 

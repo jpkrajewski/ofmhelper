@@ -1,9 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
+from signin import make_user
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job
-from ofmhelpers.schemas import Job
+from ofmhelpers.db.jobs.schema import Job
+from ofmhelpers.db.jobs.store import create_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.admin.action_log import _status_url
 
@@ -40,8 +41,6 @@ def test_dashboard_still_renders_with_a_leftover_replicate_job(admin_client):
 
 
 def test_another_users_row_is_metadata_only(admin_client):
-    from signin import make_user
-
     user = make_user("audited@example.com")
     theirs = create_job("seedance", {"prompt": "their private prompt"}, str(user.id))
     agency = str(users.agency_id())

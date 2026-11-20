@@ -5,14 +5,13 @@ from typing import Protocol, runtime_checkable
 import requests
 from pydantic import BaseModel, ValidationError, field_validator
 
-from ofmhelpers.errors import AppError
 from ofmhelpers.integrations import outbound
-lazy from ofmhelpers.schemas.users import Identity
+lazy from ofmhelpers.db.users.schema import Identity
 
 _TIMEOUT_S = 20
 
 
-class SignInError(AppError): ...
+class SignInError(Exception): ...
 
 
 class Claims(BaseModel):

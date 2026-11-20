@@ -11,10 +11,10 @@ from ofmhelpers.cache.rate_limit import (
     record_failed_user_login,
     user_login_blocked,
 )
-from ofmhelpers.db.stores import users
-from ofmhelpers.features.signin import credentials
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import STATE_COOKIE, unseal
+from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.signin.owner import owner_code, password_ok
 from ofmhelpers.log import get_logger

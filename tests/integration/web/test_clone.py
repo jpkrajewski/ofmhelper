@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 import requests
@@ -10,16 +11,18 @@ from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 
 import ofmhelpers.media.exports as exports_module
-from ofmhelpers.db.stores.jobs import get_job, list_jobs
+from ofmhelpers.db.jobs.schema import Job, JobPreview, ResultFile
+from ofmhelpers.db.jobs.store import get_job, list_jobs
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.clone import run as clone_run
+from ofmhelpers.features.clone import service as clone_service
+from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
+from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.media.video_probe import duration_s
-from ofmhelpers.schemas import Job, ResultFile
-from ofmhelpers.schemas.persistence import JobPreview
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
 from ofmhelpers.web.routers.task_helpers.responses import job_status_payload
@@ -67,7 +70,7 @@ def _post(client, videos, data=None):
     ("seconds", "expected"), [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)]
 )
 def test_duration_is_the_video_length_clamped_to_wan3(seconds, expected):
-    for target in clone.CLONE_TARGETS.all():
+    for target in list(clone.CLONE_TARGETS.values()):
         assert clone.clip_duration(target.spec, seconds) == expected
 
 
@@ -207,7 +210,7 @@ def test_run_caps_videos_per_submit(client, monkeypatch):
 
 
 @pytest.mark.usefixtures("fake_runs")
-@pytest.mark.parametrize("provider", clone.CLONE_TARGETS.names())
+@pytest.mark.parametrize("provider", list(clone.CLONE_TARGETS))
 def test_a_video_over_15_s_queues_nothing_on_any_provider(client, provider):
     before = len(list_jobs())
 
@@ -371,7 +374,6 @@ def test_duration_s_reads_the_container_length(tmp_path):
 
 
 def _stub(provider_cls, monkeypatch, sent):
-
     def submit(_self, spec, payload, idempotency_key):
         sent.append((spec.model_id, payload))
         return f"t{len(sent)}"
@@ -429,9 +431,6 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
 
 
 def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
-    from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
-    from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
-
     sent: list[dict] = []
 
     def submit(_self, path, **kwargs):
@@ -507,16 +506,14 @@ def test_run_rejects_a_provider_that_cannot_clone(client):
 
 @pytest.mark.usefixtures("fake_runs")
 def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
-    monkeypatch.setitem(
-        clone.CLONE_TARGETS.entries,
-        "higgsfield",
-        clone.CloneTarget(
-            model="higgsfield:bytedance/seedance-2.0/reference-to-video",
-            images="image_urls",
-            video="video_urls",
-            audio="generate_audio",
-        ),
+    swapped = clone.CloneTarget(
+        model="higgsfield:bytedance/seedance-2.0/reference-to-video",
+        images="image_urls",
+        video="video_urls",
+        audio="generate_audio",
     )
+    targets = MappingProxyType({**clone.CLONE_TARGETS, "higgsfield": swapped})
+    monkeypatch.setattr(clone_service, "clone_targets", lambda: targets)
     files = [("image", (f"{i}.png", bytes([i]), "image/png")) for i in range(10)]
     files.append(("videos", ("a.mp4", b"a", "video/mp4")))
     before = len(list_jobs())
@@ -713,9 +710,7 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
 
     pricing = _pricing(client)
 
-    assert set(pricing) == set(clone.CLONE_TARGETS.names()), (
-        "every clone provider is priced"
-    )
+    assert set(pricing) == set(clone.CLONE_TARGETS), "every clone provider is priced"
     assert pricing["kie"]["credits_per_video_s"] == {"720P": 40.0}
     assert pricing["kie"]["usd_per_credit"] == 0.004
     assert pricing["kie"]["max_reference_s"] == 15

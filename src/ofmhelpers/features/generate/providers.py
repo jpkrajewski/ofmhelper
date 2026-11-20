@@ -1,5 +1,5 @@
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import ParamHistory
+from ofmhelpers.db.jobs.store import ParamHistory
 
 CLONE_TASKS = frozenset({"clone", "clone_links", "clone_long"})
 

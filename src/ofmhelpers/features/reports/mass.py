@@ -2,10 +2,12 @@ import hashlib
 import time
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats, report_runs
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import DeliveryKind
+from ofmhelpers.db.report_runs import store as report_runs
 from ofmhelpers.features.events import Event, emit
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import DeliveryKind
+lazy from ofmhelpers.features.reports.daily import NAME as DAILY_NAME
 
 logger = get_logger(__name__)
 
@@ -39,9 +41,7 @@ def tell_mass(now: float | None = None) -> None:
 
 
 def _tell(now: float) -> None:
-    from ofmhelpers.features.reports.daily import NAME
-
-    last = report_runs.last_run(NAME)
+    last = report_runs.last_run(DAILY_NAME)
     since = last.ran_at if last is not None else now - _DAY
     if not senders(since, now):
         return

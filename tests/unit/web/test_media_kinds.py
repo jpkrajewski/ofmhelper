@@ -1,6 +1,6 @@
 import pytest
 
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.integrations.downloaders.generic import VIDEO_EXTENSIONS
 
 

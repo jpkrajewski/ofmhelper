@@ -6,10 +6,10 @@ from chat_platforms import StackedDriver
 from fastapi.testclient import TestClient
 
 import ofmhelpers.features.events.dispatch as dispatch_module
-from ofmhelpers.db.stores import chats
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatDelivery, ChatPlatform, DeliveryKind
 from ofmhelpers.features.reports import daily, mass
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
-from ofmhelpers.schemas.chatting import ChatDelivery, ChatPlatform, DeliveryKind
 from ofmhelpers.web.main import app
 
 

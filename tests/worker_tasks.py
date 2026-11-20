@@ -1,4 +1,5 @@
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
+lazy from ofmhelpers.features.jobs.runner import Requeued
 
 
 def make_result(name):
@@ -16,8 +17,6 @@ def fails_with(argument, secret):
 
 
 def requeue_once(note):
-    from ofmhelpers.features.jobs.runner import Requeued
-
     return Requeued()
 
 

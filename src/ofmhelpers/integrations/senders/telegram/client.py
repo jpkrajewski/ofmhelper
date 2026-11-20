@@ -36,7 +36,7 @@ class TelegramClient:
         self._session = outbound.mount(requests.Session())
 
     def me(self) -> Bot:
-        return Bot.model_validate(self._call("getMe", {}))
+        return Bot.model_validate(self._call("getMe", {}).result)
 
     def send_message(self, chat_id: str, text: str) -> Message:
         return Message.model_validate(
@@ -47,14 +47,16 @@ class TelegramClient:
                     "text": text,
                     "link_preview_options": {"is_disabled": True},
                 },
-            )
+            ).result
         )
 
     def delete_message(self, chat_id: str, message_id: int) -> None:
         self._call("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
 
     def chats(self) -> list[Chat]:
-        updates = [Update.model_validate(u) for u in self._call("getUpdates", {})]
+        updates = [
+            Update.model_validate(u) for u in self._call("getUpdates", {}).result
+        ]
         found = {u.chat.id: u.chat for u in updates if u.chat is not None}
         return list(found.values())
 
@@ -66,11 +68,11 @@ class TelegramClient:
         if offset is not None:
             payload["offset"] = offset
         found = self._call("getUpdates", payload, extra_wait_s=wait_s)
-        return [read for raw in found if (read := _update(raw)) is not None]
+        return [read for raw in found.result if (read := _update(raw)) is not None]
 
     def _call(
         self, method: str, payload: dict[str, Any], extra_wait_s: float = 0
-    ) -> Any:
+    ) -> Reply:
         try:
             response = self._session.post(
                 f"{self._base}/{method}",
@@ -87,7 +89,7 @@ class TelegramClient:
             raise TelegramError(msg) from None
         if not reply.ok:
             raise _refusal(method, reply)
-        return reply.result
+        return reply
 
 
 def _update(raw: Any) -> Update | None:

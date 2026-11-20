@@ -2,15 +2,16 @@ import secrets
 
 from redis.exceptions import RedisError
 
+from ofmhelpers.acting import Acting, Via, acting
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.acting import Acting, Via, acting
-from ofmhelpers.db.stores import event_targets, users
+from ofmhelpers.db.event_targets import store as event_targets
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.events.dispatch import deliver_to
 from ofmhelpers.features.refusals import UnavailableError
+from ofmhelpers.integrations.senders.schema import Event
 from ofmhelpers.integrations.senders.telegram.client import TelegramError, bot_name
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.events import Event
 lazy from ofmhelpers.integrations.senders.telegram.inbox import Start
 
 logger = get_logger(__name__)
@@ -18,6 +19,14 @@ logger = get_logger(__name__)
 SENDER = "telegram"
 NOT_SET_UP = "Telegram is not set up on this server"
 _LINK_KEY = "telegram:link:{token}"
+
+
+def enabled() -> bool:
+    return (
+        settings.telegram.bot_token is not None
+        and settings.events.sending(settings.infra.production)
+        and SENDER not in settings.events.senders_off_list()
+    )
 
 
 def linked(user_id: int) -> bool:

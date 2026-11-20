@@ -1,4 +1,5 @@
 import base64
+import copy
 import json
 import tempfile
 from http import HTTPStatus
@@ -60,28 +61,58 @@ def strict_schema(answer: type[BaseModel]) -> StrictSchema:
     schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 
-    def walk(node: Any) -> Any:
+    def walk(node: Any) -> None:
         if isinstance(node, list):
-            return [walk(n) for n in node]
+            for item in node:
+                walk(item)
+            return
         if not isinstance(node, dict):
-            return node
+            return
         if "$ref" in node:
-            return walk(defs[str(node["$ref"]).rsplit("/", 1)[-1]])
-        out = {
-            key: (
-                {name: walk(sub) for name, sub in value.items()}
-                if key == "properties"
-                else walk(value)
-            )
-            for key, value in node.items()
-            if key not in _NOT_STRICT
-        }
-        if out.get("type") == "object":
-            out["required"] = list(out.get("properties", {}))
-            out["additionalProperties"] = False
-        return out
+            target = copy.deepcopy(defs[str(node["$ref"]).rsplit("/", 1)[-1]])
+            node.clear()
+            node.update(target)
+            walk(node)
+            return
+        for key in [key for key in node if key in _NOT_STRICT]:
+            del node[key]
+        for key, value in node.items():
+            if key == "properties":
+                for sub in value.values():
+                    walk(sub)
+            else:
+                walk(value)
+        if node.get("type") == "object":
+            node["required"] = list(node.get("properties", {}))
+            node["additionalProperties"] = False
 
-    return StrictSchema(name=answer.__name__, json_schema=walk(schema))
+    walk(schema)
+    return StrictSchema(name=answer.__name__, json_schema=schema)
+
+
+class TextContent(BaseModel):
+    type: str = "text"
+    text: str
+
+
+class ImageUrl(BaseModel):
+    url: str
+
+
+class ImageContent(BaseModel):
+    type: str = "image_url"
+    image_url: ImageUrl
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str | list[TextContent | ImageContent]
+
+
+class ErrorRead(BaseModel):
+    message: str
+    code: str = ""
+    generated: str = ""
 
 
 class _Message(BaseModel):
@@ -132,7 +163,12 @@ class ChatCompletionsLLM(LLMProvider):
         with tempfile.TemporaryDirectory(prefix="llm-img-") as work:
             body = {
                 "model": self.model,
-                "messages": self._messages(prompt, schema.json_schema, Path(work)),
+                "messages": [
+                    message.model_dump()
+                    for message in self._messages(
+                        prompt, schema.json_schema, Path(work)
+                    )
+                ],
                 **({} if temperature is None else {"temperature": temperature}),
                 "response_format": {
                     "type": "json_schema",
@@ -152,18 +188,20 @@ class ChatCompletionsLLM(LLMProvider):
 
     def _messages(
         self, prompt: Prompt, schema: dict[str, Any], work: Path
-    ) -> list[dict[str, Any]]:
+    ) -> list[ChatMessage]:
         content = [self._part(p, work) for p in prompt.parts]
         shape = f"{_JSON_ONLY}\n{json.dumps(schema, separators=(',', ':'))}"
         system = "\n\n".join(filter(None, (prompt.system, shape)))
         return [
-            {"role": "system", "content": system},
-            {"role": "user", "content": content},
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content=content),
         ]
 
-    def _part(self, part: TextPart | MediaPart, work: Path) -> dict[str, Any]:
+    def _part(
+        self, part: TextPart | MediaPart, work: Path
+    ) -> TextContent | ImageContent:
         if isinstance(part, TextPart):
-            return {"type": "text", "text": part.text}
+            return TextContent(text=part.text)
         s = settings.llm
         limits = ImageLimits(max_bytes=s.image_max_bytes, max_side=s.image_max_side)
         try:
@@ -173,7 +211,7 @@ class ChatCompletionsLLM(LLMProvider):
             msg = f"Could not read {part.path.name}"
             raise LLMInputError(msg, detail=str(exc)) from exc
         mime = "image/jpeg" if image != part.path else part.mime_type
-        return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+        return ImageContent(image_url=ImageUrl(url=f"data:{mime};base64,{data}"))
 
     def _reply(self, response: httpx.Response) -> Reply:
         try:
@@ -197,7 +235,8 @@ class ChatCompletionsLLM(LLMProvider):
 
     def _mapped(self, response: httpx.Response) -> LLMError:
         code = response.status_code
-        message, error_code, generated = _error(response)
+        read = _error(response)
+        message, error_code, generated = read.message, read.code, read.generated
         detail = f"{code} {error_code}: {message}" + (
             f"\ngenerated: {generated[:2000]}" if generated else ""
         )
@@ -218,18 +257,18 @@ class ChatCompletionsLLM(LLMProvider):
         return LLMInputError(f"{self.label} rejected the request: {message}", detail)
 
 
-def _error(response: httpx.Response) -> tuple[str, str, str]:
+def _error(response: httpx.Response) -> ErrorRead:
     try:
         body = response.json()
     except ValueError:  # silent: not JSON: the body is the message
         body = None
     error = body.get("error") if isinstance(body, dict) else None
     if not (isinstance(error, dict) and error.get("message")):
-        return response.text[:500], "", ""
-    return (
-        str(error["message"]),
-        str(error.get("code") or ""),
-        str(error.get("failed_generation") or ""),
+        return ErrorRead(message=response.text[:500])
+    return ErrorRead(
+        message=str(error["message"]),
+        code=str(error.get("code") or ""),
+        generated=str(error.get("failed_generation") or ""),
     )
 
 

@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 UPLOADED = "succeeded"
@@ -16,7 +18,7 @@ class ResourceResponse(BaseModel):
 
     status: str = ""
     message: str = ""
-    data: object = None
+    data: Any = None
     error: ResourceError | None = None
 
 

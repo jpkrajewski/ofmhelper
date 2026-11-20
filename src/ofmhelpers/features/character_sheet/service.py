@@ -6,7 +6,8 @@ lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, list_jobs_page
+from ofmhelpers.db.jobs.schema import Job, ResultFile
+from ofmhelpers.db.jobs.store import create_job, list_jobs_page
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.store import (
     IMAGE_KINDS,
@@ -17,9 +18,9 @@ from ofmhelpers.features.assets.store import (
     uploads_root,
 )
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.jobs.schema import JobCard, JobQueued
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.media.character_sheet import combine_side_by_side
-from ofmhelpers.schemas import Job, JobCard, JobQueued, ResultFile
 
 TASK = "character_sheet"
 PREFIX = "/character-sheet"

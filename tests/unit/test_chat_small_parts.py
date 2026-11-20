@@ -3,9 +3,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from ofmhelpers.db.chats.schema import ChatEvent, ChatPosition, ChatRead, ReadScope
 from ofmhelpers.features.notifications.service import money
 from ofmhelpers.log import _HideLoginCodes
-from ofmhelpers.schemas.chatting import ChatEvent, ChatPosition, ChatRead, ReadScope
 
 
 @pytest.mark.parametrize(

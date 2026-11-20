@@ -4,6 +4,7 @@ from datetime import timedelta
 import pytest
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.short_links.schema import utc_today
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.short_links import NewLink, provider_infos
 from ofmhelpers.integrations.short_links.fake import (
@@ -13,7 +14,6 @@ from ofmhelpers.integrations.short_links.fake import (
     fake_oopsie,
 )
 from ofmhelpers.integrations.short_links.providers import get_link_provider
-from ofmhelpers.schemas.links import utc_today
 
 PROVIDERS = ["oopsie", "bouncy"]
 _FAKE_KEYS = {"oopsie": OOPSIE_FAKE_KEY, "bouncy": BOUNCY_FAKE_KEY}

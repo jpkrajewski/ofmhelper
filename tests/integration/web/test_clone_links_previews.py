@@ -10,7 +10,7 @@ from clone_links_helpers import (
     clone_links_env,  # noqa: F401
 )
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.clone_links import preview as preview_module
 from ofmhelpers.features.clone_links.preview import CANNOT_OPEN, TOO_SLOW, Price
 from ofmhelpers.features.cookies import jar as cookie_jar

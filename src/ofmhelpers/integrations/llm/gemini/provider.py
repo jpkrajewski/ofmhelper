@@ -29,6 +29,7 @@ from ofmhelpers.integrations.llm.models import (
     Usage,
 )
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
 lazy from ofmhelpers.integrations.llm.models import Prompt
 
 logger = get_logger(__name__)
@@ -71,8 +72,6 @@ class GeminiLLM(LLMProvider):
     def _client(self, timeout_s: float) -> genai.Client:
         fake = None
         if settings.infra.fake_externals:
-            from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
-
             fake = httpx.Client(transport=fake_gemini().transport())
         options = types.HttpOptions(
             timeout=_ms(timeout_s),

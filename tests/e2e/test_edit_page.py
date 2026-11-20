@@ -2,8 +2,8 @@ import re
 import subprocess
 import uuid
 from itertools import pairwise
-from pathlib import Path
 from urllib.parse import quote
+lazy from pathlib import Path
 
 import pytest
 from e2e_session import Session

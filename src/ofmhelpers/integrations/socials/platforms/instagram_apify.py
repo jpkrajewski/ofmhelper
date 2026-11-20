@@ -1,5 +1,6 @@
 import time
 from contextlib import contextmanager
+from types import MappingProxyType
 lazy from collections.abc import Generator
 
 import requests
@@ -40,6 +41,16 @@ logger = get_logger(__name__)
 _MEDIA_URL: TypeAdapter[str] = TypeAdapter(MediaUrl)
 DAY_S = 86400
 _LOCK = "lock:accounts-apify"
+
+
+class _Read(BaseModel):
+    stats: dict[str, AccountStats]
+    gave_up: set[str]
+
+
+class _ReelRun(BaseModel):
+    reels: dict[str, list[ApifyReel]] | None
+    cost_usd: float
 
 
 def profile_input(handles: list[str]) -> ProfileScraperInput:
@@ -156,7 +167,9 @@ class ApifyInstagramSource(AccountSource):
         for target in targets:
             owners.setdefault(target.handle, []).append(target.key)
         with _one_at_a_time(len(keys)) as held:
-            read = self._through_keys(keys, list(owners)) if held else {}
+            read = (
+                self._through_keys(keys, list(owners)) if held else MappingProxyType({})
+            )
         for handle, stats in read.items():
             for key in owners[handle]:
                 answers.stats[key] = stats
@@ -164,7 +177,7 @@ class ApifyInstagramSource(AccountSource):
 
     def _through_keys(
         self, keys: list[str], handles: list[str]
-    ) -> dict[str, AccountStats]:
+    ) -> MappingProxyType[str, AccountStats]:
         s = settings.accounts
         each = s.apify_usd_per_item * (1 + s.apify_est_reels)
         read: dict[str, AccountStats] = {}
@@ -181,7 +194,7 @@ class ApifyInstagramSource(AccountSource):
                 continue
             group, left = left[:room], left[room:]
             try:
-                got, gave_up = self._read(client, group)
+                got = self._read(client, group)
             except (ApifyError, requests.RequestException) as exc:
                 logger.warning(
                     "apify key %s: profile run failed on %d accounts (%s); next key",
@@ -190,14 +203,14 @@ class ApifyInstagramSource(AccountSource):
                     exc,
                     exc_info=True,
                 )
-                got, gave_up = {}, set()
-            read.update(got)
-            left = [h for h in group if h not in got and h not in gave_up] + left
-        return read
+                got = _Read(stats={}, gave_up=set())
+            read.update(got.stats)
+            left = [
+                h for h in group if h not in got.stats and h not in got.gave_up
+            ] + left
+        return MappingProxyType(read)
 
-    def _read(
-        self, client: ApifyClient, handles: list[str]
-    ) -> tuple[dict[str, AccountStats], set[str]]:
+    def _read(self, client: ApifyClient, handles: list[str]) -> _Read:
         s = settings.accounts
         now = time.time()
         asked = set(handles)
@@ -211,7 +224,8 @@ class ApifyInstagramSource(AccountSource):
                 profiles[handle] = profile
         gave_up = asked - set(profiles) if run.status == RunStatus.SUCCEEDED else set()
         public = [h for h, p in profiles.items() if not p.is_private]
-        reels, cost = self._reels(client, {h: profiles[h] for h in public})
+        reel_run = self._reels(client, {h: profiles[h] for h in public})
+        reels = reel_run.reels
         read = {
             h: _stats(p, (reels or {}).get(h, []), now)
             for h, p in profiles.items()
@@ -223,16 +237,14 @@ class ApifyInstagramSource(AccountSource):
             len(read),
             len(handles),
             sum(len(r) for r in (reels or {}).values()),
-            run.cost_usd + cost,
+            run.cost_usd + reel_run.cost_usd,
         )
-        return read, gave_up
+        return _Read(stats=read, gave_up=gave_up)
 
     @staticmethod
-    def _reels(
-        client: ApifyClient, public: dict[str, ApifyProfile]
-    ) -> tuple[dict[str, list[ApifyReel]] | None, float]:
+    def _reels(client: ApifyClient, public: dict[str, ApifyProfile]) -> _ReelRun:
         if not public:
-            return {}, 0.0
+            return _ReelRun(reels={}, cost_usd=0.0)
         s = settings.accounts
         handle_of = {p.username.lower(): h for h, p in public.items()}
         try:
@@ -253,7 +265,7 @@ class ApifyInstagramSource(AccountSource):
                     run.status_message or "no reason given",
                     len(public),
                 )
-                return None, run.cost_usd
+                return _ReelRun(reels=None, cost_usd=run.cost_usd)
             items = client.items(run)
         except (ApifyError, requests.RequestException) as exc:
             logger.warning(
@@ -263,10 +275,10 @@ class ApifyInstagramSource(AccountSource):
                 len(public),
                 exc_info=True,
             )
-            return None, 0.0
+            return _ReelRun(reels=None, cost_usd=0.0)
         reels: dict[str, list[ApifyReel]] = {h: [] for h in public}
         for reel in _parsed(items, ApifyReel, "reel"):
             handle = handle_of.get(reel.owner.lower())
             if handle is not None:
                 reels[handle].append(reel)
-        return reels, run.cost_usd
+        return _ReelRun(reels=reels, cost_usd=run.cost_usd)

@@ -1,6 +1,6 @@
 import importlib
 import time
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from pydantic import BaseModel

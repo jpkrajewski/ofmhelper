@@ -5,9 +5,9 @@ import pytest
 from redis.exceptions import RedisError
 from signin import make_user
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.assets import ref_usage
-from ofmhelpers.schemas import Role
 
 ANN, BOB = 990_001, 990_002
 

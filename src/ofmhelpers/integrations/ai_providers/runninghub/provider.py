@@ -1,4 +1,4 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.base import (

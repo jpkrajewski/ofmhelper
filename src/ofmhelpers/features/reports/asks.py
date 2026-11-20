@@ -5,7 +5,7 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.account import telegram as telegram_link
 from ofmhelpers.features.events.dispatch import deliver_to
 from ofmhelpers.features.jobs.runner import run_job
@@ -17,7 +17,7 @@ from ofmhelpers.integrations.senders.telegram.client import (
     telegram_client,
 )
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas.events import Event
+lazy from ofmhelpers.integrations.senders.schema import Event
 
 logger = get_logger(__name__)
 
@@ -38,14 +38,6 @@ class _Reading:
 @lru_cache(maxsize=1)
 def _reading() -> _Reading:
     return _Reading()
-
-
-def enabled() -> bool:
-    return (
-        settings.telegram.bot_token is not None
-        and settings.events.sending(settings.infra.production)
-        and _SENDER not in settings.events.senders_off_list()
-    )
 
 
 def pause_s() -> float:

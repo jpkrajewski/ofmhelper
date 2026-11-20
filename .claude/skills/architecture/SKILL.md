@@ -12,8 +12,8 @@ Book: "Architecture Patterns with Python", Percival and Gregory, free at https:/
 ## The pattern, where it lives here, when to read the chapter
 | Pattern | In this repo | Read when | Chapter |
 |---|---|---|---|
-| Domain model: rules in plain objects, no I/O | Pydantic models with their validation in `features/<page>/models.py`, `schemas/` | logic is growing inside a service or a router | `/book/chapter_01_domain_model.html` |
-| Repository: storage behind an interface | `db/repositories/` (the only DB code), `db/stores/` | adding a table, or a service wants a session | `/book/chapter_02_repository.html` |
+| Domain model: rules in plain objects, no I/O | Pydantic models with their validation in `features/<page>/models.py`, `<module>/schema.py` | logic is growing inside a service or a router | `/book/chapter_01_domain_model.html` |
+| Repository: storage behind an interface | `db/<table>/repository.py` (the only DB code), `store.py`, `schema.py` | adding a table, or a service wants a session | `/book/chapter_02_repository.html` |
 | Coupling and abstractions: test with a fake, not a mock | interface + fake + contract test for every integration | adding an outside service | `/book/chapter_03_abstractions.html` |
 | Service layer: one function per use case, HTTP-free | `features/<page>/service.py`; a route makes ONE call into it | a route is doing more than parse, call, return | `/book/chapter_04_service_layer.html` |
 | High gear / low gear tests | integration test first for behaviour, unit tests for logic | deciding what kind of test | `/book/chapter_05_high_gear_low_gear.html` |
@@ -30,7 +30,7 @@ Chapter URLs are `https://www.cosmicpython.com` + the path.
 ## The check, before the first line of a new thing
 1. **Layer**: router, feature/service, integration client, repository, or schema? One answer. Two answers = two things.
 2. **Neighbour**: which existing file does the same job for another page or provider? Open it and follow its shape (names, file split, test style).
-3. **Direction**: does every import go down (`web` -> `features` -> `integrations`/`media` -> `db`/`cache`/`schemas`/`config`/`utils`)? If something below needs something above, move that thing down or pass it in.
+3. **Direction**: does every import go down (`web` -> `features` -> `integrations`/`media` -> `db`/`cache`/`config`/`utils`)? If something below needs something above, move that thing down or pass it in.
 4. **Edges**: what crosses each boundary is a Pydantic model. What can fail at each outside call, and what does the caller see?
 5. **Record**: if it runs in the background, what does its job row say when done and when failed (`rq` skill)?
 6. Say the answers in two or three lines before coding. If they do not fit the existing layout, say that instead of inventing a new folder.

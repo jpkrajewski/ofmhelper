@@ -7,15 +7,18 @@ from signin import make_user, sign_in
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import DBAPIError
 
+from ofmhelpers.acting import Acting, Via, acting
+from ofmhelpers.background import sweeps
 from ofmhelpers.db import audit
-from ofmhelpers.db.acting import Acting, Via, acting
+from ofmhelpers.db.audit_log import store as audit_log
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.db.models import Authored, Base, Timestamps
+from ofmhelpers.db.phone_revisions import store as phone_revisions
 from ofmhelpers.db.session import get_engine, session_scope
-from ofmhelpers.db.stores import audit_log, devices, phone_revisions
-from ofmhelpers.db.stores import users as user_store
-from ofmhelpers.db.stores.jobs import create_job, get_job
-from ofmhelpers.features.jobs import runner, sweeps
-from ofmhelpers.schemas import DeviceFields, LoginFields
+from ofmhelpers.db.users import store as user_store
+from ofmhelpers.features.jobs import runner
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"

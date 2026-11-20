@@ -1,6 +1,6 @@
 import re
 import subprocess
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from e2e_session import Session

@@ -1,8 +1,9 @@
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.jobs.store import log_event
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, SessionUser, User, Viewer
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.schemas.users import Role, SessionUser, User, Viewer
 
 
 def _as_session(user: User) -> SessionUser:
@@ -83,3 +84,23 @@ def viewable(user_id: int, me_id: int) -> User:
         msg = "Pick another, active user to view as"
         raise RefusedError(msg)
     return user
+
+
+def signed_in_user(user_id: int) -> User | None:
+    return users.get_user(user_id)
+
+
+def _admin(admin_id: int | None) -> str | None:
+    return None if admin_id is None else str(admin_id)
+
+
+def viewing_started(admin_id: int | None, user: User) -> None:
+    log_event(
+        "viewing",
+        actor=_admin(admin_id),
+        params={"viewing": user.id, "email": user.email},
+    )
+
+
+def viewing_ended(admin_id: int | None, viewed: int) -> None:
+    log_event("viewing_end", actor=_admin(admin_id), params={"viewing": viewed})

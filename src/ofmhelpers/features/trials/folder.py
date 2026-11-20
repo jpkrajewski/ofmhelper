@@ -1,21 +1,21 @@
 import math
 from collections.abc import Callable
-from pathlib import Path
 from typing import Self
+lazy from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.cache import JobQueue, Line, QueueName
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import drive_folders as drive_store
-from ofmhelpers.db.stores.jobs import (
+from ofmhelpers.db.drive_folders import store as drive_store
+from ofmhelpers.db.jobs.store import (
     create_job,
     get_job,
     merge_params,
     reopen_job,
     running_jobs,
 )
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
@@ -31,8 +31,8 @@ from ofmhelpers.features.trials.state import (
     load,
 )
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas import Job
-lazy from ofmhelpers.schemas.drive import DriveBoard, DriveCard
+lazy from ofmhelpers.db.drive_folders.schema import DriveBoard, DriveCard
+lazy from ofmhelpers.db.jobs.schema import Job
 
 logger = get_logger(__name__)
 
@@ -285,9 +285,12 @@ def _synced(card: DriveCard, state: FolderState) -> None:
     tasks.merge_posted(state, [f for f in card.scan.posted if f.kind == "video"])
 
 
-def _sync_state(
-    scope: int | None, viewer: int, login_id: int
-) -> tuple[DriveCard, FolderState]:
+class _Synced(BaseModel):
+    card: DriveCard
+    state: FolderState
+
+
+def _sync_state(scope: int | None, viewer: int, login_id: int) -> _Synced:
     card = _card(scope, viewer, login_id)
     state = load(viewer, login_id)
     before = state.model_dump_json()
@@ -299,7 +302,7 @@ def _sync_state(
     fixed(state)
     if state.model_dump_json() != before:
         state = change(viewer, login_id, fixed)
-    return card, state
+    return _Synced(card=card, state=state)
 
 
 def read_posted(uid: int, login_id: int) -> None:
@@ -378,6 +381,10 @@ class TrialsRun(BaseModel):
     refresh_token: str = ""
 
 
+class RemakeArgs(BaseModel):
+    keys: list[str]
+
+
 class UploadArgs(BaseModel):
     keys: list[str]
     account_folder_id: str
@@ -401,30 +408,37 @@ def replay_run(job: Job) -> TrialsRun | None:
 def restart(job: Job) -> bool:
     restarts = int(job.params.get("restarts", 0))
     label = job.params.get("label")
+    args = job.params.get("args")
     if (
-        label not in (GENERATE, UPLOAD)
+        label not in (GENERATE, REMAKE, UPLOAD)
         or job.actor is None
         or restarts >= _RESTARTS_MAX
+        or (label != GENERATE and not isinstance(args, dict))
     ):
         return False
-    upload = (
-        UploadArgs.model_validate(job.params["args"])
-        if label == UPLOAD and isinstance(job.params.get("args"), dict)
-        else None
-    )
-    if label == UPLOAD and upload is None:
-        return False
+    remake = RemakeArgs.model_validate(args) if label == REMAKE else None
+    upload = UploadArgs.model_validate(args) if label == UPLOAD else None
     uid, login_id = int(job.actor), int(job.params["login"])
     merge_params(job.id, {"restarts": restarts + 1})
     reopen_job(job.id)
     claim = _Claim(uid, login_id, str(label))
     claim.job_id = job.id
+    token = refresh_token(uid) or ""
+    if remake is not None:
+        claim.launch(
+            JobQueue(name=QueueName.MEDIA).put,
+            tasks.generate_reels,
+            len(remake.keys),
+            refresh_token=token,
+            keys=remake.keys,
+        )
+        return True
     if upload is None:
         claim.launch(
             JobQueue(name=QueueName.MEDIA).put,
             tasks.make_trials,
             len(load(uid, login_id).reels),
-            refresh_token=refresh_token(uid) or "",
+            refresh_token=token,
         )
         return True
     stored = {r.key for r in load(uid, login_id).reels if r.stored}
@@ -433,7 +447,7 @@ def restart(job: Job) -> bool:
         JobQueue(name=QueueName.MEDIA if remade else QueueName.DEFAULT).put,
         tasks.upload_trials,
         len(upload.keys),
-        refresh_token=refresh_token(uid) or "",
+        refresh_token=token,
         account_folder_id=upload.account_folder_id,
         keys=upload.keys,
     )
@@ -452,8 +466,10 @@ class Trials(BaseModel, frozen=True):
             raise NotFoundError(NO_FOLDER)
 
     def open(self) -> OpenedFolder:
-        card, state = _sync_state(self.scope, self.uid, self.login_id)
-        return OpenedFolder(card=card, view=FolderView.of(self.uid, state))
+        synced = _sync_state(self.scope, self.uid, self.login_id)
+        return OpenedFolder(
+            card=synced.card, view=FolderView.of(self.uid, synced.state)
+        )
 
     def live(self) -> FolderLive:
         return FolderView.of(self.uid, load(self.uid, self.login_id)).live()

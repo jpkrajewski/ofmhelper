@@ -1,7 +1,4 @@
-from ofmhelpers.errors import AppError
-
-
-class LLMError(AppError):
+class LLMError(Exception):
     retryable = False
 
     def __init__(self, message: str, detail: str = "") -> None:

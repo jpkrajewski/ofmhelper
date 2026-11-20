@@ -1,7 +1,7 @@
 from signin import make_user
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.jobs.store import create_job, get_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.account.keys import key_tail
 from ofmhelpers.features.jobs.runner import DEACTIVATED, run_job
 from ofmhelpers.redact import MASK

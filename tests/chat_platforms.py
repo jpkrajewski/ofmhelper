@@ -7,19 +7,19 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Any
 
-from ofmhelpers.db.stores import chats
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import (
+    ChatAccount,
+    ChatPlatform,
+    ChatTokens,
+    ChatWebhook,
+)
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.sync import sync
 from ofmhelpers.features.chatting.webhooks import cover_models
 from ofmhelpers.integrations.fanvue import fake as fanvue_fake
 from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.stacked import fake as stacked_fake
-from ofmhelpers.schemas.chatting import (
-    ChatAccount,
-    ChatPlatform,
-    ChatTokens,
-    ChatWebhook,
-)
 lazy from ofmhelpers.integrations.chat_source import ChatSource
 
 STACKED_SECRET = (

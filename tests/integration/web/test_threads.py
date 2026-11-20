@@ -5,15 +5,16 @@ from fastapi.testclient import TestClient
 from notifications_socket import SOCKET, next_lines, next_sent
 from signin import sign_in_agency
 
+from ofmhelpers.background import registry
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.jobs import get_job, list_batch
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.jobs.store import get_job, list_batch
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.jobs import registry
 from ofmhelpers.features.threads import service, tasks
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.media.repurpose.photos.models import Photo
-from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -174,7 +175,7 @@ def test_each_set_has_its_own_folder_and_a_rerun_uploads_nothing_twice(drive, ph
 
     job = get_job(first.id)
     assert job is not None
-    tasks.make_pictures(**registry._threads(job))
+    tasks.make_pictures(**registry._threads(job).model_dump())
 
     assert len(photos) == 2
     assert len(drive.names_in(one)) == 3
@@ -189,7 +190,7 @@ def test_a_set_whose_folder_was_deleted_by_hand_makes_another(drive, photos):
 
     job = get_job(made.id)
     assert job is not None
-    result = tasks.make_pictures(**registry._threads(job))
+    result = tasks.make_pictures(**registry._threads(job).model_dump())
 
     (threads,) = drive.named("THREADS", _account(drive))
     (again,) = drive.named("VID_1", threads)

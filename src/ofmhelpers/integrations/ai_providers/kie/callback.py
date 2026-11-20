@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import time
-from collections.abc import Mapping
+lazy from collections.abc import Mapping
 
 from pydantic import Field, ValidationError
 

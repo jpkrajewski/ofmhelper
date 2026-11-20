@@ -3,14 +3,14 @@ from urllib.parse import urlencode
 from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.signin.consent import redirect_uri
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import HOME, SignInState, safe_next, unseal
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.users import Role
 
 logger = get_logger(__name__)
 
@@ -24,13 +24,18 @@ class Callback(BaseModel):
     signed_in: bool
 
 
-def _identity(provider: Provider, back: Callback) -> tuple[SignInState, Identity]:
+class _Verified(BaseModel):
+    carried: SignInState
+    identity: Identity
+
+
+def _identity(provider: Provider, back: Callback) -> _Verified:
     if back.error:
         msg = f"{provider.label} sign-in was cancelled"
         raise SignInError(msg)
     carried = unseal(back.cookie, provider.name, back.state)
     reply = provider.exchange(back.code, redirect_uri(provider, back.site))
-    return carried, provider.identity(reply, carried.nonce)
+    return _Verified(carried=carried, identity=provider.identity(reply, carried.nonce))
 
 
 def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
@@ -72,12 +77,13 @@ def _sign_in(provider: Provider, carried: SignInState, identity: Identity) -> Ou
 
 def finish(provider: Provider, back: Callback) -> Outcome:
     try:
-        carried, identity = _identity(provider, back)
+        verified = _identity(provider, back)
     except SignInError as exc:
         logger.warning("sign-in with %s failed: %s", provider.name, exc, exc_info=True)
         if back.signed_in:
             return Outcome(redirect=f"/account?{provider.name}=failed")
         return Outcome(error=str(exc), status_code=400)
+    carried, identity = verified.carried, verified.identity
     if carried.link_user_id is not None:
         return _link(provider, carried, carried.link_user_id, identity)
     return _sign_in(provider, carried, identity)

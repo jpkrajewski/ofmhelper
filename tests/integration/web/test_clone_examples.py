@@ -1,17 +1,17 @@
 import subprocess
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import ADMIN_EMAIL, make_user, sign_in
 
-from ofmhelpers.db.repositories import JobRepository
-from ofmhelpers.db.stores import clone_examples as store
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.clone_examples import store
+from ofmhelpers.db.jobs.repository import JobRepository
+from ofmhelpers.db.jobs.store import create_job
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.clone import examples
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 PROMPT = "Replace the guy in @Video1 with subject from @Image1, no tattoos"

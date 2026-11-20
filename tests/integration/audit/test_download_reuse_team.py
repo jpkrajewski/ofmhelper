@@ -5,12 +5,12 @@ from download_files import FakeDownloads, fake_posters
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
-from ofmhelpers.db.stores import cookies as login_cookies
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.cookies import store as login_cookies
+from ofmhelpers.db.jobs.store import get_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.downloads import media
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 LINK = "https://gated.example/p/team-reuse"

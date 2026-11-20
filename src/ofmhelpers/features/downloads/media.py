@@ -1,9 +1,9 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 from ofmhelpers.features.downloads.service import fetch, queue_downloads
 from ofmhelpers.integrations.downloaders.media import download_all
+lazy from ofmhelpers.db.downloads.schema import DownloadsQueued
 lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
-lazy from ofmhelpers.schemas.downloads import DownloadsQueued
 
 TASK = "download_media"
 

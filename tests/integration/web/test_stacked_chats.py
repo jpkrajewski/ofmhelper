@@ -7,7 +7,8 @@ from chat_platforms import StackedDriver
 from fastapi.testclient import TestClient
 from notifications_socket import agency_notifications
 
-from ofmhelpers.db.stores import chats
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatDelivery, ChatPlatform, DeliveryKind
 from ofmhelpers.features.chatting.service import platform_models
 from ofmhelpers.features.chatting.sync import run_when_due, sync
 from ofmhelpers.features.chatting.webhooks import ensure_destinations
@@ -15,7 +16,6 @@ from ofmhelpers.integrations.stacked import fake as stacked_fake
 from ofmhelpers.integrations.stacked.client import StackedClient
 from ofmhelpers.integrations.stacked.errors import StackedError
 from ofmhelpers.integrations.stacked.models import Message
-from ofmhelpers.schemas.chatting import ChatDelivery, ChatPlatform, DeliveryKind
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.usefixtures("fake_externals")

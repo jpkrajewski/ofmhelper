@@ -19,11 +19,20 @@ from pydantic import BaseModel
 from repo_paths import REPO
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
+lazy from cryptography.hazmat.primitives import serialization
+lazy from cryptography.hazmat.primitives.asymmetric import ec
+lazy from redis import Redis
+lazy from rq import Queue
+lazy from rq.registry import StartedJobRegistry
 
 from alembic import command
 from ofmhelpers.integrations.gdrive.fake import FakeDrive
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_FAKE_KEY
 from ofmhelpers.integrations.short_links.fake import BOUNCY_FAKE_KEY, OOPSIE_FAKE_KEY
+lazy from ofmhelpers.cache import JOB_QUEUES, get_redis
+lazy from ofmhelpers.db.models import Base
+lazy from ofmhelpers.db.session import get_engine
+lazy from ofmhelpers.integrations.signin.passwords import hash_password
 
 ACCOUNTS = {
     "ADMIN": ("admin", "e2e-admin-password"),
@@ -82,8 +91,6 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
 
 
 def _apple_key_pem() -> str:
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
 
     key = ec.generate_private_key(ec.SECP256R1())
     return key.private_bytes(
@@ -163,11 +170,11 @@ def base_url(
             "--port",
             str(port),
         ],
-        [sys.executable, "-m", "ofmhelpers.sweeps"],
-        [sys.executable, "-m", "ofmhelpers.worker"],
-        [sys.executable, "-m", "ofmhelpers.worker", "previews"],
-        [sys.executable, "-m", "ofmhelpers.worker", "media"],
-        [sys.executable, "-m", "ofmhelpers.worker", "edit"],
+        [sys.executable, "-m", "ofmhelpers.background.sweeps"],
+        [sys.executable, "-m", "ofmhelpers.background.worker"],
+        [sys.executable, "-m", "ofmhelpers.background.worker", "previews"],
+        [sys.executable, "-m", "ofmhelpers.background.worker", "media"],
+        [sys.executable, "-m", "ofmhelpers.background.worker", "edit"],
     ]
     with app_log.open("w") as log:
         procs = [
@@ -191,9 +198,6 @@ def base_url(
 def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
     monkeypatch.setenv("OFM_DATABASE_URL", e2e_backend.database_url)
     monkeypatch.setenv("OFM_REDIS_URL", e2e_backend.redis_url)
-    from ofmhelpers.cache import get_redis
-    from ofmhelpers.db.models import Base
-    from ofmhelpers.db.session import get_engine
 
     tables = ", ".join(Base.metadata.tables)
     with get_engine().begin() as conn:
@@ -208,7 +212,6 @@ def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
 
 @lru_cache(maxsize=1)
 def _va_password_hash() -> str:
-    from ofmhelpers.integrations.signin.passwords import hash_password
 
     return hash_password(ACCOUNTS["VA"][1])
 
@@ -232,11 +235,6 @@ def _seed_users(database_url: str) -> None:
 
 @pytest.fixture
 def jobs_idle(e2e_backend: E2EBackend) -> Callable[[], None]:
-    from redis import Redis
-    from rq import Queue
-    from rq.registry import StartedJobRegistry
-
-    from ofmhelpers.cache import JOB_QUEUES
 
     def wait(timeout_s: float = 30) -> None:
         redis = Redis.from_url(e2e_backend.redis_url)

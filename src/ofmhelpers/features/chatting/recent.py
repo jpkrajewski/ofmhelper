@@ -5,8 +5,8 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.db.chats.schema import ChatPlatform, RecentModel
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatPlatform, RecentModel
 
 logger = get_logger(__name__)
 

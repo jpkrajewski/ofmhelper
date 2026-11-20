@@ -7,21 +7,16 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import add_recorded, delete_recorded, list_jobs_page
-from ofmhelpers.features.clone.pricing import UnpricedError, clone_pricing
-from ofmhelpers.features.clone.targets import clone_targets
-from ofmhelpers.features.jobs.cost import cost_of
+from ofmhelpers.db.jobs.schema import GenerationRecord, Job, JobMeta, RecordedJob
+from ofmhelpers.db.jobs.store import add_recorded, delete_recorded, list_jobs_page
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
+from ofmhelpers.features.clone_pricing.cost import cost_of
+from ofmhelpers.features.clone_pricing.pricing import UnpricedError, clone_pricing
+from ofmhelpers.features.clone_pricing.targets import clone_targets
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.log import configure_logging, get_logger
-from ofmhelpers.schemas.persistence import (
-    GenerationRecord,
-    Job,
-    JobMeta,
-    RecordedJob,
-)
-from ofmhelpers.schemas.users import Role, User
 
 logger = get_logger(__name__)
 
@@ -136,8 +131,8 @@ class _Work(BaseModel):
         )
 
     def clone(self, at: float, source: Job, provider: str, seconds: int) -> RecordedJob:
-        target = clone_targets().entries[provider]
-        price = clone_pricing().entries[provider]
+        target = clone_targets()[provider]
+        price = clone_pricing()[provider]
         params = {
             **source.params,
             "provider": provider,
@@ -229,7 +224,7 @@ class _Work(BaseModel):
 
 def _priced_providers() -> list[str]:
     found = []
-    for name, price in clone_pricing().entries.items():
+    for name, price in clone_pricing().items():
         try:
             price.per_second(RESOLUTION)
         except UnpricedError:  # silent: an unpriced provider is skipped

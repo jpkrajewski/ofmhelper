@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Area
+from ofmhelpers.features.accounts.tracker import rescan_limited
 from ofmhelpers.features.cookies import service
 from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, OwnerId
 from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
@@ -37,7 +38,7 @@ def form(request: Request, owner_id: OwnerId, note: str | None = None) -> Respon
 @router.post("")
 def upload_cookies(request: Request, owner_id: OwnerId, file: UploadFile) -> Response:
     try:
-        service.upload(owner_id, file.file, file.filename, file.size)
+        service.upload(owner_id, file.file, file.filename, file.size, rescan_limited)
     except RefusedError as exc:  # silent: shown on the page
         return _page(request, owner_id, error=str(exc), status_code=400)
     return see_other("/cookies?note=uploaded")

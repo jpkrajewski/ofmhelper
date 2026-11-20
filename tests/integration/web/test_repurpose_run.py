@@ -5,13 +5,13 @@ from fastapi.testclient import TestClient
 from signin import sign_in
 
 from ofmhelpers.cache import QueueName
-from ofmhelpers.db.stores import devices
-from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import create_job, list_jobs
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.jobs.store import create_job, list_jobs
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.repurpose import service as repurpose
-from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 
 CLIP = ("video", ("clip.mp4", b"not really a video"))

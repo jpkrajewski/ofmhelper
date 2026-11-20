@@ -1,11 +1,11 @@
 import shutil
 import time
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Iterator
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import params_naming
+from ofmhelpers.db.jobs.store import params_naming
 from ofmhelpers.features.assets.store import assets_root_for_actor
 from ofmhelpers.features.edit.service import (
     PREPARE_TASK,

@@ -7,17 +7,16 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, model_serializer
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ofmhelpers.db.repositories import DuplicateError
-from ofmhelpers.features.assets.store import AssetRefusedError
-from ofmhelpers.features.clone.service import CloneRefusedError
 from ofmhelpers.features.drive.uploads import UploadRefusedError
-from ofmhelpers.features.edit.service import EditRefusedError
 from ofmhelpers.features.generate.service import GenerateRefusedError
 from ofmhelpers.features.refusals import (
+    AssetRefusedError,
+    CloneRefusedError,
     ConflictError,
+    EditRefusedError,
     ForbiddenError,
     RefusedError,
     TooSoonError,
@@ -26,8 +25,6 @@ from ofmhelpers.features.refusals import (
 )
 from ofmhelpers.features.refusals import NotFoundError as MissingError
 from ofmhelpers.features.trials.folder import NotFoundError
-from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
-from ofmhelpers.integrations.downloaders.urls import NotALinkError
 from ofmhelpers.log import get_logger
 from ofmhelpers.web.middleware import AuthMiddleware
 
@@ -41,15 +38,12 @@ REFUSALS: frozendict[type[Exception], int] = frozendict(
         CloneRefusedError: 400,
         EditRefusedError: 400,
         GenerateRefusedError: 400,
-        InvalidInputError: 400,
-        NotALinkError: 400,
         RefusedError: 400,
         UploadRefusedError: 400,
         ForbiddenError: 403,
         MissingError: 404,
         NotFoundError: 404,
         ConflictError: 409,
-        DuplicateError: 409,
         TooSoonError: 429,
         UnavailableError: 502,
         TryAgainError: 503,
@@ -97,10 +91,22 @@ def _refusal(status_code: int) -> Handler:
     return answer
 
 
-def exception_handlers() -> dict[int | type[Exception], Handler]:
-    return {
-        Exception: unhandled,
-        StarletteHTTPException: http_error,
-        RequestValidationError: invalid_request,
-        **{error: _refusal(status) for error, status in REFUSALS.items()},
-    }
+class ExceptionHandlers(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    handlers: dict[int | type[Exception], Handler]
+
+    @model_serializer
+    def _as_given(self) -> dict[int | type[Exception], Handler]:
+        return dict(self.handlers)
+
+
+def exception_handlers() -> ExceptionHandlers:
+    return ExceptionHandlers(
+        handlers={
+            Exception: unhandled,
+            StarletteHTTPException: http_error,
+            RequestValidationError: invalid_request,
+            **{error: _refusal(status) for error, status in REFUSALS.items()},
+        }
+    )

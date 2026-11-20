@@ -24,9 +24,18 @@ _MAX_PAGE = 100
 _DEFAULT_PAGE = 50
 
 
-def _creator(user_id: str, access: str) -> dict[str, Any]:
-    username = user_id.removeprefix("user_")
-    return {"userId": user_id, "username": username, "accessTypes": [access]}
+class FakeCreator(BaseModel):
+    user_id: str = Field(serialization_alias="userId")
+    username: str
+    access_types: list[str] = Field(serialization_alias="accessTypes")
+
+
+def _creator(user_id: str, access: str) -> FakeCreator:
+    return FakeCreator(
+        user_id=user_id,
+        username=user_id.removeprefix("user_"),
+        access_types=[access],
+    )
 
 
 class FakeMessage(BaseModel):
@@ -132,11 +141,15 @@ class FakeStacked:
         query = {k: v[0] for k, v in parse_qs(url.query).items()}
         parts = url.path.removeprefix(_PREFIX).split("/")
         if parts == ["me"]:
-            return FakeReply.json_body(_me(token))
+            return FakeReply.json_body(_me(token).model_dump())
         if parts == ["creators"]:
             access = "owner" if token == CREATOR_KEY else "agency"
             return FakeReply.json_body(
-                {"creators": [_creator(c, access) for c in reachable]}
+                {
+                    "creators": [
+                        _creator(c, access).model_dump(by_alias=True) for c in reachable
+                    ]
+                }
             )
         creator = query.get("creatorUserId")
         if not creator:
@@ -253,13 +266,24 @@ def _seconds(rfc3339: str) -> float:
     return datetime.fromisoformat(rfc3339).timestamp()
 
 
-def _me(token: str) -> dict[str, Any]:
+class FakeAccount(BaseModel):
+    type: str
+    id: str
+
+
+class FakeMe(BaseModel):
+    account: FakeAccount
+    name: str = "Fake key"
+    scopes: list[str] = ["chat:read"]
+
+
+def _me(token: str) -> FakeMe:
     account = (
-        {"type": "creator", "id": CREATOR}
+        FakeAccount(type="creator", id=CREATOR)
         if token == CREATOR_KEY
-        else {"type": "agency", "id": AGENCY}
+        else FakeAccount(type="agency", id=AGENCY)
     )
-    return {"account": account, "name": "Fake key", "scopes": ["chat:read"]}
+    return FakeMe(account=account)
 
 
 def _error(status: HTTPStatus, message: str) -> FakeReply:

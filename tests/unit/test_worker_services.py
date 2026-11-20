@@ -1,5 +1,5 @@
-from pathlib import Path
 from typing import Any
+lazy from pathlib import Path
 
 import pytest
 import yaml
@@ -42,8 +42,8 @@ def _worker_queues() -> dict[str, set[str]]:
     found = {}
     for name, service in _compose().services.items():
         cmd = service.command
-        if "ofmhelpers.worker" in cmd:
-            rest = cmd[cmd.index("ofmhelpers.worker") + 1 :]
+        if "ofmhelpers.background.worker" in cmd:
+            rest = cmd[cmd.index("ofmhelpers.background.worker") + 1 :]
             found[name] = set(rest) or {QueueName.DEFAULT.value}
     return found
 
@@ -98,9 +98,17 @@ def test_both_deploys_stop_the_workers_before_the_app(path: Path):
 
 def test_the_sweeps_have_one_service_of_their_own():
     services = _compose().services
-    running = [name for name, s in services.items() if "ofmhelpers.sweeps" in s.command]
+    running = [
+        name
+        for name, s in services.items()
+        if "ofmhelpers.background.sweeps" in s.command
+    ]
     assert running == ["sweeps"]
-    assert services["sweeps"].command == ["python", "-m", "ofmhelpers.sweeps"]
+    assert services["sweeps"].command == [
+        "python",
+        "-m",
+        "ofmhelpers.background.sweeps",
+    ]
     assert services["sweeps"].stop_grace_period == "30s"
 
 

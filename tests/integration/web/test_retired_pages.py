@@ -2,13 +2,13 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
 
-from ofmhelpers.auth.access import RETIRED, Area, areas_of
-from ofmhelpers.db.stores.jobs import list_jobs
+from ofmhelpers.background.sweeps import sweeps
+from ofmhelpers.db.jobs.store import list_jobs
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.cookies.service import UNLOCK_TASK
-from ofmhelpers.features.jobs.sweeps import sweeps
-from ofmhelpers.schemas.nav import NAV, nav
-from ofmhelpers.schemas.users import Role
+from ofmhelpers.web.access import RETIRED, Area, areas_of
 from ofmhelpers.web.main import app
+from ofmhelpers.web.nav import NAV, nav
 
 PAGES = ["/reels", "/clone-links", "/pictures"]
 

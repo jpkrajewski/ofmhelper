@@ -5,11 +5,12 @@ from fastapi.testclient import TestClient
 from notifications_socket import first_sent
 from signin import make_user, sign_in, sign_in_admin
 
-from ofmhelpers.db.stores import devices
-from ofmhelpers.db.stores import users as user_store
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.users import store as user_store
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.notifications import service as notifications
-from ofmhelpers.schemas import DeviceFields, Role
-from ofmhelpers.schemas.notifications import Notification
+from ofmhelpers.features.notifications.schema import Notification
 from ofmhelpers.web.main import app
 
 BOSS = "boss@example.com"

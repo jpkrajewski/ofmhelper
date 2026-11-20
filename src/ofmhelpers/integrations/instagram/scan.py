@@ -1,6 +1,7 @@
 import time
-from collections.abc import Iterator
 from itertools import islice
+from types import MappingProxyType
+lazy from collections.abc import Iterator
 
 from ofmhelpers.integrations.instagram.client import (
     InstagramClient,
@@ -36,7 +37,7 @@ def _recent(reels: Iterator[ReelSummary], since: float) -> Iterator[ReelSummary]
 
 def _bulk_media(
     client: InstagramClient, username: str, codes: set[str], since: float
-) -> dict[str, ReelMedia]:
+) -> MappingProxyType[str, ReelMedia]:
     found: dict[str, ReelMedia] = {}
     old_in_a_row = 0
     try:
@@ -51,7 +52,7 @@ def _bulk_media(
         logger.warning(
             "@%s: posts refused, reading reels one by one", username, exc_info=True
         )
-    return found
+    return MappingProxyType(found)
 
 
 def _reel(summary: ReelSummary, media: ReelMedia | None, profile: Profile) -> Reel:
@@ -84,7 +85,7 @@ def scan_profile(
     bulk = (
         _bulk_media(client, profile.username, {s.code for s in viral}, since)
         if viral
-        else {}
+        else MappingProxyType({})
     )
     reels: list[Reel] = []
     for summary in viral:

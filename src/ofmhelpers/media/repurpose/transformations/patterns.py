@@ -1,6 +1,6 @@
 import random
 from enum import StrEnum
-from pathlib import Path
+lazy from pathlib import Path
 
 from PIL import Image, ImageDraw
 from pydantic import BaseModel, SkipValidation

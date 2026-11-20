@@ -1,4 +1,5 @@
 from repo_paths import REPO
+lazy from uvicorn.middleware.proxy_headers import _TrustedHosts
 
 DOCKERFILE = REPO / "Dockerfile"
 
@@ -15,8 +16,6 @@ def test_production_cmd_trusts_forwarded_headers() -> None:
 
 
 def test_a_client_written_forwarded_for_is_not_its_address() -> None:
-    from uvicorn.middleware.proxy_headers import _TrustedHosts
-
     cmd = next(
         line
         for line in DOCKERFILE.read_text(encoding="utf-8").splitlines()

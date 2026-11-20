@@ -2,24 +2,26 @@ import importlib
 import inspect
 import pkgutil
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import ClassVar, Literal
+from types import MappingProxyType
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 import requests
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
+from ofmhelpers.integrations.ai_providers.schema import KeySlot
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.generation import KeySlot
-from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Mapping
 
 logger = get_logger(__name__)
 
@@ -119,13 +121,19 @@ class Provider(ABC):
         return dest
 
 
+class _Registered(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    classes: dict[str, type[Provider]] = Field(default_factory=dict)
+
+
 @lru_cache(maxsize=1)
-def _registry() -> dict[str, type[Provider]]:
-    return {}
+def _registered() -> _Registered:
+    return _Registered()
 
 
 def register_provider[P: type[Provider]](cls: P) -> P:
-    _registry()[cls.name] = cls
+    _registered().classes[cls.name] = cls
     return cls
 
 
@@ -141,14 +149,14 @@ def _import_providers() -> None:
                     raise
 
 
-def provider_classes() -> Registry[type[Provider]]:
+def provider_classes() -> MappingProxyType[str, type[Provider]]:
     _import_providers()
-    ordered = sorted(_registry().values(), key=lambda c: (c.rank, c.name))
-    return Registry[type[Provider]](entries={cls.name: cls for cls in ordered})
+    ordered = sorted(_registered().classes.values(), key=lambda c: (c.rank, c.name))
+    return MappingProxyType({cls.name: cls for cls in ordered})
 
 
 def provider_names() -> list[str]:
-    return provider_classes().names()
+    return list(provider_classes())
 
 
 def provider_class(name: str) -> type[Provider]:

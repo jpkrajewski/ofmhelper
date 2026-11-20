@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import egress
+from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders import generic, images, kvs, savers
-from ofmhelpers.integrations.downloaders.cookies import cookie_file
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.integrations.downloaders.sites import images_first
 from ofmhelpers.log import get_logger

@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app

@@ -1,6 +1,7 @@
+from types import MappingProxyType
+
 from ofmhelpers.config import settings
-from ofmhelpers.schemas.generation import KeySlot
-from ofmhelpers.utils.registry import Registry
+from ofmhelpers.integrations.ai_providers.schema import KeySlot
 
 WAN = "wan"
 SEEDANCE = "seedance"
@@ -41,18 +42,18 @@ SLOTS = (
 )
 
 
-def admin_keys() -> Registry[str]:
+def admin_keys() -> MappingProxyType[str, str]:
     s = settings.apiyi
     keys = {
         WAN: s.api_key_admin,
         SEEDANCE: s.api_key_seedance,
         DEFAULT: s.api_key_default,
     }
-    return Registry[str](entries={group: key for group, key in keys.items() if key})
+    return MappingProxyType({group: key for group, key in keys.items() if key})
 
 
 def key_for(model_id: str, given: str) -> str:
     keys = admin_keys()
-    if given not in keys.all():
+    if given not in keys.values():
         return given
     return keys.get(group_of(model_id)) or given

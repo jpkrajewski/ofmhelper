@@ -4,20 +4,19 @@ import random
 import tempfile
 import time
 import uuid
-from collections.abc import Iterable
 from http import HTTPStatus
 from http.cookiejar import Cookie, MozillaCookieJar
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+lazy from collections.abc import Iterable
 
 import requests
 from pydantic import ValidationError
 
 from ofmhelpers.config import settings
-from ofmhelpers.errors import AppError
 from ofmhelpers.integrations import outbound
-from ofmhelpers.integrations.downloaders.cookies import load_jar
+from ofmhelpers.integrations.cookie_jar import load_jar
 from ofmhelpers.integrations.pinterest.models import (
     CreatedPin,
     Envelope,
@@ -26,6 +25,7 @@ from ofmhelpers.integrations.pinterest.models import (
     PinterestAccount,
     PinterestBoard,
     ResourceError,
+    ResourceResponse,
     UploadSlot,
     UploadState,
 )
@@ -39,7 +39,7 @@ LOGIN_COOKIE = "_pinterest_sess"
 DOMAIN = "pinterest.com"
 
 
-class PinterestError(AppError):
+class PinterestError(Exception):
     def __init__(self, message: str, *, permanent: bool = False) -> None:
         super().__init__(message)
         self.permanent = permanent
@@ -150,15 +150,15 @@ class PinterestClient:
         return any(c.name == LOGIN_COOKIE for c in self._session.cookies)
 
     def me(self) -> PinterestAccount:
-        data = self._get("/v3/users/me/", {"fields": "user.id,user.username"})
-        return PinterestAccount.model_validate(data)
+        reply = self._get("/v3/users/me/", {"fields": "user.id,user.username"})
+        return PinterestAccount.model_validate(reply.data)
 
     def boards(self) -> list[PinterestBoard]:
-        data = self._get(
+        reply = self._get(
             "/v3/users/me/boards/",
             {"fields": "board.id,board.name,board.privacy", "page_size": 100},
         )
-        return [PinterestBoard.model_validate(b) for b in data or []]
+        return [PinterestBoard.model_validate(b) for b in reply.data or []]
 
     def board(self, name: str) -> PinterestBoard:
         found = next(
@@ -166,7 +166,7 @@ class PinterestClient:
         )
         if found is not None:
             return found
-        data = self._resource(
+        reply = self._resource(
             "BoardResource/create",
             {
                 "name": name,
@@ -181,7 +181,7 @@ class PinterestClient:
                 "X-Pinterest-Source-Url": "/",
             },
         )
-        made = PinterestBoard.model_validate(data)
+        made = PinterestBoard.model_validate(reply.data)
         logger.info("pinterest: made board %r (%s)", made.name, made.id)
         return made
 
@@ -231,7 +231,7 @@ class PinterestClient:
     def create_pin(self, draft: PinDraft) -> CreatedPin:
         tracking_id = str(random.randrange(10**18, 10**19))  # noqa: S311
         body = PinCreate.of(draft, tracking_id).model_dump()
-        data = self._create("/v3/storypins/", body)
+        data = self._create("/v3/storypins/", body).data
         found = data.get("id") if isinstance(data, dict) else None
         if not found:
             msg = "Pinterest made no pin (no id in its answer)"
@@ -255,7 +255,7 @@ class PinterestClient:
         data = self._create(
             "/v3/media/uploads/register/batch/",
             {"media_info_list": json.dumps([info])},
-        )
+        ).data
         try:
             return UploadSlot.model_validate(data[key])
         except (KeyError, TypeError, ValidationError) as exc:
@@ -263,20 +263,20 @@ class PinterestClient:
             raise PinterestError(msg) from exc
 
     def _state(self, upload_id: str) -> UploadState:
-        data = self._get("/v3/media/uploads/", {"upload_ids": [upload_id]})
+        data = self._get("/v3/media/uploads/", {"upload_ids": [upload_id]}).data
         try:
             return UploadState.model_validate(data[upload_id])
         except (KeyError, TypeError, ValidationError) as exc:
             msg = "Pinterest did not say how the upload is going"
             raise PinterestError(msg) from exc
 
-    def _get(self, path: str, data: dict[str, Any]) -> Any:
+    def _get(self, path: str, data: dict[str, Any]) -> ResourceResponse:
         return self._api("get", path, data)
 
-    def _create(self, path: str, data: dict[str, Any]) -> Any:
+    def _create(self, path: str, data: dict[str, Any]) -> ResourceResponse:
         return self._api("create", path, data)
 
-    def _api(self, action: str, path: str, data: dict[str, Any]) -> Any:
+    def _api(self, action: str, path: str, data: dict[str, Any]) -> ResourceResponse:
         options = {"url": path, "data": data}
         return self._resource(f"ApiResource/{action}", options, path)
 
@@ -286,7 +286,7 @@ class PinterestClient:
         options: dict[str, Any],
         what: str,
         headers: dict[str, str] | None = None,
-    ) -> Any:
+    ) -> ResourceResponse:
         url = f"{self._base}/resource/{resource}/"
         body = {
             "source_url": SOURCE_URL,
@@ -318,7 +318,7 @@ def _snippet(answer: requests.Response) -> str:
     return " ".join(answer.text[:240].split())
 
 
-def _answer(answer: requests.Response, what: str) -> Any:
+def _answer(answer: requests.Response, what: str) -> ResourceResponse:
     status = answer.status_code
     if status == HTTPStatus.TOO_MANY_REQUESTS:
         wait = answer.headers.get("Retry-After", "")
@@ -349,7 +349,7 @@ def _answer(answer: requests.Response, what: str) -> Any:
         raise PinterestError(msg) from None
     reply = envelope.resource_response
     if reply.status == "success":
-        return reply.data
+        return reply
     error = reply.error or ResourceError()
     logger.warning(
         "pinterest %s refused: %s (code %s, http %s)",

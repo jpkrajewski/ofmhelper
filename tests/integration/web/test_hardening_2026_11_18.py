@@ -6,20 +6,23 @@ from signin import make_user, make_user_with_password, sign_in
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.cache.rate_limit import clear_failed_user_logins
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.distribution import store as distribution_store
+from ofmhelpers.db.event_targets import store as event_targets
 from ofmhelpers.db.models import DeviceLoginRow, LoginRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import devices, event_targets, users
-from ofmhelpers.db.stores import distribution as distribution_store
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.account import telegram
 from ofmhelpers.features.assets import store
 from ofmhelpers.features.events import Event
 from ofmhelpers.features.events.dispatch import dispatch
-from ofmhelpers.features.signin import credentials
 from ofmhelpers.features.trials.state import work_dir
+from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
 from ofmhelpers.integrations.senders.telegram.inbox import Start
+from ofmhelpers.integrations.signin import Identity
 from ofmhelpers.integrations.signin.passwords import hash_password, verify_password
-from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 
 PASSWORD = "correct horse battery"
@@ -84,8 +87,6 @@ def test_unlinking_ends_the_other_sessions_and_keeps_this_one(monkeypatch):
 
 
 def _google(subject: str):
-    from ofmhelpers.integrations.signin import Identity
-
     return Identity(provider="google", subject=subject, email="u@gmail.com")
 
 

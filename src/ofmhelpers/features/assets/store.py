@@ -8,21 +8,21 @@ from pathlib import Path
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.users import get_user
-from ofmhelpers.features.assets.kinds import (
+from ofmhelpers.db.users.store import get_user
+from ofmhelpers.features.kinds import (
     AUDIO_EXTS,
     IMAGE_EXTS,
     VIDEO_EXTS,
     classify_kind,
 )
+from ofmhelpers.features.refusals import AssetRefusedError
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.heic import HEIC_EXTENSIONS, heic_to_jpeg
 lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
 
 logger = get_logger(__name__)
 
-
-class AssetRefusedError(ValueError): ...
+EDIT_STAGING = ".edit"
 
 
 def uploads_root() -> Path:

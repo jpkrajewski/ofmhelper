@@ -6,14 +6,15 @@ lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
+from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.jobs.store import create_job, get_job, list_jobs_page
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_videos
 from ofmhelpers.features.assets.store import make_job_dir, uploads_root
 from ofmhelpers.features.clone.service import DrivePicker, drive_picker
 from ofmhelpers.features.drive.uploads import SPOOFED_TASK
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.repurpose.models import (
     CopyScore,
@@ -25,7 +26,8 @@ from ofmhelpers.features.repurpose.models import (
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.audio_check import BrokenAudioError, verify_audio
 from ofmhelpers.media.repurpose.repurpose import Repurpose
-from ofmhelpers.schemas import DriveUpload, Job, JobsQueued
+lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
+lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.media.repurpose.checker import CheckReport, check
 
 logger = get_logger(__name__)

@@ -1,5 +1,5 @@
-from ofmhelpers.schemas.nav import NavPlace, nav
-from ofmhelpers.schemas.users import Role
+from ofmhelpers.db.users.schema import Role
+from ofmhelpers.web.nav import NavPlace, nav
 
 VA_PAGES = [item.href for item in nav(Role.USER)]
 REAL_VA_PAGES = [item.href for item in nav(Role.VA)]

@@ -73,9 +73,10 @@ class JobQueue(BaseModel, frozen=True):
         failure_ttl: int | None = None,
         at_front: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Job | None:
         if not settings.infra.rq_async:
-            return fn(*args, **kwargs)
+            fn(*args, **kwargs)
+            return None
         queue = get_queue(self.name)
         ahead = queue.started_job_registry.count + (0 if at_front else queue.count)
         rq_job = queue.enqueue(
@@ -223,7 +224,9 @@ def running_job() -> RunningJob | None:
     return RunningJob(queue=QueueName(job.origin), timeout=timeout)
 
 
-def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
+def enqueue(
+    fn: Callable[..., Any], *args: Any, job_timeout: int | None = None, **kwargs: Any
+) -> Job | None:
     return JobQueue(name=QueueName.DEFAULT).put(
         fn, *args, job_timeout=job_timeout, **kwargs
     )
@@ -231,12 +234,12 @@ def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
 
 def enqueue_to(
     queue: QueueName,
-    fn,
-    *args,
+    fn: Callable[..., Any],
+    *args: Any,
     job_timeout: int | None = None,
     at_front: bool = False,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Job | None:
     return JobQueue(name=queue).put(
         fn, *args, job_timeout=job_timeout, at_front=at_front, **kwargs
     )

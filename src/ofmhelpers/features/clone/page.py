@@ -6,17 +6,17 @@ from pydantic import BaseModel
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets.manifests import keep_videos
 from ofmhelpers.features.clone.addons import PromptAddon, prompt_addons
-from ofmhelpers.features.clone.pricing import clone_pricing
 from ofmhelpers.features.clone.service import SubjectPicks, subject_picks
-from ofmhelpers.features.clone.targets import (
+from ofmhelpers.features.clone_pricing.pricing import clone_pricing
+from ofmhelpers.features.clone_pricing.targets import (
     DEFAULT_RESOLUTION,
     clone_targets,
     offered_resolutions,
 )
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
+from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 from ofmhelpers.media.exports import Export, exports
-from ofmhelpers.schemas import ProviderChoice
 
 
 class FormView(BaseModel):
@@ -43,11 +43,9 @@ def form_view(
 ) -> FormView:
     targets = clone_targets()
     return FormView(
-        providers=provider_choices(targets.names()),
-        selected_provider=start_provider(actor, CLONE_TASKS, targets.names()),
-        pricing={
-            name: price.model_dump() for name, price in clone_pricing().entries.items()
-        },
+        providers=provider_choices(list(targets)),
+        selected_provider=start_provider(actor, CLONE_TASKS, list(targets)),
+        pricing={name: price.model_dump() for name, price in clone_pricing().items()},
         default_prompt=settings.web.clone_default_prompt,
         default_resolution=DEFAULT_RESOLUTION,
         resolutions=offered_resolutions(),
@@ -57,8 +55,8 @@ def form_view(
         prefill_videos=keep_videos(videos, assets_root),
         subjects=subject_picks(team, assets_root),
         addons=prompt_addons(),
-        max_reference_s=min(t.max_reference_s for t in targets.all()),
-        exports=exports().all(),
+        max_reference_s=min(t.max_reference_s for t in targets.values()),
+        exports=list(exports().values()),
         default_export=settings.exports.default,
         default_mirror=settings.exports.mirror,
     )

@@ -1,11 +1,12 @@
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 lazy from pydantic import SerializerFunctionWrapHandler
 
-from ofmhelpers.schemas.cookies import CookieJarSummary, CookieSite, SiteCookies
-from ofmhelpers.schemas.downloads import DownloadResult
+from ofmhelpers.db.cookies.schema import CookieJarSummary, CookieSite, SiteCookies
+from ofmhelpers.db.downloads.schema import DownloadResult
 
 __all__ = [
     "CookieJarSummary",
@@ -20,7 +21,15 @@ __all__ = [
     "YtDlpOptions",
 ]
 
-ExtractorArgs = dict[str, dict[str, list[str]]]
+
+class ExtractorArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    values: dict[str, dict[str, list[str]]] = {}
+
+    @model_serializer
+    def _as_given(self) -> dict[str, dict[str, list[str]]]:
+        return deepcopy(self.values)
 
 
 class VideoInfo(BaseModel):
@@ -48,14 +57,14 @@ class YtDlpOptions(BaseModel):
     cookiefile: str | None = None
     cookiesfrombrowser: tuple[str, None, None, None] | None = None
     proxy: str | None = None
-    extractor_args: ExtractorArgs = {}
+    extractor_args: ExtractorArgs = Field(default_factory=ExtractorArgs)
 
     @model_serializer(mode="wrap")
     def _without_empty_args(
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, Any]:
         opts: dict[str, Any] = handler(self)
-        if not self.extractor_args:
+        if not self.extractor_args.values:
             opts.pop("extractor_args", None)
         return opts
 

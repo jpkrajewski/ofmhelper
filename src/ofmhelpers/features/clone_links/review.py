@@ -1,6 +1,7 @@
 import mimetypes
 import time
 from pathlib import Path
+from types import MappingProxyType
 lazy from collections.abc import Callable
 
 import logfire
@@ -8,10 +9,15 @@ from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.cache import enqueue, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import clone_ai_checks
-from ofmhelpers.db.stores import clone_from_links as store
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.clone_ai_checks import store as clone_ai_checks
+from ofmhelpers.db.clone_ai_checks.schema import (
+    CHECK_FAILED,
+    ReviewReason,
+    ReviewStatus,
+)
+from ofmhelpers.db.clone_from_links import store
+from ofmhelpers.db.jobs.store import create_job, fail_job, get_job
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links.ai_check import check_clone, unanswered
 from ofmhelpers.features.clone_links.folders import folder_for
@@ -21,11 +27,9 @@ from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.clone_ai_checks import CHECK_FAILED, ReviewReason, ReviewStatus
-from ofmhelpers.utils.registry import Registry
+lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
 lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
 lazy from ofmhelpers.integrations.gdrive import DriveApi, DriveFile
-lazy from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
 
 logger = get_logger(__name__)
 
@@ -290,7 +294,7 @@ def _finish(
         logger.warning("AI check %s: row taken over, result not saved", review.id)
 
 
-def resume_reviews() -> Registry[str]:
+def resume_reviews() -> MappingProxyType[str, str]:
     s = settings.clone_links
     now = time.time()
     since = now - settings.aigen.resume_max_age_s
@@ -314,7 +318,7 @@ def resume_reviews() -> Registry[str]:
         if started:
             logger.warning("recovery: job %s had no review: started", job.id)
             outcomes[f"job {job.id}"] = "review started"
-    return Registry[str](entries=outcomes)
+    return MappingProxyType(outcomes)
 
 
 def _guarded(step: Callable[[CloneFromLink], str], review: CloneFromLink) -> str:

@@ -1,9 +1,9 @@
-from ofmhelpers.db.stores import devices
-from ofmhelpers.db.stores.tracked_accounts import untrack
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.catalog import services
+from ofmhelpers.db.tracked_accounts.store import untrack
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.phone_catalog import services
-lazy from ofmhelpers.schemas import Device, DeviceLogin
+lazy from ofmhelpers.db.devices.schema import Device, DeviceLogin
 
 logger = get_logger(__name__)
 
@@ -63,15 +63,3 @@ def logins_leaving(owner: int, device_id: int, login_id: int | None = None) -> N
     drive_folders.trash_folders(owner, [x.id for x in leaving])
     if tracked := _tracked_ids(leaving):
         untrack(tracked, owner)
-
-
-def folder_deleted(owner: int, login_id: int) -> None:
-    logins = _unique(
-        devices.list_devices(owner), lambda _phone, login: login.id == login_id
-    )
-    devices.archive_logins([login_id], owner)
-    if tracked := _tracked_ids(logins):
-        untrack(tracked, owner)
-    logger.info(
-        "drive folder of login %s deleted by hand: removed everywhere", login_id
-    )

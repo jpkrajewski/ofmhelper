@@ -1,11 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
+from repo_paths import SRC
 from signin import sign_in_agency
 
-from ofmhelpers.db.stores import devices as store
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, untrack
-from ofmhelpers.schemas import DeviceFields
-from ofmhelpers.schemas.devices import _compact
+from ofmhelpers.db.devices import store
+from ofmhelpers.db.devices.schema import DeviceFields, PhoneQuery, _compact
+from ofmhelpers.db.tracked_accounts.store import list_accounts, untrack
+from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.web.main import app
 
 
@@ -120,8 +121,6 @@ def test_editing_a_login_never_brings_back_an_account_removed_by_hand(admin):
 
 
 def test_a_failing_tracker_never_fails_the_saved_login(admin, monkeypatch):
-    from ofmhelpers.features.accounts import tracker as account_tracker
-
     def broken(*_args, **_kwargs):
         msg = "redis is down"
         raise RuntimeError(msg)
@@ -139,10 +138,6 @@ def test_a_failing_tracker_never_fails_the_saved_login(admin, monkeypatch):
 
 
 def test_the_sort_the_page_leaves_out_of_the_url_is_the_servers_default(admin):
-    from repo_paths import SRC
-
-    from ofmhelpers.schemas import PhoneQuery
-
     html = admin.get("/phones").text
     assert f'data-default="{PhoneQuery().sort}"' in html
     js = (SRC / "web/static/js/phones.js").read_text(encoding="utf-8")

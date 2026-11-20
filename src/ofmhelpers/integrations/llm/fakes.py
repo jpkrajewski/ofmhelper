@@ -1,11 +1,13 @@
 from typing import Any
 
+lazy from pydantic import JsonValue
 
-def field(item: dict[str, Any], camel: str, snake: str) -> Any:
+
+def field[T](item: dict[str, T], camel: str, snake: str) -> T | None:
     return item.get(camel, item.get(snake))
 
 
-def example(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> Any:
+def example(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> JsonValue:
     if defs is None:
         defs = schema.get("$defs", {})
     if "$ref" in schema:

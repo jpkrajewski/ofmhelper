@@ -6,19 +6,22 @@ from zoneinfo import ZoneInfo
 import pytest
 import time_machine
 from fastapi.testclient import TestClient
-from signin import sign_in_agency
+from signin import make_user, sign_in, sign_in_agency
 
-from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores import drive_folders as store
-from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import AddedLogin, DeviceFields, LoginFields
+from ofmhelpers.db.drive_folders import store
+from ofmhelpers.db.drive_folders.schema import VaFolder
+from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.tracked_accounts import store as tracked_accounts
+from ofmhelpers.db.tracked_accounts.store import list_accounts, track
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import UserForm
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import posting
 from ofmhelpers.integrations.gdrive import FolderGoneError
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.schemas import DeviceFields, LoginFields, UserForm
-from ofmhelpers.schemas.devices import AddedLogin
-from ofmhelpers.schemas.drive import VaFolder
+from ofmhelpers.integrations.socials.models import AccountProfile, AccountStats
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -910,8 +913,6 @@ def test_a_root_trashed_by_hand_is_found_or_made_again(drive):
 
 
 def test_an_owner_without_google_drive_gets_nothing_made_and_is_told(drive):
-    from signin import make_user, sign_in
-
     vee = make_user("vee@example.com")
     phone = devices.add_device(
         DeviceFields(
@@ -940,9 +941,6 @@ def test_the_folder_owners_files_are_theirs(drive):
 
 
 def test_cards_are_ordered_by_the_accounts_followers(drive):
-    from ofmhelpers.db.stores import tracked_accounts
-    from ofmhelpers.integrations.socials.models import AccountProfile, AccountStats
-
     for label, handle, followers in (
         ("Phone 01", "small.ig", 500),
         ("Phone 02", "big.ig", 90_000),
@@ -1010,8 +1008,6 @@ def test_a_folder_never_read_says_so_until_the_live_read(drive):
 
 
 def _user_phone(email: str, handle: str, owner: str, *, google: bool = True) -> int:
-    from signin import make_user
-
     user = make_user(email)
     if google:
         users._repository().signed_in(user.id, "", f"fake-refresh:{email}")
@@ -1025,8 +1021,6 @@ def _user_phone(email: str, handle: str, owner: str, *, google: bool = True) -> 
 
 
 def test_a_users_sync_does_and_reports_only_their_own_folders(drive):
-    from signin import sign_in
-
     _user_phone("ann@example.com", "ann.ig", "Ann")
     _user_phone("bob@example.com", "bob.ig", "Bob")
     _user_phone("cy@example.com", "cy.ig", "Cy", google=False)

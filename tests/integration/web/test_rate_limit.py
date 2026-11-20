@@ -2,7 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from redis.exceptions import RedisError
 
+from ofmhelpers.cache import get_redis
 from ofmhelpers.web.main import app
+from ofmhelpers.web.middleware import ratelimit
 
 
 @pytest.fixture
@@ -72,9 +74,6 @@ def test_write_ceiling_returns_429_and_leaves_reads_alone(limited, monkeypatch):
 
 
 def test_a_failed_expire_cannot_lock_an_ip_out_forever(limited, monkeypatch):
-    from ofmhelpers.cache import get_redis
-    from ofmhelpers.web.middleware import ratelimit
-
     key = ratelimit._key(ratelimit._LOGIN_BUCKET, "testclient")
     real_expire = get_redis().expire
     failed_once = {"done": False}

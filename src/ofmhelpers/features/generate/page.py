@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from ofmhelpers.config import settings
 from ofmhelpers.features.generate.choices import model_choices, provider_choices
 from ofmhelpers.features.generate.providers import start_provider
-from ofmhelpers.schemas import ProviderChoice
+from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 
 TASKS = frozenset({"ai"})
 

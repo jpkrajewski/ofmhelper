@@ -8,15 +8,15 @@ from signin import sign_in
 from sqlalchemy import text
 
 from ofmhelpers.cache import get_redis
+from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import cookies
-from ofmhelpers.db.stores.tracked_accounts import (
+from ofmhelpers.db.tracked_accounts.store import (
     get_account,
     list_accounts,
     record_scan,
     track,
 )
-from ofmhelpers.db.stores.watched_profiles import watch
+from ofmhelpers.db.watched_profiles.store import watch
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.features.downloads import media as download_media

@@ -4,7 +4,6 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.features.clone_long import page as clone_long
 from ofmhelpers.features.clone_long.page import (
     DEFAULT_RESOLUTION,
@@ -14,6 +13,7 @@ from ofmhelpers.features.clone_long.page import (
     TASK,
     card,
 )
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import (
     Access,
     Actor,

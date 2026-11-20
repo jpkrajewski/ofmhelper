@@ -2,7 +2,7 @@ import datetime
 import json
 import re
 import subprocess
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, RootModel

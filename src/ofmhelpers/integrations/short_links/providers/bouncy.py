@@ -2,17 +2,10 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
+from pydantic import BaseModel, Field
 lazy import requests
 
-from ofmhelpers.integrations.short_links.errors import (
-    LinkError,
-    QuotaError,
-    SlugTakenError,
-    UngatedError,
-)
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider, listed
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.link_catalog.models import (
+from ofmhelpers.db.short_links.catalog.schema import (
     DayStat,
     HourStat,
     LinkDays,
@@ -20,7 +13,19 @@ from ofmhelpers.schemas.link_catalog.models import (
     RemoteLink,
     Usage,
 )
-lazy from ofmhelpers.schemas.link_catalog.models import NewLink
+from ofmhelpers.integrations.short_links.errors import (
+    LinkError,
+    QuotaError,
+    SlugTakenError,
+    UngatedError,
+)
+from ofmhelpers.integrations.short_links.providers.base import (
+    LinkProvider,
+    RequestHeaders,
+    listed,
+)
+from ofmhelpers.log import get_logger
+lazy from ofmhelpers.db.short_links.catalog.schema import NewLink
 
 logger = get_logger(__name__)
 
@@ -59,11 +64,26 @@ def _hour_of(label: str) -> datetime:
     return datetime.fromisoformat(label[:10]).replace(tzinfo=UTC)
 
 
-def _spans(start: date, end: date, size: int) -> list[tuple[date, date]]:
-    spans = []
+class BouncyHeaders(RequestHeaders):
+    authorization: str = Field(serialization_alias="Authorization")
+
+
+class Span(BaseModel, frozen=True):
+    first: date
+    last: date
+
+
+class Bucket(BaseModel):
+    date: str
+    views: int = 0
+    clicks: int = 0
+
+
+def _spans(start: date, end: date, size: int) -> list[Span]:
+    spans: list[Span] = []
     while start <= end:
         last = min(start + timedelta(days=size - 1), end)
-        spans.append((start, last))
+        spans.append(Span(first=start, last=last))
         start = last + timedelta(days=1)
     return spans
 
@@ -84,8 +104,8 @@ def _remote(link: dict[str, Any], adult: bool | None = None) -> RemoteLink:
 class BouncyProvider(LinkProvider):
     key = "bouncy"
 
-    def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.api_key}"}
+    def _headers(self) -> BouncyHeaders:
+        return BouncyHeaders(authorization=f"Bearer {self.api_key}")
 
     @staticmethod
     def _path(remote_id: str) -> str:
@@ -172,33 +192,33 @@ class BouncyProvider(LinkProvider):
             if buckets is not None:
                 hours = [
                     HourStat(
-                        hour=_hour_of(bucket["date"]),
-                        views=bucket.get("views", 0),
-                        clicks=bucket.get("clicks", 0),
+                        hour=_hour_of(bucket.date),
+                        views=bucket.views,
+                        clicks=bucket.clicks,
                     )
                     for bucket in buckets
-                    if bucket.get("views") or bucket.get("clicks")
+                    if bucket.views or bucket.clicks
                 ]
                 found.append(LinkHours(remote_id=remote_id, hours=hours))
         return found
 
     def _days(self, remote_id: str, start: date, end: date) -> list[DayStat] | None:
         per_day: dict[date, list[int]] = {}
-        for first, last in _spans(start, end, self.info().max_span_days):
-            buckets = self._buckets(remote_id, first, last)
+        for span in _spans(start, end, self.info().max_span_days):
+            buckets = self._buckets(remote_id, span.first, span.last)
             if buckets is None:
                 return None
             for bucket in buckets:
-                day = date.fromisoformat(bucket["date"][:10])
+                day = date.fromisoformat(bucket.date[:10])
                 totals = per_day.setdefault(day, [0, 0])
-                totals[0] += bucket.get("views", 0)
-                totals[1] += bucket.get("clicks", 0)
+                totals[0] += bucket.views
+                totals[1] += bucket.clicks
         return [
             DayStat(day=day, views=views, clicks=clicks)
             for day, (views, clicks) in sorted(per_day.items())
         ]
 
-    def _buckets(self, remote_id: str, first: date, last: date) -> list[dict] | None:
+    def _buckets(self, remote_id: str, first: date, last: date) -> list[Bucket] | None:
         response = self._call(
             "GET",
             f"/analytics/links/{quote(remote_id, safe='')}",
@@ -209,7 +229,7 @@ class BouncyProvider(LinkProvider):
             return None
         if not response.ok:
             raise self._failed(response, f"read analytics of {remote_id}")
-        return response.json().get("dailyViews", [])
+        return [Bucket.model_validate(b) for b in response.json().get("dailyViews", [])]
 
     def usage(self) -> Usage:
         response = self._call("GET", "/account/limits")

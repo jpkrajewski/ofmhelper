@@ -6,13 +6,13 @@ import time
 lazy from collections.abc import Mapping
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.chats.schema import ChatDelivery, ChatRead, DeliveryKind
 from ofmhelpers.integrations.stacked.history import chat_event
 from ofmhelpers.integrations.stacked.models import (
     MassMessageEventData,
     MessageEventData,
     WebhookEnvelope,
 )
-from ofmhelpers.schemas.chatting import ChatDelivery, ChatRead, DeliveryKind
 
 MESSAGE_CREATED = "message.created"
 MESSAGE_DELETED = "message.deleted"

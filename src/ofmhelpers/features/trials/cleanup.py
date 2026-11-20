@@ -1,8 +1,11 @@
 import time
 from pathlib import Path
+from types import MappingProxyType
+
+from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.trials import folder, media
 from ofmhelpers.features.trials.state import FolderState, ReelState, at, change, load
@@ -52,7 +55,9 @@ def _delete(paths: list[Path]) -> int:
     return freed
 
 
-def _due(uid: int, login_id: int, state: FolderState, now: float) -> dict[str, int]:
+def _due(
+    uid: int, login_id: int, state: FolderState, now: float
+) -> MappingProxyType[str, int]:
     due: dict[str, int] = {}
     for reel in state.ready:
         copy = at(uid, login_id, reel.out)
@@ -74,7 +79,7 @@ def _due(uid: int, login_id: int, state: FolderState, now: float) -> dict[str, i
         due[reel.key] = reel.made
         if len(due) == _BATCH:
             break
-    return due
+    return MappingProxyType(due)
 
 
 def clean(uid: int, login_id: int, now: float) -> int:
@@ -82,15 +87,20 @@ def clean(uid: int, login_id: int, now: float) -> int:
     freed = 0
     while True:
         due = _due(uid, login_id, load(uid, login_id), now)
-        got, cleaned = _clean_batch(uid, login_id, now, due)
-        freed += got
-        if len(due) < _BATCH or not cleaned:
+        batch = _clean_batch(uid, login_id, now, due)
+        freed += batch.freed
+        if len(due) < _BATCH or not batch.cleaned:
             return freed
 
 
+class _Batch(BaseModel, frozen=True):
+    freed: int
+    cleaned: int
+
+
 def _clean_batch(
-    uid: int, login_id: int, now: float, due: dict[str, int]
-) -> tuple[int, int]:
+    uid: int, login_id: int, now: float, due: MappingProxyType[str, int]
+) -> _Batch:
     freed = cleaned = 0
 
     def apply(state: FolderState) -> None:
@@ -117,7 +127,7 @@ def _clean_batch(
                 reel.source_dropped()
 
     change(uid, login_id, apply)
-    return freed, cleaned
+    return _Batch(freed=freed, cleaned=cleaned)
 
 
 def remove_old() -> None:

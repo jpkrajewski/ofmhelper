@@ -5,7 +5,7 @@ from app_pages import ADMIN_HEADER, ADMIN_ONLY_PAGES, VA_PAGES
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.features.jobs import sweeps
+from ofmhelpers.background import sweeps
 from ofmhelpers.web.main import app
 
 PROTECTED_PAGES = [

@@ -3,12 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone.service import drive_picker
 from ofmhelpers.features.handmade import service
 from ofmhelpers.features.handmade.service import TASK, run_handmade
-from ofmhelpers.schemas import JobsQueued
+from ofmhelpers.features.jobs.schema import JobsQueued
+from ofmhelpers.web.access import Action, Area
 from ofmhelpers.web.dependencies import Access, Can, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes

@@ -1,6 +1,6 @@
 import re
-from pathlib import Path
 from typing import Any
+lazy from pathlib import Path
 
 from pydantic import BaseModel, model_serializer
 

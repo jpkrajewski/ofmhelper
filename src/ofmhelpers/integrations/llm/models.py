@@ -1,8 +1,8 @@
 import mimetypes
-from collections.abc import Iterable
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, Self
+lazy from collections.abc import Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 

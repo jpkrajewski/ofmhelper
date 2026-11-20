@@ -3,7 +3,8 @@ from pathlib import Path
 lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import drive_uploads as upload_store
+from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.jobs.schema import Job, ResultFile
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.store import (
     VIDEO_KINDS,
@@ -13,8 +14,9 @@ from ofmhelpers.features.assets.store import (
     uploads_root,
 )
 from ofmhelpers.features.jobs.runner import start_job
+from ofmhelpers.features.jobs.schema import CloneCard, JobsQueued
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.schemas import CloneCard, DriveUpload, Job, JobsQueued, ResultFile
+lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 
 TASK = "handmade_upload"
 LABEL = "Handmade"

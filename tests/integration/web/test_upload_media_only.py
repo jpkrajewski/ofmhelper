@@ -5,11 +5,13 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from signin import sign_in
 
+from ofmhelpers.media.metadata_cleaner import SUPPORTED_EXTENSIONS
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     MEDIA_KINDS,
     VIDEO_KINDS,
+    classify_kind,
     media_response,
     require_upload_kind,
 )
@@ -77,8 +79,5 @@ def test_clean_images_rejects_a_non_image_upload(va_client):
 
 
 def test_clean_images_accepts_every_extension_the_cleaner_supports(va_client, tmp_path):
-    from ofmhelpers.media.metadata_cleaner import SUPPORTED_EXTENSIONS
-    from ofmhelpers.web.routers.task_helpers import IMAGE_KINDS, classify_kind
-
     for ext in SUPPORTED_EXTENSIONS:
         assert classify_kind(f"x{ext}") in IMAGE_KINDS, ext
