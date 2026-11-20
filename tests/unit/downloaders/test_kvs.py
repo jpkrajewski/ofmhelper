@@ -42,6 +42,11 @@ def test_a_page_without_a_kvs_player_is_not_one(html):
 
 
 class _Reply:
+    is_redirect = False
+
+    def close(self):
+        return None
+
     def __init__(self, text="", content=b"", status=200):
         self.text, self._content, self.status_code = text, content, status
 
@@ -65,13 +70,13 @@ def test_download_saves_the_best_quality_with_the_page_as_referer(
 ):
     asked = []
 
-    def get(url, headers=None, timeout=None, stream=False):
+    def get(url, headers=None, timeout=None, stream=False, allow_redirects=True):
         asked.append((url, headers.get("Referer")))
         if url == URL:
             return _Reply(text=PAGE.read_text())
         return _Reply(content=b"\x00\x00\x00 ftypisom video bytes")
 
-    monkeypatch.setattr(kvs.outbound, "get", get)
+    monkeypatch.setattr(kvs.egress.outbound, "get", get)
 
     result = kvs.download(URL, tmp_path)
 
@@ -84,12 +89,12 @@ def test_download_saves_the_best_quality_with_the_page_as_referer(
 
 
 def test_a_failed_video_stream_leaves_no_file(monkeypatch, tmp_path):
-    def get(url, headers=None, timeout=None, stream=False):
+    def get(url, headers=None, timeout=None, stream=False, allow_redirects=True):
         if url == URL:
             return _Reply(text=PAGE.read_text())
         return _Reply(status=403)
 
-    monkeypatch.setattr(kvs.outbound, "get", get)
+    monkeypatch.setattr(kvs.egress.outbound, "get", get)
 
     result = kvs.download(URL, tmp_path)
 
@@ -100,7 +105,7 @@ def test_a_failed_video_stream_leaves_no_file(monkeypatch, tmp_path):
 
 def test_a_site_without_a_kvs_player_says_unsupported(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        kvs.outbound, "get", lambda *a, **k: _Reply(text="<html>plain</html>")
+        kvs.egress.outbound, "get", lambda *a, **k: _Reply(text="<html>plain</html>")
     )
     result = kvs.download("https://example.com/v", tmp_path)
     assert (result.success, result.error) == (False, "Unsupported URL: no KVS player")

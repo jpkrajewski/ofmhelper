@@ -61,7 +61,7 @@ Secure access
 - `AG.SAD.5` Break-glass exists and is written down: `scripts/deploy.sh`, the provider's console, `README.md` "Troubleshooting".
 
 Data lifecycle
-- `AG.DLM.1` A full restore needs four things: the Postgres dump, `.env` (above all `OFM_VAULT_KEY`), `uploads/`, `kieai_out/` (`README.md` "Backups"). A deploy never removes volumes.
+- `AG.DLM.1` The backup is the Postgres dump + the server `.env` (above all `OFM_VAULT_KEY`), pulled to the owner's PC daily by `scripts/pull_backup.sh` (owner 2026-11-20: no uploads/kieai_out; `README.md` "Backups"), restore drill proved on dev. A deploy never removes volumes.
 - `AG.DLM.2` Encrypted in transit (HTTPS at nginx, HTTP redirects) and stored logins encrypted. No secret in logs, telemetry or job params.
 - `AG.DLM.3` Data moves through the app's own machinery: Alembic revisions and queue jobs, repeatable and logged.
 - `AG.DLM.4` Customer data is classified by where it may go: prod snapshot and `.env` are gitignored, nothing from them enters the repo, tests or an outside service.
@@ -112,7 +112,7 @@ Auditing
 
 ## Gaps (checked in the repo 2026-11-11; proposals, not tasks)
 - `DL.ADS.2` No automatic rollback: a deploy that fails `/health` ends red and the app stays on the new, broken build. Going back by hand: the image of the release before (`ofmhelpers-app:<sha>`) is kept on the server; the Deploy workflow with that `sha`, or `scripts/deploy.sh <sha>`, runs it without a rebuild (README "Deploying"). A migration may drop or rename in the same revision, so a rollback can need a database restore.
-- `AG.DLM.1` No recovery objectives, and the backup is a manual `pg_dump` (`README.md` "Backups"); nothing schedules it or copies it off the server.
+- `AG.DLM.1` No recovery objectives, the backup is pulled to the owner's PC by `scripts/pull_backup.sh` (schedule: `scripts/schedule_backup.ps1`, registered by the owner once); the first real pull from production is the owner's step.
 - `O.CM.1` No automatic alert on prod errors or a failed health check found in workflows or scripts; errors are found by querying Logfire.
 - `QA.ST.5` No dynamic security testing of the running app.
 - `DL.SCM.5` No allowed-licence list for dependencies (public repo).

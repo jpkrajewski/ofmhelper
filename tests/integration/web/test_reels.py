@@ -19,6 +19,7 @@ from ofmhelpers.db.stores.watched_profiles import (
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.reels import page as reels
 from ofmhelpers.features.reels import watch as reel_watch
+from ofmhelpers.integrations import egress
 from ofmhelpers.integrations.instagram import (
     InstagramError,
     InstagramRateLimitedError,
@@ -1021,8 +1022,6 @@ def _jpeg(width: int = 1080, height: int = 1920) -> bytes:
 
 @pytest.fixture
 def cdn(monkeypatch, tmp_path):
-    from ofmhelpers.features.reels import thumbs as reel_thumbs
-
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads-root"))
     asked: list[str] = []
     state = {"status": 200}
@@ -1034,8 +1033,8 @@ def cdn(monkeypatch, tmp_path):
         response._content = _jpeg() if state["status"] == 200 else b"no"
         return response
 
-    monkeypatch.setattr(reel_thumbs.outbound, "get", get)
-    monkeypatch.setattr(reel_thumbs, "_addresses", lambda _host: ["157.240.1.1"])
+    monkeypatch.setattr(egress.outbound, "get", get)
+    monkeypatch.setattr(egress, "_addresses", lambda _host: ["157.240.1.1"])
     return asked, state
 
 

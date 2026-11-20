@@ -6,6 +6,7 @@ import requests
 from PIL import Image
 
 from ofmhelpers.features.reels import thumbs as reel_thumbs
+from ofmhelpers.integrations import egress
 
 PUBLIC = "157.240.1.1"
 COVER = "https://cdn.example.com/cover.jpg"
@@ -21,6 +22,7 @@ def _reply(status: int = 200, location: str | None = None) -> requests.Response:
     response = requests.Response()
     response.status_code = status
     response._content = _jpeg() if status == 200 else b""
+    response.raw = io.BytesIO()
     if location:
         response.headers["location"] = location
     return response
@@ -42,8 +44,8 @@ def net(monkeypatch):
         asked.append((url, kwargs))
         return replies[url]
 
-    monkeypatch.setattr(reel_thumbs, "_addresses", addresses)
-    monkeypatch.setattr(reel_thumbs.outbound, "get", get)
+    monkeypatch.setattr(egress, "_addresses", addresses)
+    monkeypatch.setattr(egress.outbound, "get", get)
     return hosts, replies, asked
 
 
@@ -80,7 +82,7 @@ def _resolver(monkeypatch, *resolved: tuple) -> None:
 
 def test_a_host_with_only_global_addresses_passes_the_resolver(monkeypatch):
     _resolver(monkeypatch, ("151.101.1.1", 0), ("2a04:4e42::1", 0, 0, 0))
-    reel_thumbs._check_public(COVER)
+    egress.check_public(COVER)
 
 
 @pytest.mark.parametrize(
@@ -93,8 +95,8 @@ def test_a_host_with_only_global_addresses_passes_the_resolver(monkeypatch):
 )
 def test_any_non_global_address_from_the_resolver_is_refused(monkeypatch, resolved):
     _resolver(monkeypatch, *resolved)
-    with pytest.raises(reel_thumbs.NotPublicError):
-        reel_thumbs._check_public(COVER)
+    with pytest.raises(egress.NotPublicError):
+        egress.check_public(COVER)
 
 
 def test_one_private_address_among_public_ones_is_refused(net, tmp_path):
@@ -148,7 +150,7 @@ def test_under_fakes_no_address_is_looked_up(net, monkeypatch, tmp_path):
     def no_lookup(host: str) -> list[str]:
         raise AssertionError(host)
 
-    monkeypatch.setattr(reel_thumbs, "_addresses", no_lookup)
+    monkeypatch.setattr(egress, "_addresses", no_lookup)
     dest = tmp_path / "c.webp"
 
     assert reel_thumbs.kept_thumb(dest, COVER) == dest

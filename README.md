@@ -287,8 +287,18 @@ docker compose -f docker-compose.yml exec -T postgres \
   | gzip > ~/ofmhelpers-$(date +%F).sql.gz
 ```
 
-Copy the dump off the server. A full restore needs four things: this dump,
-`.env` (above all `OFM_VAULT_KEY`), `uploads/`, and `kieai_out/`.
+Off the server, automatically: `scripts/pull_backup.sh`, run on the owner's PC
+(reads `deploy.local.env`, read-only on the server), saves into
+`~/ofmhelpers-backups` (`OFM_BACKUP_DIR`): `db/` the verified
+pg_dump, `env/` the server `.env` (mode 600; above all `OFM_VAULT_KEY`), the
+newest 14 of each (`OFM_BACKUP_KEEP`). Nothing else: no `uploads/`, no media.
+`scripts/schedule_backup.ps1` (PowerShell, once) registers it daily at 04:00.
+
+A restore needs exactly these two: the dump and the `.env`. Drill (proved on
+dev 2026-11-20: same row counts and alembic head as the live dev DB):
+`createdb restore_drill`, `gzip -dc <dump> | psql -v ON_ERROR_STOP=1 -d restore_drill`,
+compare counts, `dropdb restore_drill`. Dev proof of the script itself:
+`OFM_BACKUP_LOCAL=1 OFM_BACKUP_COMPOSE="docker compose -f docker-compose.yml -f docker-compose.dev.yml" scripts/pull_backup.sh`.
 
 ### Phones: history and backup
 
@@ -306,8 +316,8 @@ under its owner. It is encrypted with `OFM_VAULT_KEY` (Fernet); the
 passwords inside are encrypted a second time with the same key. Without the
 key the file is useless, to you too: keep the key off the server.
 
-The file is on the server's own disk. Copy it off the server like the dump
-above (`scp ubuntu@<server>:ofmhelper/uploads/backups/phones/*.enc .`).
+The file is on the server's own disk only (the PC pull carries the database,
+which holds the same History in `phone_revisions`).
 
 To get the History back (the key in the server's `.env`):
 
@@ -324,8 +334,8 @@ changes no phone. Each person then opens /phones, History, Restore.
 ## 12. Moving to a new server
 
 1. Steps 1–8 on the new box.
-2. On the old box: run the backup from step 11, and copy `.env`,
-   `uploads/` and `kieai_out/` over, e.g.
+2. On the old box: run the backup from step 11 (dump + `.env`), and copy
+   `uploads/` and `kieai_out/` over by hand if they are wanted, e.g.
    `rsync -a uploads kieai_out new:~/ofmhelper/`.
 3. On the new box: start Postgres, load the dump, then start everything:
    ```bash

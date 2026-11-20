@@ -57,6 +57,9 @@ backlog.txt
 # AWS guide text for the aws-devops-guidance skill: all rights reserved, rebuilt by its build_cache.py
 .claude/skills/aws-devops-guidance/cache/
 
+# Production server details (IP, key paths) moved out of CLAUDE.local.md: local only, public repo
+.claude/skills/prod-server/
+
 # security audit 2026-11-18: credentials never reach this public repo.
 .env.local
 .env.production

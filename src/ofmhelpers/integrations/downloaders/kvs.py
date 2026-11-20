@@ -7,7 +7,7 @@ from pydantic import BaseModel
 lazy from yt_dlp.extractor.generic import GenericIE
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations import outbound
+from ofmhelpers.integrations import egress
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.log import get_logger
 
@@ -67,8 +67,7 @@ def download(url: str, output_dir: Path | None = None) -> DownloadResult:
     timeout = settings.downloaders.http_timeout_s
     headers = {"User-Agent": _BROWSER}
     try:
-        page = outbound.get(url, headers=headers, timeout=timeout)
-        page.raise_for_status()
+        page = egress.get(url, headers=headers, timeout=timeout)
     except requests.RequestException as exc:
         logger.warning("kvs: page of %s not read", url, exc_info=True)
         return DownloadResult(url=url, success=False, error=f"KVS page: {exc}")
@@ -97,11 +96,12 @@ def _save(url: str, dest: Path, headers: dict[str, str], timeout: int) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
     try:
-        with outbound.get(url, headers=headers, timeout=timeout, stream=True) as r:
-            r.raise_for_status()
-            with tmp.open("wb") as out:
-                for chunk in r.iter_content(_CHUNK):
-                    out.write(chunk)
+        with (
+            egress.get(url, headers=headers, timeout=timeout, stream=True) as r,
+            tmp.open("wb") as out,
+        ):
+            for chunk in r.iter_content(_CHUNK):
+                out.write(chunk)
         tmp.replace(dest)
     finally:
         tmp.unlink(missing_ok=True)
