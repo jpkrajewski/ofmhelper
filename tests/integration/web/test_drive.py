@@ -1,13 +1,3 @@
-"""/drive: every Instagram login on an active phone gets "<handle> - <owner>"
-in the shared Drive folder, which the VA uploads into, and a POSTED folder
-inside it, which people move a video into once posted. Every sweep heals
-whatever it finds: a re-run writes nothing, hand-made folders are reused, a
-new owner renames, deleted / trashed / renamed / dragged-out folders come
-back, concurrent sweeps never duplicate, the live folder is refused outside
-production, nothing in Drive is ever moved or deleted. The page shows what
-waits in each folder (previews proxied through the app, and only those) and
-how many files were uploaded today: by /clone, and by hand."""
-
 import datetime
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -31,8 +21,6 @@ from ofmhelpers.schemas.devices import AddedLogin
 from ofmhelpers.schemas.drive import VaFolder
 from ofmhelpers.web.main import app
 
-# The agency's Google account (the password admin's, who owns the phones
-# `_phone` makes): its My Drive, and the "DEV - ALL ACCOUNTS" in it.
 AGENCY = "agency@example.com"
 MY_DRIVE = f"mydrive-{AGENCY}"
 ROOT = "agency-root-folder"
@@ -41,21 +29,16 @@ POSTED = "POSTED"
 
 @pytest.fixture
 def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
-    """The fake Drive, the agency's Google Drive connected, its
-    "DEV - ALL ACCOUNTS" folder already there (adopted by the first sweep)."""
-    # Fake ids repeat from test to test; the kept previews must not.
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
     fake.seed_folder("DEV - ALL ACCOUNTS", MY_DRIVE, item_id=ROOT, owner=AGENCY)
     users._repository().signed_in(users.agency_id(), "", f"fake-refresh:{AGENCY}")
-    users.set_drive_root(users.agency_id(), ROOT)  # as a first sweep would
+    users.set_drive_root(users.agency_id(), ROOT)
     return fake
 
 
 def _client() -> TestClient:
-    """The agency (an admin): its own cards -- the phones `_phone` makes are
-    the agency's. Nobody sees another person's: test_ownership.py."""
     c = TestClient(app)
     sign_in_agency(c)
     return c
@@ -92,9 +75,6 @@ def _stored(handle: str = "ann.ig"):
     return store.account_folders().get(target.login_id)
 
 
-# --- sync: account folder + POSTED ----------------------------------------------
-
-
 def test_sync_makes_a_folder_and_its_posted_folder_per_instagram_login(drive):
     phone = _phone("Phone 01", owner="Anna")
     _login(phone, "instagram", "ann.ig")
@@ -110,10 +90,8 @@ def test_sync_makes_a_folder_and_its_posted_folder_per_instagram_login(drive):
     assert not report.failed
     account = _account(drive, "ann.ig")
     assert drive.named(POSTED, account) == [_stored().posted_folder_id]
-    # Nothing else: no day folder.
     assert [f.name for f in drive.children(account)] == [POSTED]
     assert drive.named("bob.ig - Bob", ROOT) == []
-    # The bot owns what it made.
     assert drive.item(account).owner == AGENCY
 
 
@@ -216,13 +194,9 @@ def test_a_hand_renamed_account_folder_gets_its_name_back(drive):
 
     report = drive_folders.sync()
 
-    # Same folder, kept by id: its name comes back, nothing new is made.
     assert report.renamed == ["ann.ig - Anna"]
     assert report.created == []
     assert drive.named("ann.ig - Anna", ROOT) == [account]
-
-
-# --- self-healing: POSTED -------------------------------------------------------
 
 
 def test_a_trashed_posted_folder_is_made_again_in_the_same_sweep(drive):
@@ -237,7 +211,6 @@ def test_a_trashed_posted_folder_is_made_again_in_the_same_sweep(drive):
     assert new != old
     assert drive.named(POSTED, _account(drive, "ann.ig")) == [new]
     assert report.posted_folders == ["ann.ig - Anna/POSTED"]
-    # Trash is not delete: the old one is still there, in the trash.
     assert drive.item(old).trashed
 
 
@@ -277,16 +250,11 @@ def test_a_posted_folder_dragged_out_is_left_there_and_a_new_one_made(drive):
     new = _stored().posted_folder_id
     assert new != posted
     assert drive.named(POSTED, _account(drive, "ann.ig")) == [new]
-    # Never moved back by the app: it stays where the person put it.
     assert drive.item(posted).parents == [ROOT]
 
 
 @pytest.mark.parametrize("how", ["trash", "delete"])
 def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive, how):
-    """Prod, 2026-10-22: a VA deleted folders in Drive and the sweep made
-    them again every 5 minutes. Now the account goes everywhere -- off the
-    phone (password archived), off /accounts -- and the folder stays gone;
-    restoring it on /phones brings all of it back."""
     phone = _phone("Phone 01")
     added = devices.add_login(
         phone, LoginFields(service="instagram", username="ann.ig", password="pw")
@@ -302,7 +270,7 @@ def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive
 
     assert report.created == []
     assert drive.named("ann.ig - Anna", ROOT) == []
-    assert drive_folders.sync().created == []  # and never again
+    assert drive_folders.sync().created == []
     assert [x.username for d in devices.list_devices() for x in d.logins] == []
     [archived] = devices.archived_logins()
     assert (archived.id, archived.username, archived.on) == (
@@ -310,7 +278,7 @@ def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive
         "ann.ig",
         ["Phone 01"],
     )
-    assert devices.secrets(login).password == "pw"  # kept
+    assert devices.secrets(login).password == "pw"
     assert "ann.ig" not in [a.handle for a in list_accounts()]
 
     client = _client()
@@ -322,9 +290,6 @@ def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive
 
 
 def test_state_before_posted_folders_heals_on_the_first_sweep(drive):
-    """Production on deploy: account rows without a POSTED id, and that
-    day's folder in Drive with uploads in it. The sweep adds POSTED and
-    touches nothing else."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     account = drive.seed_folder("ann.ig - Anna", ROOT, owner=AGENCY)
     day = drive.seed_folder("2026-10-21", account, owner=AGENCY)
@@ -363,7 +328,6 @@ def test_one_failing_login_does_not_stop_the_others(drive):
     assert len(report.failed) == 1
     assert "ann.ig - Anna" in report.failed[0]
     assert _posted(drive, "bob.ig", owner="Bob")
-    # Retried on the next sweep.
     drive.fail_on()
     assert drive_folders.sync().created == ["ann.ig - Anna"]
 
@@ -371,9 +335,6 @@ def test_one_failing_login_does_not_stop_the_others(drive):
 def test_a_login_deleted_while_its_folder_is_made_is_skipped_and_nothing_is_deleted(
     drive, monkeypatch
 ):
-    # Prod job drive_sync 9e928539 (2026-11-15): the login went between the
-    # sync reading it and saving its folder; the FK violation failed the run,
-    # the other logins, the VA folders and the tally with it.
     gone_phone = _phone("Phone 01")
     gone = _login(gone_phone, "instagram", "ann.ig")
     _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
@@ -393,7 +354,6 @@ def test_a_login_deleted_while_its_folder_is_made_is_skipped_and_nothing_is_dele
     assert report.created == ["bob.ig - Bob"]
     assert _posted(drive, "bob.ig", owner="Bob")
     assert [t.handle for t in store.targets()] == ["bob.ig"]
-    # Left in Drive, never trashed; the account added again adopts it.
     (kept,) = drive.named("ann.ig - Anna", ROOT)
     _login(_phone("Phone 03"), "instagram", "ann.ig")
     assert drive_folders.sync().adopted == ["ann.ig - Anna"]
@@ -426,11 +386,7 @@ def test_deleting_the_login_forgets_its_folders_and_history(drive):
     drive_folders.sync()
     devices.remove_login(phone, login)
     assert store.account_folders().folders == []
-    # Drive keeps the folder and what is in it.
     assert drive.named("ann.ig - Anna", ROOT)
-
-
-# --- tally: what was posted -----------------------------------------------------
 
 
 def test_a_video_moved_into_posted_counts_once(drive):
@@ -446,7 +402,6 @@ def test_a_video_moved_into_posted_counts_once(drive):
     card = drive_folders.board().cards[0]
     assert card.posted_total == 1
     assert card.waiting == []
-    # Moved to POSTED it is still a file uploaded today.
     assert card.uploaded_today.total == 1
 
 
@@ -466,8 +421,6 @@ def test_a_file_moved_back_out_waits_again_and_counts_once(drive):
 
 
 def test_a_new_account_folder_starts_its_counts_at_zero(drive):
-    """Counts follow the folder the files are in: a dev copy of the prod
-    database must not show prod's files on its own new folders."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     drive.add_file(_posted(drive, "ann.ig"), "reel.mp4", "video/mp4")
@@ -483,9 +436,6 @@ def test_a_new_account_folder_starts_its_counts_at_zero(drive):
 
 
 def test_uploaded_today_tells_clone_uploads_from_files_put_there_by_hand(drive):
-    """A file /clone's "Upload to Drive" made (`drive_uploads`) is a clone
-    upload, any other one a person put there; one from another day is
-    neither, and one already moved to POSTED still counts."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
     drive_folders.sync()
@@ -506,7 +456,6 @@ def test_uploaded_today_tells_clone_uploads_from_files_put_there_by_hand(drive):
     ann, bob = cards["ann.ig"], cards["bob.ig"]
     assert (ann.clone, ann.manual, ann.total) == (1, 2, 3)
     assert (bob.clone, bob.manual, bob.total) == (0, 0, 0)
-    # The saved read (/drive without a Drive call) counts the same.
     saved = drive_folders.board(live=False).cards
     assert {c.target.handle: c.uploaded_today for c in saved} == cards
 
@@ -525,20 +474,14 @@ def test_a_second_posted_folder_counts_and_is_flagged(drive):
     assert [f.id for f in card.scan.extra_posted_folders] == [extra]
     html = _client().get("/drive/live").text
     assert '1 more "POSTED" folder in here' in html
-    # Never renamed or moved: a person merges them.
     assert drive.item(extra).name == "posted"
 
 
 def test_uploaded_today_turns_at_local_midnight_in_the_drive_timezone(drive):
-    """Uploaded today turns at midnight in the Drive timezone
-    (Europe/Warsaw), the team's calendar day -- not the posting window, which
-    starts mid-evening and would count an evening's files as yesterday's."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     posted = _posted(drive, "ann.ig")
     tz = ZoneInfo("Europe/Warsaw")
-    # Two uploaded yesterday evening (the posting window would call "today"),
-    # one this morning: only the last is today by the calendar day.
     for at, name in (
         (datetime.datetime(2026, 10, 21, 21, 0, tzinfo=tz), "y1.mp4"),
         (datetime.datetime(2026, 10, 21, 23, 30, tzinfo=tz), "y2.mp4"),
@@ -555,12 +498,9 @@ def test_uploaded_today_turns_at_local_midnight_in_the_drive_timezone(drive):
 @pytest.mark.parametrize(
     ("at", "start"),
     [
-        # Summer and winter alike: UTC, no daylight saving shift.
         ("2026-07-01T20:00:00+00:00", "2026-07-01T18:45:00+00:00"),
         ("2026-12-01T20:00:00+00:00", "2026-12-01T18:45:00+00:00"),
-        # After midnight UTC, inside the window: still the evening's day.
         ("2026-12-02T00:30:00+00:00", "2026-12-01T18:45:00+00:00"),
-        # Morning: the day that started last evening.
         ("2026-12-02T10:00:00+00:00", "2026-12-01T18:45:00+00:00"),
         ("2026-12-02T18:45:00+00:00", "2026-12-02T18:45:00+00:00"),
     ],
@@ -584,7 +524,6 @@ def _utc(text: str) -> datetime.datetime:
 @pytest.mark.parametrize(
     ("at", "start", "end", "is_open"),
     [
-        # Before: the evening's window, not open yet.
         (
             "2026-12-01T18:44:00+00:00",
             "2026-12-01T18:45:00+00:00",
@@ -597,14 +536,12 @@ def _utc(text: str) -> datetime.datetime:
             "2026-12-02T00:45:00+00:00",
             True,
         ),
-        # Past midnight UTC, still open.
         (
             "2026-12-02T00:44:00+00:00",
             "2026-12-01T18:45:00+00:00",
             "2026-12-02T00:45:00+00:00",
             True,
         ),
-        # Closed: rolls to the next evening.
         (
             "2026-12-02T00:45:00+00:00",
             "2026-12-02T18:45:00+00:00",
@@ -638,8 +575,6 @@ def test_the_posting_window_follows_its_settings(monkeypatch):
 def test_every_page_carries_the_posting_window_hidden(fake_externals):
     client = TestClient(app)
     with time_machine.travel(_utc("2026-12-01T20:00:00+00:00"), tick=False):
-        # Signed in at the travelled time: a session signed today is past
-        # its 5 h max age there, and /home sends a stale one to /login.
         sign_in_agency(client)
         page = client.get("/home").text
     start = int(_utc("2026-12-01T18:45:00+00:00").timestamp())
@@ -671,9 +606,6 @@ def test_one_account_failing_to_list_does_not_stop_the_tally(drive, monkeypatch)
     assert "ann.ig - Anna" in report.failed[0]
 
 
-# --- concurrency -------------------------------------------------------------------
-
-
 def _three_logins() -> None:
     for i, owner in enumerate(("Anna", "Bob", "Cleo")):
         _login(_phone(f"Phone 0{i}", owner=owner), "instagram", f"h{i}.ig")
@@ -686,8 +618,6 @@ def _assert_one_of_each(drive: FakeDrive) -> None:
 
 
 def test_a_sync_during_another_does_nothing(drive, monkeypatch):
-    """The button pressed while the loop's sweep is half-way: the second
-    one waits for nothing and touches nothing."""
     _three_logins()
     inside = threading.Event()
     release = threading.Event()
@@ -728,9 +658,6 @@ def test_concurrent_syncs_never_duplicate_a_folder(drive):
     _assert_one_of_each(drive)
 
 
-# --- the page -------------------------------------------------------------------------
-
-
 def test_page_shows_what_waits_and_what_was_posted(drive):
     ann = _login(_phone("Phone 01"), "instagram", "ann.ig")
     _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
@@ -744,12 +671,9 @@ def test_page_shows_what_waits_and_what_was_posted(drive):
 
     html = _client().get("/drive/live").text
 
-    # No page-level summary: each card says what waits and what was posted.
     assert "waiting to post in" not in html
     assert "Posted today" not in html
-    # reel1.mp4, notes.txt and old.mp4 (in POSTED), all put there by hand.
     assert "Uploaded to Drive today: <strong>3</strong>" in html
-    # One number each: no split by kind or by who uploaded (owner 2026-11-12).
     assert "Waiting: <strong>2</strong>" in html
     assert "Clone:" not in html
     assert "Manual:" not in html
@@ -761,8 +685,6 @@ def test_page_shows_what_waits_and_what_was_posted(drive):
 
 
 def test_other_folders_in_an_account_folder_are_ignored(drive):
-    """The old day folders: VAs clear them out; the page neither shows nor
-    lists nor touches them."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     day = drive.seed_folder("2026-10-21", _account(drive, "ann.ig"))
@@ -774,14 +696,11 @@ def test_other_folders_in_an_account_folder_are_ignored(drive):
     assert "2026-10-21" not in html
     assert "Nothing waiting to post" in html
     assert drive.writes == []
-    assert drive.calls.count("children") == 1  # the root
-    assert drive.calls.count("children_of") == 2  # accounts, POSTED folders
+    assert drive.calls.count("children") == 1
+    assert drive.calls.count("children_of") == 2
 
 
 def test_page_lists_every_account_in_a_fixed_number_of_calls(drive):
-    """Root cause of a 2-8 s /drive (prod, 2026-10-22): three Drive calls
-    per account. Now the root once, then one batch each for the account
-    folders and their POSTED folders, however many accounts there are."""
     for n in range(6):
         _login(_phone(f"Phone {n:02d}"), "instagram", f"user{n}.ig")
     drive_folders.sync()
@@ -792,13 +711,10 @@ def test_page_lists_every_account_in_a_fixed_number_of_calls(drive):
     html = _client().get("/drive/live").text
 
     assert html.count('class="dr-file"') == 6
-    # The root's own check runs alongside its listing: order not fixed.
     assert sorted(drive.calls) == ["children", "children_of", "children_of", "folder"]
 
 
 def test_a_trashed_account_folder_is_still_told_on_the_page(drive):
-    """Missing from the root listing, it goes the slow way, which tells it
-    is gone and forgets it."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     _login(_phone("Phone 02", owner="Bea"), "instagram", "bea.ig")
     drive_folders.sync()
@@ -807,12 +723,10 @@ def test_a_trashed_account_folder_is_still_told_on_the_page(drive):
     html = _client().get("/drive/live").text
 
     assert "The account&#39;s folder was deleted" in html
-    assert "Nothing waiting to post" in html  # bea's, from the batch
+    assert "Nothing waiting to post" in html
 
 
 def test_page_sees_a_trashed_account_folder_that_still_lists(drive):
-    """Drive still lists a trashed folder's files; the page checks the
-    folder itself, so the account is removed and nothing made again."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     account = _account(drive, "ann.ig")
@@ -857,9 +771,6 @@ def test_a_card_that_fails_to_load_says_so(drive, monkeypatch):
     assert "Nothing waiting to post" not in html
 
 
-# --- routes --------------------------------------------------------------------
-
-
 def test_sync_route_reports(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     response = _client().post("/drive/sync")
@@ -871,7 +782,6 @@ def test_sync_route_reports(drive):
 
 
 def _uploaded_preview(drive: FakeDrive) -> str:
-    """A preview-able file in ann.ig's folder, as "<login>/<file>"."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     file_id = drive.add_file(_account(drive, "ann.ig"), "a.jpg", thumbnail=True)
@@ -888,8 +798,6 @@ def test_thumb_route_serves_an_account_folder_file_and_caches_privately(drive):
 
 
 def test_thumb_is_fetched_from_drive_once(drive):
-    """The preview image is kept on disk; whether the file is still ours is
-    asked every time."""
     file_id = _uploaded_preview(drive)
     first = _client().get(f"/drive/thumb/{file_id}")
     drive.clear_calls()
@@ -923,8 +831,6 @@ def test_thumb_route_refuses_a_random_id(drive):
 
 
 def test_thumb_route_refuses_a_file_outside_the_apps_folders(drive):
-    """The owner's account sees their whole Drive: a file kept anywhere
-    but that login's folders is not the page's to show."""
     login = _uploaded_preview(drive).split("/")[0]
     loose = drive.add_file(ROOT, "passport.jpg", thumbnail=True)
     elsewhere = drive.seed_folder("Someone else's", shared=True)
@@ -952,16 +858,9 @@ def test_thumb_route_needs_login(drive):
     assert response.status_code == 303
 
 
-# --- each owner's own root ------------------------------------------------------
-
-
 def test_the_agencys_hand_made_root_is_adopted_in_any_case(
     fake_externals, tmp_path, monkeypatch
 ):
-    """Prod's "all accounts" (lower case, made by hand, with folders in it)
-    is the owner's root from the first sweep on: nothing is made beside it.
-    Production's root name without claiming production (fake externals
-    refuse OFM_ENV=production)."""
     monkeypatch.setattr(drive_folders, "_DEV_PREFIX", "")
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
@@ -982,8 +881,6 @@ def test_the_agencys_hand_made_root_is_adopted_in_any_case(
 def test_dev_never_adopts_the_live_root_it_makes_its_own(
     fake_externals, tmp_path, monkeypatch
 ):
-    """Same Google account on dev and prod: dev works in "DEV - ALL
-    ACCOUNTS" only, the live folders are never read or written."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
@@ -997,7 +894,7 @@ def test_dev_never_adopts_the_live_root_it_makes_its_own(
     (dev_root,) = fake.named("DEV - ALL ACCOUNTS", MY_DRIVE)
     assert users.get_user(users.agency_id()).drive_root_id == dev_root
     assert fake.named("ann.ig - Anna", dev_root)
-    assert len(fake.named("ann.ig - Anna", live)) == 1  # untouched
+    assert len(fake.named("ann.ig - Anna", live)) == 1
 
 
 def test_a_root_trashed_by_hand_is_found_or_made_again(drive):
@@ -1036,7 +933,6 @@ def test_an_owner_without_google_drive_gets_nothing_made_and_is_told(drive):
 
 
 def test_the_folder_owners_files_are_theirs(drive):
-    """Made by the owner's own account, not a bot."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     assert drive.item(_account(drive, "ann.ig")).owner == AGENCY
@@ -1071,29 +967,20 @@ def test_cards_are_ordered_by_the_accounts_followers(drive):
     html = _client().get("/drive/live").text
     order = [html.index(f">@{h}") for h in ("big.ig", "small.ig", "new.ig")]
     assert order == sorted(order)
-    # Followers next to the handle (2026-10-22), a tracked one only.
     assert '@big.ig <span class="dr-followers">· 90k followers</span>' in html
     assert ">@new.ig</p>" in html
 
 
 def test_the_owner_sits_next_to_the_phone_model(drive):
-    """User request 2026-10-24: one line "iPhone 13 · Blue · Anna", no owner
-    line of its own."""
     _login(_phone("Phone 01", owner="Anna"), "instagram", "ann.ig")
     html = _client().get("/drive/live").text
     assert '<p class="ph-specs">iPhone 13 · Blue · Anna</p>' in html
     assert 'class="ph-meta"' not in html
 
 
-# --- the page opens from the last read ---------------------------------------------
-
-
 def test_the_page_opens_with_no_drive_call_from_the_last_read(drive):
-    """A click on /drive waited ~2 s for Google every time. Now it shows
-    what the last read (sweep, Sync, a live load) saw, and drive.js fetches
-    /drive/live behind it."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
-    drive_folders.sync()  # reads every folder: the page has something to show
+    drive_folders.sync()
     drive.add_file(_account(drive, "ann.ig"), "new.mp4", "video/mp4")
     drive.clear_calls()
 
@@ -1102,20 +989,17 @@ def test_the_page_opens_with_no_drive_call_from_the_last_read(drive):
     assert drive.calls == []
     assert 'data-live="/drive/live"' in html
     assert 'class="dr-asof"' in html
-    assert "Nothing waiting to post" in html  # the sweep saw no file yet
+    assert "Nothing waiting to post" in html
 
     live = _client().get("/drive/live").text
     assert "new.mp4" in live
     assert 'class="dr-asof"' not in live
-    # The live read is the next page's start.
     drive.clear_calls()
     assert "new.mp4" in _client().get("/drive").text
     assert drive.calls == []
 
 
 def test_a_folder_never_read_says_so_until_the_live_read(drive):
-    """A folder made but not read yet (as on a fresh install, before the
-    first sweep finished)."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     folder = drive.create_folder(ROOT, "ann.ig - Anna")
     store.save_account_folder(login, folder.id, "ann.ig - Anna", ROOT)
@@ -1125,11 +1009,7 @@ def test_a_folder_never_read_says_so_until_the_live_read(drive):
     assert "Reading from Drive" not in _client().get("/drive/live").text
 
 
-# --- review fixes: scope, the live root in a dev copy, batch 404s ----------------------
-
-
 def _user_phone(email: str, handle: str, owner: str, *, google: bool = True) -> int:
-    """A user with a phone holding one Instagram login; Google connected."""
     from signin import make_user
 
     user = make_user(email)
@@ -1159,22 +1039,19 @@ def test_a_users_sync_does_and_reports_only_their_own_folders(drive):
     assert body["posted_folders"] == ["ann.ig - Ann/POSTED"]
     assert body["not_connected"] == []
     assert body["failed"] == []
-    assert users.by_email("bob@example.com").drive_root_id is None  # untouched
+    assert users.by_email("bob@example.com").drive_root_id is None
 
-    admin = _client().post("/drive/sync").json()  # an admin's: their own too
+    admin = _client().post("/drive/sync").json()
     assert admin["created"] == []
     assert admin["not_connected"] == []
     assert users.by_email("bob@example.com").drive_root_id is None
 
-    sweep = drive_folders.sync()  # the background loop: everyone's
+    sweep = drive_folders.sync()
     assert sweep.created == ["bob.ig - Bob"]
     assert sweep.not_connected == ["cy@example.com"]
 
 
 def test_dev_never_uses_a_stored_live_root_from_a_prod_copy(drive):
-    """A dev database copied from prod keeps the live "ALL ACCOUNTS" id and
-    its folder rows: dev finds its own root by name, never writes or reads
-    in the live one, and the live rows are not used."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     live = drive.seed_folder("ALL ACCOUNTS", MY_DRIVE, owner=AGENCY)
     live_account = drive.seed_folder("ann.ig - hand named", live, owner=AGENCY)
@@ -1189,7 +1066,7 @@ def test_dev_never_uses_a_stored_live_root_from_a_prod_copy(drive):
     assert report.created == ["ann.ig - Anna"]
     assert _stored().folder_id == _account(drive, "ann.ig")
     assert drive.item(live).name == "ALL ACCOUNTS"
-    assert drive.names_in(live) == ["ann.ig - hand named"]  # not renamed back
+    assert drive.names_in(live) == ["ann.ig - hand named"]
     assert drive.names_in(live_account) == [POSTED]
 
 
@@ -1209,8 +1086,6 @@ def test_the_page_forgets_a_stored_live_root_in_dev(drive):
 
 
 def test_a_404_in_the_batch_keeps_the_root_and_lists_one_by_one(drive, monkeypatch):
-    """An account folder deleted between the root listing and the batch
-    404s the whole `children_of` query: the healthy root stays."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     drive.add_file(_account(drive, "ann.ig"), "new.mp4", "video/mp4")
@@ -1227,20 +1102,15 @@ def test_a_404_in_the_batch_keeps_the_root_and_lists_one_by_one(drive, monkeypat
     assert "new.mp4" in html
 
 
-# --- the agency admin without Google: the Drive bot in the configured root --------
-
 BOT_ROOT = "configured-all-accounts"
 
 
 @pytest.fixture
 def bot_drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
-    """Prod right after users came in: the agency admin signed in with the
-    admin password (no Google token); the bot (service account) and its
-    shared root (`OFM_GDRIVE_ROOT_FOLDER`) configured as before."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
     monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", BOT_ROOT)
-    fake = fake_drive()  # seeds the configured root, shared with the bot
+    fake = fake_drive()
     fake.rename_by_hand(BOT_ROOT, "DEV - ALL ACCOUNTS")
     return fake
 
@@ -1262,8 +1132,6 @@ def test_the_agency_admin_without_google_is_read_through_the_bot(bot_drive):
 
 
 def test_the_bot_never_makes_a_root_of_its_own(bot_drive):
-    """The configured root not usable (outside production: not named
-    "DEV - ALL ACCOUNTS"): the sweep says why and makes nothing anywhere."""
     bot_drive.rename_by_hand(BOT_ROOT, "ALL ACCOUNTS")
     _login(_phone("Phone 01"), "instagram", "ann.ig")
 
@@ -1289,8 +1157,6 @@ def test_only_the_agency_admin_falls_back_to_the_bot(bot_drive):
 
 
 def test_an_unusable_bot_key_is_no_fallback(bot_drive, monkeypatch):
-    """A key that does not load (mangled env quoting): the agency admin is
-    "not connected" like before, and the sweep goes on for everyone."""
     monkeypatch.setattr(drive_folders, "service_account_email", lambda: None)
     _login(_phone("Phone 01"), "instagram", "ann.ig")
 
@@ -1300,11 +1166,7 @@ def test_an_unusable_bot_key_is_no_fallback(bot_drive, monkeypatch):
     assert report.failed == []
 
 
-# --- one account is one thing: /accounts, /phones, Drive ---------------------
-
-
 def _tracked_login(phone: int, handle: str = "ann.ig") -> tuple[int, int]:
-    """(login id, /accounts id) of an Instagram login with a password."""
     added = devices.add_login(
         phone, LoginFields(service="instagram", username=handle, password="pw")
     )
@@ -1315,7 +1177,6 @@ def _tracked_login(phone: int, handle: str = "ann.ig") -> tuple[int, int]:
 
 
 def test_removed_on_accounts_it_leaves_the_phones_and_drive_password_kept(drive):
-    """Prod, 2026-10-22: removed on /accounts, they stayed on the phones."""
     login, account = _tracked_login(_phone("Phone 01"))
     other_login, _ = _tracked_login(_phone("Phone 02", owner="Bea"), "bea.ig")
     drive_folders.sync()
@@ -1324,12 +1185,12 @@ def test_removed_on_accounts_it_leaves_the_phones_and_drive_password_kept(drive)
     r = _client().post("/accounts/delete", json={"ids": [account]})
 
     assert r.json()["count"] == 1
-    assert drive.item(folder).trashed  # restorable in Drive
+    assert drive.item(folder).trashed
     assert [x.id for d in devices.list_devices() for x in d.logins] == [other_login]
     assert [a.id for a in devices.archived_logins()] == [login]
     assert devices.secrets(login).password == "pw"
     assert "ann.ig" not in [a.handle for a in list_accounts()]
-    assert drive_folders.sync().created == []  # not made again
+    assert drive_folders.sync().created == []
 
 
 def test_off_its_last_phone_it_leaves_accounts_and_drive(drive):
@@ -1343,7 +1204,7 @@ def test_off_its_last_phone_it_leaves_accounts_and_drive(drive):
     assert r.status_code == 200
     assert drive.item(folder).trashed
     assert "ann.ig" not in [a.handle for a in list_accounts()]
-    assert devices.archived_logins() == []  # deleted on purpose, as /phones says
+    assert devices.archived_logins() == []
 
 
 def test_off_one_of_two_phones_it_stays_everywhere(drive):
@@ -1389,8 +1250,6 @@ def test_adding_an_archived_account_again_brings_it_back(drive):
 
 
 def test_a_posted_folder_gone_mid_scan_never_removes_the_account(drive, monkeypatch):
-    """Only POSTED went between the account's listing and POSTED's own:
-    the account folder is still there, so nothing is archived."""
     _tracked_login(_phone("Phone 01"))
     drive_folders.sync()
     posted = _posted(drive, "ann.ig")
@@ -1410,8 +1269,6 @@ def test_a_posted_folder_gone_mid_scan_never_removes_the_account(drive, monkeypa
 
 
 def test_an_archived_account_with_no_phone_left_is_not_restored(drive):
-    """Restored onto no phone, the next phone change would delete it,
-    password included."""
     phone = _phone("Phone 01")
     login, account = _tracked_login(phone)
     _client().post("/accounts/delete", json={"ids": [account]})

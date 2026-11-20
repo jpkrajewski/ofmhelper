@@ -1,13 +1,3 @@
-"""Each link's landing views and clicks in the last 24 hours, asked of its
-provider at once: what `money` answers (owner 2026-11-08: "current stuff", not
-"since the report").
-
-A one-day range comes back by the hour on both providers (UTC; links/CLAUDE.md,
-Oopsie checked on its real API 2026-11-08), so the window is the current hour
-and the 23 before it, read from at most two days per provider: two Oopsie calls
-for up to 200 links, two Bouncy calls per link. Nothing synced or stored.
-"""
-
 from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
@@ -25,15 +15,11 @@ _HOURS = 24
 
 
 class LastDay(BaseModel):
-    """Per link id, its numbers; and the providers that could not tell now
-    (their label: their links' clicks are missing from the counts)."""
-
     counts: dict[int, DayCount] = {}
     unread: list[str] = []
 
 
 def window_start(now: float) -> datetime:
-    """The first hour counted: 23 before the current one."""
     current = datetime.fromtimestamp(now, UTC).replace(
         minute=0, second=0, microsecond=0
     )

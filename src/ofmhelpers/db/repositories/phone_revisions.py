@@ -1,15 +1,3 @@
-"""A person's phones as they were (`phone_revisions`, alembic b7c8d9e0f1a3).
-
-The rows are written by the database: a trigger on `devices`, `logins` and
-`device_logins` stores the owner's whole state after every transaction that
-touches them, and a second one refuses any change to a stored revision. So
-nothing here records; this reads the list, goes back to a revision, and
-hands states to and from the backup file.
-
-Nothing cached: the snapshots hold what the phone tables hold (secrets as
-their encrypted text), which must never reach Redis.
-"""
-
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -33,7 +21,6 @@ _LIST = text(
 
 _OWNS = text("SELECT 1 FROM phone_revisions WHERE id = :revision AND user_id = :owner")
 
-# Logins the revision has and the tables no longer do.
 _BACK = text(
     """
     SELECT x.id
@@ -45,8 +32,6 @@ _BACK = text(
     """
 )
 
-# What was added since leaves; a row the revision has stays the row it is
-# (same id), so what hangs on it (its Drive folder rows) stays too.
 _DROP_ADDED = (
     text(
         """
@@ -77,8 +62,6 @@ _DROP_ADDED = (
             WHERE x.id = l.id)
         """
     ),
-    # Two phones that swapped labels since (or two logins their names) would
-    # trip the unique constraints half way through the rows put back.
     text("UPDATE devices SET label = '~' || id WHERE user_id = :owner"),
     text("UPDATE logins SET username = '~' || id WHERE user_id = :owner"),
 )
@@ -93,8 +76,6 @@ _HISTORY = text(
 
 _NEWEST = text("SELECT max(id) FROM phone_revisions")
 
-# A revision read back from a backup file, under its own time and words.
-# One the table already has (same person, moment and change) is not added.
 _LOAD = text(
     """
     INSERT INTO phone_revisions (user_id, created_at, txid, change, snapshot)
@@ -108,11 +89,6 @@ _LOAD = text(
 
 
 def _put_back(name: str, owned: str) -> str:
-    """The SQL writing table `name`'s rows of the revision over the table's:
-    inserted when gone, set to every stored value when there. Table and
-    column names are the mapped model's own, never a caller's. A revision
-    from before the row stamps (alembic a1b2c3d4e5f8) is read in today's
-    shape (`phone_snapshot_current`): stored revisions are never rewritten."""
     table = Base.metadata.tables[name]
     columns = [c.name for c in table.columns]
     keys = [c.name for c in table.primary_key.columns]
@@ -125,7 +101,7 @@ def _put_back(name: str, owned: str) -> str:
         ) r
         WHERE {owned}
         ON CONFLICT ({", ".join(keys)}) DO UPDATE SET {changed}
-        """  # noqa: S608 -- identifiers from the mapped tables only
+        """  # noqa: S608
 
 
 _OWNED_LINK = (
@@ -133,7 +109,6 @@ _OWNED_LINK = (
 )
 
 
-# Logins before the links that point at them.
 _PUT_BACK = (
     ("logins", "r.user_id = :owner"),
     ("devices", "r.user_id = :owner"),
@@ -143,15 +118,11 @@ _PUT_BACK = (
 
 class PhoneRevisionRepository:
     def page(self, owner: int, limit: int) -> list[PhoneRevision]:
-        """`owner`'s newest `limit` revisions, newest first."""
         with session_scope() as s:
             rows = s.execute(_LIST, {"owner": owner, "limit": limit}).mappings()
             return [PhoneRevision.model_validate(dict(r)) for r in rows]
 
     def restore(self, revision_id: int, owner: int) -> Restored | None:
-        """`owner`'s phones made what revision `revision_id` holds, in one
-        transaction; None when it is not theirs. The triggers record the
-        result as a new revision, so a restore can itself be undone."""
         asked = {"revision": revision_id, "owner": owner}
         with session_scope() as s:
             if s.execute(_OWNS, asked).first() is None:
@@ -164,21 +135,15 @@ class PhoneRevisionRepository:
             return Restored(revision_id=revision_id, logins_back=back)
 
     def history(self) -> list[PhoneState]:
-        """Every revision of everyone, oldest first: what the backup file
-        holds."""
         with session_scope() as s:
             rows = s.execute(_HISTORY).mappings()
             return [PhoneState.model_validate(dict(r)) for r in rows]
 
     def newest_id(self) -> int:
-        """The newest revision's id; 0 when there is none."""
         with session_scope() as s:
             return s.execute(_NEWEST).scalar_one() or 0
 
     def load(self, state: PhoneState) -> int | None:
-        """A revision from a backup file back in its owner's History, with
-        the time and the words it had. Changes no phone. None when the
-        History already has it."""
         with session_scope() as s:
             row = s.execute(
                 _LOAD,

@@ -1,14 +1,9 @@
-"""TikTok's H.264 re-encode is bounded (review #12): an ffmpeg that runs
-past `OFM_DOWNLOAD_REENCODE_TIMEOUT_S` is stopped, its partial output
-removed and the downloaded original kept, as on any ffmpeg failure."""
-
 import sys
 import time
 
 from ofmhelpers.integrations.downloaders import generic
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 
-# ffmpeg stand-ins: write the output (argv[1]), then hang / fail / finish.
 _HANG = "import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_bytes(b'p'); time.sleep(60)"
 _FAIL = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(b'p'); sys.exit(1)"
 _DONE = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(b'h264')"
@@ -53,8 +48,6 @@ def test_a_failing_re_encode_keeps_the_original_and_no_partial(monkeypatch, tmp_
 
 
 def test_the_re_encode_is_veryfast_at_crf_18(tmp_path):
-    """Every TikTok is re-encoded (its best format is HEVC only): medium took
-    twice as long for the same quality (2026-11-06)."""
     cmd = DownloadConfig(output_dir=tmp_path).ffmpeg_cmd(
         tmp_path / "a.mp4", tmp_path / "b.mp4"
     )

@@ -1,9 +1,3 @@
-"""The site's pages as navigation knows them: the header bar, its "More"
-menu and the home page's tool cards all render from `NAV`, so a new page
-is one `NavItem` here, never an edit to three templates. Who sees an item
-is the access map's answer for its `area` (`auth/access.py`): the menu
-never lists a page its reader cannot open."""
-
 from enum import StrEnum
 
 from pydantic import BaseModel
@@ -14,19 +8,18 @@ lazy from ofmhelpers.schemas.users import Viewer
 
 
 class NavPlace(StrEnum):
-    BAR = "bar"  # always visible in the header
-    MORE = "more"  # folded under "More"
+    BAR = "bar"
+    MORE = "more"
 
 
 class NavItem(BaseModel):
     href: str
     label: str
-    icon: str  # a name in templates/_icons.html
+    icon: str
     place: NavPlace
     area: Area
 
     def is_current(self, path: str) -> bool:
-        """Whether `path` is this page or one under it."""
         return path == self.href or path.startswith(f"{self.href}/")
 
 
@@ -245,15 +238,10 @@ NAV = (
 
 
 def nav(role: Role | None) -> list[NavItem]:
-    """Every page someone of `role` may open, in menu order. None (nobody
-    signed in: a public page's header) lists what a user has."""
     return [item for item in NAV if allowed(role or Role.USER, item.area)]
 
 
 def nav_of(viewer: Viewer | None) -> list[NavItem]:
-    """The menu of a request's person (`auth.access.opens`: a manager's is
-    their list cut to what their employer opens); nobody signed in: a
-    user's."""
     if viewer is None:
         return nav(None)
     return [item for item in NAV if opens(viewer, item.area)]

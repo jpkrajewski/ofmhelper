@@ -1,8 +1,5 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
-{# One login's POSTED reels, newest first: each one's pictures for Threads
-   (made, being made, failed) or a button that makes them. While one is
-   being made the page reloads itself (threads.js, `data-refresh`). #}
 {% block title %}Threads — @{{ folder.card.target.handle }} — Ascend Global LLC{% endblock %}
 {% block content %}
 {% set t = folder.card.target %}

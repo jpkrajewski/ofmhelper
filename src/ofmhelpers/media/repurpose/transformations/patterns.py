@@ -1,8 +1,3 @@
-"""Full-frame pattern images for Special's overlay: Duplyfi's stripes /
-grid / check / spiral / particles / psyche SVGs (`generatePatternImage`),
-drawn with Pillow at the copy's exact output size. Laid over the video at a
-few percent opacity (`video.VideoTransformer._overlay`)."""
-
 import random
 from enum import StrEnum
 from pathlib import Path
@@ -23,7 +18,6 @@ class Pattern(StrEnum):
 _STRIPE_PERIOD = 12
 _STRIPE_WIDTH = 6
 _GRID_SPACING = 10
-# Duplyfi's grid lines: white at 70% over black.
 _GRID_GREY = (179, 179, 179)
 _CHECK_SIZE = 16
 _SPIRAL_SECTORS = 8
@@ -35,8 +29,6 @@ _PSYCHE_COLOURS = ("#FE1648", "#F13BDE", "#880DFB", "#42A6FE", "#FFB020")
 
 
 class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
-    """One pattern image being drawn: Pillow's pen and the frame's size."""
-
     pen: SkipValidation[ImageDraw.ImageDraw]
     w: int
     h: int
@@ -63,7 +55,6 @@ class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
                     )
 
     def sectors(self, fills: list[str | None]) -> None:
-        """Pie sectors from the centre past the corners, one per fill (None: skip)."""
         w, h = self.w, self.h
         r = max(w, h)
         box = [w / 2 - r, h / 2 - r, w / 2 + r, h / 2 + r]

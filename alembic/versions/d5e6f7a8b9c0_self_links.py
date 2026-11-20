@@ -1,16 +1,3 @@
-"""self_link_domains, self_link_clicks: self-hosted bridge pages
-
-Our own link provider "self": the custom domains we serve bridge pages on, and
-one row per hit on a bridge page (view / continue-through) with its exact time
-and the visitor's Cloudflare geo. The links themselves reuse `short_links` with
-provider = "self", so nothing here mirrors that table.
-
-Revision ID: d5e6f7a8b9c0
-Revises: e7f8a9b0c1d2
-Create Date: 2026-11-08 00:45:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

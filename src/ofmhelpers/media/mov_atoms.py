@@ -1,11 +1,3 @@
-"""Minimal QuickTime/MP4 atom tree: parse a `moov`, edit it, write it back.
-
-Only the containers an edit needs to reach into are parsed (`CONTAINERS`);
-every other atom keeps its payload as raw bytes, so a round trip is
-byte-identical. Sizes are recomputed on write, so a moov rewritten after
-its mdat (no `faststart`) moves no chunk offset.
-"""
-
 import struct
 from pathlib import Path
 
@@ -14,7 +6,7 @@ from pydantic import BaseModel
 CONTAINERS = {b"moov", b"trak", b"mdia", b"minf", b"stbl", b"edts"}
 _HEADER = 8
 _LARGE_HEADER = 16
-_EPOCH_1904 = 2082844800  # seconds from 1904-01-01 to 1970-01-01
+_EPOCH_1904 = 2082844800
 
 
 class Atom(BaseModel):
@@ -58,22 +50,17 @@ def parse(data: bytes) -> list[Atom]:
 
 
 class AtomSpan(BaseModel, frozen=True):
-    """Where one top-level atom sits in its file."""
-
     kind: bytes
     offset: int
     size: int
 
 
 class Moov(BaseModel):
-    """A file's parsed moov atom and where it starts."""
-
     atom: Atom
     offset: int
 
 
 def top_level(path: Path) -> list[AtomSpan]:
-    """Each top-level atom's type, offset and size, without reading mdat."""
     found: list[AtomSpan] = []
     with path.open("rb") as f:
         offset = 0
@@ -92,7 +79,6 @@ def top_level(path: Path) -> list[AtomSpan]:
 
 
 def read_moov(path: Path) -> Moov:
-    """The moov atom of `path` and its offset."""
     for span in top_level(path):
         if span.kind == b"moov":
             with path.open("rb") as f:
@@ -104,27 +90,20 @@ def read_moov(path: Path) -> Moov:
 
 
 def set_times(atom: Atom, unix_seconds: int) -> None:
-    """Set the creation and modification time of a version-0 mvhd/tkhd/mdhd."""
     if atom.payload[0] != 0:
         return
     stamp = struct.pack(">II", unix_seconds + _EPOCH_1904, unix_seconds + _EPOCH_1904)
     atom.payload = atom.payload[:4] + stamp + atom.payload[12:]
 
 
-# Offset of the (version 0) duration field in each header's payload, in
-# the movie timescale: mvhd after version/flags, 2 times and timescale;
-# tkhd after version/flags, 2 times, track ID and a reserved word.
 _DURATION_OFFSET = {b"mvhd": 16, b"tkhd": 20}
 
 
 def duration(atom: Atom) -> int:
-    """A version-0 mvhd/tkhd duration."""
     at = _DURATION_OFFSET[atom.type]
     return int.from_bytes(atom.payload[at : at + 4], "big")
 
 
 def set_duration(atom: Atom, value: int) -> None:
-    """Set a version-0 mvhd/tkhd duration, or the first edit's segment
-    duration of an elst (version/flags, entry count, then the entries)."""
     at = _DURATION_OFFSET.get(atom.type, 8)
     atom.payload = atom.payload[:at] + value.to_bytes(4, "big") + atom.payload[at + 4 :]

@@ -1,15 +1,3 @@
-"""
-Covers the editable default prompts and the model switch on /generate:
-- Kling 3.0 (kie.ai) defaults to a handheld-camera template and Nano Banana
-  Pro to reference-by-position language -- now catalog data
-  (`default_prompt`), applied by static/js/ai-form.js.
-- A default only ever replaces empty text or a default it put there itself.
-- Picked files follow a model switch.
-This repo has no JS test runner, so these confirm the page and script ship
-the expected text and wiring (a regression here means the feature silently
-stopped being served to the browser at all).
-"""
-
 import json
 import re
 
@@ -48,8 +36,6 @@ def test_kling_default_prompt_template_is_shipped(client):
 
 
 def test_nanobanana_multi_ref_default_prompt_is_shipped_unconditionally(client, script):
-    """No reference-image-count gate: the default is set the moment the model
-    is picked, not only once 2+ images are attached."""
     prompt = _models(client)["kie:nano-banana-pro"]["default_prompt"]
 
     assert prompt == "Refer to first image and second image, replicate third image."
@@ -70,14 +56,10 @@ def test_switching_models_replaces_an_untouched_default_instead_of_leaving_it(sc
 
 
 def test_no_stale_paste_hint_text(client):
-    """Paste-to-upload works globally (see file-picker.js's paste listener)
-    -- there must be no leftover "click here first" instruction."""
     assert "Click here" not in client.get("/generate").text
 
 
 def test_switching_models_carries_picked_files_over(script):
-    """The new model's pickers get the old one's files (by kind) before the
-    old fieldset leaves the page."""
     carry = script.index("window.FilePicker.carryOver(fieldset, next)")
     swap = script.index("fieldset.replaceWith(next)")
     assert carry < swap

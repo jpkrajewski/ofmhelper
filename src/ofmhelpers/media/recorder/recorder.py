@@ -1,19 +1,3 @@
-"""Re-encode a video into what an iPhone camera recording of `profile` is.
-
-ffmpeg does the encode, everything taken from the profile: codec, level,
-size (portrait; landscape swaps), HLG/BT.2020 10-bit (SDR sources converted
-with zscale), frame rate, timescale, bitrates, B-frames, AAC; the moov is
-written after the mdat, as an iPhone does. Then the moov is rewritten with
-the atoms ffmpeg cannot write (`atoms`): movie and video-track `meta`,
-`tapt`, Apple media/data handlers and `alis` data references, `und`
-languages, the profile's ftyp minor version, and every mvhd/tkhd/mdhd time
-set to the recording's end. The moov comes after the mdat, so resizing it
-moves no chunk offset.
-
-What ffmpeg cannot make is left out: the Dolby Vision RPU, the APAC
-spatial-audio track and the per-frame `mebx` metadata tracks.
-"""
-
 import math
 import mmap
 import random
@@ -33,21 +17,15 @@ from ofmhelpers.media.recorder import atoms, sample_entries, sample_tables
 from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.recorder.models import DeviceProfile, Recording, TimingPlan
 
-# VBV around the profile's average bitrate.
 _MAXRATE_FACTOR = 1.5
 _BUFSIZE_FACTOR = 2
-# Samples in one AAC packet.
 _AAC_FRAME = 1024
-# HEVC general_level_idc is 30 x the level number.
 _LEVEL_IDC_PER_LEVEL = 30
-# ftyp: size(4) type(4) major_brand(4), then minor_version(4).
 _FTYP_MINOR_OFFSET = 12
-# mdhd version 0: version/flags(4) times(8) timescale(4) duration(4), language.
 _MDHD_LANG_OFFSET = 20
 
 
 def frame_size(profile: DeviceProfile, src: SourceInfo) -> Size:
-    """The profile's portrait size, or its landscape twin for a wide source."""
     w, h = profile.video.width, profile.video.height
     if src.height >= src.width:
         return Size(width=w, height=h)
@@ -55,10 +33,6 @@ def frame_size(profile: DeviceProfile, src: SourceInfo) -> Size:
 
 
 def _timing_filters(profile: DeviceProfile, plan: TimingPlan) -> str:
-    """select drops the planned frames (the kept ones keep their capture
-    time, so audio stays in sync); setpts on a timescale-tick base runs
-    every frame from each nudge one tick later. Quoted, so the commas inside
-    the expressions are not filter separators."""
     dropped = "+".join(f"eq(n,{i})" for i in plan.dropped) or "0"
     nudged = "+".join(f"gte(N,{i})" for i in plan.nudges) or "0"
     return (
@@ -87,8 +61,6 @@ def _video_filter(
 
 
 def _audio_filter(profile: DeviceProfile, src: SourceInfo) -> str:
-    """Resampled, then padded/trimmed to whole AAC packets: an iPhone's audio
-    track is one stts run of full 1024-sample packets."""
     rate = profile.audio.sample_rate
     total = math.ceil(src.duration * rate / _AAC_FRAME) * _AAC_FRAME
     return f"aresample={rate},apad=whole_len={total},atrim=end_sample={total}"
@@ -99,9 +71,6 @@ def encode_args(
 ) -> list[str]:
     v, a = profile.video, profile.audio
     level = v.level / _LEVEL_IDC_PER_LEVEL
-    # info=0: no x265 version/settings SEI in the bitstream. Closed GOP:
-    # keyframes are IDR, not the iPhone's CRA (`sync_nal_unit_type`) --
-    # x265 4.1 crashes on cra-nal=1 with B-frames.
     x265 = (
         f"info=0:fps={v.fps}:level-idc={level:g}:bframes={v.b_frames}:"
         f"keyint={v.gop_size}:open-gop=0:high-tier=0:"
@@ -111,7 +80,6 @@ def encode_args(
     return [
         "-vf",
         _video_filter(profile, src, plan, mirror=mirror),
-        # Keep the planned timestamps: no frame duplicated into the gaps.
         "-fps_mode",
         "passthrough",
         "-c:v",
@@ -127,9 +95,6 @@ def encode_args(
         f"{v.bitrate_kbps * _BUFSIZE_FACTOR}k",
         "-x265-params",
         x265,
-        # mov takes the last sample's duration from its packet; libx265's
-        # packets carry none (it would be 1 tick). pts/dts passed through:
-        # left out, setts drops the composition offsets.
         "-bsf:v",
         f"setts=pts=PTS:dts=DTS:duration={plan.last_frame_ticks}",
         "-tag:v",
@@ -157,14 +122,11 @@ def encode_args(
         str(profile.container.movie_timescale),
         "-chunk_duration",
         str(profile.container.chunk_duration_ms * 1000),
-        # Signed composition offsets (ctts v1) when the profile has them.
         *(["-movflags", "+negative_cts_offsets"] if v.negative_cts_offsets else []),
         "-map_metadata",
         "-1",
-        # Becomes the video sample entry's compressorname.
         "-metadata:s:v:0",
         f"encoder={v.compressor_name}",
-        # bitexact: no Lavf/Lavc version stamps in the container or AAC.
         "-fflags",
         "+bitexact",
         "-flags:v",
@@ -181,8 +143,6 @@ def _handler_kind(trak: Atom) -> str:
 
 
 class _Retagger:
-    """Rewrites one ffmpeg moov into the profile's."""
-
     def __init__(
         self, profile: DeviceProfile, recording: Recording, size: Size
     ) -> None:
@@ -196,10 +156,6 @@ class _Retagger:
         }
 
     def moov(self, moov: Atom) -> Atom:
-        # Every track and the movie end together, as on an iPhone: each
-        # track's edit is cut to the shortest track (a source whose audio
-        # outruns its video, or the AAC packet padding, would leave them
-        # apart).
         self.length = min(
             duration(tkhd)
             for trak in moov.all(b"trak")
@@ -294,8 +250,6 @@ def record(
     recording: Recording,
     timeout_s: int,
 ) -> None:
-    """Write `src` to `dst` (.mov) as `profile`'s camera would have recorded
-    it. `recording.duration_s` is ignored: the source's length is used."""
     info = probe(src, timeout_s)
     recording = recording.model_copy(update={"duration_s": info.duration})
     frames = math.ceil(info.duration * profile.video.fps)

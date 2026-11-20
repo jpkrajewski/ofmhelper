@@ -1,21 +1,3 @@
-/*
- * /repurpose page controller.
- *
- * Knobs: every input with `data-knob` is one preset value at that path
- * ("video.zoom", "video.adjust.temp", "audio.pitch"); none has a `name`, so
- * the form never posts them one by one -- submit and Download preset send
- * them as one preset JSON. A range knob is two inputs (min / max): one filled
- * = that number, both = [min, max]. Picking a preset (or Special) fills the
- * knobs and the device from the page's presets (#rp-presets); Special adds
- * the preset's special parts on top.
- *
- * Generate: generation.js posts and polls; a card it builds for a finished
- * or failed run (it carries the ⋯ menu) is swapped for the server's cards
- * (`/repurpose/cards/{job}`: one per copy, with its score, Recreate only).
- *
- * Recreate: the card's video, preset name, Special, knobs, device and copies
- * back in the form.
- */
 (() => {
     function number(input) {
         if (!input || input.value.trim() === "") return null;
@@ -38,7 +20,6 @@
         o[last] = value;
     }
 
-    // Every knob path once, in page order.
     function paths(form) {
         return [...new Set([...form.querySelectorAll("[data-knob]")].map((el) => el.dataset.knob))];
     }
@@ -88,7 +69,6 @@
         first.value = value ?? "";
     }
 
-    // The knobs as a preset: only the set ones.
     function collect(form) {
         const preset = { video: {}, audio: {} };
         for (const path of paths(form)) {
@@ -173,7 +153,6 @@
         });
     }
 
-    // generation.js's cards (they carry the ⋯ menu) -> the server's.
     function initSwap(gallery) {
         const swapping = new Set();
 

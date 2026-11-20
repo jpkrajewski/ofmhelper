@@ -1,20 +1,5 @@
-"""The one Redis connection in this repo, plus the small string key/value
-helpers built on it.
-
-The connection is built lazily from settings.infra (never at import), for the
-same reason the DB engine is: the worker and the API must bind to whatever
-OFM_REDIS_URL is set at runtime, and tests point it at a test broker. Cached
-per URL so production reuses one connection pool and a URL change between
-tests still rebuilds.
-
-`get_text`/`set_text`/`delete_text` are for **optimisation caches only** --
-values a process would happily recompute. They swallow RedisError and report a
-miss, so a broker outage degrades to "slow" rather than "broken". Anything that
-must not silently lose a write (the RQ queue, the rate-limit counters) uses
-`get_redis()` directly and decides its own failure policy.
-"""
-
 from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
 from redis.exceptions import RedisError
 
 from ofmhelpers.config import settings
@@ -35,8 +20,11 @@ def get_redis() -> Redis:
     return _redis
 
 
+def subscriber() -> AsyncRedis:
+    return AsyncRedis.from_url(settings.infra.redis_url)
+
+
 def used_bytes() -> int | None:
-    """The memory Redis holds (queues, caches); None when it cannot be read."""
     try:
         return int(get_redis().info("memory")["used_memory"])
     except RedisError, KeyError, ValueError:
@@ -45,7 +33,6 @@ def used_bytes() -> int | None:
 
 
 def get_text(key: str) -> str | None:
-    """Cached string for `key`, or None on a miss *or* an unreachable broker."""
     try:
         raw = get_redis().get(key)
     except RedisError:

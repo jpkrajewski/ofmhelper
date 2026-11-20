@@ -1,12 +1,3 @@
-/*
- * A run of one failure on a gallery (/generate, /clone, /download-assets, ...):
- * twelve "kie.ai: No credits" cards in a row read as one red wall (2026-11-18).
- * Three or more cards side by side that failed the same way on the same tool (the
- * failed box's words and the meta line) fold into the first; its button shows the
- * rest. Only the view changes: every card stays in the page, so scrolling, the live
- * poll, Hide and Recreate work on each as before. A run once opened stays open.
- * Needs _card_actions.html's `card-failed-more` template (the gallery pages).
- */
 (() => {
     const template = document.getElementById("card-failed-more");
     if (!template) return;

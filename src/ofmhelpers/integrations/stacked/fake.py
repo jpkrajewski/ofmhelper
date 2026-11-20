@@ -1,13 +1,3 @@
-"""Stacked's API faked at the wire (OFM_FAKE_EXTERNALS, tests).
-
-Answers the calls `client.StackedClient` makes the way Stacked does (real
-answers checked 2026-11-04, see CLAUDE.md). `CREATOR_KEY` acts as `CREATOR`,
-`AGENCY_KEY` as an agency linked to `CREATOR` and `OTHER_CREATOR`; any other
-key is refused. Chats start empty: `add_chat` makes one, `add_message` writes
-in it. `fail_next` answers the next calls with an error, `calls` records
-(method, path), for assertions.
-"""
-
 import json
 import threading
 from datetime import datetime
@@ -40,8 +30,6 @@ def _creator(user_id: str, access: str) -> dict[str, Any]:
 
 
 class FakeMessage(BaseModel):
-    """A chat message as Stacked answers it (its names as aliases)."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     message_id: int = Field(serialization_alias="messageId")
@@ -58,17 +46,13 @@ class FakeStacked:
         self.chats: dict[str, list[dict[str, Any]]] = {}
         self.webhooks: dict[str, list[dict[str, Any]]] = {}
         self.fail_next: list[FakeReply] = []
-        # creator -> [(epoch s, gross cents)] and [(epoch s, 1)]: `sold`, `subscribed`.
         self.sales: dict[str, list[tuple[float, int]]] = {}
         self.subscribers: dict[str, list[tuple[float, int]]] = {}
         self._messages: dict[str, list[dict[str, Any]]] = {}
         self._last_id = 1000
         self._lock = threading.Lock()
 
-    # --- test data ----------------------------------------------------------
-
     def add_chat(self, creator: str, fan: str, channel_url: str) -> None:
-        """A chat nobody wrote in yet, `creator`'s with `fan`."""
         members = [
             {
                 "userId": user_id,
@@ -97,8 +81,6 @@ class FakeStacked:
     def add_message(
         self, channel_url: str, user_id: str, text: str, at_ms: int | None = None
     ) -> FakeMessage:
-        """`user_id` writes in the chat; the provider's own events have an
-        empty `user_id`, like the real ones."""
         self._last_id += 1
         made = FakeMessage(
             message_id=self._last_id,
@@ -123,8 +105,6 @@ class FakeStacked:
     def add_reaction(
         self, channel_url: str, message_id: int, user_id: str, at_ms: int
     ) -> None:
-        """Only on the chat's messages: the real chat list's last message has no
-        `reactions`, and the last message's id does not change."""
         message = next(
             m for m in self._messages[channel_url] if m["messageId"] == message_id
         )
@@ -133,14 +113,10 @@ class FakeStacked:
         )
 
     def sold(self, creator: str, gross_cents: int, at: float) -> None:
-        """A sale `/earnings` counts in a window holding `at`."""
         self.sales.setdefault(creator, []).append((at, gross_cents))
 
     def subscribed(self, creator: str, at: float) -> None:
-        """A new subscriber `/subscribers/summary` counts."""
         self.subscribers.setdefault(creator, []).append((at, 1))
-
-    # --- the API ------------------------------------------------------------
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         url = urlsplit(request.url or "")
@@ -181,7 +157,7 @@ class FakeStacked:
             return self._subscribers(creator, query)
         if parts[0] == "webhooks":
             return self._webhooks(request, creator, parts)
-        if len(parts) == 3 and parts[0] == "chats" and parts[2] == "messages":  # noqa: PLR2004 -- chats/{channelUrl}/messages
+        if len(parts) == 3 and parts[0] == "chats" and parts[2] == "messages":  # noqa: PLR2004
             return self._chat_messages(creator, unquote(parts[1]), query)
         return _error(HTTPStatus.NOT_FOUND, "not found")
 
@@ -193,7 +169,6 @@ class FakeStacked:
         return [value for at, value in items if start <= at < end]
 
     def _earnings(self, creator: str, query: Mapping[str, str]) -> FakeReply:
-        """`sold` within the window, summed like the real one (gross, cents)."""
         gross = sum(self._in_window(self.sales.get(creator, []), query))
         summary = {
             "creatorUserId": creator,
@@ -223,10 +198,6 @@ class FakeStacked:
     def _webhooks(
         self, request: requests.PreparedRequest, creator: str, parts: list[str]
     ) -> FakeReply:
-        """Destinations per key and creator, as Stacked keeps them: another key
-        of the same creator sees none of them (kept under the creator's id for
-        its own key, `<key>:<creator>` for any other). A secret is only in the
-        answer that made it."""
         token = str(request.headers.get("Authorization") or "").removeprefix("Bearer ")
         held = creator if token == CREATOR_KEY else f"{token}:{creator}"
         mine = self.webhooks.setdefault(held, [])
@@ -247,8 +218,6 @@ class FakeStacked:
         return FakeReply.json_body({**made, "secret": f"whsec_{self._last_id}"})
 
     def _chats(self, creator: str, query: Mapping[str, str]) -> FakeReply:
-        """Latest last message first; the cursor is an offset, opaque to the
-        client like the real one."""
         chats = sorted(
             self.chats.get(creator, []),
             key=lambda c: c.get("lastMessage", {}).get("createdAt", 0),

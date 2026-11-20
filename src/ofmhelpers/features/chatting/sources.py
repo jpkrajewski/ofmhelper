@@ -1,5 +1,3 @@
-"""Every chat platform with an API here. A new platform = one line in `_all`."""
-
 from functools import lru_cache
 
 from ofmhelpers.features.chatting.fanvue_tokens import FanvueTokens
@@ -19,7 +17,6 @@ def _all() -> dict[ChatPlatform, ChatSource]:
 
 
 def platforms() -> list[ChatPlatform]:
-    """Those with an API here, configured or not."""
     return list(_all())
 
 

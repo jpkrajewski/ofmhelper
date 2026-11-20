@@ -1,17 +1,3 @@
-"""drive_uploads: clone results uploaded into an account's Drive folder
-
-One row per result file and account folder: queued, then done (with the
-Drive file) or failed (with why). The job, index and login together are
-unique, so the same video is never uploaded twice into the same folder.
-Deleted with the login (its folder is no longer the app's) or with the
-uploader.
-
-Revision ID: e4f5a6b7c8d9
-Revises: d3e4f5a6b7c8
-Create Date: 2026-10-22 06:30:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

@@ -1,10 +1,3 @@
-"""
-Covers the unified /download-assets page (Download videos / Download images /
-Clean images collapsed into one non-blocking page) and the Action log's
-"who did what" tracking -- all without touching the network (the actual
-downloaders are stubbed).
-"""
-
 import io
 import json
 import re
@@ -35,8 +28,6 @@ def client():
 
 
 def test_download_assets_page_offers_one_download_tool_and_clean(client):
-    """Nobody picks between videos and images: one Download tool takes any
-    link (see test_download_media.py)."""
     html = client.get("/download-assets").text
     for tool in ("download_media", "clean_images"):
         assert f'data-tool="{tool}"' in html
@@ -44,7 +35,6 @@ def test_download_assets_page_offers_one_download_tool_and_clean(client):
         assert f'data-tool="{gone}"' not in html
     assert 'action="/download-media/run"' in html
     assert 'id="tool-select"' in html
-    # old standalone form pages are gone
     assert client.get("/download-videos").status_code in (404, 405)
     assert client.get("/download-images").status_code in (404, 405)
     assert client.get("/clean-images").status_code in (404, 405)
@@ -93,9 +83,7 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
         }
     ]
 
-    # the file behind the card's view_url actually serves
     assert client.get(status["result"][0]["view_url"]).status_code == 200
-    # HTML deep link still renders via the shared status template
     assert client.get(f"/download-videos/jobs/{job_id}").status_code == 200
 
 
@@ -115,7 +103,6 @@ def test_clean_images_json_run_and_status(client, monkeypatch, tmp_path):
 
 
 def test_clean_images_keeps_two_images_with_one_name(client, monkeypatch, tmp_path):
-    """Picks add up across folders, so two can share a name."""
     monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
     monkeypatch.setattr(clean_image_router, "clean_metadata", lambda d: None)
 
@@ -132,8 +119,6 @@ def test_clean_images_keeps_two_images_with_one_name(client, monkeypatch, tmp_pa
 def test_a_cleaned_image_saves_under_a_name_of_its_own_job(
     client, monkeypatch, tmp_path
 ):
-    """Every run's first image is IMG_0001.png. From that name alone each saved
-    as IMG_3133.png: "IMG_3133 (9).png" on disk."""
     monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
 
     def cleaned() -> tuple[str, dict]:
@@ -148,7 +133,6 @@ def test_a_cleaned_image_saves_under_a_name_of_its_own_job(
     for job, card in (cleaned(), cleaned()):
         assert card["name"] == "IMG_0001.png"
         assert card["download_name"] == download_name("IMG_0001.png", job)
-        # What the browser saves is what the card says.
         saved = client.get(card["download_url"]).headers["content-disposition"]
         assert f'filename="{card["download_name"]}"' in saved
 
@@ -177,12 +161,10 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
         lambda urls, assets_root, user_id=None, job_id=None: [],
     )
 
-    # admin runs one
     r = client.post("/download-videos/run", data={"urls": "https://a.example/1"})
     admin_job = r.json()["job_id"]
     assert get_job(admin_job).actor == str(users.by_email("admin").id)
 
-    # a user runs one
     user_client = TestClient(app)
     user = sign_in(user_client)
     r = user_client.post("/download-videos/run", data={"urls": "https://a.example/2"})
@@ -193,16 +175,11 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     assert "<h1>Logs</h1>" in html
     assert 'class="badge badge-neutral">admin<' in html
     assert f'class="badge badge-neutral">{user.email}<' in html
-    # An audit row, not the user's work: no link to (or summary of) their job.
     assert f"/jobs/{user_job}" not in html
     assert f"/jobs/{admin_job}" in html
 
 
 def test_still_running_card_carries_poll_attributes_on_page_reload(client):
-    """Same regression as /generate: leaving /download-assets while a job is
-    still running and coming back must not leave the spinner stuck --
-    the server-rendered card needs data-pending + data-poll-prefix so
-    generation.js resumes polling it instead of requiring a manual refresh."""
     job_id = create_job("download_videos", {"urls": ["https://a.example/1"]})
     assert get_job(job_id).status == "running"
 
@@ -214,12 +191,6 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client):
 
 
 def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
-    """Regression: DownloadResult.output_paths is list[Path], and
-    dataclasses.asdict() does NOT stringify Path objects. A raw Path landing
-    in a job's "result" used to crash json.dumps in jobs.py._save() -- and
-    because JOBS is mutated before _save() runs, that one bad job then broke
-    every future job save (including unrelated tools like nanobanana) until
-    the process restarted."""
     out_file = tmp_path / "clip.mp4"
     out_file.write_bytes(b"fake video")
 
@@ -232,9 +203,9 @@ def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
         ["https://a.example/1"], str(tmp_path / "assets")
     )
 
-    stored = jobs_store._stored(result)  # what run_job writes to the DB
+    stored = jobs_store._stored(result)
     assert stored[0]["output_paths"] == [str(out_file)]
-    json.dumps(stored)  # must not raise
+    json.dumps(stored)
 
 
 def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
@@ -250,24 +221,15 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
         ["https://a.example/1"], str(tmp_path / "assets")
     )
 
-    stored = jobs_store._stored(result)  # what run_job writes to the DB
+    stored = jobs_store._stored(result)
     assert stored[0]["output_paths"] == [str(out_file)]
-    json.dumps(stored)  # must not raise
+    json.dumps(stored)
 
 
 def test_a_bad_job_result_cannot_break_future_jobs():
-    """In the old JSON store a single job whose result held a non-serializable
-    value (a stray Path) poisoned the shared in-memory JOBS dict, so every
-    later save failed too -- one crashed download-videos job could take down
-    nanobanana's /run endpoint. With each job persisted in its own Postgres
-    transaction that failure mode is structurally gone: the bad job fails in
-    isolation and unrelated jobs still persist fine."""
     poisoned_job = create_job("download_videos", {"urls": ["https://a.example/1"]})
-    # A raw Path is not JSON-serializable, so writing it fails -- but only for
-    # this job; run_job records it as failed rather than crashing.
     run_job(poisoned_job, lambda: [{"path": Path("/tmp/gone.mp4")}], {})
     assert get_job(poisoned_job).status == "failed"
 
-    # An unrelated job created afterwards must still persist successfully.
     next_job = create_job("nanobanana", {"prompt": "a cat"})
     assert get_job(next_job).task == "nanobanana"

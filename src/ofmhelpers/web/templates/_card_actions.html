@@ -1,10 +1,5 @@
-{# The actions rows of a gallery card (_gallery_card.html), as templates
-   generation.js clones for a run that finishes while the page is open: one
-   markup, from the same macros, for a reloaded and a live card. Included
-   by every page that loads generation.js. #}
 {% import "components/ui.html" as ui %}
 {% import "_card_hide.html" as hide %}
-{# Hide only for who may hide (not a VA). #}
 {% set may_hide = can(request, "hide") %}
 <template id="card-actions-done"><div class="result-actions">
     {{ ui.button("Download", href="#", icon="download", hook="download-btn") }}
@@ -14,8 +9,5 @@
     {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
     {% if may_hide %}{% call ui.menu("More actions") %}{{ hide.items() }}{% endcall %}{% endif %}
 </div></template>
-{# A failure the reader's own keys fix (schemas/errors.py `error_text`
-   `about_keys`): only for who may open /account. #}
 {% if can(request, "account") %}<template id="card-failed-keys"><a class="result-failed-fix" href="/account">API keys</a></template>{% endif %}
-{# Folded run of identical failures (static/js/failed-runs.js). #}
 <template id="card-failed-more">{{ ui.button("", block=true, hook="failed-more") }}</template>

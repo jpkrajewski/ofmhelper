@@ -1,31 +1,3 @@
-{# A gallery page's toolbar, under its title like /phones' (Export, Add
-   phone): "Show hidden (N)" at the right switches the gallery to only the
-   cards its owner hid, "Hide hidden" back (static/js/hidden-cards.js swaps
-   the label). The row is only there while at least one is hidden. Expects
-   `hidden_count`.
-
-   A page that sets `dates` (its `GalleryQuery`: /generate, /clone,
-   /download-assets) gets the date filter at the left (`ui.date_range`, two
-   calendar icons: only the runs started on those days, the reader's own
-   days, hence `data-zone-times`); it keeps the row there (`data-keep`) whatever the
-   hidden count.
-
-   /download-assets also sets `sheet_cooldown_s` (seconds its button still
-   rests, 0 = ready): "Download from Drive sheet" comes first and keeps the
-   row too (static/js/download.js).
-
-   A dated page of someone with VAs gets a "VAs" button next to the dates
-   (`makers_of(request)`: the reader and their VAs): one picked, only that
-   person's runs show and the button names them (`GalleryQuery.va`).
-
-   /clone sets `sop`: the "SOP" button, which opens its examples dialog
-   (static/js/clone-sop.js). It also sets `drive_filter`: at the right "Not
-   uploaded to Drive" is a button that stays pressed while only finished
-   videos in no Drive folder show (only clones go to Drive; not for a VA).
-   Both filters are links (`GalleryQuery.link`): no script.
-
-   A page that sets `tour` (/generate, /clone, /download-assets) gets "How to" first in
-   the row: the guided tour of the page (static/js/tour.js). #}
 {% import "components/ui.html" as ui %}
 {% set sheet_button = sheet_cooldown_s is defined %}
 {% set dated = dates is defined %}
@@ -49,7 +21,6 @@
         {% if drive_switch %}{{ ui.button("Show not uploaded to Drive", href=here ~ dates.link(not_uploaded=not dates.not_uploaded), icon="folder", hook="not-uploaded", attrs={"aria-pressed": "true" if dates.not_uploaded else "false"}) }}{% endif %}
         {% if sop is defined %}{{ ui.button("SOP", icon="list", hook="sop-open") }}{% endif %}
         {% if sheet_button %}{{ ui.button("Download from Drive sheet", icon="download", hook="sheet-download", attrs={"data-cooldown-s": sheet_cooldown_s}) }}{% endif %}
-        {# Not for a VA: they hide nothing (`Action.HIDE`). #}
         {% if request is not defined or can(request, "hide") %}{{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": kept and not hidden_count}) }}{% endif %}
     </div>
 </div>

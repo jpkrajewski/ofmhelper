@@ -1,10 +1,3 @@
-"""One viewer x login's trial-reel state: which POSTED reels were pulled,
-their caption, the generated copy, approval and upload -- a JSON file in the
-folder's work dir. Several writers at once (Generate trials making 28
-copies while a caption is applied to one, an upload, the page adding new
-POSTED videos): every write is `change()` -- the file read fresh, changed
-and replaced under the folder's Redis lock -- so none undoes another's."""
-
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -23,17 +16,13 @@ from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
 
-# A write is a read + a small JSON dump: seconds would mean something hangs.
 _LOCK_S = 30
 
 CAPTION_MAX = 80
-# A reel with no POSTED date sorts after every one that has it.
 _NEVER = datetime.min.replace(tzinfo=UTC)
 
 
 class ReelStatus(StrEnum):
-    """A reel's step, stored as this text in state.json."""
-
     PENDING = "pending"
     DOWNLOADED = "downloaded"
     GENERATED = "generated"
@@ -43,65 +32,40 @@ class ReelStatus(StrEnum):
 
 
 class Recipe(BaseModel):
-    """What made a copy: the same again makes the same edit again (every
-    choice of the pipeline is drawn from the seed), so the copy itself need
-    not be kept (`cleanup`)."""
-
     seed: int
     caption: str
     pipeline: str = ""
-    # What the seed drew that time (speed, crop, colour, sound...), as the
-    # pipeline reported it: to look at, never an input -- the seed is.
     draws: dict[str, Any] | None = None
 
 
 class ReelState(BaseModel):
-    """One POSTED reel and its trial copy."""
-
-    # A status assigned as plain text still becomes a ReelStatus.
     model_config = ConfigDict(validate_assignment=True)
 
-    key: str  # the Drive file id (stable, unique in the folder)
+    key: str
     name: str
-    # Its createdTime in POSTED: the page shows the newest first.
     posted_at: datetime | None = None
     status: ReelStatus = ReelStatus.PENDING
     caption: str | None = None
-    # What the AI wrote to choose from (empty: a reel made before there were
-    # choices); `caption` is the one on the copy, maybe the person's own.
     captions: list[str] = Field(default_factory=list)
-    local: str | None = None  # downloaded source, relative to the work dir
-    out: str | None = None  # the generated copy, relative to the work dir
-    made: int = 0  # times the copy was made: the page's cache buster
-    # When the copy on the page was made (None: one made before this was
-    # kept): the page shows the newest first.
+    local: str | None = None
+    out: str | None = None
+    made: int = 0
     made_at: datetime | None = None
     approved: bool = False
     error: str | None = None
-    # The job making or uploading this reel now (busy while it runs).
     job_id: str | None = None
-    # Its file name in TRIALS once uploaded.
     uploaded_as: str | None = None
-    # What made the copy (None: one made before recipes were kept).
     recipe: Recipe | None = None
-    # Whether POSTED still had its source at the last read (None: not read
-    # since this was kept). Only then may `cleanup` delete the copy: one whose
-    # source left Drive could never be made again.
     posted: bool | None = None
-    # The copy's video is on disk. False: a day old, only its poster is left
-    # (`cleanup`); Upload makes it again from `recipe`.
     stored: bool = True
 
     def posted_or_never(self) -> datetime:
         return self.posted_at or _NEVER
 
     def made_or_posted(self) -> datetime:
-        """The page's order of made copies: when made, else (made before
-        that was kept) when posted."""
         return self.made_at or self.posted_or_never()
 
     def claim_remake(self, job_id: str, caption: str | None = None) -> None:
-        """Taken by a job making it again (with `caption`, when given)."""
         self.job_id, self.error = job_id, None
         if caption is not None:
             self.caption = caption
@@ -120,11 +84,9 @@ class ReelState(BaseModel):
         self.local, self.status, self.error = local, ReelStatus.DOWNLOADED, None
 
     def source_back(self, local: str) -> None:
-        """Its source downloaded again, for a copy made again."""
         self.local = local
 
     def mark_made(self, out: str, captions: list[str], recipe: Recipe) -> None:
-        """Its new copy is not the one in Drive, if one is."""
         self.caption, self.out, self.made = recipe.caption, out, self.made + 1
         self.made_at = datetime.now(UTC)
         self.captions, self.recipe, self.stored = captions, recipe, True
@@ -132,16 +94,12 @@ class ReelState(BaseModel):
         self.approved, self.job_id, self.uploaded_as = False, None, None
 
     def restored(self) -> None:
-        """The same copy on disk again (an upload of a cleaned-up one)."""
         self.stored = True
 
     def cleaned(self) -> None:
-        """Its video and source deleted; the poster and the recipe stay."""
         self.stored, self.local = False, None
 
     def source_dropped(self) -> None:
-        """Its source deleted before any copy was made: Generate downloads it
-        again."""
         self.local = None
         if self.status == ReelStatus.DOWNLOADED:
             self.status = ReelStatus.PENDING
@@ -150,7 +108,6 @@ class ReelState(BaseModel):
         self.status, self.error, self.job_id = ReelStatus.FAILED, error, None
 
     def try_again(self) -> None:
-        """A new Generate takes it again: no longer counted as failed."""
         self.status = ReelStatus.DOWNLOADED if self.local else ReelStatus.PENDING
         self.error = None
 
@@ -165,14 +122,11 @@ class ReelState(BaseModel):
         self.job_id, self.error = None, None
 
     def left_drive(self) -> None:
-        """Replaced by a newer batch: selectable again."""
         self.uploaded_as = None
         if self.status == ReelStatus.UPLOADED:
             self.status = ReelStatus.GENERATED
 
     def upload_failed(self, error: str) -> None:
-        """Its batch did not go up: as it was before the click, still selected,
-        saying why."""
         was_in_drive = self.uploaded_as is not None
         self.status = ReelStatus.UPLOADED if was_in_drive else ReelStatus.GENERATED
         self.job_id, self.error, self.approved = None, error, True
@@ -183,14 +137,9 @@ class FolderState(BaseModel):
     account_folder_id: str = ""
     posted_folder_id: str = ""
     trials_folder_id: str | None = None
-    # The last Generate trials (one at a time).
     job_id: str | None = None
-    # Why the last job could not reach Google Drive (page notice), if so.
     problem: str | None = None
-    # What the last Generate trials left (status line): nothing new in POSTED,
-    # or how many it could not make.
     note: str | None = None
-    # Newest in POSTED first (`tasks.merge_posted`): the page's order.
     reels: list[ReelState] = Field(default_factory=list)
 
     def reel(self, key: str) -> ReelState | None:
@@ -207,12 +156,10 @@ class FolderState(BaseModel):
 
     @property
     def ready(self) -> list[ReelState]:
-        """Reels with a generated copy, the page's results."""
         return [r for r in self.reels if r.out]
 
     @property
     def failed(self) -> list[ReelState]:
-        """Reels with no copy that the last Generate could not make."""
         return [r for r in self.todo if r.status == ReelStatus.FAILED]
 
     @property
@@ -221,12 +168,10 @@ class FolderState(BaseModel):
 
     @property
     def todo(self) -> list[ReelState]:
-        """Reels with no copy yet: what Generate trials makes."""
         return [r for r in self.reels if not r.out]
 
 
 def work_dir(user_id: int, login_id: int) -> Path:
-    """Read per call: the uploads root is a setting."""
     root = Path(settings.infra.uploads_root) / "trials"
     return root / str(user_id) / str(login_id)
 
@@ -253,8 +198,6 @@ def save(user_id: int, state: FolderState) -> None:
 def locked(
     user_id: int, login_id: int, what: str = "state", wait_s: int = _LOCK_S
 ) -> Iterator[None]:
-    """One of the folder's locks (`what`) across the app and every worker.
-    Redis down or the wait over: logged, and the work goes ahead unlocked."""
     lock = get_redis().lock(
         f"lock:trials:{what}:{user_id}:{login_id}",
         timeout=wait_s,
@@ -283,7 +226,6 @@ def locked(
 def change(
     user_id: int, login_id: int, edit: Callable[[FolderState], None]
 ) -> FolderState:
-    """`edit` applied to the state as it is now, saved; the saved state."""
     with locked(user_id, login_id):
         state = load(user_id, login_id)
         edit(state)
@@ -294,7 +236,6 @@ def change(
 def change_reel(
     user_id: int, login_id: int, key: str, edit: Callable[[ReelState], None]
 ) -> FolderState:
-    """`edit` applied to one reel as it is now (gone meanwhile: nothing)."""
 
     def apply(state: FolderState) -> None:
         if (reel := state.reel(key)) is not None:
@@ -304,7 +245,6 @@ def change_reel(
 
 
 def at(user_id: int, login_id: int, rel: str | None) -> Path | None:
-    """A state's relative path as an absolute one inside the work dir."""
     if rel is None:
         return None
     root = work_dir(user_id, login_id).resolve()

@@ -1,13 +1,3 @@
-"""What /phones knows that is not user data, shipped as JSON beside this
-file and validated on first use:
-
-- `services.json` -- the login services (iCloud, Gmail, ..., Other).
-- `catalog.json` -- every iPhone model with its official colors and storage.
-
-Adding a service, a model or a color is one JSON entry; the forms, cards,
-filters, export and the phone drawings (`render.py`) all read these
-accessors."""
-
 from functools import lru_cache
 from importlib import resources
 
@@ -46,8 +36,6 @@ __all__ = [
 
 
 class ListedModel(BaseModel, frozen=True):
-    """A catalog model with the family it is listed under."""
-
     family: Family
     model: PhoneModel
 
@@ -58,28 +46,22 @@ def _read(name: str) -> str:
 
 @lru_cache(maxsize=1)
 def services() -> Registry[LoginService]:
-    """Every login service by its stored key, in display order."""
     listed = TypeAdapter(list[LoginService]).validate_json(_read("services.json"))
     return Registry[LoginService](entries={s.key: s for s in listed})
 
 
 @lru_cache(maxsize=1)
 def tracked_services() -> Registry[LoginService]:
-    """The login services whose accounts /accounts tracks, by that platform
-    ("instagram" -> the Instagram service)."""
     return Registry[LoginService](
         entries={s.tracked_platform: s for s in services().all() if s.tracked_platform}
     )
 
 
 def cookie_sites() -> list[CookieSite]:
-    """The services whose login a cookies.txt may carry (`cookies` in
-    services.json), in display order: what /cookies checks."""
     return [s.cookie_site for s in services().all() if s.cookie_site]
 
 
 def get_service(key: str) -> LoginService:
-    """Raises ValueError for a service not (or no longer) listed."""
     try:
         return services()[key]
     except KeyError:
@@ -104,5 +86,4 @@ def _models() -> Registry[ListedModel]:
 
 
 def find_model(model_id: str) -> ListedModel | None:
-    """The model and its family; None for an id not (or no longer) listed."""
     return _models().get(model_id)

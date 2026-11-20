@@ -1,7 +1,3 @@
-"""A failed card shows one short reason, not the provider's raw message.
-The messages below are the real ones jobs have failed with (prod data,
-2026-10-22), ids shortened."""
-
 import pytest
 
 from ofmhelpers.features.clone_links import run as clone_link_run
@@ -37,8 +33,6 @@ from ofmhelpers.schemas.errors import FALLBACK, download_reason, error_reason
             "Input out of range",
         ),
         ("abc123 failed: Internal Error, Please try again later.", "Provider error"),
-        # A downloader's words for a link asked for again (prod 2026-11-12,
-        # job 65a6bb46, a reel of a banned profile).
         (
             "ERROR: [Instagram] DdolTu_JpJ0: Instagram sent an empty media response. Check if this post is accessible in your browser without being logged-in.",
             "Post deleted or profile banned",
@@ -91,8 +85,6 @@ def test_error_maps_to_one_short_reason(error, reason):
     ("error", "reason"),
     [
         ("Could not download this reel", "Could not download"),
-        # yt-dlp's Instagram login wall and a site's 401 behind our own
-        # words: never the AI provider's "Rate limited" / "Wrong API key".
         (
             (
                 "Could not download this reel: The webpage request was redirected"
@@ -120,8 +112,6 @@ def test_error_maps_to_one_short_reason(error, reason):
     ],
 )
 def test_a_run_that_never_reached_the_provider_says_so(error, reason):
-    """/clone-links' own fixed messages (web/clone_links/run.py) come first
-    and only at the start of the message."""
     assert error_reason(error) == reason
 
 
@@ -164,9 +154,6 @@ def test_our_words_inside_a_providers_message_are_the_providers(error, reason):
 
 
 def test_a_run_recovery_still_finishes_says_still_generating():
-    """runner.wait's timeout: paid, remembered, finished by recovery -- not
-    "Timed out" or "Failed", and a task id with 401 in it is no key
-    problem."""
     error = (
         "kie.ai is still generating (task 8f2c-401-ab, waited 1800s). No action"
         " needed -- recovery finishes this job once kie.ai does."
@@ -188,8 +175,6 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
     assert payload.model_dump()["error_reason"] == "No credits"
 
 
-# What the downloaders really said, from the prod snapshot of 2026-11-15
-# (ids shortened): each failed link says why on its card.
 @pytest.mark.parametrize(
     ("error", "reason"),
     [

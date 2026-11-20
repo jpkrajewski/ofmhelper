@@ -1,24 +1,3 @@
-"""Instagram's logged-out web GraphQL, called the way instagram.com itself
-calls it for a visitor who is not signed in: a profile's follower count, its
-reels tab with play counts, and one reel's mp4 and length.
-
-No cookies for those: the logged-in REST API redirects a stale session to the
-login page and rate-limits anonymous callers within minutes, while these
-queries answer a plain visitor. Each needs the page's `lsd` token, read once
-from the profile page this client opens first.
-
-The one exception is a reel Instagram hides from logged-out visitors (some
-accounts' reels all are): its reels-tab entry still has views, but the
-logged-out reel query answers null. For those, `media` falls back to the
-logged-in `/api/v1/media/{pk}/info/` with the cookies.txt the caller hands
-the client (one user's own, `db/stores/cookies.py`; never a shared file);
-without a working login there the reel stays unresolved (None). The queries are keyed by `doc_id`s
-Instagram rotates every few weeks; they are settings
-(`settings.instagram.*_doc_id`), and a rotated one shows up here as a
-response without data, not as a crash. Undocumented API: when Instagram
-changes it, this file and `models.py` are the whole blast radius.
-"""
-
 import json
 from collections.abc import Iterator
 from functools import cached_property
@@ -74,41 +53,25 @@ _PROFILE_FLAGS = {
 }
 
 
-class InstagramError(AppError):
-    """A failure worth showing the user as it is (rate limit, unknown or
-    private profile, rotated query id)."""
+class InstagramError(AppError): ...
 
 
-class InstagramRateLimitedError(InstagramError):
-    """Instagram is refusing this IP for now: every next call would fail the
-    same way, so a batch should stop rather than burn through its list."""
+class InstagramRateLimitedError(InstagramError): ...
 
 
-class ProfilePrivateError(InstagramError):
-    """The account is private: nothing of it is visible logged out."""
+class ProfilePrivateError(InstagramError): ...
 
 
-class InstagramUnavailableError(InstagramError):
-    """Instagram answered 5xx even after this client's own retries: a blip
-    on its side (or the proxy's), worth another try through another proxy."""
+class InstagramUnavailableError(InstagramError): ...
 
 
-class ProfileNotFoundError(InstagramError):
-    """Even the crawler view shows no profile. Usually the account is gone,
-    but a proxy IP Instagram has flagged gets that same answer for a real
-    account -- so a caller confirms it through another connection and never
-    deletes anything on it."""
+class ProfileNotFoundError(InstagramError): ...
 
 
-# Transient answers urllib3 retries itself (with backoff + jitter) before a
-# call gives up; 429 is not one -- it is the proxy rotation's job.
 _RETRY_STATUSES = (500, 502, 503, 504)
 
 
 def _retrying(session: requests.Session) -> requests.Session:
-    """`session` retrying connection drops, read timeouts and 5xx
-    `http_retries` times. Every call here is a read, POSTed GraphQL
-    included, so retrying any method is safe."""
     s = settings.instagram
     retry = Retry(
         total=s.http_retries,
@@ -124,23 +87,13 @@ def _retrying(session: requests.Session) -> requests.Session:
     return outbound.mount(session)
 
 
-# The link-preview crawler's view tells a missing account from a page that
-# came back without its data (a soft rate limit looks exactly like a missing
-# account): see `pages.crawler_sees_a_profile`.
 _CRAWLER_UA = (
     "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
 )
 
 
 class InstagramClient:
-    """One profile's worth of calls: `open_profile` first (it reads the
-    token every query after it needs), then the queries."""
-
     def __init__(self, proxy: str | None = None, cookies: str | None = None) -> None:
-        """`proxy`: the URL every logged-out call of this client goes
-        through (`settings.instagram.proxy_urls`), None for direct.
-        `cookies`: the cookies.txt text its logged-in calls send (one
-        user's own login), None: none of them work."""
         self._cookies = cookies
         self._settings = settings.instagram
         self._session = _retrying(requests.Session())
@@ -189,9 +142,6 @@ class InstagramClient:
         )
 
     def _missing(self, username: str) -> InstagramError:
-        """Why the profile page came back without a profile: gone for good
-        when the crawler view agrees, else Instagram withholding data for
-        now (which a batch treats as a rate limit)."""
         r = self._session.get(
             f"{ROOT}/{username}/",
             headers={"User-Agent": _CRAWLER_UA},
@@ -204,8 +154,6 @@ class InstagramClient:
         )
 
     def reels(self, user_id: str) -> Iterator[ReelSummary]:
-        """The profile's reels tab, newest first; the caller stops iterating
-        once it has seen enough."""
         page_size = self._settings.page_size
         cursor = ""
         while True:
@@ -233,11 +181,6 @@ class InstagramClient:
             cursor = next_cursor
 
     def timeline(self, username: str) -> Iterator[TimelinePost]:
-        """The posts grid, newest first after its pinned posts (code, its
-        mp4 + length or None for a photo, posted at, pinned) -- twelve posts a
-        request, where `media` costs one request per reel. Ends early, without
-        error, for an account hidden from logged-out visitors (Instagram
-        answers it with an error); `media` covers those."""
         page_size = self._settings.page_size
         cursor: str | None = None
         while True:
@@ -287,8 +230,6 @@ class InstagramClient:
 
     @cached_property
     def _logged_in(self) -> requests.Session | None:
-        """A session carrying this client's cookies.txt, or None without a
-        readable one."""
         if not self._cookies:
             logger.info("no Instagram login for this call; gated reels stay login-only")
             return None
@@ -316,9 +257,6 @@ class InstagramClient:
         return session
 
     def exists_logged_in(self, username: str) -> bool | None:
-        """Whether the uploaded login sees `username`'s profile page: the
-        answer a flagged proxy cannot fake. None when there is no working
-        login or the page says neither."""
         session = self._logged_in
         if session is None:
             return None
@@ -334,10 +272,6 @@ class InstagramClient:
         return pages.is_profile_page(r.text) if r.ok else None
 
     def _login_tokens(self, username: str) -> LoginTokens | None:
-        """What the uploaded login's GraphQL calls need, read off the
-        profile's reels page the way the browser loads it. None when there
-        is no login, or Instagram no longer treats it as logged in (the
-        page has no viewer)."""
         session = self._logged_in
         if session is None:
             return None
@@ -358,13 +292,6 @@ class InstagramClient:
     def reels_logged_in(
         self, username: str, user_id: str, limit: int
     ) -> list[ReelSummary] | None:
-        """Up to `limit` of the profile's newest reels as the uploaded login
-        sees them: every reel, including the ones Instagram hides from
-        logged-out visitors (sensitive/age-restricted -- the logged-out tab
-        just ends early). The browser's own reels-tab GraphQL query, sent
-        with the login; its REST API (`/api/v1/clips/user/`) redirects
-        cookie sessions to the home page (2026-10-20). None without a
-        working login, so the caller falls back to the logged-out tab."""
         tokens = self._login_tokens(username)
         if tokens is None:
             return None
@@ -399,9 +326,6 @@ class InstagramClient:
         return found[:limit]
 
     def media_logged_in(self, pk: str) -> ReelMedia | None:
-        """A logged-out-gated reel, through the uploaded login. None when
-        there is none or it no longer works (Instagram redirects a dead
-        session to its home page) -- the scan still lists the reel."""
         session = self._logged_in
         if session is None:
             return None
@@ -412,7 +336,6 @@ class InstagramClient:
                 allow_redirects=False,
             )
         except requests.RequestException:
-            # One reel left login-only, not the whole scan failed.
             logger.warning("logged-in media %s unreachable", pk, exc_info=True)
             return None
         if r.status_code != HTTPStatus.OK:
@@ -436,9 +359,6 @@ class InstagramClient:
         variables: dict[str, Any],
         login: LoginTokens | None = None,
     ) -> M:
-        """One GraphQL query: logged out (this client's session, through its
-        proxy), or -- with `login` -- as the uploaded login, the way the
-        logged-in web app sends it."""
         session = self._logged_in if login else self._session
         if session is None:
             msg = "no Instagram login uploaded"

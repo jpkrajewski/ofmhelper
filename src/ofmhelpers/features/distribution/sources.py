@@ -1,9 +1,3 @@
-"""What a model has to post: the files in the POSTED folders (the /drive
-sweep's last read: no Drive call) and the pictures /threads made in the
-THREADS/<reel> folders (read from Drive) of every Instagram account
-/accounts gives that model's creator. Oldest first, so a queue drains in the
-order things were made and new ones join at the end."""
-
 import datetime
 
 from pydantic import BaseModel, ConfigDict
@@ -41,8 +35,6 @@ def _posts(files: list[DriveFile], source: PostSource, preset: str) -> list[NewP
 
 
 class Sources(BaseModel):
-    """One owner's models' content, their /drive board read once."""
-
     model_config = ConfigDict(frozen=True)
 
     user_id: int
@@ -52,9 +44,6 @@ class Sources(BaseModel):
         return board.cards
 
     def of_model(self, model: ModelPreset, cards: list[DriveCard]) -> list[NewPost]:
-        """Everything the model's Instagram accounts' folders hold that can
-        be posted, each file once. A folder Drive cannot read now is logged
-        and left out (the next round reads it again)."""
         handles = {
             a.handle.casefold()
             for a in list_accounts(self.user_id)
@@ -78,8 +67,6 @@ class Sources(BaseModel):
         return list(found.values())
 
     def found(self, card: DriveCard, preset: str) -> list[NewPost]:
-        """Everything one login's folders hold that can be posted, as files
-        of the model `preset`. Raises `DriveError` (THREADS is read live)."""
         posted = _posts(card.scan.posted, PostSource.posted, preset)
         if not card.account_folder_id:
             return posted
@@ -107,9 +94,6 @@ class Sources(BaseModel):
 
 
 def _threads_folder(place: ReviewPlace, account_folder_id: str) -> str | None:
-    """The account's THREADS folder where /threads made one, found, never
-    made (the sweep reads the live folders every 5 minutes). Dev reading the
-    live folders: its own copy in the DEV root, as /threads writes there."""
     drive = place.drive
     parent: str | None = account_folder_id
     if read_live_mode():

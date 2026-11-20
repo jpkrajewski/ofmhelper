@@ -1,9 +1,3 @@
-"""/accounts scans through the sources in turn (integrations/socials/sources.py):
-Apify first, every key most credit first, then our client logged out through
-the proxies, then logged in. What one leaves unread -- keys out of credit, a
-run cut short, an account the actor cannot find -- the next one reads; the
-fakes answer at the wire (Apify, Instagram), nothing is paid."""
-
 import time
 
 import pytest
@@ -50,7 +44,6 @@ def _source(account: TrackedAccount) -> str:
 
 
 def _proxy_reads() -> list[str]:
-    """Handles our own client opened (logged out or in)."""
     return [
         path.strip("/").split("/")[0]
         for _, path, _ in fake_instagram().calls
@@ -69,7 +62,6 @@ def test_apify_reads_every_account_and_only_the_last_7_days(fakes):
         (*PUBLIC, "closed_doors"), "apify"
     )
     assert _proxy_reads() == []
-    # One profile run for all, one reel run for the public ones, 7 days back.
     (profiles,) = _runs(PROFILE_SCRAPER)
     assert sorted(profiles["usernames"]) == sorted((*PUBLIC, "closed_doors"))
     (reels,) = _runs(REEL_SCRAPER)
@@ -79,7 +71,6 @@ def test_apify_reads_every_account_and_only_the_last_7_days(fakes):
     sheep = accounts["sheep_love33"]
     assert sheep.followers == 12000
     assert sheep.error is None
-    # 8 reels, one 900 h old: past the 7 days, not read.
     assert len(sheep.post_views) == 7
     assert min(p.posted_at for p in sheep.post_views) > time.time() - 7 * 86400
     assert accounts["closed_doors"].profile.is_private
@@ -116,7 +107,6 @@ def test_a_key_takes_only_what_its_credit_covers_the_next_key_the_rest(
 ):
     monkeypatch.setenv("APIFY_API_KEYS", f"{KEY_A},{KEY_B}")
     monkeypatch.setenv("OFM_ACCOUNTS_APIFY_EST_REELS", "9")
-    # $0.026 an account: A (the richer) covers 2, B the third.
     fakes.credit_left[KEY_A] = 0.06
     fakes.credit_left[KEY_B] = 0.05
     accounts = _scan(*PUBLIC)
@@ -126,15 +116,12 @@ def test_a_key_takes_only_what_its_credit_covers_the_next_key_the_rest(
 
 
 def test_half_a_reel_run_sends_its_accounts_on_never_half_saved(fakes, monkeypatch):
-    """A reel run cut short (credit gone mid-run) keeps no account's reels:
-    one read by half would save wrong views. The next key reads them; with
-    none left, the proxy client."""
     fakes.cut_short.add(REEL_SCRAPER)
     accounts = _scan(*PUBLIC, "closed_doors")
 
     assert {h: _source(a) for h, a in accounts.items()} == {
         **dict.fromkeys(PUBLIC, "proxy"),
-        "closed_doors": "apify",  # private: nothing to read past its profile
+        "closed_doors": "apify",
     }
     assert len(accounts["sheep_love33"].post_views) == 8
 
@@ -159,12 +146,10 @@ def test_sources_follow_the_configured_order(fakes, monkeypatch):
     assert fakes.inputs == []
 
 
-class _Killed(BaseException):
-    """A deploy's SIGTERM, as far as the job is concerned."""
+class _Killed(BaseException): ...
 
 
 def test_what_apify_read_is_saved_before_the_next_source_starts(fakes, monkeypatch):
-    """A job killed after the paid read never pays for it again."""
 
     def killed(_self, _targets):
         raise _Killed
@@ -182,22 +167,18 @@ def test_a_failed_reel_run_keeps_the_paid_profiles_and_sends_only_public_on(
     fakes, monkeypatch
 ):
     monkeypatch.setenv("APIFY_API_KEYS", f"{KEY_A},{KEY_B}")
-    fakes.credit_left[KEY_B] = 4.0  # A first
+    fakes.credit_left[KEY_B] = 4.0
     fakes.cut_short.add(REEL_SCRAPER)
     accounts = _scan(*PUBLIC, "closed_doors")
 
     first, second = _runs(PROFILE_SCRAPER)
     assert sorted(first["usernames"]) == sorted((*PUBLIC, "closed_doors"))
-    # The private one was read with A's profiles: not asked for again.
     assert sorted(second["usernames"]) == sorted(PUBLIC)
     assert _source(accounts["closed_doors"]) == "apify"
     assert {_source(accounts[h]) for h in PUBLIC} == {"proxy"}
 
 
 def test_one_apify_batch_spends_at_a_time(fakes):
-    """Parallel jobs sizing their share from the same credit figure would
-    spend it several times over: a second batch waits, and one that cannot
-    get its turn goes to the next source."""
     lock = get_redis().lock("lock:accounts-apify", timeout=60)
     assert lock.acquire(blocking=False)
     try:

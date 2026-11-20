@@ -1,15 +1,3 @@
-"""Instagram. Sources in turn (`Platform.sources`): Apify
-(`instagram_apify.py`), then our own client (`fetch`) logged out through the
-proxies, then the same client as the account's owner (cookies: last resort).
-
-`fetch` = `ofmhelpers.integrations.instagram`'s client: the profile
-(followers, following, avatar; through the proxy) and the newest
-`track_max_reels` reels with their play counts -- logged in when `cookies`
-are given and the login works (every reel), else the logged-out reels tab
-(which omits reels Instagram hides from visitors; the scan is then marked
-`limited`). A private account still has its profile numbers; it just has no
-reels to read."""
-
 import time
 from itertools import islice
 
@@ -45,10 +33,8 @@ lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
 logger = get_logger(__name__)
 
-# Instagram CDN URLs moved onto its global host (IPv4-reachable).
 _MEDIA_URL: TypeAdapter[str] = TypeAdapter(MediaUrl)
 
-# A proxy failing like this is dead for the rest of the job.
 _DEAD_PROXY = (
     requests.exceptions.ProxyError,
     requests.exceptions.SSLError,
@@ -59,11 +45,6 @@ _DEAD_PROXY = (
 def _reels(
     client: InstagramClient, username: str, user_id: str, cap: int, logged_in: bool
 ) -> tuple[list[ReelSummary], bool]:
-    """Up to `cap` + 1 newest reels (one past the cap tells a complete read
-    from a capped one), and whether they come from the limited logged-out
-    view: Instagram hides an account's sensitive/age-restricted reels from
-    logged-out visitors, so the logged-in list is used when `logged_in` and
-    the owner's login works."""
     if logged_in:
         try:
             full = client.reels_logged_in(username, user_id, cap + 1)
@@ -92,8 +73,6 @@ class InstagramPlatform(InstagramNames, Platform):
         except InstagramRateLimitedError as exc:
             raise RateLimitedError(str(exc)) from exc
         except (InstagramUnavailableError, ProfileNotFoundError) as exc:
-            # "Not found" is also what a flagged proxy IP gets for a real
-            # account: worth another connection.
             raise RetryableError(str(exc)) from exc
         except requests.RequestException as exc:
             msg = f"connection failed ({type(exc).__name__})"
@@ -135,7 +114,6 @@ class InstagramPlatform(InstagramNames, Platform):
                 )
                 for r in reels[:cap]
             ],
-            # A private account's posts were not read at all.
             complete=not profile.is_private and len(reels) <= cap,
             limited=limited,
             scanned_at=time.time(),

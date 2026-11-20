@@ -1,9 +1,3 @@
-"""Bouncy (api.bouncy.ai/v1): deeplinks on bouncy.ai or a system domain.
-The 18+ gate is set by `PUT /links/{id}` with `forceAdultWarning` and
-`adultContentCheckpoint` (undocumented on REST; the fields Bouncy's own MCP
-`adult_warning` writes, verified 2026-10-22, links/CLAUDE.md). GET never
-returns them, so a listed link's gate is unknown."""
-
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -38,7 +32,6 @@ _QUOTA_CODES = {"TOTAL_LINK_LIMIT_REACHED", "plan_upgrade_required"}
 
 
 def _code(response: requests.Response) -> str | None:
-    """Bouncy's machine-readable error code, top level or nested."""
     try:
         body = response.json()
     except ValueError:  # silent: not JSON: no code
@@ -50,7 +43,6 @@ def _code(response: requests.Response) -> str | None:
 
 
 def _timestamp(value: Any) -> float | None:
-    """Bouncy sends Firestore `{"_seconds": ...}` or an ISO string."""
     if isinstance(value, dict) and "_seconds" in value:
         return float(value["_seconds"])
     if isinstance(value, str):
@@ -62,16 +54,12 @@ def _timestamp(value: Any) -> float | None:
 
 
 def _hour_of(label: str) -> datetime:
-    """A one-day range's bucket, "YYYY-MM-DD HH" (UTC), as its hour; a bare
-    day ("YYYY-MM-DD") as its first hour."""
     if len(label) > len("YYYY-MM-DD"):
         return datetime.strptime(label[:13], "%Y-%m-%d %H").replace(tzinfo=UTC)
     return datetime.fromisoformat(label[:10]).replace(tzinfo=UTC)
 
 
 def _spans(start: date, end: date, size: int) -> list[tuple[date, date]]:
-    """`start`..`end` cut into spans of at most `size` days: a longer one
-    comes back in monthly buckets (90 days did, 2026-10-22)."""
     spans = []
     while start <= end:
         last = min(start + timedelta(days=size - 1), end)
@@ -195,7 +183,6 @@ class BouncyProvider(LinkProvider):
         return found
 
     def _days(self, remote_id: str, start: date, end: date) -> list[DayStat] | None:
-        """One link's days, summed from its spans; None when it is gone."""
         per_day: dict[date, list[int]] = {}
         for first, last in _spans(start, end, self.info().max_span_days):
             buckets = self._buckets(remote_id, first, last)
@@ -212,10 +199,6 @@ class BouncyProvider(LinkProvider):
         ]
 
     def _buckets(self, remote_id: str, first: date, last: date) -> list[dict] | None:
-        """`dailyViews` of one span: days, or hours ("YYYY-MM-DD HH") for a
-        one-day span. None on a 404: the link was deleted since it was
-        listed (by hand on Bouncy, or by a delete job), which failed the
-        whole sync (2026-10-24)."""
         response = self._call(
             "GET",
             f"/analytics/links/{quote(remote_id, safe='')}",

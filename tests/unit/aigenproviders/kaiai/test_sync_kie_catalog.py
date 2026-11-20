@@ -1,6 +1,3 @@
-"""scripts/sync_kie_catalog.py turned offline: a kie.ai docs page (its
-OpenAPI spec) in, a catalog entry -- or the reason it is skipped -- out."""
-
 import importlib.util
 import json
 from pathlib import Path

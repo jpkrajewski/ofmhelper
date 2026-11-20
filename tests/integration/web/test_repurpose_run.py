@@ -1,7 +1,3 @@
-"""/repurpose/run: what its form takes. The knobs are one JSON string the route
-parses, so a value smuggled into the ffmpeg filtergraph through `noise_flags`
-is refused before anything runs."""
-
 import json
 
 import pytest

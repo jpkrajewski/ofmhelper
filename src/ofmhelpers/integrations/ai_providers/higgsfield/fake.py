@@ -1,16 +1,3 @@
-"""Higgsfield faked at the wire (OFM_FAKE_EXTERNALS, tests): the official
-SDK runs unchanged over an `httpx.MockTransport` answering its endpoints
-(docs.higgsfield.ai, see this package's CLAUDE.md): the presigned upload
-(`/files/generate-upload-url`, then a keyless PUT), the submit
-(`POST /<model id>`) and `/requests/<id>/status`.
-
-Only `FAKE_KEY` is accepted; any other key gets 401 (the app shows
-"Higgsfield: wrong API key"). A submit with an `Idempotency-Key` already
-seen answers with that key's request, as Higgsfield does. A request is "queued" for `polls_until_done`
-status reads, then "completed" with one output on the fake result host
-(also served to `requests`: the provider's `_live` check and the download).
-"""
-
 import itertools
 import threading
 from functools import lru_cache
@@ -35,9 +22,7 @@ class FakeHiggsfield:
         self.polls_until_done = polls_until_done
         self.requests: dict[str, dict] = {}
         self.submitted: list[str] = []
-        # Idempotency-Key -> its request: a resent submit gets the same one.
         self.keys: dict[str, str] = {}
-        # The next submit is made, then its answer never arrives (a timeout).
         self.lose_next = False
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
@@ -118,10 +103,6 @@ def fake_higgsfield() -> FakeHiggsfield:
 
 
 def install(client: SyncClient) -> None:
-    """Points the SDK client's two httpx clients at the fake. They are the
-    SDK's `cached_property`s `_client` / `_upload_client` (higgsfield-client
-    0.2.0); the fake e2e and tests/contract fail loudly if a release renames
-    them."""
     transport = fake_higgsfield().transport()
     client.__dict__["_client"] = httpx.Client(
         transport=transport,

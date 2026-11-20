@@ -1,37 +1,3 @@
-"""downloads: one row per downloaded file.
-
-A download was only its job: the files in the job's JSONB `result`. Nothing
-could ask "has this person downloaded this link", "which videos are a day
-old and unused" or "which was asked for last" without reading every result.
-Those are filtered and sorted on, so they are real columns now
-(`.claude/rules/database.md`), one row per file:
-
-- `user_id` (FK users.id, ON DELETE RESTRICT: the job's owner) + `url` (the
-  pasted link), index `ix_downloads_user_id_url`: the same link asked again
-  is found, not downloaded twice.
-- `job_id` (FK jobs.id, ON DELETE CASCADE) + `position` (the file's index
-  among the job's files, the `{i}` of `/files/{job}/{i}`), unique together.
-- `file_path` (where the downloader left it), `asset_path` (its copy in the
-  asset store, what a clone names; NULL until looked up).
-- `stored` (the video is on this server), `removed_at`; `created_at`,
-  `last_used_at`, index `ix_downloads_stored_last_used_at`: the retention
-  sweep's read, and /download-assets' order.
-
-Written by `features/downloads/service.py` (a download job finishing, the
-same link pasted again) and `features/downloads/cleanup.py` (the sweep);
-read by those, `db/stores/jobs.py` (a removed video keeps its card),
-`db/repositories/jobs.py` (the gallery's order) and `/refs/missing`. The
-job row stays the run's record; its `result` still lists the files.
-
-Filled from the done jobs of the three download tasks: one row per output
-file, `stored` true (the sweep's first round finds what is really there),
-`last_used_at` = the job's start. `asset_path` cannot be read from the row:
-the sweep fills it. A job that is nobody's (`user_id` NULL) gets no rows.
-
-Revision ID: f4b5c6d7e8a1
-Revises: e3f4a5b6c7d9
-"""
-
 import sqlalchemy as sa
 
 from alembic import op
@@ -41,9 +7,6 @@ down_revision = "e3f4a5b6c7d9"
 branch_labels = None
 depends_on = None
 
-# A result that is not the grouped list (still running, failed, an old
-# one-entry-per-file result) has no rows: each CASE keeps a set-returning
-# function from ever seeing anything but an array.
 _BACKFILL = """
 INSERT INTO downloads
     (user_id, job_id, url, position, file_path, stored, created_at, last_used_at)
@@ -114,8 +77,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Nothing to give back: every row was read from a job's result, which the
-    # job still has.
     op.drop_index("ix_downloads_stored_last_used_at", table_name="downloads")
     op.drop_index("ix_downloads_user_id_url", table_name="downloads")
     op.drop_table("downloads")

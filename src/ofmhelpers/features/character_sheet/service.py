@@ -1,7 +1,3 @@
-"""/character-sheet: several shots of one character (typically 9:16) back as
-one lossless PNG, side by side in upload order; the sheet lands in the
-person's part of the asset store, ready for the reuse picker."""
-
 import shutil
 from pathlib import Path
 lazy from collections.abc import Sequence
@@ -29,7 +25,6 @@ TASK = "character_sheet"
 PREFIX = "/character-sheet"
 FILES_PREFIX = f"{PREFIX}/files"
 SHEET_NAME = "character_sheet.png"
-# One image is not a sheet.
 MIN_IMAGES = 2
 
 
@@ -44,8 +39,6 @@ def run_combine(
     sheet = combine_side_by_side(
         [directory / name for name in files], directory / SHEET_NAME
     )
-    # Straight into the reuse picker: a character sheet is a reference image
-    # for the generation tools.
     register_generated_asset(sheet, Path(assets_root) if assets_root else None)
     return [ResultFile(name=sheet.name, path=str(sheet))]
 
@@ -56,14 +49,11 @@ def _card(job: Job) -> JobCard:
 
 
 def cards(actor: str) -> list[JobCard]:
-    """The person's newest sheets."""
     recent = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor).jobs
     return [_card(job) for job in recent]
 
 
 def _saved(uploads: list[UploadFile], names: list[str], job_dir: Path) -> list[str]:
-    """Numbered, not saved under the client's name: iOS names every shared
-    photo "image.jpg", and the number is also what keeps upload order."""
     saved = []
     for i, (upload, name) in enumerate(zip(uploads, names, strict=True)):
         dest = job_dir / f"{i:02d}_{name}"

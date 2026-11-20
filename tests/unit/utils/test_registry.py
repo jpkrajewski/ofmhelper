@@ -1,5 +1,3 @@
-"""`utils/registry.py`: the read-only name -> entry table functions return."""
-
 import pytest
 from pydantic import ValidationError
 

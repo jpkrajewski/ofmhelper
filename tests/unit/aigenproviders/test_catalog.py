@@ -1,6 +1,3 @@
-"""The catalog every page and job reads: every provider's models load, every
-schema is valid, and a new provider is picked up with no other change."""
-
 import json
 from pathlib import Path
 
@@ -16,8 +13,6 @@ from ofmhelpers.integrations.ai_providers.base import (
 from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec, models_for
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 
-# What /generate offered as kie.ai models before /ai: none may go missing
-# (jobs and /clone's CloneTarget name them).
 KIE_MODELS = {
     "nano-banana-pro",
     "bytedance/seedance-2",
@@ -55,9 +50,6 @@ def test_every_kie_model_is_still_offered():
 
 
 def test_kie_catalog_has_its_whole_model_list():
-    """Every image/video model of kie.ai's docs (scripts/sync_kie_catalog.py),
-    each id once: the catalog is keyed by id, so a duplicate would silently
-    replace another entry."""
     raw = json.loads(Path(KieProvider.catalog_path()).read_text(encoding="utf-8"))
     ids = [e["model_id"] for e in raw]
 
@@ -81,14 +73,11 @@ def test_every_schema_is_valid_and_every_field_classified(spec):
     media = {f.name for f in spec.media_fields}
     scalars = {f.name for f in spec.form_fields}
     assert not media & scalars
-    # A prompt, where there is one, is a form field.
     assert {"prompt"} & set(spec.properties.names()) <= scalars
 
 
 @pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
 def test_every_required_field_is_one_the_form_fills(spec):
-    """A required field the form cannot render (an array of objects, a URL
-    of no media kind) would make the model impossible to run."""
     assert spec.required <= {f.name for f in spec.form_fields} | {
         f.name for f in spec.media_fields
     }
@@ -96,15 +85,11 @@ def test_every_required_field_is_one_the_form_fills(spec):
 
 @pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
 def test_no_field_collides_with_the_run_forms_own(spec):
-    """/ai/run posts provider, model and api_key itself: a schema field of
-    that name is sent through `fixed` instead."""
     assert not {"provider", "model", "api_key"} & set(spec.properties.names())
 
 
 @pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
 def test_no_default_is_a_url(spec):
-    """A URL default is a docs sample asset: sent for a field left empty, and
-    once a signed link with the docs' own access key in it."""
     urls = {
         name: prop["default"]
         for name, prop in spec.input_schema.get("properties", {}).items()
@@ -122,9 +107,6 @@ def test_get_spec_by_key_and_unknown_key():
 
 @pytest.fixture
 def plugin_provider(tmp_path, monkeypatch):
-    """A provider defined outside the package, as a new one would be: a
-    `Provider` subclass, its catalog file and its registration -- nothing
-    else in the app touched. Dropped again after the test."""
     path = tmp_path / "catalog.json"
     path.write_text(
         json.dumps(

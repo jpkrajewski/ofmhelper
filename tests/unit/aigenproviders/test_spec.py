@@ -1,6 +1,3 @@
-"""`ModelSpec`: what a catalog entry's input schema turns into -- the form's
-fields, its file pickers, typed values, validation and the request body."""
-
 import pytest
 
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
@@ -57,8 +54,6 @@ def test_media_fields_by_name_format_and_x_media():
 
 
 def test_form_fields_are_the_scalars_only():
-    """URL fields of no media kind, arrays and objects are left to the
-    provider's own default; a nullable anyOf is unwrapped."""
     fields = {f.name: f.type for f in SPEC.form_fields}
 
     assert fields == {

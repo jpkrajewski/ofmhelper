@@ -1,6 +1,3 @@
-"""Each report's runs (`report_runs`), one per day: the claim that it went out, when,
-and the counters it saw. Not cached: read once a minute by one sweep."""
-
 from typing import Any
 lazy from datetime import date
 
@@ -14,7 +11,6 @@ from ofmhelpers.schemas.reports import ReportMarks, ReportRun
 
 class ReportRunRepository:
     def last(self, name: str) -> ReportRun | None:
-        """The newest run of `name`."""
         with session_scope() as s:
             row = s.execute(
                 select(ReportRunRow)
@@ -35,7 +31,6 @@ class ReportRunRepository:
     def claim(
         self, name: str, day: date, ran_at: float, sent: bool, marks: dict[str, Any]
     ) -> bool:
-        """The run of `name` for `day`; False when there is one already."""
         with session_scope() as s:
             made = s.execute(
                 insert(ReportRunRow)

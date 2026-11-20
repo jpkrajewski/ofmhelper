@@ -1,24 +1,3 @@
-"""
-ofmhelpers/web/reel_watch.py
-
-Rescans every profile on /reels' watch list every `rescan_interval_s` (12 h by
-default), so its viral reels stay current without anyone pressing Scan --
-while `rescan_enabled` (`OFM_IG_RESCAN_ENABLED`, off since 2026-10-23). Off,
-the sweeper only retries the first scan of a just-added profile.
-
-The sweeper only decides *who* is due: it claims them in one atomic UPDATE
-(`stores.watched_profiles.claim_due`, so a second API process cannot claim
-the same profile) and queues one worker job that scans them one after
-another -- Instagram rate-limits logged-out bursts, so ten parallel workers
-would only buy ten 429s. A claim that never completes (worker killed by a
-deploy) expires after `rescan_claim_ttl_s` and the profile is picked up again.
-
-A username is scanned once for every user watching it, so its logged-in
-calls (gated reels, the "really gone?" check) use the cookies of the
-earliest-added watcher who has uploaded any (`stores.cookies.for_watched`),
-else none -- the one place a user's login works for others' lists too.
-"""
-
 import random
 import time
 
@@ -51,16 +30,12 @@ from ofmhelpers.utils.proxy_pool import ProxyPool
 
 logger = get_logger(__name__)
 
-# Worth another try through another connection: a rate limit, a 5xx, a dead
-# or flaky proxy (refused, TLS broken, dropped, timed out), and "not found"
-# -- which a proxy IP Instagram has flagged gets for a real account too.
 _RETRYABLE = (
     InstagramRateLimitedError,
     InstagramUnavailableError,
     ProfileNotFoundError,
     requests.RequestException,
 )
-# A proxy failing like this is dead for the rest of the job.
 _DEAD_PROXY = (
     requests.exceptions.ProxyError,
     requests.exceptions.SSLError,
@@ -68,31 +43,20 @@ _DEAD_PROXY = (
 )
 
 
-class _OfflineError(Exception):
-    """Even a direct connection fails: our own network is down (a DNS blip
-    did exactly that on dev), so the rest of the batch would only fail the
-    same way."""
+class _OfflineError(Exception): ...
 
 
 def _is_new(username: str) -> bool:
-    """Watched, but never scanned successfully: just added. A profile with
-    a good scan behind it is never removed by a later one."""
     watched = get_watched(username)
     return watched is not None and watched.result is None
 
 
 def _reject(username: str, reason: str) -> None:
-    """A just-added profile that can never be scanned leaves the list: a
-    watch list of dead and private accounts helps nobody. The page tells the
-    user which ones were not added (static/js/reels.js)."""
     unwatch_unscanned(username)
     logger.info("@%s not added: %s", username, reason)
 
 
 def _confirmed_gone(username: str, answered: list[BaseException]) -> bool:
-    """Every proxy said "no such profile", and the uploaded login -- which a
-    flagged proxy IP cannot fool -- does not see it either (or there is no
-    login to ask)."""
     if not all(isinstance(f, ProfileNotFoundError) for f in answered):
         return False
     client = InstagramClient(cookies=login_cookies.for_watched(username))
@@ -100,10 +64,6 @@ def _confirmed_gone(username: str, answered: list[BaseException]) -> bool:
 
 
 def scan_watched(username: str, proxy: str | None = None) -> ProfileReels | None:
-    """One scan (through `proxy`, when given), stored when it settles: its
-    reels, or a lasting failure (private profile, rotated query) shown next
-    to the previous result. Anything worth retrying elsewhere is raised and
-    nothing is stored."""
     s = settings.instagram
     try:
         found = scan_profile(
@@ -132,9 +92,6 @@ def scan_watched(username: str, proxy: str | None = None) -> ProfileReels | None
 
 
 def _failure(failures: list[BaseException]) -> str:
-    """What the row shows once Instagram itself answered a failure on every
-    try that reached it. A profile is never removed for it: the previous
-    result stays, and the next rescan tries again."""
     tries = len(failures)
     if any(isinstance(f, ProfileNotFoundError) for f in failures):
         return (
@@ -145,17 +102,10 @@ def _failure(failures: list[BaseException]) -> str:
 
 
 def _scan_rotating(username: str, pool: ProxyPool, tries: int) -> None:
-    """One profile, up to `tries` times, each through the pool's next proxy
-    after a jittered pause; a dead proxy leaves the pool. The batch stops
-    only when every try was rate-limited, or a direct connection fails
-    (_OfflineError). Tries that never reached Instagram record nothing --
-    not the profile's fault; it stays claimed and is retried when the claim
-    expires. What Instagram itself answered is recorded on the row and the
-    batch goes on."""
     failures: list[BaseException] = []
     for attempt in range(tries):
         if attempt:
-            time.sleep(random.uniform(0, settings.instagram.retry_jitter_s))  # noqa: S311 -- jitter, not crypto
+            time.sleep(random.uniform(0, settings.instagram.retry_jitter_s))  # noqa: S311
         proxy = pool.next()
         try:
             scan_watched(username, proxy)
@@ -183,12 +133,6 @@ def _scan_rotating(username: str, pool: ProxyPool, tries: int) -> None:
 
 
 def scan_all(usernames: list[str]) -> None:
-    """The worker job: the claimed profiles, one at a time, through
-    `settings.instagram.proxy_urls` in turn (direct without any), each tried
-    on up to 1 + `proxy_retries` proxies. A profile still rate-limited after
-    that, or the network being down, ends the job: the rest keep their
-    claim, which expires after `rescan_claim_ttl_s`, and the next sweep
-    picks them up then (with a fresh proxy pool)."""
     s = settings.instagram
     pool = ProxyPool(s.proxy_urls)
     for done, username in enumerate(usernames):
@@ -214,7 +158,6 @@ def scan_all(usernames: list[str]) -> None:
 
 
 def _unlocked(client: InstagramClient, reel: Reel) -> Reel:
-    """A login-only reel with its mp4 and length, when the login sees it."""
     if reel.video_url:
         return reel
     media = client.media_logged_in(reel.pk)
@@ -230,11 +173,6 @@ def _unlocked(client: InstagramClient, reel: Reel) -> Reel:
 
 
 def unlock_gated(user_id: int) -> None:
-    """The worker job `user_id`'s cookies.txt upload queues: the login-only
-    reels stored for profiles they watch, resolved now (not at the next
-    rescan) through each profile's scan login (`for_watched`: theirs, unless
-    an earlier watcher has one). One unlocked past `max_duration_s` drops
-    out, as a scan would have dropped it."""
     max_s = settings.instagram.max_duration_s
     for watched in list_watched(owner=user_id):
         result = watched.result
@@ -251,9 +189,6 @@ def unlock_gated(user_id: int) -> None:
 
 
 def queue_due_scans() -> list[str]:
-    """Claims and queues the profiles due: never scanned (a first scan lost
-    to a deploy is retried once its claim expires) and, while rescans are
-    on (`rescan_enabled`), not scanned for `rescan_interval_s`."""
     s = settings.instagram
     interval = s.rescan_interval_s if s.rescan_enabled else None
     due = claim_due(interval, s.rescan_claim_ttl_s)

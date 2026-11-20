@@ -1,8 +1,3 @@
-"""What the download tools share: a pasted box becomes one queued job for the
-links not downloaded before, a job's run fetches what is not on disk and
-writes one `downloads` row per file, and the answer that sends the page on
-to another one."""
-
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,8 +30,6 @@ logger = get_logger(__name__)
 
 
 class Redirect(BaseModel):
-    """The URL the page opens next, with the picked videos on its query."""
-
     redirect: str
 
 
@@ -48,12 +41,6 @@ def queue_downloads(
     owner_id: int,
     assets_root: Path,
 ) -> DownloadsQueued:
-    """One job of `task` for the pasted links this person has not downloaded
-    before, run by `run` (`run_downloads` of the tool's own module: RQ
-    stores that path). A link repeated in the paste counts once. A link
-    downloaded before starts nothing new (`again.sort_out`): its card goes
-    to the first place, and its video is fetched into its own job again if
-    it had been removed. Every link downloaded before: no job at all."""
     links = list(dict.fromkeys(read_links(pasted)))
     if not links:
         msg = "At least one URL is required"
@@ -68,9 +55,6 @@ def queue_downloads(
 
 
 class Links(BaseModel, frozen=True):
-    """A download job to be: whose it is and what runs it. `queue` makes the
-    job of `task` for the links and puts its run in line."""
-
     task: str
     run: Callable[..., Any]
     actor: str
@@ -78,8 +62,6 @@ class Links(BaseModel, frozen=True):
     assets_root: Path
 
     def queue(self, links: list[str], **noted: str) -> str:
-        """The new job's id. `noted`: what else its row says about where the
-        links came from (`params`, next to `urls`)."""
         job_id = create_job(self.task, {"urls": links, **noted}, actor=self.actor)
         enqueue(
             run_job,
@@ -96,27 +78,17 @@ class Links(BaseModel, frozen=True):
 
 
 def _on_disk(result: DownloadResult | None) -> bool:
-    """Whether a link's earlier download is still whole on this server."""
     if result is None or not result.output_paths:
         return False
     return all(path.is_file() for path in result.output_paths)
 
 
 def _team_of(user_id: int | None) -> frozenset[int]:
-    """`user_id`, their employer and that employer's VAs: whose downloads
-    may stand in for a fetch of theirs (the same set a viewer sees). A
-    stranger's file may have been fetched with a login the asker lacks."""
     user = users.get_user(user_id) if user_id is not None else None
     return viewer_for(user, None).team_ids if user is not None else frozenset()
 
 
 def _already_here(user_id: int | None, urls: list[str]) -> dict[str, DownloadResult]:
-    """`urls` a download of `user_id`'s team still has whole on disk, as this
-    job's own result for that link (dev 2026-11-11: a VA pasted a reel their
-    owner had downloaded five hours before and it was fetched again). The
-    asker gets a card and a copy in their own asset store; they never see
-    whose download it was. Anyone outside the team is fetched with the
-    asker's own cookies."""
     if not urls:
         return {}
     found: dict[str, list[Path]] = {}
@@ -136,23 +108,10 @@ def fetch(
     user_id: int | None,
     job_id: str | None,
 ) -> list[DownloadResult]:
-    """A download job's run, the same on its first run and on every replay
-    (a restart, the card's Download, the link pasted again): a link whose
-    files are on disk -- this job's, or a download of it by someone of the
-    asker's team (`_already_here`) -- is not fetched, the rest are, logged
-    in as `user_id`
-    (their own cookies.txt, read here: never in the queued job). Every file
-    then goes into the asset store and gets its `downloads` row. A link
-    that had been downloaded and cannot be fetched again keeps its entry:
-    its card and poster stay, its video stays removed.
-    `job_id` None: a job queued before 2026-11-11, which keeps no rows."""
     job = get_job(job_id) if job_id else None
     before = {r.url: r for r in job.download_results() if r.success} if job else {}
     missing = [url for url in urls if not _on_disk(before.get(url))]
     if job is not None:
-        # A link the asker's team already holds is that file, not a second
-        # download. (A job from before `downloads` existed keeps no rows and
-        # looks nothing up.)
         before |= _already_here(job.user_id or user_id, missing)
     wanted = [url for url in missing if not _on_disk(before.get(url))]
     fetched = iter(
@@ -169,9 +128,6 @@ def fetch(
             logger.warning(
                 "download job %s: %s not fetched again: %s", job_id, url, new.error
             )
-            # The reason stays with the entry: its card says why the video
-            # is not back (prod 2026-11-12, job 65a6bb46: a reel of a banned
-            # profile, five clicks on Download, each ending in the poster).
             results.append(old.model_copy(update={"again_error": new.error}))
         else:
             results.append(new)
@@ -182,10 +138,6 @@ def fetch(
 def _keep(
     job: Job | None, results: list[DownloadResult], assets_root: Path, fetched: set[str]
 ) -> None:
-    """Every file on disk into the asset store (the Reuse picker's, and what
-    a clone names) and into `downloads`, at its place among the job's files.
-    The previews of a link fetched just now are dropped: the job's finish
-    makes them again from the new file."""
     files = []
     position = 0
     for result in results:

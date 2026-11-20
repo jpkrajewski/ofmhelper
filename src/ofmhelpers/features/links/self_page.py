@@ -1,7 +1,3 @@
-"""What /self-links shows and does behind its routes
-(web/routers/tracking/self_links.py): our own bridge pages' clicks over any
-time frame, and the custom domains they are served on."""
-
 from datetime import date, timedelta
 
 from pydantic import BaseModel
@@ -16,8 +12,6 @@ _STATUSES = ("active", "disabled")
 
 
 class PageView(BaseModel):
-    """/self-links: each field is a name `self_links.html` reads."""
-
     stats: SelfStats
     domains: list[SelfDomain]
     pages: list[RemoteLink]
@@ -38,7 +32,6 @@ def page_view(query: SelfRange, scope: int) -> PageView:
 
 
 def add_domain(host: str, owner_id: int) -> None:
-    """Starts serving bridge pages on `host` for this owner."""
     if host in {d.host for d in self_links.domains(owner_id)}:
         msg = f"{host} is already added"
         raise RefusedError(msg)
@@ -52,7 +45,6 @@ def _own_domain(domain_id: int, owner: int) -> None:
 
 
 def set_status(domain_id: int, status: str, owner_id: int) -> None:
-    """Turns serving on (active) or off (disabled) for the domain."""
     if status not in _STATUSES:
         msg = "Unknown status"
         raise RefusedError(msg)
@@ -61,6 +53,5 @@ def set_status(domain_id: int, status: str, owner_id: int) -> None:
 
 
 def delete_domain(domain_id: int, owner_id: int) -> None:
-    """Removes the domain (its links stop serving)."""
     _own_domain(domain_id, owner_id)
     self_links.remove_domain(domain_id, owner_id)

@@ -1,9 +1,3 @@
-"""
-/uniqify: upload one video, get back N re-encoded variants of it as one zip,
-each with its own speed / zoom / colour / grain / mirror / trim jitter
-(`utils.uniqify`). Both roles; a VA only ever sees its own runs.
-"""
-
 from pathlib import Path
 from typing import Annotated
 
@@ -45,8 +39,6 @@ class UniqifyForm(FormModel):
     metadata: MetadataMode = MetadataMode.STRIP
     output_name: Stripped = ""
 
-    # The upper limits are settings, read when a form is checked (a `le=`
-    # would keep what the setting said at import).
     @field_validator("copies")
     @classmethod
     def _at_most_max_copies(cls, copies: int) -> int:

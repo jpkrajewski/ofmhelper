@@ -1,7 +1,3 @@
-"""Which key a generation runs on (`features/account/keys.py`): a person's
-saved key of the model's slot, a key saved under the wrong slot passed over,
-the first working key kept as theirs, and its end recorded on the job."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
@@ -18,7 +14,6 @@ from ofmhelpers.web.main import app
 WAN = "apiyi:wan3.0-video"
 SEEDREAM = "apiyi:seedream-4-5-251128"
 SEEDANCE = "apiyi:doubao-seedance-2-0-260128"
-# One key per APIYI token group, as `GET /v1/models` tells them apart.
 WAN_KEY = "sk-wanGroupKey0000000000000000000000000000aaaa"
 DEFAULT_KEY = "sk-defaultGroupKey00000000000000000000000bbbb"
 SEEDANCE_KEY = "sk-seedanceGroupKey0000000000000000000000cccc"
@@ -27,7 +22,6 @@ OTHER_WAN_KEY = "sk-anotherWanGroupKey00000000000000000000dddd"
 
 @pytest.fixture
 def groups(fake_externals):
-    """APIYI answering each group's key with the models that group reaches."""
     del fake_externals
     fake_apiyi().key_models.update(
         {
@@ -75,7 +69,6 @@ def test_a_run_goes_out_on_the_saved_key_of_its_models_group(model, used):
     users.set_api_key(user_id, "apiyi-seedance", SEEDANCE_KEY)
     keys = Keys.of(user_id)
 
-    # The form shows one of them (the default slot's), whatever the model.
     assert keys.prefill("apiyi") == DEFAULT_KEY
     assert keys.for_run("apiyi", model, DEFAULT_KEY) == used
     assert keys.for_run("apiyi", model, "") == used
@@ -91,9 +84,6 @@ def test_a_group_without_a_saved_key_falls_back_to_the_default_one():
 
 @pytest.mark.usefixtures("groups")
 def test_a_key_saved_under_the_wrong_group_is_passed_over(monkeypatch):
-    """Prod 2026-11-11, job d66e133c: the admin's saved APIYI key was a
-    Wan-group key, the three group keys were in .env, and every Seedream run
-    went out on the saved one: 503, shown as "Wrong API key"."""
     monkeypatch.setenv("APIYI_API_KEY_WAN", WAN_KEY)
     monkeypatch.setenv("APIYI_API_KEY_SEEDANCE", SEEDANCE_KEY)
     monkeypatch.setenv("APIYI_API_KEY_DEFAULT", DEFAULT_KEY)
@@ -105,7 +95,6 @@ def test_a_key_saved_under_the_wrong_group_is_passed_over(monkeypatch):
     assert prefilled == OTHER_WAN_KEY
     assert keys.for_run("apiyi", SEEDREAM, prefilled) == DEFAULT_KEY
     assert keys.for_run("apiyi", SEEDANCE, prefilled) == SEEDANCE_KEY
-    # Their own key still runs what its group reaches.
     assert keys.for_run("apiyi", WAN, prefilled) == OTHER_WAN_KEY
 
 
@@ -127,14 +116,11 @@ def test_a_typed_key_that_is_not_theirs_runs_as_typed():
     users.set_api_key(user_id, "apiyi", DEFAULT_KEY)
 
     assert Keys.of(user_id).for_run("apiyi", SEEDREAM, " sk-typed ") == "sk-typed"
-    # Nothing was asked of APIYI about a key that runs as typed.
     assert fake_apiyi().model_lists == 0
 
 
 @pytest.mark.usefixtures("groups")
 def test_apiyi_not_answering_leaves_the_saved_order():
-    """An unknown key (401 on the model list) cannot be placed: the slot's
-    own key is used and the run itself says what is wrong with it."""
     user_id = _user()
     users.set_api_key(user_id, "apiyi", "sk-unknownToApiyi")
 
@@ -160,14 +146,12 @@ def test_the_first_key_that_worked_is_kept_under_its_models_slot(monkeypatch):
     keep_used(user_id, [_task("j1", WAN, WAN_KEY)])
     assert _saved(user_id) == {"apiyi-wan": WAN_KEY}
 
-    # A saved slot is never replaced by a run, another slot is filled.
     keep_used(
         user_id,
         [_task("j2", WAN, OTHER_WAN_KEY), _task("j2", SEEDREAM, DEFAULT_KEY)],
     )
     assert _saved(user_id) == {"apiyi-wan": WAN_KEY, "apiyi": DEFAULT_KEY}
 
-    # The admin's .env key stays in .env.
     keep_used(user_id, [_task("j3", "kie:nano-banana-pro", "env-kie-key", "kie")])
     assert "kie" not in _saved(user_id)
 

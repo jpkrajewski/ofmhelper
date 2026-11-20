@@ -1,7 +1,3 @@
-"""The agency's phones (/phones) and their logins: the forms' bodies, what
-the page lists (no secret in it), the filters / sort, and the one login's
-secrets the page asks for on Show / Copy."""
-
 from enum import StrEnum
 from typing import Annotated
 
@@ -35,16 +31,10 @@ _Number = Annotated[str, StringConstraints(strip_whitespace=True, max_length=32)
 
 
 def drawing_url(model_id: str | None, color_id: str | None) -> str:
-    """Where the phone's drawing is served; the browser caches one per
-    model and color."""
     return f"/phones/drawing.svg?model={model_id or ''}&color={color_id or ''}"
 
 
 class DeviceFields(BaseModel):
-    """The add / edit phone dialog: a catalog model and one of its official
-    colors -- or, for a phone the catalog does not list, `custom_model` and
-    no ids."""
-
     label: _Label
     model_id: str | None = None
     color_id: str | None = None
@@ -78,11 +68,6 @@ class DeviceFields(BaseModel):
 
 
 class LoginFields(BaseModel):
-    """The add / edit login dialog. `username` is stored the way the
-    service writes it (`LoginService.username`); `provider` names a custom
-    service's site ("" for the others); the password is kept exactly as
-    typed, spaces included."""
-
     service: str
     provider: _Name = ""
     username: Annotated[str, StringConstraints(min_length=1, max_length=255)]
@@ -104,26 +89,16 @@ class LoginFields(BaseModel):
 
 
 class AssignAccount(BaseModel):
-    """/accounts "Assign phone": one of the person's tracked accounts onto
-    the phone clicked. `replace`: the phone's other accounts of that service
-    leave it first (the page asked)."""
-
     account_id: int
     replace: bool = False
 
 
 class LoginSecrets(BaseModel):
-    """What Show / Copy / Edit fetch for one login, never in the page."""
-
     password: str
     backup_codes: str
 
 
 class AddedLogin(BaseModel):
-    """A login just put on a phone. `existed`: the phone's owner had the
-    account saved already (on another phone, or archived); it was linked,
-    not stored twice."""
-
     model_config = ConfigDict(frozen=True)
 
     id: int
@@ -131,8 +106,6 @@ class AddedLogin(BaseModel):
 
 
 class ArchivedLogin(BaseModel):
-    """A login removed everywhere, password kept (/phones Archived)."""
-
     id: int
     service: str
     username: str
@@ -149,19 +122,14 @@ class DeviceLogin(BaseModel):
     has_password: bool
     has_codes: bool
     updated_at: float
-    # Every phone it is signed in on (labels), this one included.
     on: list[str] = Field(default_factory=list)
-    # Only in the export.
     password: str = ""
     backup_codes: str = ""
-    # Its /accounts row, when that platform tracks this handle, and that
-    # row's latest follower count (None until its first scan).
     tracked_account_id: int | None = None
     tracked_followers: int | None = None
 
     @property
     def followers_label(self) -> str:
-        """ "12.3k followers"; "" when not tracked or not scanned yet."""
         n = self.tracked_followers
         if n is None:
             return ""
@@ -169,8 +137,6 @@ class DeviceLogin(BaseModel):
 
     @property
     def info(self) -> LoginService | None:
-        """None for a service no longer in services.json: still listed
-        and exported, under its stored key."""
         return services().get(self.service)
 
     @property
@@ -188,7 +154,6 @@ class DeviceLogin(BaseModel):
         return self.info.link(self.username) if self.info else None
 
     def elsewhere(self, label: str) -> list[str]:
-        """The other phones it is on."""
         return [p for p in self.on if p != label]
 
 
@@ -197,8 +162,6 @@ _MILLION = 1_000_000
 
 
 def _compact(n: int) -> str:
-    """950, 12.3k, 1.2M: one decimal where it says something. The unit is
-    picked after rounding (999_960 is "1M", not "1000k")."""
     if n < _THOUSAND:
         return str(n)
     thousands = round(n / _THOUSAND, 1)
@@ -209,7 +172,6 @@ def _compact(n: int) -> str:
 
 class Device(BaseModel):
     id: int
-    # Whose phone it is (a user; `owner` is the person who holds it).
     user_id: int
     label: str
     model_id: str | None
@@ -228,14 +190,12 @@ class Device(BaseModel):
         return self.retired_at is not None
 
     def accounts_of(self, service: str) -> Registry[DeviceLogin]:
-        """Its logins of `service`, by username."""
         return Registry[DeviceLogin](
             entries={x.username: x for x in self.logins if x.service == service}
         )
 
     @property
     def followers(self) -> int | None:
-        """The most followers of any tracked account signed in on it."""
         counts = [
             x.tracked_followers for x in self.logins if x.tracked_followers is not None
         ]
@@ -266,14 +226,11 @@ class Device(BaseModel):
 
     @property
     def specs(self) -> str:
-        """Model and color, whichever are known: "iPhone 13 · Blue"."""
         finish = self.finish.label if self.finish else ""
         return " · ".join(p for p in (self.model_label, finish) if p)
 
     @property
     def drawing_url(self) -> str:
-        """Its back, drawn from the catalog (routers/inventory/phones.py
-        serves `ofmhelpers.features.phones.catalog.render`)."""
         return drawing_url(self.model_id, self.color_id)
 
     @property
@@ -282,8 +239,6 @@ class Device(BaseModel):
 
     @property
     def search_text(self) -> str:
-        """What the search box matches: the phone, its model, and every
-        login's name and provider -- never a password."""
         parts = [
             self.label,
             self.specs,
@@ -295,20 +250,14 @@ class Device(BaseModel):
 
 
 class AccountPhones(BaseModel):
-    """One /accounts row's phones: the active ones signed in to it."""
-
     account_id: int
     phones: list[Device]
 
 
 class PhonesByAccount(BaseModel):
-    """The phones of each tracked account that has any (/accounts shows
-    them in place of a typed note)."""
-
     rows: list[AccountPhones] = Field(default_factory=list)
 
     def of(self, account_id: int) -> list[Device]:
-        """The account's phones, by label; none when it is on no phone."""
         for row in self.rows:
             if row.account_id == account_id:
                 return row.phones
@@ -324,15 +273,11 @@ class PhoneSort(StrEnum):
 
 
 class PhoneQuery(BaseModel):
-    """The toolbar's filters and sort, as the query string (blank = unset),
-    so every view is a link. Search is instant, in the page."""
-
     family: str = ""
     color: str = ""
     owner: str = ""
     service: str = ""
     sort: PhoneSort = PhoneSort.FOLLOWERS
-    # /accounts "Assign phone": the tracked account waiting for a phone.
     assign: int | None = None
 
     @field_validator("sort", mode="before")
@@ -369,7 +314,6 @@ class PhoneQuery(BaseModel):
         if self.sort is PhoneSort.LOGINS:
             return sorted(devices, key=lambda d: (-len(d.logins), d.label.lower()))
         if self.sort is PhoneSort.FOLLOWERS:
-            # Most followed first; phones with no tracked account last.
             return sorted(
                 devices,
                 key=lambda d: (

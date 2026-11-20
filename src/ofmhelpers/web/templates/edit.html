@@ -1,14 +1,6 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
-{# /edit (routers/video_tools/edit.py, static/js/edit.js): the video (its
-   light copy once the edit worker made it) with the crop box over it, a
-   strip of its frames with the marker and two handles for where the part
-   starts and ends, frame steps, Play plays the part at the picked speed,
-   Turn (rotate, mirror) / Crop / Speed / Size, Frame downloads the frame
-   shown, Cut queues the part (or the clips, joined) on the edit worker
-   (edit.js polls): Clone it / Download. Nothing it makes is kept past a
-   day. #}
 {% block content %}
 {{ ui.page_header("Edit") }}
 
@@ -35,9 +27,6 @@
             <span class="edit-crop-grip" data-corner="se"></span>
         </div>
     </div>
-    {# The timeline is what Cut makes: the clips one after another, each
-       with its frames; a deleted part is gone and the rest closes up.
-       Above it each clip's label: drag it to move the clip, x drops it. #}
     <div class="edit-track" id="edit-track"></div>
     <div class="edit-timeline edit-timeline-bare" id="edit-timeline">
         <div class="edit-segs" id="edit-segs"></div>

@@ -1,28 +1,3 @@
-"""The snapchat-US pipeline: a light touch (colours stay the source's, sound
-varies ~5%, CapCut sharpen 5, framing barely moves; user 2026-10-30: the
-stealth_wild mix "fucks up colors"; 2026-11-03: still too dark, too zoomed),
-mirrored and turned 1 degree, a Snapchat caption bar, recorded as an iPhone 16
-Pro Max in 4K30 HDR in the USA. The knobs live in `snapchat_iphone16_usa.json`
-next to this file; edit the JSON, not the code.
-
-Colours (measured 2026-11-03, geometry off, against the source, as the page
-shows the copy): the way to HLG and back takes 1% of the brightness, and the old
-draws (brightness +-0.02, gamma +-3%) moved it from -7.5% to +5%. So brightness
-and gamma only ever draw up, by about what the way there takes.
-
-Zoom: a turned frame must be scaled up to still cover the output. The old mix
-cut 12% of the picture away: the 2 degree turn 7%, the corner zoom 1.5%, tilt
-and drift 3%. Now 6.5%: the 1 degree turn is 4% of it.
-
-    from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import run
-    run("in.mp4", "out.mp4", caption="Going a little too far?", seed=7)
-
-    python -m ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa \
-        in.mp4 out.mp4 --caption "Going a little too far?"
-
-Same seed = same copy (every knob draws from it).
-"""
-
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -42,15 +17,13 @@ def run(
     recorded_at: datetime | None = None,
     timeout_s: int = 600,
 ) -> RunResult:
-    """The JSON preset, then the pipeline's own fixed look: mirrored, turned
-    1 degree, the caption bar; recorded on the iphone16_usa device."""
     job = Repurpose(
         src, dst, seed=seed, recorded_at=recorded_at, timeout_s=timeout_s
     ).apply_json_preset(str(_PRESET))
     job.video = job.video.model_copy(
         update={
-            "mirror": 1.0,  # every copy, not a chance
-            "rotate": 1.0,  # degrees: the main zoom, see the docstring
+            "mirror": 1.0,
+            "rotate": 1.0,
             "snapchat_caption": caption,
         }
     )
@@ -59,19 +32,13 @@ def run(
     return result
 
 
-# How far the copy may sit under its source before it counts as silenced
-# (the preset's volume and EQ move it ~1 dB; a blown chain 20+ dB), and the
-# loudest a copy may be: hotter = a crushed wall.
 _MAX_DROP_DB = 10.0
 _MEAN_MAX_DB = -6.0
-# A real recording has dynamics: its mean sits this far under the peak;
-# a copy may lose some of the source's, never all of them.
 _MIN_DYNAMICS_DB = 4.0
 _DYNAMICS_LOSS_DB = 3.0
 
 
 def _levels(path: Path) -> tuple[float, float] | None:
-    """(mean, max) volume of the first audio stream; None: no audio."""
     import re
 
     from ofmhelpers.media.ffmpeg import run, run_log
@@ -92,12 +59,6 @@ def _levels(path: Path) -> tuple[float, float] | None:
 
 
 def _verify_audio(src: Path, dst: Path) -> None:
-    """The copy must sound like its source: ffmpeg 8.0.1's vibrato filter
-    intermittently blows a chain up to a full-scale wall (measured 2026-10-30,
-    ~30% of runs, any params) -- and a wall of constant amplitude IS silence
-    to a speaker. Judged against the source, not absolute levels: a nearly
-    silent reel (mean -50 dB, prod 2026-10-30) makes a nearly silent copy.
-    Raise before a bad copy ships."""
     copy = _levels(dst)
     if copy is None:
         msg = f"{dst.name}: no audio stream"
@@ -119,7 +80,7 @@ def _verify_audio(src: Path, dst: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser()
     parser.add_argument("src", type=Path)
     parser.add_argument("dst", type=Path)
     parser.add_argument("--caption", default=DEFAULT_CAPTION)

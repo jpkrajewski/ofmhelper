@@ -12,10 +12,6 @@ from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
 
-# gallery-dl errors that mean "this site wants a login", as the message the
-# person downloading can act on. Instagram shows a logged-out visitor only a
-# post's cover image, so gallery-dl gets nothing (verified 2026-10-22, also
-# through OFM_IG_PROXIES). A new site = one entry.
 _LOGIN_WALLS = {
     "redirect to login page": (
         "This post needs a login: upload your fresh cookies.txt at /cookies"
@@ -24,8 +20,6 @@ _LOGIN_WALLS = {
 
 
 def _error(stderr: str) -> str:
-    """gallery-dl's stderr as the job's error: a known login wall in plain
-    words, anything else as gallery-dl said it."""
     for marker, message in _LOGIN_WALLS.items():
         if marker in stderr:
             return message
@@ -36,13 +30,8 @@ class ImageDownloadConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     output_dir: Path = Path("downloads")
-    # {id} doesn't exist for every extractor and silently becomes "None",
-    # causing filename collisions across different posts (gallery-dl then
-    # skips "already downloaded" files). post_shortcode is Instagram's real
-    # unique identifier; num disambiguates multiple images in one post.
     filename_template: str = "{category}_{post_shortcode}_{num}.{extension}"
     extra_args: list[str] = []
-    # At most this many files (gallery-dl `--range 1-N`); None = all of them.
     max_items: int | None = None
 
     def gallery_dl_cmd(self, url: str, cookiefile: str | None = None) -> list[str]:
@@ -53,7 +42,7 @@ class ImageDownloadConfig(BaseModel):
             "-f",
             self.filename_template,
             "--no-mtime",
-            "--no-skip",  # overwrite existing files instead of silently skipping them
+            "--no-skip",
         ]
 
         if self.max_items is not None:
@@ -62,7 +51,6 @@ class ImageDownloadConfig(BaseModel):
             cmd += ["--cookies", cookiefile]
 
         cmd += self.extra_args
-        # security audit 2026-11-18: "--" so a URL starting with "-" is no option.
         cmd += ["--", url]
         return cmd
 
@@ -70,7 +58,6 @@ class ImageDownloadConfig(BaseModel):
 def download(
     url: str, config: ImageDownloadConfig | None = None, cookiefile: str | None = None
 ) -> DownloadResult:
-    """`url`'s files, logged in as `cookiefile` (None: logged out)."""
     config = config or ImageDownloadConfig()
     if settings.infra.fake_externals:
         return fake.images(url, config.output_dir)
@@ -107,10 +94,9 @@ def download(
         if not p.is_file():
             continue
         mtime = p.stat().st_mtime
-        # new file, or existing file that was just overwritten during this run
         if (p not in before_mtimes or mtime > before_mtimes[p]) and (
             mtime >= start_time - 1
-        ):  # small buffer for filesystem timestamp granularity
+        ):
             changed_files.append(p)
 
     changed_files.sort(key=lambda p: p.stat().st_mtime)
@@ -126,7 +112,6 @@ def download_all(
     config: ImageDownloadConfig | None = None,
     cookies: str | None = None,
 ) -> list[DownloadResult]:
-    """Every URL, logged in with `cookies` (the user's cookies.txt text)."""
     config = config or ImageDownloadConfig()
     with cookie_file(cookies) as cookiefile:
         return [download(url, config, cookiefile) for url in urls]

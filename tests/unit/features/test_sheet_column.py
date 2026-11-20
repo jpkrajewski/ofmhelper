@@ -1,6 +1,3 @@
-"""features/downloads/sheet.py `column_of`: a day's links are found by the
-date on top of their column, in whichever tab and column it stands."""
-
 from datetime import date
 
 from ofmhelpers.features.downloads.sheet import Column, column_of
@@ -25,7 +22,6 @@ def test_the_links_under_todays_date_top_to_bottom_and_no_other_days():
 
 
 def test_the_column_is_found_wherever_it_stands():
-    """Not the first column, not the first tab, rows of different lengths."""
     notes = SheetTab(name="Notes", rows=[["MODEL", "LINK"], ["Jaxson", C]])
     days = SheetTab(
         name="Days",
@@ -41,7 +37,6 @@ def test_no_column_for_the_day_is_none_not_an_empty_day():
     assert column_of(_sheet(tab), TODAY) is None
     assert column_of(_sheet(SheetTab(name="Empty")), TODAY) is None
     assert column_of(_sheet(), TODAY) is None
-    # The date there, nothing under it yet: a day with no links.
     assert column_of(_sheet(SheetTab(name="s", rows=[[TODAY]])), TODAY) == Column(
         links=[]
     )

@@ -1,14 +1,3 @@
-"""
-web/ref_usage.py: which reference files were last *picked*, kept in Redis so
-mtime can go back to meaning "uploaded" (see routers/refs.py's two lists, and
-task_helpers.resolve_existing_ref, which no longer writes to the store).
-
-Each user has their own list: one user's picks never push another's out.
-The important property is the one at the bottom: a broker that can't record
-"you picked this file" must not fail a generation that has every file it
-needs.
-"""
-
 from pathlib import Path
 from unittest import mock
 
@@ -20,7 +9,6 @@ from ofmhelpers.db.stores import users
 from ofmhelpers.features.assets import ref_usage
 from ofmhelpers.schemas import Role
 
-# Ids no real user has: the keys are the tests' own.
 ANN, BOB = 990_001, 990_002
 
 
@@ -43,8 +31,6 @@ def test_records_uses_newest_first():
 
 
 def test_picking_a_file_again_moves_it_back_to_the_front():
-    """The whole point: a file you use daily can't sink below one you touched
-    once."""
     ref_usage.record_use(ANN, Path("a.png"))
     ref_usage.record_use(ANN, Path("b.png"))
     ref_usage.record_use(ANN, Path("a.png"))
@@ -53,8 +39,6 @@ def test_picking_a_file_again_moves_it_back_to_the_front():
 
 
 def test_each_users_list_holds_only_their_own_picks(monkeypatch):
-    """With one shared list, a busy user's picks filled the bounded window
-    and everyone else's recent files fell out of it."""
     monkeypatch.setenv("OFM_REF_USAGE_MAX_TRACKED", str(3))
     ref_usage.record_use(ANN, Path("ann.png"))
     for i in range(5):
@@ -82,13 +66,11 @@ def test_the_key_is_bounded(monkeypatch):
 
 def test_a_dead_broker_costs_ordering_not_the_generation():
     with mock.patch.object(ref_usage, "get_redis", side_effect=RedisError("down")):
-        ref_usage.record_use(ANN, Path("a.png"))  # must not raise
+        ref_usage.record_use(ANN, Path("a.png"))
         assert ref_usage.recent(ANN, 5) == []
 
 
 def test_a_va_and_their_owner_share_one_list():
-    """A VA works in the owner's part of the store: what either picked last
-    is the same list for both (owner 2026-11-14), and nobody else's."""
     owner, other = make_user("boss@example.com"), make_user("second@example.com")
     va = make_user("va@example.com", Role.VA)
     users.set_owner(va.id, owner.id)

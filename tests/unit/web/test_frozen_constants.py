@@ -1,7 +1,3 @@
-"""Shared constants of many callers cannot be changed by accident: a write
-fails at once instead of changing the cache headers or the job registry of
-the whole app."""
-
 import pytest
 
 from ofmhelpers.features.jobs.recovery import RESTARTS

@@ -1,7 +1,3 @@
-"""The provider-neutral side of `ofmhelpers.integrations.llm`: prompts, media kinds, the
-per-use defaults, the registry, setup errors, strict schemas and contact
-sheets -- no provider is called."""
-
 from pathlib import Path
 from typing import Literal
 
@@ -40,7 +36,7 @@ def test_a_prompt_keeps_text_and_media_in_order():
         (MediaKind.VIDEO, "video/mp4"),
     ]
     assert prompt.system == "role"
-    assert prompt.temperature is None  # the provider's own default
+    assert prompt.temperature is None
 
 
 def test_a_file_that_is_no_media_is_refused():
@@ -60,15 +56,13 @@ def test_every_provider_is_registered():
 
 
 def test_the_gemini_fake_serves_every_model_the_default_chain_asks():
-    """A model the fake does not serve is a 404, which the AI check skips:
-    tests would quietly run a shorter chain than production (review #48)."""
-    defaults = LLMSettings.model_construct()  # defaults only: no env, no .env
+    defaults = LLMSettings.model_construct()
     asked = {defaults.gemini_model} | {
         model.strip() or defaults.gemini_model
         for name, _, model in (n.partition(":") for n in defaults.video_chain)
         if name.strip().lower() == "gemini"
     }
-    assert len(asked) > 1  # the chain names models of its own
+    assert len(asked) > 1
     assert asked - MODELS == set()
 
 
@@ -134,7 +128,7 @@ class _Answer(BaseModel):
     problems: list[str] = Field(default_factory=list, max_length=5)
     inner: _Inner
     maybe: float | None = None
-    title: str = "x"  # a field named like a schema keyword
+    title: str = "x"
 
 
 def test_the_fake_answers_the_plainest_value_the_schema_allows():
@@ -176,16 +170,15 @@ def test_a_strict_schema_is_closed_inlined_and_all_required():
         "items": {"type": "string"},
     }
     assert found["properties"]["title"] == {"type": "string"}
-    # Still describes the same answers.
     assert _Answer.model_validate(example(found))
 
 
 def test_a_contact_sheet_tiles_stills_of_a_video(tmp_path):
     video = tmp_path / "clip.mp4"
-    video.write_bytes(fake_media.mp4())  # 320x568
+    video.write_bytes(fake_media.mp4())
 
     sheet = contact_sheet(video, tmp_path / "sheet.jpg", 9, 100, 60)
 
     with Image.open(sheet) as img:
         assert img.format == "JPEG"
-        assert img.size == (300, 3 * 178)  # 3x3 stills, each 100 wide
+        assert img.size == (300, 3 * 178)

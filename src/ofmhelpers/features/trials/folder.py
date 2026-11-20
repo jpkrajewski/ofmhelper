@@ -1,10 +1,3 @@
-"""One viewer's trials of one login, as the /trials page needs them: what the
-page shows right now (`FolderView`) and the claims that start its jobs. All of
-it answers at once: the Drive and ffmpeg work is a job (`tasks`). A claim
-checks and takes its reels in one locked write: ten clicks at once start one
-job, the rest do nothing. What encodes waits its turn on the media queue, the
-rest runs beside it; a reel being made or uploaded is the only thing blocked."""
-
 import math
 from collections.abc import Callable
 from pathlib import Path
@@ -48,8 +41,6 @@ GENERATE = "Making trials"
 REMAKE = "Making one trial"
 CAPTIONS = "Writing captions"
 UPLOAD = "Uploading"
-# What each trials job runs, by the label its row keeps: with the row's
-# `args` it runs again from the row alone (`replay_kwargs`).
 RUNS: frozendict[str, Callable[..., object]] = frozendict(
     {
         GENERATE: tasks.make_trials,
@@ -58,7 +49,6 @@ RUNS: frozendict[str, Callable[..., object]] = frozendict(
         UPLOAD: tasks.upload_trials,
     }
 )
-# A Generate cut off by restarts this often is failed: something kills it.
 _RESTARTS_MAX = 2
 
 NO_FOLDER = "No such account folder"
@@ -67,8 +57,7 @@ NOT_GENERATED = "Not generated yet"
 NO_POSTER = "No poster"
 
 
-class NotFoundError(LookupError):
-    """What was asked for is not there; the text is the page's 404."""
+class NotFoundError(LookupError): ...
 
 
 class Started(BaseModel):
@@ -88,9 +77,6 @@ def _in_line(ahead: int) -> str:
 
 
 class FolderProgress(BaseModel):
-    """A phone card's trials: copies made, reels in all, Generate running, and
-    how many jobs are before it while it waits in the queue."""
-
     ready: int
     total: int
     making: bool
@@ -107,7 +93,6 @@ class FolderProgress(BaseModel):
 
     @property
     def label(self) -> str:
-        """The card's button while Generate runs."""
         if self.ahead is not None:
             return _in_line(self.ahead)
         return f"Making… {self.ready} of {self.total}"
@@ -119,10 +104,6 @@ class CardStamp(BaseModel):
 
 
 class FolderLive(BaseModel):
-    """What the page polls: whether anything runs, the status line, and each
-    card in page order with its stamp ("pending-<key>" for one still being
-    made by Generate trials)."""
-
     running: bool
     making: bool
     todo: int
@@ -140,16 +121,11 @@ def _at_work(uid: int, job_id: str | None) -> bool:
 
 
 class FolderView(BaseModel):
-    """A folder right now: its state and which of its jobs are at work,
-    Generate trials and each reel's own (Apply caption / Regenerate / its
-    upload)."""
-
     state: FolderState
     active: set[str]
     making: bool
     busy: set[str]
     uploading: set[str]
-    # The media queue: who waits, and how many jobs are ahead of each.
     line: Line
 
     @classmethod
@@ -176,39 +152,32 @@ class FolderView(BaseModel):
 
     @property
     def made(self) -> list[ReelState]:
-        """The made copies, the newest made first (the page's first cards)."""
         return sorted(self.state.ready, key=ReelState.made_or_posted, reverse=True)
 
     @property
     def pending(self) -> list[ReelState]:
-        """The reels Generate trials is still making (shown as generating)."""
         if not self.making:
             return []
         return [r for r in self.state.todo if r.status != ReelStatus.FAILED]
 
     @property
     def failed(self) -> list[ReelState]:
-        """The reels with no copy that could not be made (the last cards)."""
         return self.state.failed
 
     @property
     def ahead(self) -> int | None:
-        """Jobs before this folder's Generate, while it waits in the queue."""
         return self.line.ahead(self.state.job_id or "") if self.making else None
 
     @property
     def queued(self) -> set[str]:
-        """The reels whose own job (Regenerate, Apply caption) waits in the queue."""
         return {r.key for r in self.state.reels if r.job_id in self.line}
 
     @property
     def pending_stamp(self) -> str:
-        """Moves when the pending cards stop waiting in the queue."""
         return "queued" if self.ahead is not None else ""
 
     @property
     def status(self) -> str:
-        """The page's status line."""
         if self.ahead is not None:
             return _in_line(self.ahead)
         if self.making:
@@ -230,8 +199,6 @@ class FolderView(BaseModel):
         return self.state.note or ""
 
     def _upload_status(self) -> str:
-        """An upload as it is: waiting for the encoder, making deleted copies
-        again (minutes each), or sending to Drive (seconds)."""
         reels = [r for r in self.state.reels if r.key in self.uploading]
         ahead = [
             a
@@ -248,7 +215,6 @@ class FolderView(BaseModel):
         return f"Uploading {len(reels)} to Drive…"
 
     def stamp(self, reel: ReelState) -> str:
-        """Changes whenever the reel's card would look different."""
         busy: str | bool = reel.key in self.busy
         if reel.key in self.uploading:
             busy = "uploading"
@@ -270,8 +236,6 @@ class FolderView(BaseModel):
         return [r for r in self.failed if f"failed-{r.key}" in keys]
 
     def live(self) -> FolderLive:
-        """Cards in page order: made copies (newest made first), then what
-        Generate is still making, then what it could not make."""
         cards = [CardStamp(key=r.key, stamp=self.stamp(r)) for r in self.made]
         cards += [
             CardStamp(key=f"pending-{r.key}", stamp=self.pending_stamp)
@@ -292,8 +256,6 @@ class FolderView(BaseModel):
 
 
 def _card(scope: int | None, viewer: int, login_id: int) -> DriveCard:
-    """The login's /drive card from the last sweep's read (no Drive call:
-    the page answers at once; Generate trials lists POSTED itself)."""
     board = drive_folders.board(owner=scope, viewer=viewer, live=False)
     card = next((c for c in board.cards if c.target.login_id == login_id), None)
     if card is None:
@@ -301,16 +263,10 @@ def _card(scope: int | None, viewer: int, login_id: int) -> DriveCard:
     return card
 
 
-# What a reel says when the job holding it is gone (a deploy cut it off and
-# it could not start over): its batch is not in Drive, it is selected again.
 STOPPED = "Stopped by an update: upload again"
 
 
 def _released(uid: int, state: FolderState) -> None:
-    """Reels still held by a job that no longer runs (failed, done, or gone)
-    let go: an upload's go back to how they were before the click, selected,
-    saying why (prod 2026-11-18: a deploy cut an upload of 6, recovery failed
-    it, the 6 stayed "uploading" with their selection gone and no reason)."""
     for reel in state.reels:
         if not reel.job_id or _at_work(uid, reel.job_id):
             continue
@@ -322,8 +278,6 @@ def _released(uid: int, state: FolderState) -> None:
 
 
 def _synced(card: DriveCard, state: FolderState) -> None:
-    """`state` matched to the card's POSTED videos: new ones added, ones
-    gone (or never videos) dropped unless already made."""
     state.account_folder_id = card.account_folder_id or ""
     state.posted_folder_id = card.posted_folder_id or ""
     if not card.posted_folder_id or card.error or card.unread:
@@ -334,8 +288,6 @@ def _synced(card: DriveCard, state: FolderState) -> None:
 def _sync_state(
     scope: int | None, viewer: int, login_id: int
 ) -> tuple[DriveCard, FolderState]:
-    """The login's card and its state matched to POSTED (written only when
-    that changed something)."""
     card = _card(scope, viewer, login_id)
     state = load(viewer, login_id)
     before = state.model_dump_json()
@@ -351,9 +303,6 @@ def _sync_state(
 
 
 def read_posted(uid: int, login_id: int) -> None:
-    """The folder's state matched to the last read of its POSTED (no Drive
-    call), for work that has no page open (`cleanup`). A login with no card
-    any more: nothing is read."""
     try:
         _sync_state(uid, uid, login_id)
     except NotFoundError:  # silent: a login with no card any more has nothing to read
@@ -361,21 +310,16 @@ def read_posted(uid: int, login_id: int) -> None:
 
 
 class PhoneCards(BaseModel):
-    """/trials: /drive's last read and each card's trials by its login."""
-
     board: DriveBoard
     progress: dict[int, FolderProgress]
 
 
 class OpenedFolder(BaseModel):
-    """One folder's page: its card and its reels."""
-
     card: DriveCard
     view: FolderView
 
 
 def phone_cards(uid: int, scope: int | None) -> PhoneCards:
-    """/drive's last read and each card's trials."""
     board = drive_folders.board(owner=scope, viewer=uid, live=False)
     running = {j.id for j in running_jobs() if j.actor == str(uid)}
     line = JobQueue(name=QueueName.MEDIA).line()
@@ -389,9 +333,6 @@ def phone_cards(uid: int, scope: int | None) -> PhoneCards:
 
 
 class _Claim:
-    """One click's try at a job: the job is made the moment a locked write
-    first takes something, and only then goes on the queue."""
-
     def __init__(self, uid: int, login_id: int, label: str) -> None:
         self.uid, self.login_id, self.label = uid, login_id, label
         self.job_id: str | None = None
@@ -414,10 +355,6 @@ class _Claim:
         at_front: bool = False,
         **kwargs,
     ) -> None:
-        """The job on `enqueue`'s queue, `at_front` for work someone waits
-        for (an upload, a caption, Regenerate): it waits at most for the copy
-        being made. Its arguments but the Drive token go into the row's
-        params first (`args`), so the row alone can run it again."""
         trials = settings.trials
         if self.job_id is None:
             return
@@ -434,10 +371,6 @@ class _Claim:
 
 
 class TrialsRun(BaseModel):
-    """A trials job's run rebuilt from its row: `model_dump()` is what its
-    run function (`RUNS[label]`) takes; the row's `args` ride along as they
-    were kept."""
-
     model_config = ConfigDict(extra="allow")
 
     user_id: int
@@ -446,15 +379,11 @@ class TrialsRun(BaseModel):
 
 
 class UploadArgs(BaseModel):
-    """What an Upload ran with (its row's `args`)."""
-
     keys: list[str]
     account_folder_id: str
 
 
 def replay_run(job: Job) -> TrialsRun | None:
-    """What a trials job ran with, from its row (the Drive token read again
-    for its person); None for one from before rows kept their `args`."""
     args = job.params.get("args")
     if job.actor is None or not isinstance(args, dict):
         return None
@@ -470,15 +399,6 @@ def replay_run(job: Job) -> TrialsRun | None:
 
 
 def restart(job: Job) -> bool:
-    """A Generate or an Upload cut off by a restart, queued again (recovery,
-    features/jobs/recovery.py): a deploy gives workers 120 s, a Generate
-    runs for hours (prod 2026-11-07: one cut at 52 min) and an Upload that
-    makes deleted copies again for many minutes (prod 2026-11-18: one of 6
-    cut at 23 min). A Generate leaves copies already made alone; an Upload
-    goes up all or nothing, the old ones in TRIALS trashed only after, so
-    both go on as if never stopped. False (failed as interrupted, its reels
-    let go on the next page open: `_released`): one reel's remake or
-    captions (it does not know its keys), or cut off too often."""
     restarts = int(job.params.get("restarts", 0))
     label = job.params.get("label")
     if (
@@ -495,7 +415,6 @@ def restart(job: Job) -> bool:
     if label == UPLOAD and upload is None:
         return False
     uid, login_id = int(job.actor), int(job.params["login"])
-    # Counted first: a restart that dies on the way still counts.
     merge_params(job.id, {"restarts": restarts + 1})
     reopen_job(job.id)
     claim = _Claim(uid, login_id, str(label))
@@ -522,11 +441,6 @@ def restart(job: Job) -> bool:
 
 
 class Trials(BaseModel, frozen=True):
-    """One viewer's trials of one login: everything a route of the folder page
-    does. `scope`: whose phones the viewer may see (None: everyone's).
-    `encode` puts what makes a copy in the line of the media queue (4K encodes,
-    one at a time), `enqueue` the rest beside it."""
-
     uid: int
     scope: int | None
     login_id: int
@@ -534,8 +448,6 @@ class Trials(BaseModel, frozen=True):
     enqueue: Callable[..., object]
 
     def owned(self) -> None:
-        """security audit 2026-11-18: the login must be one of the viewer's
-        phones' (`scope`); NotFoundError (404) before anything is written."""
         if all(t.login_id != self.login_id for t in drive_store.targets(self.scope)):
             raise NotFoundError(NO_FOLDER)
 
@@ -547,8 +459,6 @@ class Trials(BaseModel, frozen=True):
         return FolderView.of(self.uid, load(self.uid, self.login_id)).live()
 
     def view(self) -> FolderView:
-        """The folder's view, when the login is one of the viewer's phones' (the
-        phones /drive's cards are made from, without building them)."""
         self.owned()
         return FolderView.of(self.uid, load(self.uid, self.login_id))
 
@@ -562,8 +472,6 @@ class Trials(BaseModel, frozen=True):
         return _at_work(self.uid, job_id)
 
     def generate(self) -> Started:
-        """POSTED read for new reels: those downloaded and made, a copy already
-        made left alone; a second click while it runs does nothing."""
         _sync_state(self.scope, self.uid, self.login_id)
         claim = self.claim(GENERATE)
 
@@ -585,11 +493,6 @@ class Trials(BaseModel, frozen=True):
         return Started(started=bool(claim.job_id))
 
     def upload(self, approved: list[str] | None) -> Uploading:
-        """The selected copies replace what is in TRIALS: each claimed for this
-        upload (one being made is left out; one already in Drive can go up
-        again, or it would be deleted with the rest). One upload at a time: two
-        at once would delete each other's. A copy deleted since (`cleanup`) is
-        made again by the upload first, so that one waits its turn to encode."""
         wanted = set(approved or [])
         claim = self.claim(UPLOAD)
         claimed: list[str] = []
@@ -621,9 +524,6 @@ class Trials(BaseModel, frozen=True):
 
 
 class Reel(BaseModel, frozen=True):
-    """One reel (`key`) of a viewer's trials: everything a route of one card
-    does. A key the folder does not have is `NotFoundError`."""
-
     trials: Trials
     key: str
 
@@ -634,8 +534,6 @@ class Reel(BaseModel, frozen=True):
         return state
 
     def remake(self, caption: str | None = None) -> Started:
-        """One reel made again as its own job, alongside whatever else runs
-        (with `caption` first, when given)."""
         claim = self.trials.claim(REMAKE)
 
         def take(reel: ReelState) -> None:
@@ -655,9 +553,6 @@ class Reel(BaseModel, frozen=True):
         return Started(started=bool(claim.job_id))
 
     def ask_captions(self) -> Started:
-        """A reel made before there were captions to choose from gets them, as
-        its own job (a click on one that has them does nothing: it would cost
-        quota)."""
         claim = self.trials.claim(CAPTIONS)
 
         def take(reel: ReelState) -> None:
@@ -676,11 +571,7 @@ class Reel(BaseModel, frozen=True):
         return Started(started=bool(claim.job_id))
 
     def apply_caption(self, caption: str) -> Started:
-        """A caption chosen or written: saved, then the reel is made again
-        with it."""
         text = " ".join(caption.split())[:CAPTION_MAX]
-        # An empty box changes nothing: "" would mean "ask the AI", which costs
-        # quota.
         if not text:
             return Started(started=False)
         return self.remake(text)
@@ -697,8 +588,6 @@ class Reel(BaseModel, frozen=True):
         return path
 
     def playable(self) -> Path:
-        """The copy as the page plays it (H.264, `media`); the copy itself when
-        no preview can be made."""
         copy = self._copy()
         try:
             return media.preview(copy)
@@ -707,7 +596,6 @@ class Reel(BaseModel, frozen=True):
             return copy
 
     def poster(self) -> Path:
-        """The copy's poster; of one deleted since (`cleanup`), the one kept."""
         reel = load(self.trials.uid, self.trials.login_id).reel(self.key)
         gone = (
             at(self.trials.uid, self.trials.login_id, reel.out)

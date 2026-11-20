@@ -1,8 +1,3 @@
-"""/download-assets "Download from Drive sheet" in a browser: the button
-reads today's links from the person's sheet, their cards come, and it rests
-(disabled, counting down in its label) after every click, also across a
-reload; with nothing new it says so and starts nothing."""
-
 import re
 
 import pytest
@@ -14,7 +9,7 @@ from ofmhelpers.integrations.gdrive.models import SheetTab
 
 pytestmark = pytest.mark.e2e
 
-VA_ID = 2  # e2e conftest `_seed_users`
+VA_ID = 2
 EMAIL = "va.google@example.com"
 A = "https://www.tiktok.com/@user/video/111"
 B = "https://www.tiktok.com/@user/video/222"
@@ -23,7 +18,6 @@ LABEL = "Download from Drive sheet"
 
 
 def _sheet(drive: FakeDrive, *links: str) -> None:
-    """Today's column of the person's `content_links`, as typed on a phone."""
     from ofmhelpers.features.downloads import sheet
 
     FakePersonDrive(drive, EMAIL).children("root")
@@ -35,7 +29,6 @@ def _sheet(drive: FakeDrive, *links: str) -> None:
 
 
 def _rested() -> None:
-    """A minute later."""
     from ofmhelpers.features.downloads import sheet
 
     sheet.Clicker(user_id=VA_ID).wake()
@@ -58,7 +51,6 @@ def test_the_button_downloads_todays_links_then_rests(
     expect(page.locator(".ph-toolbar .hidden-toggle")).to_be_hidden()
     expect(cards).to_have_count(0)
 
-    # The click: the page comes back with the download's cards, one a link.
     with page.expect_navigation():
         button.click()
     expect(cards.locator("video.result-video")).to_have_count(
@@ -68,12 +60,10 @@ def test_the_button_downloads_todays_links_then_rests(
     expect(button).to_be_disabled()
     expect(button).to_have_text(resting)
 
-    # Still resting after a reload.
     page.reload()
     expect(button).to_be_disabled()
     expect(button).to_have_text(resting)
 
-    # Rested, nothing added: no new card, the page says so, and it rests again.
     _rested()
     page.reload()
     expect(button).to_be_enabled()
@@ -84,7 +74,6 @@ def test_the_button_downloads_todays_links_then_rests(
     expect(button).to_have_text(resting)
     expect(cards).to_have_count(2)
 
-    # A click while it rests is refused by the server too.
     refused = page.request.post("/download-media/sheet-downloads")
     assert refused.status == 429
     assert re.fullmatch(r"Wait \d+ s", refused.json()["detail"])

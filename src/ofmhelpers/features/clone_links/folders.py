@@ -1,8 +1,3 @@
-"""Where a reviewed /clone-links video goes in its owner's Drive root: a
-GOOD one into `settings.clone_links.good_folder`, anything else -- GLITCHY,
-or a check that could not answer -- into `trial_folder`, where a person
-looks first. Import-light: /drive reads `review_folders` too."""
-
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links.ai_check.models import Verdict
 lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
@@ -14,6 +9,5 @@ def folder_for(check: CloneAiCheck) -> str:
 
 
 def review_folders() -> set[str]:
-    """The folder names reviews upload into (no account's folder)."""
     s = settings.clone_links
     return {s.good_folder, s.trial_folder}

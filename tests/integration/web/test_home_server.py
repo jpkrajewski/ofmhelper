@@ -1,7 +1,3 @@
-"""/home's Server section (features/server): admins only, fetched from
-/home/server; the host numbers read from /proc and the disk; what is worth
-a warning."""
-
 from pathlib import Path
 
 import pytest
@@ -111,7 +107,7 @@ def test_the_host_numbers_come_from_proc(tmp_path, monkeypatch):
     assert box.swap.used == 0
     assert box.load == (1.5, 1.0, 0.5)
     assert box.uptime_s == pytest.approx(7200.55)
-    assert box.cpu_percent == 0  # the same ticks both reads
+    assert box.cpu_percent == 0
     assert box.disk.total > 0
 
 

@@ -1,6 +1,3 @@
-"""Who connected Fanvue and their live tokens, for `FanvueSource`: the part of that
-platform that needs the database."""
-
 import time
 
 from ofmhelpers.config import settings

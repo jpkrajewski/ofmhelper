@@ -1,13 +1,3 @@
-"""
-Uploads are restricted to media, and what comes back out can't run as a page
-in our own origin.
-
-The attack this closes: an uploaded "payload.html" opened from the app
-executes same-origin with the viewer's session cookie. Two independent brakes -- the upload is rejected by
-extension (require_upload_kind), and anything non-media already on disk is
-served as an octet-stream attachment with nosniff (media_response).
-"""
-
 import io
 
 import pytest
@@ -50,8 +40,6 @@ def test_non_image_video_names_are_rejected(name):
 
 
 def test_reference_store_also_takes_audio():
-    """The generation tools' reference store is the one place audio is a
-    legitimate input -- it must not be narrowed to image/video."""
     assert require_upload_kind("voice.mp3", MEDIA_KINDS) == "voice.mp3"
 
 
@@ -67,7 +55,6 @@ def test_media_response_serves_images_inline_with_nosniff(tmp_path):
 
 
 def test_media_response_forces_a_download_for_anything_else(tmp_path):
-    """Covers assets stored before the upload allowlist existed."""
     path = tmp_path / "legacy.html"
     path.write_bytes(b"<script>steal()</script>")
 
@@ -79,9 +66,6 @@ def test_media_response_forces_a_download_for_anything_else(tmp_path):
 
 
 def test_clean_images_rejects_a_non_image_upload(va_client):
-    """clean_metadata *skips* an extension it doesn't know instead of failing,
-    so an unprocessed .html used to survive in the job dir and come back from
-    /clean-images/files/... as a page on our own origin."""
     r = va_client.post(
         "/clean-images/run",
         files={
@@ -93,7 +77,6 @@ def test_clean_images_rejects_a_non_image_upload(va_client):
 
 
 def test_clean_images_accepts_every_extension_the_cleaner_supports(va_client, tmp_path):
-    """The allowlist must not be narrower than utils/metadata_cleaner's."""
     from ofmhelpers.media.metadata_cleaner import SUPPORTED_EXTENSIONS
     from ofmhelpers.web.routers.task_helpers import IMAGE_KINDS, classify_kind
 

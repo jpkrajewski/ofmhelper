@@ -1,20 +1,3 @@
-"""The knob search, a CLI:
-
-    python -m ofmhelpers.media.repurpose.lab.search CLIPS_DIR OUT_DIR --minutes 30 --workers 16
-
-Every measurement (`measure.Measurement`) is appended to OUT/results.jsonl
-the moment it lands, so a cut-off run keeps what it measured. Phases, each
-with its share of the time:
-
-1. baseline + ablation (to 35%): no knobs, then each knob alone at 1/3, 2/3
-   and all of its cap, and past it (`space.OVER_CAP`), on the same 2 clips;
-2. random throws (to 60%): random knob mixes, each knob on at p 0.35 with a
-   strength up to OVER_CAP x its cap, on 2 random clips;
-3. search (to the end): Optuna NSGA-II per part within the caps, on 3
-   clips: video lowers the caught % at VMAF >= `VMAF_FLOOR` and raises
-   VMAF; audio lowers Chromaprint's % and the sound change.
-"""
-
 import argparse
 import hashlib
 import json
@@ -33,12 +16,8 @@ from ofmhelpers.media.repurpose.lab.calibrate import Calibration, cross_pairs
 from ofmhelpers.media.repurpose.lab.measure import Measurement, measure
 from ofmhelpers.media.repurpose.lab.space import BY_NAME, OVER_CAP, Part, knobs
 
-# The search's VMAF floor under an untouched copy's VMAF (the device's own
-# encode already costs ~5: 94.9 on the strip device, 2026-10-26), and the
-# score never counts above that baseline (sharpening raises VMAF: no reward).
 VMAF_DROP = 3.0
 _DEFAULT_BASELINE = 95.0
-# Best earlier throws per part that start the NSGA-II population.
 _SEEDS = {"video": 16, "audio": 8}
 _ABLATION_STEPS = (1 / 3, 2 / 3, 1.0, OVER_CAP)
 _RANDOM_ON = 0.35
@@ -52,7 +31,6 @@ class Job(BaseModel):
     strengths: dict[str, float]
     sample: str
     seed: int
-    # Optuna: (part, trial number) this measurement belongs to.
     study_trial: int | None = None
 
 
@@ -113,8 +91,6 @@ def throws(clips: list[Path], rng: random.Random) -> Iterator[Job]:
 
 
 class Searcher:
-    """Two NSGA-II studies (video, audio), asked and told around the pool."""
-
     def __init__(self, clips: list[Path], seed: int, baseline: float) -> None:
         self.clips = clips
         self.baseline = baseline
@@ -183,8 +159,6 @@ class Searcher:
             )
 
     def seed(self, results: Path) -> int:
-        """Start each study from the best earlier random throws within the
-        caps (video: the least caught at the floor; audio: the least found)."""
         rows: dict[str, list[dict[str, Any]]] = {}
         for line in results.read_text(encoding="utf-8").splitlines():
             row = json.loads(line)
@@ -219,14 +193,10 @@ class Searcher:
 
 
 def _found(m: Measurement) -> float:
-    """What the video search lowers: the mean % found over every method
-    (SSCD holds ~92% on every in-cap mix, so the worst method alone gave the
-    search nothing to climb; 2026-10-26)."""
     return mean(m.video.values()) if m.video else 100.0
 
 
 def baseline_vmaf(results: Path) -> float:
-    """An untouched copy's VMAF, from this run's baseline measurements."""
     if not results.exists():
         return _DEFAULT_BASELINE
     got = [

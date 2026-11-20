@@ -1,22 +1,3 @@
-"""user_cookies: each user's own cookies.txt
-
-There was one cookies.txt (`OFM_COOKIES_FILE`) every scan and download of
-every user sent. Now each user uploads their own at /cookies, stored here
-encrypted (`EncryptedText`, `OFM_VAULT_KEY`). The old file, when present,
-becomes the password admin's cookies (the agency's: their scans and
-downloads used it before), unless they already have some -- running this
-again changes nothing. The file itself is left where it is (rollback net).
-
-Needs the cookies volume mounted in the `migrate` service
-(docker-compose.yml) and `OFM_VAULT_KEY` set when the file exists: a file
-that cannot be encrypted fails the migration rather than being lost.
-
-Revision ID: b1c2d3e4f5a7
-Revises: a1c2e3f4b5d6
-Create Date: 2026-10-22 12:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 from pathlib import Path
 

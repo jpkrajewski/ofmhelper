@@ -1,5 +1,3 @@
-"""Going to a provider's consent screen, and past the fake one (e2e)."""
-
 import secrets
 
 from pydantic import BaseModel
@@ -16,15 +14,11 @@ logger = get_logger(__name__)
 
 
 class ConsentStart(BaseModel):
-    """Where to send the browser, and the state cookie's value for the trip."""
-
     url: str
     cookie: str
 
 
 def provider(name: str) -> Provider:
-    """The sign-in in the path (/auth/<name>/...): unknown, or its
-    credentials not set, is `NotFoundError`."""
     found = providers().get(name)
     if found is None or not found.configured():
         msg = "No such sign-in"
@@ -33,13 +27,10 @@ def provider(name: str) -> Provider:
 
 
 def offered() -> list[Provider]:
-    """The sign-ins the login page has a button for."""
     return configured()
 
 
 def redirect_uri(provider: Provider, site: str) -> str:
-    """The callback the provider returns to; `site` = this request's base URL,
-    used when `APP_BASE_URL` is not set."""
     path = f"auth/{provider.name}/callback"
     base = settings.web.base_url
     return f"{base.rstrip('/')}/{path}" if base else site + path
@@ -48,7 +39,6 @@ def redirect_uri(provider: Provider, site: str) -> str:
 def begin(
     provider: Provider, site: str, next_url: str, link_user_id: int | None
 ) -> ConsentStart:
-    """`link_user_id`: connect the account to this signed-in user."""
     carried = SignInState(
         provider=provider.name,
         state=secrets.token_urlsafe(24),
@@ -69,16 +59,12 @@ def begin(
 
 
 def fake_callback(cookie: str, provider: str, state: str, email: str) -> str:
-    """Where the fake consent screen returns to. A state that is not this
-    browser's own is `RefusedError`."""
     try:
         carried = unseal(cookie, provider, state)
     except SignInError as exc:
         logger.warning("fake consent for %s refused", provider, exc_info=True)
         msg = "Sign-in did not work. Try again."
         raise RefusedError(msg) from exc
-    # Like Google: a Drive (refresh) token only when connecting, never on a
-    # plain sign-in.
     code = fake_code(
         FakeAccount(
             email=email.strip().lower(),

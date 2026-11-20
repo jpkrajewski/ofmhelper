@@ -1,6 +1,3 @@
-"""Is a generated reel too glitchy to post? `check_clone(video)`. See
-clone_ai_check/CLAUDE.md."""
-
 from ofmhelpers.features.clone_links.ai_check.check import (
     RULES,
     check_clone,

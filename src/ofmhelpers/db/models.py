@@ -1,21 +1,3 @@
-"""
-SQLAlchemy ORM tables backing db/stores/jobs.py,
-db/stores/applications.py, db/stores/watched_profiles.py and
-db/stores/tracked_accounts.py, db/stores/devices.py and db/stores/drive_folders.py. Column sets mirror the exact dict/JSON shapes those
-modules write today (see schemas.py for the Pydantic mirror), so the
-step-5 backfill is a straight field-for-field copy.
-
-`created_at` stays a float epoch (double precision) rather than a timestamp
--- the app writes `time.time()` everywhere and sorts on it, so keeping the
-raw type is the least-invasive, behaviour-preserving choice.
-
-File references are NOT a separate table: a job's result files live inside
-its `result` JSONB payload exactly as they do in uploads/jobs.json.
-
-The empty tables of removed features were dropped in alembic 7a8b9c0d1e2f.
-`drive_day_folders` is still there, unmapped: it holds rows (alembic/env.py).
-"""
-
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -51,11 +33,6 @@ class Base(DeclarativeBase):
 
 
 class Timestamps:
-    """When the row was made and last changed, by the database's clock
-    (UTC), never the app's: `created_at` by its default, `updated_at` by the
-    `stamp_row` trigger whenever a column that is not quiet changes (alembic
-    a1b2c3d4e5f8, which also records the change in `audit_log`)."""
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -65,11 +42,6 @@ class Timestamps:
 
 
 class Authored:
-    """Who made the row and who changed it last: the person acting in that
-    transaction (`db/acting.py`), set by the `stamp_row` trigger. NULL: the
-    system (a sweep, a migration) or a row from before 2026-11-15. SET NULL:
-    a user removed leaves the history (`audit_log`) and the rows."""
-
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -79,14 +51,6 @@ class Authored:
 
 
 class UserRow(Timestamps, Authored, Base):
-    """Someone who may sign in (ofmhelpers.integrations.signin): with Google or Apple
-    (`UserIdentityRow`), or their email + password (`password_hash`,
-    scrypt; "" = none set). An admin adds them on /users (or their email is
-    in `OFM_ADMIN_EMAILS`); the account "admin" also takes
-    `APP_PASSWORD_ADMIN`. Everyone sees only what is theirs; an admin also
-    manages people and the admin tools. The Google refresh token (`EncryptedText`) is what Drive
-    uploads go up as."""
-
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -95,48 +59,29 @@ class UserRow(Timestamps, Authored, Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # Deferred: this row is read on every request, and decrypting it there would
-    # turn a changed OFM_VAULT_KEY into every page answering 500.
     google_refresh_token: Mapped[str] = mapped_column(
         EncryptedText, nullable=False, default="", deferred=True
     )
-    # "" is stored as "" (db/encrypted.py), so this needs no key.
     drive_connected: Mapped[bool] = column_property(
         func.length(google_refresh_token) > 0
     )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    # Their "ALL ACCOUNTS" folder in their own Drive (features/drive/folders.py
-    # finds or makes it); NULL until Google Drive is connected and swept.
     drive_root_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # The account `APP_PASSWORD_ADMIN` opens and the agency's data belongs
-    # to; the first `OFM_ADMIN_EMAILS` admin's Google sign-in takes it over.
     is_password_account: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
-    # A VA's owner (role "va"): whose keys and store the VA works with and
-    # who sees the VA's jobs. NULL for everyone else, and for a VA nobody
-    # owns yet. RESTRICT: an owner is not removed from under their VAs.
     owner_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
     )
-    # When they last pressed Logout: every session signed in before it is
-    # out, on every device (alembic c8d9e0f1a2b4). NULL = never.
     sessions_ended_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # Their last action (a page opened, anything sent), written at most once
-    # a minute (features/users/presence.py); a VA idle past the limit is
-    # logged out at this moment (alembic d9e0f1a2b3c5). NULL = not seen yet.
     last_seen_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
 
 class UserIdentityRow(Timestamps, Authored, Base):
-    """A Google or Apple account linked to a user, by the provider's stable
-    id (`subject`): an Apple private-relay address or a changed Gmail still
-    finds its user."""
-
     __tablename__ = "user_identities"
 
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -148,9 +93,6 @@ class UserIdentityRow(Timestamps, Authored, Base):
 
 
 class PasswordLinkRow(Base):
-    """A one-time link to set a password (made on /users for a new user, or
-    to reset one). Only its SHA-256 is stored."""
-
     __tablename__ = "password_links"
 
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -161,9 +103,6 @@ class PasswordLinkRow(Base):
 
 
 class UserApiKeyRow(Timestamps, Authored, Base):
-    """A user's own key for a generation provider (kie.ai, Higgsfield...):
-    what their forms pre-fill, so their runs bill their account."""
-
     __tablename__ = "user_api_keys"
 
     user_id: Mapped[int] = mapped_column(
@@ -174,10 +113,6 @@ class UserApiKeyRow(Timestamps, Authored, Base):
 
 
 class UserCookiesRow(Timestamps, Authored, Base):
-    """A user's own cookies.txt (alembic b1c2d3e4f5a7): the logins their
-    downloads and their accounts' scans send. Never shared with another
-    user, except the shared watched-profile scan (db/stores/cookies.py)."""
-
     __tablename__ = "user_cookies"
 
     user_id: Mapped[int] = mapped_column(
@@ -188,9 +123,6 @@ class UserCookiesRow(Timestamps, Authored, Base):
 
 
 class ChatThreadRow(Base):
-    """One chat of a model on a chat platform (alembic f3e2d1c0b9a8): how far
-    the /chatting sweep has read it."""
-
     __tablename__ = "chat_threads"
 
     platform: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -200,9 +132,6 @@ class ChatThreadRow(Base):
 
 
 class ChatFanMessageRow(Base):
-    """A fan's message and when the model answered it (alembic f3e2d1c0b9a8):
-    what /chatting's numbers and list come from."""
-
     __tablename__ = "chat_fan_messages"
     __table_args__ = (
         Index(
@@ -230,9 +159,6 @@ class ChatFanMessageRow(Base):
 
 
 class ChatModelMessageRow(Base):
-    """When a model message was sent, no text (alembic d9c8b7a6e5f4): a fan
-    message arriving after the reply that answers it finds it here."""
-
     __tablename__ = "chat_model_messages"
     __table_args__ = (
         Index(
@@ -248,11 +174,6 @@ class ChatModelMessageRow(Base):
 
 
 class ChatAccountRow(Base):
-    """Someone who connected a chat platform that has no API keys (alembic
-    b7a6c5d4e3f2). Tokens are encrypted, and rotate on every refresh. `connected_from`:
-    the server it was connected on (alembic c9b8a7f6e5d4), the only one that may spend
-    them: dev runs on a copy of production's database."""
-
     __tablename__ = "chat_accounts"
 
     platform: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -271,9 +192,6 @@ class ChatAccountRow(Base):
 
 
 class ChatNotificationRow(Base):
-    """A finished mass message, a new subscriber or a big sale (alembic
-    a9b8c7d6e5f4). `event_id` keeps a repeated delivery from showing twice."""
-
     __tablename__ = "chat_notifications"
     __table_args__ = (Index("ix_chat_notifications_at", "at"),)
 
@@ -288,11 +206,6 @@ class ChatNotificationRow(Base):
 
 
 class ChatSaleRow(Base):
-    """Every sale a platform announced (alembic e7f8a9b0c1d2), small ones too:
-    what the daily report sums. `gross_cents` is what the fan paid, before fees;
-    `event_id` keeps a repeated delivery from counting twice. The big ones also
-    go to `chat_notifications` for the pop-up."""
-
     __tablename__ = "chat_sales"
     __table_args__ = (Index("ix_chat_sales_at", "at"),)
 
@@ -306,11 +219,6 @@ class ChatSaleRow(Base):
 
 
 class ReportRunRow(Base):
-    """One day's run of a report (alembic e7f8a9b0c1d2): the row is the claim (a
-    report goes out once a day), `ran_at` where the next one's window starts,
-    `marks` the counters it saw (each link's daily clicks), so the next one
-    counts what came in since."""
-
     __tablename__ = "report_runs"
 
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -321,9 +229,6 @@ class ReportRunRow(Base):
 
 
 class ChatWebhookRow(Base):
-    """The webhook destination made for a model on a chat platform (alembic
-    e2d3c4b5a6f7). Its signing secret is shown once, when it is made."""
-
     __tablename__ = "chat_webhooks"
 
     platform: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -339,56 +244,32 @@ class JobRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     task: Mapped[str] = mapped_column(String(64), nullable=False)
-    # Whose job it is; NULL = nobody's (a system event, a removed user's).
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
-    # Set when the job reaches done/failed, cleared when it is run again.
     finished_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     params: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    # result/preview are free-form per task type -- see module docstring.
     result: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     preview: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    # When its owner hid its card from the galleries; NULL = shown. A view
-    # choice only: the job and its files stay.
     hidden_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # What happened on the way (`schemas.JobMeta`): never an input, so not
-    # `params`.
     meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
-    # What the run cost in dollars; NULL = no known price (never 0).
-    # `cost_estimated`: the provider reported none, the amount is the app's
-    # own price for the run (`features/jobs/cost.py`).
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     cost_estimated: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
 
     __table_args__ = (
-        # Every read (list_jobs, pruning) sorts/filters by created_at.
         Index("ix_jobs_created_at", "created_at"),
-        # One person's jobs, newest first: galleries, /vas.
         Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
     )
 
 
 class DownloadRow(Base):
-    """One file a download job fetched (alembic f4b5c6d7e8a1; written by
-    `features/downloads/service.py` when the job finishes, read by the
-    retention sweep, the same-link lookup and /download-assets' order).
-    `position`: the file's index among its job's files, the `{i}` of
-    `/files/{job}/{i}`. `file_path`: where the downloader left it;
-    `asset_path`: its copy in the owner's part of the asset store (what a
-    clone's `reference_videos` names; NULL: not looked up yet, or none).
-    `stored`: the video is on this server; false once the sweep removed it
-    (`removed_at`), its poster and this row stay. `last_used_at`: when the
-    person last asked for it, or a job last used it. Real columns, not the
-    job's JSONB result: each is filtered or sorted on."""
-
     __tablename__ = "downloads"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -417,26 +298,18 @@ class DownloadRow(Base):
 
     __table_args__ = (
         UniqueConstraint("job_id", "position", name="uq_downloads_job_position"),
-        # "Has this person downloaded this link": the same-link lookup.
         Index("ix_downloads_user_id_url", "user_id", "url"),
-        # The sweep: what is still stored, least recently used first.
         Index("ix_downloads_stored_last_used_at", "stored", "last_used_at"),
     )
 
 
 class ApplicationRow(Base):
-    """One submission of the public `/` landing-page application form
-    (templates/reachmodel.html). Write-once from the outside world, read-only
-    in the CRM page -- there is nothing to update, so no status column."""
-
     __tablename__ = "applications"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     first_name: Mapped[str] = mapped_column(Text, nullable=False)
     last_name: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False)
-    # Two optional columns, but the form requires at least one of them -- see
-    # routers/apply.ApplicationForm: a lead we cannot message back is useless.
     phone: Mapped[str] = mapped_column(Text, nullable=False, default="")
     telegram_handle: Mapped[str] = mapped_column(Text, nullable=False, default="")
     instagram_handle: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -449,20 +322,12 @@ class ApplicationRow(Base):
 
 
 class WatchedProfileRow(Base):
-    """An Instagram profile /reels keeps rescanning (features/reels/watch.py), with
-    its latest scan: `result` is an `instagram.ProfileReels` dump, `error`
-    the last scan's failure. `claimed_at` marks a scan in flight, so two
-    sweepers (one per API process) never queue the same profile twice."""
-
     __tablename__ = "watched_profiles"
 
-    # Whose watch list (alembic d3e4f5a6b7c8). A username two owners watch
-    # is two rows, scanned once: a scan writes every row of its username.
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True, index=True
     )
     username: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
-    # Free-form label the feed filters by ("asian", "gay", ...); None = none.
     group_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     added_at: Mapped[float] = mapped_column(Float, nullable=False)
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -474,10 +339,6 @@ class WatchedProfileRow(Base):
 
 
 class ProfileGroupRow(Timestamps, Authored, Base):
-    """A /reels group created on its own ("+ New group"), so it is in every
-    dropdown before any profile is in it. Groups in use also come from
-    `watched_profiles.group_name`; this table only adds the empty ones."""
-
     __tablename__ = "watched_profile_groups"
 
     user_id: Mapped[int] = mapped_column(
@@ -487,12 +348,6 @@ class ProfileGroupRow(Timestamps, Authored, Base):
 
 
 class ProfileScanStatRow(Base):
-    """One successful scan of a watched profile, as numbers: the history the
-    feed's latest-scan-only `watched_profiles.result` does not keep (growth,
-    posting rate, which groups perform). Written with every scan
-    (`WatchedProfileRepository.record_scan`); not deleted with the profile,
-    so stopping to watch an account keeps its past."""
-
     __tablename__ = "watched_profile_scans"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -513,13 +368,9 @@ class ProfileScanStatRow(Base):
 
 
 class CreatorRow(Timestamps, Authored, Base):
-    """A creator /accounts assigns accounts to (any platform). Created the
-    first time a name is assigned; the name is how the page refers to it."""
-
     __tablename__ = "creators"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # Whose it is (alembic d3e4f5a6b7c8): only they see it (admins too).
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
@@ -531,23 +382,12 @@ class CreatorRow(Timestamps, Authored, Base):
 
 
 class TrackedAccountRow(Timestamps, Authored, Base):
-    """A social account /accounts tracks (features/accounts/tracker.py rescans it
-    every `rescan_interval_s`), with its latest scan: `profile` is a
-    `socials.AccountProfile` dump, `metrics` an `AccountMetrics` one (what
-    the list shows); its posts are `TrackedPostRow`s. `covered_since`: the
-    publish time from which those posts are complete (0: every post was
-    read; None: no scan read any yet). `error` is the last scan's failure,
-    shown next to the previous numbers; `claimed_at` marks a scan in
-    flight."""
-
     __tablename__ = "tracked_accounts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # Whose it is (alembic d3e4f5a6b7c8): only they see it (admins too).
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    # A `socials.platforms()` key.
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     handle: Mapped[str] = mapped_column(String(64), nullable=False)
     creator_id: Mapped[int | None] = mapped_column(
@@ -556,14 +396,8 @@ class TrackedAccountRow(Timestamps, Authored, Base):
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # Set by "Remove": no longer scanned or listed, every record kept;
-    # adding the handle again clears it.
     untracked_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # The platform's stable id (`AccountProfile.account_id`), set by the
-    # first successful scan: a renamed account's new handle merges into it.
     platform_account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # Consecutive failed scans; backs the rescan interval off (see
-    # `AccountsSettings.max_rescan_interval_s`).
     failed_scans: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
@@ -576,7 +410,6 @@ class TrackedAccountRow(Timestamps, Authored, Base):
         UniqueConstraint(
             "user_id", "platform", "handle", name="uq_tracked_accounts_platform_handle"
         ),
-        # NULLs never collide: only scanned accounts carry an id.
         UniqueConstraint(
             "user_id",
             "platform",
@@ -588,12 +421,6 @@ class TrackedAccountRow(Timestamps, Authored, Base):
 
 
 class TrackedPostRow(Base):
-    """A post of a tracked account, kept while published within
-    `settings.accounts.post_retention_days`: scans upsert the posts they
-    read (by the platform's own `post_id`) and never remove one they did
-    not see; only age prunes. `views` are as of `last_seen_at`. Deleted
-    with its account."""
-
     __tablename__ = "tracked_posts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -615,11 +442,6 @@ class TrackedPostRow(Base):
 
 
 class AccountSnapshotRow(Base):
-    """One successful scan of a tracked account: the history growth and the
-    analytics chart are read from. `followers` is a column (growth is a SQL
-    lookup); the rest is the scan's `AccountMetrics` dump, so a platform
-    with other numbers needs no migration. Deleted with its account."""
-
     __tablename__ = "tracked_account_snapshots"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -636,20 +458,12 @@ class AccountSnapshotRow(Base):
 
 
 class DeviceRow(Timestamps, Authored, Base):
-    """A physical phone of the agency (/phones). `model_id`/`color_id` are
-    `ofmhelpers.schemas.phone_catalog.catalog()` ids (`custom_model` for a phone the
-    catalog does not list). Its logins are linked through
-    `DeviceLoginRow`. "Retire" sets `retired_at`: off the list and the
-    export, every login kept."""
-
     __tablename__ = "devices"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # Whose it is (alembic d3e4f5a6b7c8): only they see it (admins too).
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    # How its owner calls it ("Phone 07"); unique per owner.
     label: Mapped[str] = mapped_column(String(32), nullable=False)
     model_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
     color_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -665,25 +479,15 @@ class DeviceRow(Timestamps, Authored, Base):
 
 
 class LoginRow(Timestamps, Authored, Base):
-    """One account: an iCloud, a Gmail, an Instagram, a website... `service`
-    is an `ofmhelpers.schemas.phone_catalog.services()` key; `provider` names it for a
-    custom service ("Acme Corp"), "" otherwise. Stored once, signed in on
-    any number of phones (`DeviceLoginRow`). Password and backup codes are
-    encrypted at rest (`EncryptedText`); "" stays "", so a list can tell
-    which logins have one without decrypting anything."""
-
     __tablename__ = "logins"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # The owner of the phones it is on: a login links only to its owner's
-    # phones, so nobody reveals another's password by adding the same handle.
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     service: Mapped[str] = mapped_column(String(32), nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     username: Mapped[str] = mapped_column(String(255), nullable=False)
-    # Deferred: a row loaded for its name never needs the key.
     password: Mapped[str] = mapped_column(
         EncryptedText,
         nullable=False,
@@ -699,9 +503,6 @@ class LoginRow(Timestamps, Authored, Base):
         deferred_group="secret",
     )
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    # Set: the account was removed everywhere (/accounts, or its Drive folder
-    # deleted by hand) -- hidden from every phone, password kept, restorable
-    # (alembic e5f6a7b8c9d1). Its phone links stay for the restore.
     archived_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
@@ -712,9 +513,6 @@ class LoginRow(Timestamps, Authored, Base):
 
 
 class DeviceLoginRow(Timestamps, Authored, Base):
-    """A login signed in on a phone. Deleted with either side; a login no
-    phone links any more is deleted with its last link (repository)."""
-
     __tablename__ = "device_logins"
 
     device_id: Mapped[int] = mapped_column(
@@ -728,10 +526,6 @@ class DeviceLoginRow(Timestamps, Authored, Base):
 
 
 class DriveAccountFolderRow(Base):
-    """An Instagram login's folder in the shared Drive folder (/drive),
-    "<handle> - <owner>". Kept by id, so a new owner renames it instead of
-    starting another. Deleted with the login; the Drive folder never is."""
-
     __tablename__ = "drive_account_folders"
 
     login_id: Mapped[int] = mapped_column(
@@ -740,23 +534,13 @@ class DriveAccountFolderRow(Base):
     folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)
-    # The root folder it was made or found in: a row of another root (dev
-    # once pointed at the live folder) is ignored, never written into.
     root_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # Its POSTED folder inside it; NULL until the sweep makes or finds one.
     posted_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # Its last read (`schemas.AccountScan`), what /drive opens with before
-    # the live read arrives; NULL until read once.
     scan: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class DriveVaFolderRow(Base):
-    """A VA's own folder in their owner's "ALL ACCOUNTS" (/drive, /handmade:
-    alembic e0f1a2b3c4d6). Kept by id, so a renamed VA renames it; a row of
-    another root is ignored and the folder made again there. Deleted with
-    the VA; the Drive folder never is."""
-
     __tablename__ = "drive_va_folders"
 
     user_id: Mapped[int] = mapped_column(
@@ -771,18 +555,11 @@ class DriveVaFolderRow(Base):
 
 
 class DriveUploadRow(Base):
-    """A clone result uploaded (or on its way) into an account's Drive
-    folder, as the uploader's Google account (features/drive/uploads.py).
-    `status`: queued, done (`drive_file_id`, `drive_url`) or failed
-    (`error`). One per file and folder: never uploaded twice there."""
-
     __tablename__ = "drive_uploads"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     file_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    # The folder: an account's (`login_id`) or a VA's own (`va_id`, alembic
-    # f1a2b3c4d5e7), exactly one.
     login_id: Mapped[int | None] = mapped_column(
         ForeignKey("logins.id", ondelete="CASCADE"), nullable=True
     )
@@ -814,14 +591,6 @@ class DriveUploadRow(Base):
 
 
 class DrivePostedFileRow(Base):
-    """A file seen in a login's POSTED folder, from the sweep that first saw
-    it: Drive keeps no time a file was moved, so this is what a sweep's
-    "newly posted" counts -- only the files seen in the login's current
-    account folder (`folder_id`), so a new folder (a dev copy's own root)
-    starts at zero.
-    Never deleted when the file leaves POSTED (the live count drops, the
-    history stays); deleted with the login."""
-
     __tablename__ = "drive_posted_files"
 
     file_id: Mapped[str] = mapped_column(String(128), primary_key=True)
@@ -831,7 +600,6 @@ class DrivePostedFileRow(Base):
     name: Mapped[str] = mapped_column(String(512), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     first_seen_at: Mapped[float] = mapped_column(Float, nullable=False)
-    # The account folder it was seen in (NULL: a login without one then).
     folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (
@@ -840,13 +608,6 @@ class DrivePostedFileRow(Base):
 
 
 class ShortLinkRow(Timestamps, Authored, Base):
-    """A link on a link provider (/links): one we made ("Generate links":
-    one per Instagram account, `account_id`) or one the provider listed on
-    a sync. `remote_id` is the provider's id for it (NULL while still
-    being made); `status`: creating | active | inactive | failed |
-    deleting. `adult`: visitors confirm 18+ first (NULL: the provider does
-    not say). A link the provider no longer lists is deleted here too."""
-
     __tablename__ = "short_links"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -878,17 +639,12 @@ class ShortLinkRow(Timestamps, Authored, Base):
             "user_id", "provider", "remote_id", name="uq_short_links_remote"
         ),
         Index("ix_short_links_account_id", "account_id"),
-        # The public bridge looks a self link up by (domain, slug) on every
-        # hit; partial so it stays small (self + active only).
         Index(
             "ix_short_links_bridge",
             "domain",
             "slug",
             postgresql_where=text("provider = 'self' AND status = 'active'"),
         ),
-        # One self address is one link, whoever owns it (owner 2026-11-18):
-        # a live or paused one holds its address; failed and deleting ones
-        # do not. `taken_slugs` numbers a new one past it.
         Index(
             "uq_short_links_self_address",
             "domain",
@@ -902,9 +658,6 @@ class ShortLinkRow(Timestamps, Authored, Base):
 
 
 class ShortLinkDayRow(Base):
-    """One UTC day of one link's numbers, as its provider reports them:
-    landing views and clicks through. Rewritten by every sync."""
-
     __tablename__ = "short_link_daily_stats"
 
     link_id: Mapped[int] = mapped_column(
@@ -916,10 +669,6 @@ class ShortLinkDayRow(Base):
 
 
 class LinkSyncRow(Base):
-    """A user's account on a link provider, as the sweeper keeps it: when it
-    was last synced (or claimed by a sync), the last sync's error, and the
-    plan's quota then (`links.Usage`)."""
-
     __tablename__ = "short_link_syncs"
 
     user_id: Mapped[int] = mapped_column(
@@ -933,10 +682,6 @@ class LinkSyncRow(Base):
 
 
 class SelfLinkDomainRow(Timestamps, Authored, Base):
-    """A custom domain we serve our own bridge pages on (provider "self").
-    `owner_id` NULL = shared by everyone; otherwise one user's own. `status`:
-    pending (added, not serving yet) | active (bridge serves it) | disabled."""
-
     __tablename__ = "self_link_domains"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -948,12 +693,6 @@ class SelfLinkDomainRow(Timestamps, Authored, Base):
 
 
 class SelfLinkClickRow(Base):
-    """One hit on a self-hosted bridge page: a landing view (`kind` = view) or
-    a continue-through (`kind` = click). Unlike `short_link_daily_stats` (one
-    row per UTC day) this keeps every hit with its exact time and what
-    Cloudflare told us about the visitor, so any time frame, country, device or
-    referrer can be read back. Raw `ip` is kept on purpose."""
-
     __tablename__ = "self_link_clicks"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -977,14 +716,6 @@ class SelfLinkClickRow(Base):
 
 
 class CloneAiCheckRow(Base):
-    """One AI check (`ofmhelpers.features.clone_links.ai_check`, web/clone_ai_checks.py): is a
-    generated video too glitchy to post? The verdict (GOOD/GLITCHY, None when
-    the check itself failed -- `error`), how sure the model was, every glitch
-    it saw, its reasoning, and what a debugger needs: the prompt, the raw
-    answer, who answered, the stills' times (enough to draw the contact
-    sheet again), attempts and timings. `job_id`/`file_index`: the result it
-    checked, when it was one; `user_id`: whose."""
-
     __tablename__ = "clone_ai_checks"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -1012,8 +743,6 @@ class CloneAiCheckRow(Base):
     sheet_s: Mapped[float] = mapped_column(Float, nullable=False)
     llm_s: Mapped[float] = mapped_column(Float, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # quota / setup / failed (`CloneAiCheck.error_kind`); the provider's own
-    # text, kept for debugging and never shown.
     error_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -1023,15 +752,6 @@ class CloneAiCheckRow(Base):
 
 
 class CloneFromLinkRow(Base):
-    """A /clone-links result on its way to Drive (features/clone_links/review.py):
-    checked for glitches (`check_id`: its `clone_ai_checks` row), then uploaded
-    as its owner's Google account into their root's GOOD REELS or TRIAL
-    REELS (`folder_name`). `status`: checking, uploading, done
-    (`drive_file_id`, `drive_url`) or failed (`error`). One per result
-    file. `path`: the result's local file (a cut-off review is queued again
-    from it); `started_at`: when a worker claimed it (None: still queued);
-    `attempts`: how many times it was started. Deleted with its job."""
-
     __tablename__ = "clone_from_links"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -1064,11 +784,6 @@ class CloneFromLinkRow(Base):
 
 
 class PicturePresetRow(Timestamps, Authored, Base):
-    """A /pictures preset (alembic 9c1d2e3f4a5b): a name, the prompt and up
-    to 10 reference images (paths in the owner's part of the asset store, in
-    order) every run of it sends. Its owner's; the agency's are everyone's
-    to use. Names are unique per owner."""
-
     __tablename__ = "picture_presets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -1078,8 +793,6 @@ class PicturePresetRow(Timestamps, Authored, Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     images: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    # Every run's output shape ("3:4"); NULL = the picture's own (alembic
-    # 4e5f6a7b8c9d).
     aspect_ratio: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     __table_args__ = (
@@ -1088,11 +801,6 @@ class PicturePresetRow(Timestamps, Authored, Base):
 
 
 class CloneExampleRow(Timestamps, Authored, Base):
-    """An example /clone's SOP shows (alembic a6b7c8d9e0f2): its title, the
-    prompt it shows and its place in the list; its files are in
-    `<uploads>/sop/<id>/`. Made from a finished clone (`job_id`, while that
-    run exists) and kept without it. Everyone's to read."""
-
     __tablename__ = "clone_examples"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
@@ -1107,12 +815,6 @@ class CloneExampleRow(Timestamps, Authored, Base):
 
 
 class PhoneRevisionRow(Base):
-    """One person's phones after one change (alembic b7c8d9e0f1a3): the rows
-    of `devices`, `logins` and `device_logins` as stored, secrets still
-    encrypted. Written by the database's own trigger on those tables, never
-    by the app; a second trigger makes the table append-only. Mapped so the
-    schema check and the tests' wipe know it."""
-
     __tablename__ = "phone_revisions"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
@@ -1135,12 +837,6 @@ class PhoneRevisionRow(Base):
 
 
 class AuditLogRow(Base):
-    """One change to a row people edit (alembic a1b2c3d4e5f8): who, as whom,
-    from where, which row, what changed. Written by the database's own
-    trigger on the audited tables (`db/audit.py`), never by the app; a
-    second trigger makes the table append-only. Read by
-    `db/repositories/audit_log.py`."""
-
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
@@ -1150,7 +846,6 @@ class AuditLogRow(Base):
     table_name: Mapped[str] = mapped_column(Text, nullable=False)
     row_id: Mapped[str] = mapped_column(Text, nullable=False)
     op: Mapped[str] = mapped_column(Text, nullable=False)
-    # No foreign keys: the log outlives any row and any person.
     owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     viewing_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -1171,12 +866,6 @@ class AuditLogRow(Base):
 
 
 class UserEventTargetRow(Timestamps, Authored, Base):
-    """Where one person's events go on one sender (alembic b2c3d4e5f6a9):
-    their own Telegram chat, linked from /account (the bot's /start link).
-    An event of theirs (`Event.owner_id`) goes there instead of the agency's
-    chats (`features/events/dispatch.py`). `target` is where a message goes:
-    never logged, masked in `audit_log`."""
-
     __tablename__ = "user_event_targets"
 
     user_id: Mapped[int] = mapped_column(
@@ -1187,15 +876,6 @@ class UserEventTargetRow(Timestamps, Authored, Base):
 
 
 class DistributionChannelRow(Timestamps, Authored, Base):
-    """One account on another site (`platform`: "pinterest") that
-    /distribution posts to (alembic 9909cfa699f9). It belongs to no model:
-    every model's content of its owner is spread over all their accounts.
-    `cookies` its logged-in cookies.txt (encrypted, masked in `audit_log`);
-    `next_at` when its next pin is due (jittered), `resume_at` set while the
-    site rate-limits it; `error` why it stopped (dead cookies); `paused_at`
-    set = nothing goes out. The middle three are the sweep's: quiet in the
-    stamps."""
-
     __tablename__ = "distribution_channels"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -1204,7 +884,6 @@ class DistributionChannelRow(Timestamps, Authored, Base):
     )
     platform: Mapped[str] = mapped_column(Text, nullable=False)
     account_name: Mapped[str] = mapped_column(Text, nullable=False)
-    # Deferred: the page lists channels without decrypting anything.
     cookies: Mapped[str] = mapped_column(
         EncryptedText, nullable=False, default="", deferred=True
     )
@@ -1218,8 +897,6 @@ class DistributionChannelRow(Timestamps, Authored, Base):
     resume_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # When its login cookie expires (renewed cookies are saved after every
-    # pin): the page warns a week before. Quiet in the stamps.
     cookies_expire_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -1235,11 +912,6 @@ class DistributionChannelRow(Timestamps, Authored, Base):
 
 
 class DistributionPresetRow(Timestamps, Authored, Base):
-    """One model's preset, private to its owner (alembic 9909cfa699f9): a
-    `schemas.distribution.ModelPreset` dump, read back whole. Loaded with
-    `python -m ofmhelpers.features.distribution preset <file> --owner <id>`;
-    the files themselves never go into the (public) repo."""
-
     __tablename__ = "distribution_presets"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -1248,8 +920,6 @@ class DistributionPresetRow(Timestamps, Authored, Base):
     )
     key: Mapped[str] = mapped_column(Text, nullable=False)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    # The model's one self link, made the first time one of its files is
-    # pinned.
     link_id: Mapped[int | None] = mapped_column(
         ForeignKey("short_links.id", ondelete="SET NULL"), nullable=True
     )
@@ -1260,11 +930,6 @@ class DistributionPresetRow(Timestamps, Authored, Base):
 
 
 class DistributionPostRow(Base):
-    """One Drive file queued for one channel (alembic 9909cfa699f9): never
-    twice (unique per channel and file). `status` queued -> publishing ->
-    published (`remote_id` = the pin's id) or failed (`error`, tried again
-    up to `max_attempts`); `job_id` = its latest publish job."""
-
     __tablename__ = "distribution_posts"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -1277,13 +942,11 @@ class DistributionPostRow(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False)
-    # The model the file is of (its preset key).
     preset: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     job_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     remote_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # What it was pinned with, drawn when claimed (`PostSource` docs).
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     link: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1303,6 +966,5 @@ class DistributionPostRow(Base):
             "channel_id", "file_id", name="uq_distribution_posts_channel_file"
         ),
         Index("ix_distribution_posts_channel_status", "channel_id", "status"),
-        # Which files a model's accounts already pinned (the pick of the next).
         Index("ix_distribution_posts_file_status", "file_id", "status"),
     )

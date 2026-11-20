@@ -1,17 +1,3 @@
-"""The fake's half for APIYI's other families (`fake.py` dispatches here):
-Gemini `generateContent`, the OpenAI images API, Seedance's Ark tasks and
-Veo's `/v1/videos`, answered the way docs.apiyi.com describes them, with the
-traps the docs warn about:
-
-- Seedance: without `Accept-Encoding: identity` the gateway's mislabelled
-  gzip body arrives truncated (an unreadable answer).
-- Veo: `seconds` as a number is refused (400 parse_request_failed);
-  `generateAudio` is refused; `/content` needs the key (the API host
-  checks it for every route); `veo_url` False = a completed task without a
-  `video_url`.
-- The images API: the official gpt-image-2 refuses `response_format`.
-"""
-
 import base64
 import itertools
 import json
@@ -41,8 +27,6 @@ def error(status: int, code: str, message: str) -> FakeReply:
 
 
 class Multipart(BaseModel):
-    """A multipart body: its plain fields and its (field, file name) files."""
-
     fields: dict[str, str]
     files: list[tuple[str, str]]
 
@@ -65,9 +49,7 @@ def _png_b64() -> str:
 class FakeFamilies:
     def __init__(self, polls_until_done: int = 2) -> None:
         self.polls_until_done = polls_until_done
-        # Every submit: (path, JSON body or multipart fields, file names).
         self.calls: list[tuple[str, dict[str, Any], list[tuple[str, str]]]] = []
-        # The next generateContent answers this body instead of an image.
         self.gemini_next: dict[str, Any] | None = None
         self.veo_url = True
         self.tasks: dict[str, dict[str, Any]] = {}
@@ -75,7 +57,6 @@ class FakeFamilies:
         self._lock = threading.Lock()
 
     def handle(self, request: requests.PreparedRequest, path: str) -> FakeReply | None:
-        """The answer when `path` is one of these families', else None."""
         method = request.method
         if method == "POST" and path.endswith(":generateContent"):
             return self._gemini(request, path)
@@ -102,8 +83,6 @@ class FakeFamilies:
         loaded = json.loads(raw if isinstance(raw, (str, bytes)) and raw else b"{}")
         return loaded if isinstance(loaded, dict) else {}
 
-    # --- Gemini -----------------------------------------------------------
-
     def _gemini(self, request: requests.PreparedRequest, path: str) -> FakeReply:
         body = self._json(request)
         self._record(path, body)
@@ -127,8 +106,6 @@ class FakeFamilies:
                 "usageMetadata": {"promptTokenCount": 10},
             }
         )
-
-    # --- OpenAI images ----------------------------------------------------
 
     def _images(self, request: requests.PreparedRequest, path: str) -> FakeReply:
         content_type = str(request.headers.get("Content-Type", ""))
@@ -155,11 +132,8 @@ class FakeFamilies:
             return FakeReply.json_body({"created": 1, "data": [{"url": url}]})
         return FakeReply.json_body({"created": 1, "data": [{"b64_json": _png_b64()}]})
 
-    # --- Seedance ---------------------------------------------------------
-
     def _seedance(self, request: requests.PreparedRequest, path: str) -> FakeReply:
         if request.headers.get("Accept-Encoding") != "identity":
-            # The gateway labels a plain body gzip: the client reads garbage.
             return FakeReply(
                 body=b'id":"cgt-trunc', headers={"Content-Type": "application/json"}
             )
@@ -185,8 +159,6 @@ class FakeFamilies:
                 "usage": {"completion_tokens": 108900},
             }
         )
-
-    # --- Veo --------------------------------------------------------------
 
     def _veo(self, request: requests.PreparedRequest, path: str) -> FakeReply:
         if request.method == "POST" and path == "/v1/videos":

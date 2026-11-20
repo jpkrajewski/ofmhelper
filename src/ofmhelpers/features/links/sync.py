@@ -1,23 +1,3 @@
-"""
-ofmhelpers/web/link_sync.py
-
-/links' background work, all on the worker, each on the link owner's own
-key (features/links/keys.py `client`):
-
-- `sync_links`: what a provider lists for a user, and every link's daily
-  views and clicks of the longest period; a sweep queues one per (user,
-  provider) every `sync_interval_s` (3 h), claimed atomically like
-  account_tracker's scans (an expired claim is taken over).
-- `create_links`: "Generate links" -- each link made in turn, always 18+
-  gated (the client refuses to leave one ungated); a taken slug is
-  numbered and tried again; a quota, rate limit or key error fails the
-  rest at once with the provider's words.
-- `enable_adult`, `delete_links`: the bulk actions.
-
-Provider-agnostic: everything provider-specific is behind
-`links.providers.LinkProvider`.
-"""
-
 from datetime import timedelta
 lazy from collections.abc import Callable
 
@@ -44,17 +24,11 @@ lazy from ofmhelpers.schemas import ShortLink
 
 logger = get_logger(__name__)
 
-# Numbered slugs tried after a taken one ("name-2", "name-3", ...).
 _SLUG_TRIES = 5
-# Errors that would fail every next call the same way.
 _STOPS = (AuthError, QuotaError, RateLimitedError)
 
 
 def _regate(found: LinkProvider, user_id: int, provider: str) -> None:
-    """The 18+ gate on for every link of the owner's on `provider` known to
-    be without it (made elsewhere, or a gate that failed and could not be
-    undone): links are always 18+ gated (user decision 2026-10-22). One
-    that still fails stays flagged on /links."""
     for link in store.list_links(user_id):
         if link.provider != provider or link.adult is not False or not link.remote_id:
             continue
@@ -73,9 +47,6 @@ def _regate(found: LinkProvider, user_id: int, provider: str) -> None:
 
 
 def sync_links(user_id: int, provider: str) -> None:
-    """The worker job: one user's links on one provider and their numbers,
-    then the 18+ gate on wherever it is missing. A failure is recorded on
-    the sync (shown on /links), never raised."""
     found = keys.client(user_id, provider)
     if found is None:
         store.finish_sync(user_id, provider, None, "No API key")
@@ -97,8 +68,6 @@ def sync_links(user_id: int, provider: str) -> None:
         store.finish_sync(user_id, provider, None, str(exc))
         return
     except Exception as exc:
-        # An answer of a shape the client does not know, a database error:
-        # recorded, so the claim is dropped and /links says it.
         logger.exception("%s sync of user %s failed", provider, user_id)
         store.finish_sync(
             user_id, provider, None, f"Sync failed ({type(exc).__name__}): {exc}"
@@ -109,10 +78,6 @@ def sync_links(user_id: int, provider: str) -> None:
 
 
 def _make(provider: LinkProvider, link: ShortLink, taken: set[str]) -> None:
-    """One link, its slug numbered while taken on the provider, never onto
-    one of the owner's own (`taken`, which it adds to). A link made but left
-    ungated (its gate and its deletion both failed) is recorded, flagged.
-    Raises the provider's errors."""
     rules = provider_infos()[link.provider].slug
     base, slug, n = link.slug, link.slug, 1
     for _ in range(_SLUG_TRIES + 1):
@@ -145,9 +110,6 @@ def _make(provider: LinkProvider, link: ShortLink, taken: set[str]) -> None:
 
 
 def create_links(user_id: int, provider: str, link_ids: list[int]) -> None:
-    """The worker job: "Generate links". Each link is made or failed with
-    the reason; one that stops every next call stops the batch; anything
-    unexpected fails that one link, never the rest."""
     links = [x for x in store.get_links(link_ids, user_id) if x.status == "creating"]
     found = keys.client(user_id, provider)
     if found is None:
@@ -185,8 +147,6 @@ def create_links(user_id: int, provider: str, link_ids: list[int]) -> None:
 
 
 def _clients(user_id: int) -> Callable[[str], LinkProvider | None]:
-    """One client per provider for a job's links (its throttle is shared
-    per key anyway: base.LinkProvider._wait_turn)."""
     made: dict[str, LinkProvider | None] = {}
 
     def client(provider: str) -> LinkProvider | None:
@@ -198,7 +158,6 @@ def _clients(user_id: int) -> Callable[[str], LinkProvider | None]:
 
 
 def enable_adult(user_id: int, link_ids: list[int]) -> None:
-    """The worker job: the 18+ confirmation on for each link."""
     client = _clients(user_id)
     for link in store.get_links(link_ids, user_id):
         found = client(link.provider)
@@ -216,9 +175,6 @@ def enable_adult(user_id: int, link_ids: list[int]) -> None:
 
 
 def delete_links(user_id: int, link_ids: list[int]) -> None:
-    """The worker job: each link deleted on its provider, then here. One
-    the provider still has after a failure goes back to its status with
-    the error."""
     client = _clients(user_id)
     try:
         for link in store.get_links(link_ids, user_id):
@@ -258,7 +214,6 @@ def queue_due_syncs() -> list[LinkSyncKey]:
 
 
 def sync_now(user_id: int, provider: str | None = None) -> list[LinkSyncKey]:
-    """`user_id`'s links (on `provider`, else all) synced at once."""
     store.mark_due(user_id, provider)
     return _queue(
         [

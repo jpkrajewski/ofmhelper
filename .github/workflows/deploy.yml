@@ -175,9 +175,10 @@ jobs:
             echo "== swapping in the new containers =="
             # --remove-orphans: a service taken out of the compose file (clone-links-worker,
             # events-worker, 2026-11-11) would run on with the old code, next to the new.
-            # Redis waits until the workers are down: a changed REDIS_PASSWORD
-            # recreates it, and the old workers draining their jobs would lose it.
-            $compose up -d --wait --remove-orphans postgres pot-provider
+            # Postgres and Redis wait until the app and workers are down: a changed
+            # config (a new password in .env) recreates them, and the old app still
+            # serving lost its database for seconds (prod 2026-11-18, OFMHELPERS-9).
+            $compose up -d --remove-orphans pot-provider
             # Old code never runs against the new schema: the app and workers
             # stop before `migrate` touches it (seconds of downtime; the build
             # is already done). Compose then runs `migrate` (alembic upgrade
@@ -200,8 +201,8 @@ jobs:
             # deploy (scripts/postgres_password.sh): a new value in .env is a
             # rotation. The app is stopped, nothing logs in with the old one.
             echo "== passwords from .env =="
+            $compose up -d --wait postgres redis
             $compose exec -T postgres sh -s < scripts/postgres_password.sh
-            $compose up -d --wait redis
             echo "== migrating, then starting the app =="
             $compose up -d --no-deps --force-recreate migrate ofmhelpers worker sweeps preview-worker media-worker edit-worker
             $compose logs migrate

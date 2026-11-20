@@ -1,8 +1,3 @@
-"""What /phones does behind its routes (web/routers/inventory/phones.py):
-the list as the page shows it, the export, and what is done to one phone
-(`Phone`) or one saved login (`SavedLogin`) of the person asking. A login of
-a tracked service (Instagram) also shows on its phone owner's /accounts."""
-
 import datetime
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -42,20 +37,14 @@ lazy from ofmhelpers.schemas import DeviceFields
 
 logger = get_logger(__name__)
 
-# The job row of the Drive sync a login put on a phone starts.
 DRIVE_SYNC_TASK = drive_folders.SYNC_TASK
 
 
-class SecretsUnreadableError(RuntimeError):
-    """A saved password or backup code could not be read or written: the
-    vault key (`OFM_VAULT_KEY`) is missing or changed. The message says
-    which; only /phones shows it."""
+class SecretsUnreadableError(RuntimeError): ...
 
 
 @contextmanager
 def _vault() -> Iterator[None]:
-    """What reads or writes a secret on purpose: the vault's own error
-    leaves as this feature's."""
     try:
         yield
     except VaultError as exc:
@@ -63,24 +52,17 @@ def _vault() -> Iterator[None]:
 
 
 class Assigning(BaseModel):
-    """/accounts "Assign phone": the tracked account waiting for a phone and
-    the phone-login service it is saved as."""
-
     account: TrackedAccount
     service: str
 
 
 class PageView(BaseModel):
-    """/phones: each field is a name `phones.html` reads."""
-
-    # Pick mode (`?assign=`): a click on a phone connects this account.
     assigning: Assigning | None
     devices: list[Device]
     retired: list[Device]
     archived: list[ArchivedLogin]
     total: int
     logins: int
-    # The add/edit dialog suggests the people already holding a phone.
     owners: list[str]
     sorts: type[PhoneSort]
     default_sort: PhoneSort
@@ -89,8 +71,6 @@ class PageView(BaseModel):
 
 
 class Workbook(BaseModel):
-    """The export: every active phone and its logins, in plaintext."""
-
     content: bytes
     name: str
     phones: int
@@ -99,13 +79,10 @@ class Workbook(BaseModel):
 
 class LoginAdded(BaseModel):
     id: int
-    # The account was already saved (on another phone): linked, not copied.
     linked: bool
 
 
 def _assigning(account_id: int | None, scope: int) -> Assigning | None:
-    """The person's own tracked account `account_id`, when its platform is
-    one a phone login tracks (Instagram); None for anything else."""
     account = get_account(account_id, scope) if account_id is not None else None
     service = tracked_services().get(account.platform) if account else None
     if account is None or service is None:
@@ -132,8 +109,6 @@ def page_view(query: PhoneQuery, scope: int) -> PageView:
 
 
 def drawing(model: str, color: str) -> str:
-    """The phone's back in its color as SVG, drawn from the catalog; a plain
-    phone for an unknown model."""
     found = find_model(model)
     phone = found.model if found else None
     finish = catalog().color(phone, color) if phone else None
@@ -164,18 +139,12 @@ def _require(found: bool, what: str) -> None:
 
 
 def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
-    """An Instagram (any tracked service's) login shows on its phone owner's
-    /accounts."""
     owner = store.owner_of_login(login_id)
     if owner is not None:
         track_login(body.service, body.username, user_id=owner, revive=revive)
 
 
 def _make_drive_folder(login_id: int, service: str) -> None:
-    """A tracked service's login just put on a phone: its owner's Drive
-    folders are made now (on the worker), not at the next sweep. Never
-    raises: the login is saved already; a failure is logged and the sweep
-    makes the folder."""
     found = services().get(service)
     if found is None or not found.tracked_platform or not drive_folders.enabled():
         return
@@ -191,9 +160,6 @@ def _make_drive_folder(login_id: int, service: str) -> None:
 
 
 class Phone(BaseModel, frozen=True):
-    """One phone of the person asking (`scope`); anything asked of a phone
-    that is not theirs, or gone, is `NotFoundError`."""
-
     scope: int
     device_id: int
 
@@ -208,7 +174,6 @@ class Phone(BaseModel, frozen=True):
         _require(store.restore_device(self.device_id, self.scope), "Phone")
 
     def delete(self) -> None:
-        """Its logins no other phone has leave /accounts and Drive too."""
         logins_leaving(self.scope, self.device_id)
         _require(store.delete_device(self.device_id, self.scope), "Phone")
 
@@ -219,8 +184,6 @@ class Phone(BaseModel, frozen=True):
 
     @_vault()
     def _saved(self, body: LoginFields) -> LoginAdded:
-        """The login saved on this phone and tracked; its Drive folder is
-        the caller's to queue."""
         added = store.add_login(self.device_id, body, self.scope)
         if added is None:
             msg = "Phone not found"
@@ -229,16 +192,6 @@ class Phone(BaseModel, frozen=True):
         return LoginAdded(id=added.id, linked=added.existed)
 
     def assign(self, body: AssignAccount) -> LoginAdded:
-        """/accounts "Assign phone": the person's tracked account becomes a
-        login on this phone (no password yet), so it gets its Drive folder.
-        The phone's other accounts of that service leave it when `replace`
-        (as Remove login does: off their last phone they leave /accounts and
-        Drive, password deleted); without it they refuse. The new account
-        goes on first: a failure half way leaves the phone with both, never
-        with none, and the same request sent again finishes it (an account
-        already on the phone is no error). Its Drive folder is queued after
-        the others left: a sync started before would read logins being
-        deleted under it (prod job drive_sync 9e928539, 2026-11-15)."""
         found = _assigning(body.account_id, self.scope)
         phone = store.get_device(self.device_id, self.scope)
         if found is None or phone is None:
@@ -258,25 +211,20 @@ class Phone(BaseModel, frozen=True):
         added = LoginAdded(id=already.id, linked=True) if already else self._saved(new)
         for name in others:
             self.remove_login(on_phone[name].id)
-        # Also for an account on the phone already: the point of Assign phone.
         _make_drive_folder(added.id, found.service)
         return added
 
     def remove_login(self, login_id: int) -> None:
-        """Off its last phone, the account leaves /accounts and Drive too."""
         logins_leaving(self.scope, self.device_id, login_id)
         _require(store.remove_login(self.device_id, login_id, self.scope), "Login")
 
 
 class SavedLogin(BaseModel, frozen=True):
-    """One saved login of the person asking (`scope`)."""
-
     scope: int
     login_id: int
 
     @_vault()
     def secret(self) -> LoginSecrets:
-        """Its password and backup codes, for Show / Copy / Edit."""
         found = store.secrets(self.login_id, self.scope)
         if found is None:
             msg = "Login not found"
@@ -286,15 +234,9 @@ class SavedLogin(BaseModel, frozen=True):
     @_vault()
     def edit(self, body: LoginFields) -> None:
         _require(store.update_login(self.login_id, body, self.scope), "Login")
-        # A renamed handle is tracked; an account removed by hand stays removed
-        # (editing a password is no reason to bring it back).
         _track(self.login_id, body, revive=False)
 
     def restore(self) -> None:
-        """An archived account back on its phones, tracked again (its Drive
-        folder is made at the next sweep). Not one whose phones were all
-        deleted meanwhile: restored, it would sit on no phone and the next
-        phone change would delete it, password included."""
         archived = {x.id: x for x in store.archived_logins(self.scope)}
         if self.login_id in archived and not archived[self.login_id].on:
             msg = "No phone has this account any more: add it to a phone instead"

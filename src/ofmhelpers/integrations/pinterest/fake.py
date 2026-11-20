@@ -1,14 +1,3 @@
-"""pinterest.com's web calls faked at the wire (OFM_FAKE_EXTERNALS, tests),
-answering as the real ones answered on 2026-11-18 (`client.py`): the
-`resource_response` envelope, a signed S3 slot per registered upload, an
-upload `processing` once and then `succeeded` with a signature, a pin id per
-`/v3/storypins/`, a board made by `BoardResource/create`; the account's
-username is `pin_<its _pinterest_sess value>` (one fake per cookies file). A
-request without the `_pinterest_sess` cookie, or any
-while `logged_out`, is a 403 like a dead session. `pins` records every pin
-made (its body); `fail_next` answers the next resource calls with these
-replies."""
-
 import json
 import re
 import threading
@@ -41,7 +30,6 @@ class FakePinterest:
         self.pins: list[FakePin] = []
         self.uploaded: list[str] = []
         self.logged_out = False
-        # Pinterest failing to process every upload (a broken file).
         self.broken_uploads = False
         self.account: dict[str, str] = dict(ACCOUNT)
         self.boards: list[dict[str, str]] = [dict(b) for b in BOARDS]
@@ -111,7 +99,6 @@ class FakePinterest:
         return None
 
     def _state(self, upload_id: str) -> dict[str, Any]:
-        """Processing on the first ask, done after (only once uploaded)."""
         asked = self._uploads.get(upload_id)
         if asked is None or upload_id not in self.uploaded:
             return {"upload_id": upload_id, "status": "registered"}

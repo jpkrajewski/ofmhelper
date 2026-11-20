@@ -1,10 +1,3 @@
-"""Reconciling a picker's manifest of new + reused files into ordered paths.
-
-The manifest is what stops a reused reference file from being re-uploaded: the
-client says "entry 2 is the file you already have at this path", and this is
-the only place that claim is validated against the asset store.
-"""
-
 from collections.abc import Sequence
 from functools import lru_cache
 from pathlib import Path
@@ -25,14 +18,7 @@ logger = get_logger(__name__)
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
-    """Validate a path the client claims points at a previously-uploaded
-    file. Raises `AssetRefusedError` if it's outside allowed_root or
-    doesn't actually exist -- never trust a client-supplied path as-is.
-
-    Pure: it reads the store and never writes to it. "This file was just
-    picked" is recorded by the caller (`features/assets/ref_usage.record_use`), which is
-    the only place that knows a resolve meant a real reuse."""
-    if "\0" in raw_path:  # security audit 2026-11-18: refusal, not a 500
+    if "\0" in raw_path:
         msg = "Invalid reference path"
         raise AssetRefusedError(msg)
     resolved = Path(raw_path).resolve()
@@ -46,11 +32,6 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
 
 
 def keep_files(raw_paths: Sequence[str], allowed_root: Path, kind: str) -> list[str]:
-    """Of stored paths a page is about to offer (refs another tool handed
-    over, a person's most used files), the ones that are a `kind` file still
-    in this session's part of the store. A stale or forged path is dropped,
-    never a 400: the page just offers fewer. Each kept path is absolute,
-    ready to hand a file picker as an existing pick."""
     kept: list[str] = []
     for raw in raw_paths:
         try:
@@ -63,14 +44,10 @@ def keep_files(raw_paths: Sequence[str], allowed_root: Path, kind: str) -> list[
 
 
 def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
-    """Of the `?video=` refs a page was handed (one tool sending its result
-    to /clone or /clone-long), the videos still in this session's store."""
     return keep_files(raw_paths, allowed_root, "video")
 
 
 class ManifestEntry(BaseModel):
-    """One picked file of a form: a new upload, or one already in the store."""
-
     kind: str = "new"
     path: str = ""
 
@@ -87,13 +64,6 @@ def build_ordered_paths(
     *,
     user_id: int,
 ) -> list[str]:
-    """Reconstructs an ordered list of file paths from a JSON manifest like
-    [{"kind": "new"}, {"kind": "existing", "path": "..."}]. Genuinely new
-    uploads go through save_asset (content-deduped); existing refs are
-    resolved by path, never re-uploaded -- together this is what prevents
-    duplicate files on disk. Each file counts as used by `user_id`. A manifest
-    that does not parse is refused (`AssetRefusedError`): taking every entry
-    as new would drop the picked files before a paid run."""
     try:
         manifest = _manifest_adapter().validate_json(manifest_json)
     except ValidationError as exc:
@@ -111,11 +81,6 @@ def build_ordered_paths(
             if upload is None or not upload.filename:
                 continue
             resolved = Path(save_asset(upload, allowed_root)).resolve()
-        # Picked or freshly uploaded, this file was just used, and the picker
-        # opens on what you last used (see routers/refs.py's ordering). A new
-        # upload counts too: save_asset dedupes by content, so re-uploading a
-        # file you already had keeps its old mtime and would sink it in
-        # "Recently uploaded".
         ref_usage.record_use(user_id, resolved)
         paths.append(str(resolved))
     return paths

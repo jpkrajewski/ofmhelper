@@ -1,27 +1,3 @@
-"""A finished /clone-links run's video on its way to Drive: checked for
-glitches (`ofmhelpers.features.clone_links.ai_check`), then uploaded as its owner's Google
-account into their root (`drive_folders.root_name()`), GOOD REELS or
-TRIAL REELS (`folders.py`).
-
-`start_reviews` (end of the run's job) starts one `clone_from_links` row per
-result and queues `review_file` for each: the generated video is already
-saved by then, so nothing here can lose it or fail its job. A worker first
-claims the row (a second queued job for it does nothing), then writes the
-check (`clone_ai_checks`: verdict, reasoning, prompt, raw answer, timings)
-and one Logfire span `AI check {job_id}` with the verdict, glitch percent,
-folder and any error. A check that cannot answer, or raises, still sends
-the video to TRIAL REELS. A failure ends as the row's `error`: a fixed
-reason (`ReviewReason`) the card shows after "Not in Drive:"; the raw text
-goes to the log and the span only.
-
-The card has no retry button (user decision 2026-10-25: the VA sorts in
-Drive). `resume_reviews`, recovery's step every sweep, retries instead: a review
-whose worker was killed is queued again, an upload that failed for a
-reason that may pass is tried again with the check it already has, and a
-done run whose review never started gets one -- each a bounded number of
-times (`settings.clone_links.review_attempts`).
-"""
-
 import mimetypes
 import time
 from pathlib import Path
@@ -54,13 +30,8 @@ lazy from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
 logger = get_logger(__name__)
 
 NOT_CONNECTED: str = ReviewReason.NOT_CONNECTED.value
-# The run whose results these are (routers/generation/clone_links.py TASK).
 RUN_TASK = "clone_links"
-# One try at checking and uploading one result: its own job row.
 TASK = "clone_links_review"
-# A failed review is tried again unless it failed for one of these: nothing
-# a retry changes (the file is gone, Drive is not connected, it was given
-# up on already).
 _FINAL = frozenset(
     {
         ReviewReason.NOT_CONNECTED,
@@ -69,14 +40,10 @@ _FINAL = frozenset(
         ReviewReason.CUT_OFF,
     }
 )
-# Tried again only once Drive has room / takes the person's token again.
 _WAIT_FOR_DRIVE = frozenset({DRIVE_FULL, RECONNECT})
 
 
 def start_reviews(job_id: str, user_id: int, paths: list[str | None]) -> list[int]:
-    """A review per result (`paths` in result order), queued; the ids
-    started. One already done or running is left alone; a result kept only
-    by the provider (path None) gets a failed one saying so. Never raises."""
     started = []
     for index, path in enumerate(paths):
         try:
@@ -102,8 +69,6 @@ def _start(job_id: str, index: int, user_id: int, path: str | None) -> int | Non
 
 
 def _queue(review_id: int) -> None:
-    """`review_file` queued; a queue that refuses it fails the row (recovery
-    tries again)."""
     job_id = None
     try:
         job_id = _job(review_id)
@@ -122,8 +87,6 @@ def _queue(review_id: int) -> None:
 
 
 def _job(review_id: int) -> str:
-    """This try's job row: the person's, naming the clone and which of its
-    videos is checked."""
     review = store.get(review_id)
     return create_job(
         TASK,
@@ -137,9 +100,6 @@ def _job(review_id: int) -> str:
 
 
 def review_file(review_id: int, path: str | None = None) -> None:
-    """Worker job: claim the review, check its video, then upload it. A
-    review already uploading (its check saved) is only uploaded. `path`:
-    the file, for a job queued before the row kept it."""
     review = store.claim(review_id)
     if review is None:
         return
@@ -154,7 +114,6 @@ def review_file(review_id: int, path: str | None = None) -> None:
         try:
             _review(review, review.path or path, span)
         except JobTimeoutException as exc:
-            # RQ's time limit: its worker is killed shortly, so no upload.
             logger.exception("AI check %s ran out of time", review_id)
             _failed(review, ReviewReason.TIMED_OUT, exc, span)
         except Exception as exc:
@@ -194,7 +153,6 @@ def _failed(
 
 
 def _mirrored(job_id: str) -> bool:
-    """Whether the run's export flipped its video left-right."""
     job = get_job(job_id)
     return bool(job and job.params.get("mirror"))
 
@@ -202,8 +160,6 @@ def _mirrored(job_id: str) -> bool:
 def _checked(
     review: CloneFromLink, video: Path, span: logfire.LogfireSpan
 ) -> CloneAiCheck:
-    """The check of `video`; one with no verdict when the check itself
-    raised (a non-LLM failure: those come back as a check)."""
     try:
         return check_clone(video, mirrored=_mirrored(review.job_id))
     except JobTimeoutException:
@@ -215,8 +171,6 @@ def _checked(
 
 
 def _saved(review: CloneFromLink, check: CloneAiCheck) -> int | None:
-    """The check's row id; None when it could not be saved (its job was
-    deleted meanwhile: the review row went with it)."""
     try:
         saved = clone_ai_checks.save(
             check,
@@ -233,8 +187,6 @@ def _saved(review: CloneFromLink, check: CloneAiCheck) -> int | None:
 
 
 def _check(review: CloneFromLink, video: Path, span: logfire.LogfireSpan) -> str | None:
-    """The check, saved; the folder it sends the video to. None when the
-    row is no longer this claim's: nothing more to do."""
     check = _checked(review, video, span)
     check_id = _saved(review, check)
     folder = folder_for(check)
@@ -258,9 +210,6 @@ def _check(review: CloneFromLink, video: Path, span: logfire.LogfireSpan) -> str
         }
     )
     if check.error:
-        # No verdict: the reel goes to TRIAL REELS unchecked. The check off
-        # for every reel (quota, setup) or one that raised is an error, so
-        # Logfire's error triage shows it; any other no-answer a warning.
         off = check.error_kind in ("quota", "setup") or check.error == CHECK_FAILED
         span.set_attribute("check_skipped", check.error_kind or "failed")
         span.set_level("error" if off else "warn")
@@ -292,7 +241,6 @@ def _upload(
     try:
         place = review_folder(token, review.user_id, folder)
         drive, target = place.drive, place.folder_id
-        # A run before this one may have uploaded it before it was killed.
         made = (
             _already_there(drive, target, name, video.stat().st_size)
             if review.attempts > 1
@@ -315,9 +263,6 @@ def _upload(
 def _already_there(
     drive: DriveApi, folder_id: str, name: str, size: int
 ) -> DriveFile | None:
-    """This video, if a killed run got it up: the same name, and not another
-    size. Names alone collide (a hash mod 10^4), and adopting another reel's
-    file would mark this one as filed."""
     return next(
         (
             f
@@ -335,7 +280,6 @@ def _finish(
     drive_url: str | None = None,
     error: str | None = None,
 ) -> None:
-    """The claimed row finished; nothing when it is no longer this claim's."""
     if not store.finish(
         review.id,
         claimed=review.started_at,
@@ -346,15 +290,7 @@ def _finish(
         logger.warning("AI check %s: row taken over, result not saved", review.id)
 
 
-# --- recovery ------------------------------------------------------------------
-
-
 def resume_reviews() -> Registry[str]:
-    """Recovery's step for reviews (`features/jobs/recovery.py`, every sweep): every
-    review a deploy, OOM or crash cut off, or whose upload failed for a
-    reason that may pass, queued again; a done run that has no review
-    started; "review <id>" / "job <id>" -> what happened. Never raises for
-    one review."""
     s = settings.clone_links
     now = time.time()
     since = now - settings.aigen.resume_max_age_s
@@ -390,8 +326,6 @@ def _guarded(step: Callable[[CloneFromLink], str], review: CloneFromLink) -> str
 
 
 def _resume_cut_off(review: CloneFromLink) -> str:
-    """Its worker was killed: queued again, or given up after
-    `review_attempts` claims."""
     if review.attempts >= settings.clone_links.review_attempts:
         _finish(review, error=ReviewReason.CUT_OFF)
         logger.warning("recovery: review %s cut off too often: failed", review.id)
@@ -404,10 +338,6 @@ def _resume_cut_off(review: CloneFromLink) -> str:
 
 
 def _resume_lost(review: CloneFromLink) -> str:
-    """No worker ever took it: its queued job went with the queue (a deploy, a
-    Redis restart), or the queue is hours behind. Queued again once per
-    `review_lost_s` (a duplicate does nothing, `claim` is atomic); given up
-    once past `resume_max_age_s`, so no card spins forever."""
     if time.time() - review.created_at > settings.aigen.resume_max_age_s:
         _finish(review, error=ReviewReason.CUT_OFF)
         logger.warning("recovery: review %s never started: failed", review.id)
@@ -421,9 +351,6 @@ def _resume_lost(review: CloneFromLink) -> str:
 
 
 def _retryable(review: CloneFromLink) -> bool:
-    """A failed review a retry may fix: one that never got queued, or an
-    upload whose check is saved, failed for a reason that may pass, with
-    attempts left."""
     if review.attempts >= settings.clone_links.review_attempts:
         return False
     if review.error == ReviewReason.QUEUE_FAILED:
@@ -433,8 +360,6 @@ def _retryable(review: CloneFromLink) -> bool:
 
 def _resume_failed(review: CloneFromLink) -> str:
     if review.error in _WAIT_FOR_DRIVE:
-        # Only once a page has seen this Drive with room and its token taken
-        # again (cached only: never asks Google from here).
         space = drive_space(review.user_id, ask=False)
         if space is None or space.low or space.reconnect:
             return "waiting for Drive"

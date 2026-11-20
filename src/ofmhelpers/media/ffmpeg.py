@@ -1,6 +1,3 @@
-"""Running ffmpeg/ffprobe: the one place that finds the binaries and turns a
-failure into an error a job can show."""
-
 import shutil
 import subprocess
 from collections.abc import Generator
@@ -17,8 +14,6 @@ def binary(name: str) -> str:
 
 
 def run(args: list[str], timeout_s: int) -> str:
-    """Run ffmpeg/ffprobe and return stdout; a failure raises with the tool's
-    own last lines -- that is what the job's error shows, not the whole argv."""
     with _failures(args, timeout_s):
         return subprocess.run(
             args, check=True, capture_output=True, text=True, timeout=timeout_s
@@ -26,7 +21,6 @@ def run(args: list[str], timeout_s: int) -> str:
 
 
 def run_bytes(args: list[str], timeout_s: int) -> bytes:
-    """`run` for raw output (pixels): stdout as bytes."""
     with _failures(args, timeout_s):
         return subprocess.run(
             args, check=True, capture_output=True, timeout=timeout_s
@@ -34,7 +28,6 @@ def run_bytes(args: list[str], timeout_s: int) -> bytes:
 
 
 def run_log(args: list[str], timeout_s: int) -> str:
-    """`run` for a result ffmpeg writes to its log (`volumedetect`): stderr."""
     with _failures(args, timeout_s):
         done = subprocess.run(args, check=True, capture_output=True, timeout=timeout_s)
     return done.stderr.decode(errors="replace")
@@ -42,7 +35,6 @@ def run_log(args: list[str], timeout_s: int) -> str:
 
 @contextmanager
 def _failures(args: list[str], timeout_s: int) -> Generator[None]:
-    """A failure or a timeout as a RuntimeError naming only the tool."""
     name = Path(args[0]).name
     try:
         yield

@@ -1,8 +1,3 @@
-"""Signing in: email + password (and the admin password account), Google and
-Apple through their real flow against the in-process fakes of their token
-endpoints, set-password links from /users, linking accounts on /account,
-and the session following /users changes at once."""
-
 import re
 import time
 from urllib.parse import parse_qs, urlsplit
@@ -33,9 +28,6 @@ def _password_login(client: TestClient, email: str, password: str, next_url: str
         data={"email": email, "password": password, "next": next_url},
         follow_redirects=False,
     )
-
-
-# --- email + password ----------------------------------------------------------
 
 
 def test_a_user_signs_in_with_their_password(client):
@@ -72,7 +64,6 @@ def test_the_admin_password_signs_in_as_the_password_account(client):
 
 
 def test_the_admin_password_opens_an_admin_email_as_that_admin(client, monkeypatch):
-    """You type your own Gmail and the admin password: you are in as you."""
     monkeypatch.setenv("OFM_ADMIN_EMAILS", "Owner@Example.com")
     r = _password_login(client, " owner@example.com ", "test-admin")
     assert r.status_code == 303
@@ -92,11 +83,7 @@ def test_the_admin_password_opens_no_other_email(client):
     )
 
 
-# --- the app owner: the admin password alone (signin/owner.py) ----------------
-
-
 def _owner(client: TestClient, password: str, next_url: str = "/"):
-    """Start -> the app owner's password page -> its callback."""
     started = client.get(
         "/auth/owner/start", params={"next": next_url}, follow_redirects=False
     )
@@ -142,8 +129,6 @@ def test_a_wrong_owner_password_signs_nobody_in_and_is_counted(client, caplog):
 
 
 def test_an_owner_code_opens_only_its_own_sign_in(client):
-    """A code from one sign-in replayed against another (other nonce) is
-    refused."""
     from ofmhelpers.integrations.signin.owner import owner_code
 
     started = client.get("/auth/owner/start", follow_redirects=False)
@@ -187,7 +172,6 @@ def test_after_sign_in_only_a_path_on_this_site(client, target):
 
 @pytest.mark.parametrize("target", ["", "/"])
 def test_a_sign_in_without_a_page_to_return_to_lands_on_home(client, target):
-    """ "/" is the public landing page; the app starts at /home."""
     make_user_with_password(password=PASSWORD)
     r = _password_login(client, "user@example.com", PASSWORD, target)
     assert (r.status_code, r.headers["location"]) == (303, "/home")
@@ -206,9 +190,6 @@ def test_a_provider_sign_in_without_a_page_lands_on_home(client):
     make_user("friend@example.com")
     r = _consent(client, "apple", "friend@example.com")
     assert (r.status_code, r.headers["location"]) == (303, "/home")
-
-
-# --- the session follows /users ------------------------------------------------
 
 
 def test_a_deactivated_or_removed_user_is_out_at_the_next_click(client):
@@ -232,7 +213,6 @@ def test_a_role_change_applies_at_once(client):
 
 
 def test_a_session_from_before_users_must_sign_in_again(client):
-    """The old cookie held only a role."""
     import json
     from base64 import b64encode
 
@@ -244,9 +224,6 @@ def test_a_session_from_before_users_must_sign_in_again(client):
     cookie = TimestampSigner(settings.session.session_secret).sign(old).decode()
     client.cookies.set("ofm_session", cookie)
     assert client.get("/generate", follow_redirects=False).status_code == 303
-
-
-# --- /users and set-password links ---------------------------------------------
 
 
 def _link(html: str) -> str:
@@ -277,7 +254,6 @@ def test_an_admin_adds_a_user_who_sets_a_password_from_the_link(client):
     assert done.status_code == 303
     assert newcomer.get("/generate").status_code == 200
 
-    # The link works once.
     assert TestClient(app).get(link).status_code == 404
     assert (
         _password_login(TestClient(app), "new@example.com", PASSWORD).status_code == 303
@@ -321,8 +297,6 @@ def test_users_page_is_admins_only(client):
 
 
 def test_an_admin_deactivates_and_removes_and_never_changes_a_role(client):
-    """A role is picked when the user is added and stays (owner's rule
-    2026-11-12): the page has no role control and no route takes one."""
     sign_in_admin(client)
     user = make_user("someone@example.com")
     r = client.post(f"/users/{user.id}/role", data={"role": "admin"})
@@ -335,13 +309,8 @@ def test_an_admin_deactivates_and_removes_and_never_changes_a_role(client):
     assert users.get_user(user.id) is None
 
 
-# --- Google and Apple ----------------------------------------------------------
-
-
 @pytest.fixture
 def providers_on(fake_externals, monkeypatch):
-    """Both providers configured; their token endpoints answered by
-    signin/fake.py, their consent screens by /auth/fake-consent."""
     key = ec.generate_private_key(ec.SECP256R1())
     pem = key.private_bytes(
         serialization.Encoding.PEM,
@@ -361,7 +330,6 @@ def providers_on(fake_externals, monkeypatch):
 
 
 def _consent(client: TestClient, provider: str, email: str, **start):
-    """Start -> fake consent -> the provider's callback (Apple: POST)."""
     started = client.get(
         f"/auth/{provider}/start", params=start, follow_redirects=False
     )
@@ -385,7 +353,6 @@ def test_an_added_email_signs_in_with_a_provider(client, provider):
     user = make_user("friend@example.com")
     r = _consent(client, provider, "friend@example.com", next="/reels")
     assert r.status_code == 303
-    # Google goes on to connect Drive first (no token yet), Apple straight in.
     assert r.headers["location"] in (
         "/reels",
         "/auth/google/start?link=1&next=%2Freels",
@@ -419,10 +386,7 @@ def test_an_env_admin_gets_in_on_a_fresh_install_and_stays_admin(client):
 @pytest.mark.usefixtures("providers_on")
 @pytest.mark.parametrize("address", ["owner@example.com", "second@example.com"])
 def test_a_deactivated_agency_account_stays_out_for_google(client, address):
-    """Audit 2026-11-18: any OFM_ADMIN_EMAILS address signing in with Google
-    reactivated the agency account another admin had deactivated. Only the
-    admin password restores it."""
-    _consent(client, "google", "owner@example.com")  # claims the account
+    _consent(client, "google", "owner@example.com")
     agency = users.by_email("owner@example.com")
     users.set_active(agency.id, active=False)
 
@@ -448,26 +412,21 @@ def test_the_admin_password_restores_a_deactivated_agency_account(client):
 
 @pytest.mark.usefixtures("providers_on")
 def test_a_google_sign_in_without_drive_goes_straight_on_to_connecting_it(client):
-    """Prod, 2026-10-22: the VA signed in with the admin Google account and
-    then had to find "Connect Google Drive". Sign-in asks only who you are;
-    an account without a Drive token is sent on to the Drive consent at
-    once, then lands where it was going. With the token on file, a later
-    sign-in goes straight in."""
     user = make_user("friend@example.com")
 
     r = _consent(client, "google", "friend@example.com", next="/reels")
     assert r.headers["location"] == "/auth/google/start?link=1&next=%2Freels"
-    assert client.get("/generate").status_code == 200  # signed in already
+    assert client.get("/generate").status_code == 200
     assert not users.get_user(user.id).drive_connected
 
     r = _consent(client, "google", "friend@example.com", link="1", next="/reels")
-    assert r.headers["location"] == "/reels"  # back where it was going
+    assert r.headers["location"] == "/reels"
     assert users.get_user(user.id).drive_connected
     assert users.refresh_token(user.id) == "fake-refresh:friend@example.com"
 
     again = TestClient(app)
     r = _consent(again, "google", "friend@example.com", next="/reels")
-    assert r.headers["location"] == "/reels"  # Drive on file: no detour
+    assert r.headers["location"] == "/reels"
     assert users.get_user(user.id).drive_connected
 
 
@@ -519,7 +478,6 @@ def test_a_forged_or_stale_callback_is_refused(client):
 
 @pytest.mark.usefixtures("providers_on")
 def test_a_reply_with_another_nonce_is_refused(client):
-    """A code minted for another sign-in (replayed) carries its nonce."""
     from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
 
     make_user("friend@example.com")
@@ -558,7 +516,6 @@ def _link_start(client: TestClient):
 
 
 def _copy_of(client: TestClient) -> TestClient:
-    """Another browser holding a copy of this one's session cookie."""
     copy = TestClient(app)
     copy.cookies.set("ofm_session", client.cookies.get("ofm_session"))
     return copy
@@ -567,9 +524,6 @@ def _copy_of(client: TestClient) -> TestClient:
 @pytest.mark.usefixtures("providers_on")
 @pytest.mark.parametrize("ended_by", ["logout", "deactivation", "password change"])
 def test_a_session_already_ended_links_no_account(client, ended_by):
-    """Audit 2026-11-18: /auth/ is public, so the gate never looked at the
-    link start; a copy of a cookie ended by Logout still linked the holder's
-    own Google account, a lasting way into the person's account."""
     me = make_user_with_password(password=PASSWORD)
     _password_login(client, me.email, PASSWORD)
     stolen = _copy_of(client)
@@ -590,8 +544,6 @@ def test_a_session_already_ended_links_no_account(client, ended_by):
 
 @pytest.mark.usefixtures("providers_on")
 def test_a_link_begun_before_a_deactivation_links_nothing(client):
-    """The round trip carries the account in its state cookie; the account's
-    state is read again when it comes back."""
     me = sign_in(client)
     started = _link_start(client)
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
@@ -616,7 +568,7 @@ def test_a_failed_connect_goes_back_to_account_still_signed_in(client):
         "/auth/google/start", params={"link": "1"}, follow_redirects=False
     )
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
-    client.cookies.delete("ofm_signin")  # back on a host that never saw it
+    client.cookies.delete("ofm_signin")
     r = client.get(
         "/auth/google/callback",
         params={"code": "x", "state": state},
@@ -632,8 +584,6 @@ def test_a_failed_connect_goes_back_to_account_still_signed_in(client):
 def test_a_drive_connect_started_on_www_keeps_its_state_for_the_callback(
     monkeypatch,
 ):
-    """Prod, 2026-10-22: started on www., the state cookie stayed there while
-    Google sent the person back to APP_BASE_URL's host."""
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "id")
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
     monkeypatch.setenv("APP_BASE_URL", "https://ascendglobal.cash/")
@@ -655,7 +605,7 @@ def test_unlinking_the_only_way_in_is_refused(client):
     _consent(client, "google", "my.gmail@example.com", link="1")
     assert client.post("/account/unlink/google").status_code == 400
     make_user_with_password(me.email, PASSWORD)
-    sign_in(client)  # a new password signs every session out
+    sign_in(client)
     assert (
         client.post("/account/unlink/google", follow_redirects=False).status_code == 303
     )
@@ -689,9 +639,6 @@ def test_google_sign_in_url_has_the_callback_and_a_nonce_but_no_drive(
     assert "ofm_signin=" in r.headers["set-cookie"]
 
 
-# --- /account: own API keys ----------------------------------------------------
-
-
 def test_a_users_saved_key_prefills_their_forms_and_nobody_elses(client, monkeypatch):
     monkeypatch.setenv("KIE_AI_API_KEY_ADMIN", "env-admin-key")
     sign_in(client)
@@ -719,8 +666,6 @@ def _saved_keys(user_id: int) -> dict[str, str]:
 
 
 def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
-    """Both keys typed, one click: both saved. A blank field later leaves its
-    saved key alone; only Remove removes."""
     user = sign_in(client)
 
     r = client.post(
@@ -776,14 +721,8 @@ def test_account_password_change_needs_the_current_one(client):
     )
 
 
-# --- the agency's admin takes over the password account ------------------------------
-
-
 @pytest.mark.usefixtures("providers_on")
 def test_the_first_admin_email_takes_over_the_password_account_and_its_data(client):
-    """Prod before users: everything belonged to "admin". The first
-    OFM_ADMIN_EMAILS address signing in with Google becomes that account --
-    same id, so every phone, account and job is theirs, nothing moved."""
     from ofmhelpers.db.stores import devices
     from ofmhelpers.schemas import DeviceFields
 
@@ -799,7 +738,6 @@ def test_the_first_admin_email_takes_over_the_password_account_and_its_data(clie
     assert owner.is_admin
     assert users.by_email("admin") is None
     assert any(d.id == phone for d in devices.list_devices(owner.id))
-    # The admin password still opens it, typed as "admin" or as the email.
     assert _password_login(TestClient(app), "admin", "test-admin").status_code == 303
     assert (
         _password_login(TestClient(app), "owner@example.com", "test-admin").status_code
@@ -810,8 +748,6 @@ def test_the_first_admin_email_takes_over_the_password_account_and_its_data(clie
 
 @pytest.mark.usefixtures("providers_on")
 def test_every_admin_way_in_is_the_one_agency_admin(client):
-    """Google with any admin address, an admin address + the admin
-    password, the app owner: one user (user decision 2026-10-22)."""
     agency = users.agency_id()
     _consent(client, "google", "second@example.com")
     assert _signed_in_as(client) == agency
@@ -829,7 +765,6 @@ def test_every_admin_way_in_is_the_one_agency_admin(client):
 
 
 def _signed_in_as(client: TestClient) -> int:
-    """The user id `client`'s session is signed in as (/account shows it)."""
     page = client.get("/account").text
     email = page.split('<p class="lead">', 1)[1].split(" · ", 1)[0]
     found = users.by_email(email)
@@ -837,11 +772,7 @@ def _signed_in_as(client: TestClient) -> int:
     return found.id
 
 
-# --- review fixes: races, sessions after a password change, escaping -----------
-
-
 def _together(count: int, call):
-    """`call()` from `count` threads released at the same instant."""
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
 
@@ -884,8 +815,6 @@ def test_concurrent_links_of_one_account_go_to_one_user_only():
 
 
 def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
-    """The second OFM_ADMIN_EMAILS address, signing in from several tabs at
-    once: every tab is the agency admin."""
     from ofmhelpers.integrations.signin import Identity
 
     monkeypatch.setenv("OFM_ADMIN_EMAILS", "owner@example.com, racer@example.com")
@@ -960,8 +889,6 @@ def test_an_email_with_a_quote_never_reaches_inline_script(client):
 def test_connecting_google_drive_syncs_that_persons_folders_right_away(
     client, monkeypatch
 ):
-    """No wait for the next sweep: the Drive token arriving builds the root
-    and account folders at once, so /clone's upload works straight away."""
     from ofmhelpers.features.drive import folders as drive_folders
 
     synced: list[int | None] = []
@@ -969,22 +896,16 @@ def test_connecting_google_drive_syncs_that_persons_folders_right_away(
     user = make_user("friend@example.com")
     apple = make_user("apple@example.com")
 
-    _consent(client, "google", "friend@example.com")  # sign-in: no Drive yet
+    _consent(client, "google", "friend@example.com")
     assert synced == []
     _consent(client, "google", "friend@example.com", link="1")
-    _consent(TestClient(app), "apple", "apple@example.com")  # no Drive token
+    _consent(TestClient(app), "apple", "apple@example.com")
 
     assert synced == [user.id]
     assert apple.id not in synced
 
 
-# --- ultrareview fixes ------------------------------------------------------
-
-
 def test_a_deactivated_agency_admin_stays_out_until_the_admin_password(client):
-    """A wrong password for "admin" must not restore the deactivated
-    account, nor may its own password open it; the admin password does
-    (break-glass)."""
     agency = users.agency_id()
     users._repository().set_password_hash(agency, hash_password(PASSWORD))
     users.set_active(agency, active=False)
@@ -1000,8 +921,6 @@ def test_a_deactivated_agency_admin_stays_out_until_the_admin_password(client):
 
 @pytest.mark.usefixtures("providers_on")
 def test_a_fake_consent_for_another_sign_in_is_a_400_in_our_words(client):
-    """A state that is not this browser's own (no trip started, or another
-    one's): refused, the reason logged, never shown."""
     client.get("/auth/google/start", follow_redirects=False)
 
     r = client.post(

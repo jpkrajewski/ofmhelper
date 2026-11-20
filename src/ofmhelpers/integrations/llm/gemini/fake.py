@@ -1,22 +1,3 @@
-"""Gemini faked at the wire (OFM_FAKE_EXTERNALS, tests): the official SDK
-runs unchanged over an `httpx.MockTransport` (its `HttpOptions.httpx_client`)
-answering the Gemini API endpoints it calls (ai.google.dev/api):
-
-- `POST /v1beta/models/<model>:generateContent`: the answer is the next
-  queued one (`answer_next`, `fail_next`), else the plainest value the
-  request's `responseJsonSchema` allows (true, 0, "", [], an enum's first
-  value) -- for a pass/fail checker that reads "passed".
-- the Files API: the resumable upload (`POST /upload/v1beta/files` hands out
-  an upload URL; chunks to it, the last "finalize"), `GET` (a file is
-  PROCESSING for `polls_until_active` reads, then ACTIVE) and `DELETE`. A
-  request naming a file that is missing or not ACTIVE is a 400, as Google's.
-
-Only `FAKE_KEY` is accepted (`x-goog-api-key`); any other key gets Google's
-400 "API key not valid"; a model not in `MODELS`, Google's 404. Every answer
-reports `USAGE` (`usageMetadata`). State is per process (memory): the app
-under e2e and its tests never share it.
-"""
-
 import itertools
 import json
 import threading
@@ -29,10 +10,8 @@ import httpx
 from ofmhelpers.integrations.llm.fakes import example, field
 
 FAKE_KEY = "fake-gemini-key"
-# A second project's key (several keys in GEMINI_API_KEY, tried in turn).
 FAKE_KEY_2 = "fake-gemini-key-2"
 HOST = "generativelanguage.googleapis.com"
-# Free-tier text/vision models (ai.google.dev/gemini-api/docs/models, 2026-10-24).
 MODELS = frozenset(
     {
         "gemini-3.8-flash",
@@ -42,7 +21,6 @@ MODELS = frozenset(
         "gemini-3.1-flash-lite",
     }
 )
-# The tokens every answer reports, as Google writes them.
 USAGE = {
     "promptTokenCount": 1200,
     "thoughtsTokenCount": 300,
@@ -68,26 +46,19 @@ def _error(
 class FakeGemini:
     def __init__(self, polls_until_active: int = 1) -> None:
         self.polls_until_active = polls_until_active
-        # Every generateContent body, oldest first, the model each asked and
-        # the read timeout (s) it was sent with.
         self.requests: list[dict[str, Any]] = []
         self.models: list[str] = []
-        # The key of each generateContent, in order.
         self.keys: list[str | None] = []
         self.timeouts: list[float | None] = []
         self.files: dict[str, dict[str, Any]] = {}
         self.deleted: list[str] = []
-        # Uploaded files end FAILED instead of ACTIVE (`fail_processing`).
         self.processing_fails = False
         self._replies: list[httpx.Response | str] = []
         self._uploads: dict[str, dict[str, Any]] = {}
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
 
-    # --- test hooks ---------------------------------------------------------
-
     def answer_next(self, answer: dict[str, Any] | str) -> None:
-        """The next generateContent's answer text (a dict is sent as JSON)."""
         with self._lock:
             self._replies.append(
                 answer if isinstance(answer, str) else json.dumps(answer)
@@ -114,7 +85,6 @@ class FakeGemini:
             self._replies.append(_error(code, status, message, details))
 
     def refuse_next(self) -> None:
-        """The next generateContent is blocked by the safety filters."""
         with self._lock:
             self._replies.append(
                 httpx.Response(
@@ -127,13 +97,10 @@ class FakeGemini:
             )
 
     def fail_processing(self) -> None:
-        """Every file uploaded from now on fails Google's processing."""
         self.processing_fails = True
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._answer)
-
-    # --- the wire -----------------------------------------------------------
 
     def _answer(self, request: httpx.Request) -> httpx.Response:
         url = request.url

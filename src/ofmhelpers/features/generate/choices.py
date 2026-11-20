@@ -1,6 +1,3 @@
-"""The providers and models the generation pages offer, read off the provider
-registry and the catalog (`integrations/ai_providers/`)."""
-
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.ai_providers.catalog import catalog
 from ofmhelpers.schemas import ModelChoice, ProviderChoice
@@ -9,8 +6,6 @@ from ofmhelpers.schemas import ModelChoice, ProviderChoice
 def provider_choices(
     names: list[str] | None = None, *, notices: bool = True
 ) -> list[ProviderChoice]:
-    """Every provider, or just `names` in that order. `notices`: with each
-    one's passing warning (off for a page its warning is not about)."""
     classes = provider_classes()
     return [
         ProviderChoice(

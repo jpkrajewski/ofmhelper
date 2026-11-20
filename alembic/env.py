@@ -1,9 +1,3 @@
-"""
-Alembic migration environment. Pulls the DB URL from the app's own config
-(settings.infra.database_url) rather than alembic.ini, and targets the ORM's
-Base.metadata so `alembic revision --autogenerate` sees the models.
-"""
-
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -15,18 +9,12 @@ from ofmhelpers.db.models import Base
 config = context.config
 
 if config.config_file_name is not None:
-    # Not disable_existing_loggers=True (fileConfig's default): run in-process
-    # (alembic.command, the migration tests) it would silence every logger
-    # the app already made.
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-# One source of truth for the connection string (see alembic.ini comment).
 config.set_main_option("sqlalchemy.url", settings.infra.database_url)
 
 target_metadata = Base.metadata
 
-# Unmapped but kept: /drive's old day folders hold rows a downgrade must give
-# back. Without this autogenerate would emit a DROP.
 RETIRED_TABLES = frozenset({"drive_day_folders"})
 
 
@@ -57,8 +45,6 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        # Data a revision moves is the migration's in audit_log (a1b2c3d4e5f8):
-        # for the whole session, every revision's transaction.
         connection.exec_driver_sql(
             "SELECT set_config('ofm.via', 'migration', false), "
             "set_config('ofm.ref', 'alembic', false)"

@@ -1,32 +1,3 @@
-"""The downloads sweep (features/jobs/sweeps.py, hourly). Nothing ever deleted
-`downloads/`, and each video is on disk a second time in the asset store
-(two mounts cannot hard-link): prod's disk sat at 84-93% (2026-11).
-
-A downloaded video leaves this server (owner, 2026-11-11):
-- `unused`: no job used it, a day (`keep_unused_s`) after it was last asked
-  for (downloaded, its link pasted again, fetched again);
-- `cloned`: a job names it in its params (a clone, any tool, any status),
-  14 days (`keep_cloned_s`) after its last use;
-- `max`: 30 days (`keep_max_s`) after it was first downloaded, whatever
-  used it -- but never within a day of being asked for or used, so a video
-  fetched again is there for a day.
-
-What stays for good: its `downloads` row (`stored` false), its job, and its
-poster (an image: its small preview), made now if missing -- a video whose
-poster cannot be made is left this round. The card's Download and a clone's
-Recreate fetch it again (`again.py`). What goes: the file in `downloads/`
-(and its folder when empty), the 720p preview, and the asset store's copy
-unless another stored download is the same file, a job's result is it, or
-a clone used it within `keep_cloned_s` (the `max` rule: that clone's
-Recreate still finds it). A video a running or waiting job names is never
-touched; nor one whose own job is running (it is being fetched again).
-
-A file already gone from disk is only marked (`stored` false).
-
-`python -m ofmhelpers.features.downloads.cleanup` prints what a round would
-remove right now (`dry_count`) and changes nothing.
-"""
-
 import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -46,25 +17,17 @@ from ofmhelpers.schemas.persistence import Named
 
 logger = get_logger(__name__)
 
-# Rows looked at per read: one query says which of them a job names.
 _BATCH = 50
 _RULES = ("unused", "cloned", "max")
 
 
 class _Judged(BaseModel):
-    """One stored download as a round sees it."""
-
     file: Download
     on_disk: bool
-    # Its copy in the asset store, when known.
     asset: str | None = None
-    # What a job's params hold when it uses it: the content digest in the
-    # asset copy's name (a count without the file: `__<name>`).
     fragment: str | None = None
     use: Named | None = None
-    # Last asked for or used.
     idle_since: datetime
-    # Why it goes now; None: it stays.
     rule: str | None = None
 
     @property
@@ -77,8 +40,6 @@ class _Judged(BaseModel):
 
 
 class Swept(BaseModel):
-    """What one round did."""
-
     removed: int = 0
     unused: int = 0
     cloned: int = 0
@@ -90,9 +51,6 @@ class Swept(BaseModel):
 
 
 class RuleCount(BaseModel):
-    """Rows one rule would remove: how many, how many of those have their
-    file on this disk, and the bytes those take (both copies)."""
-
     rule: str
     rows: int = 0
     on_disk: int = 0
@@ -100,10 +58,6 @@ class RuleCount(BaseModel):
 
 
 class DryCount(BaseModel):
-    """What a round would do right now, nothing changed. `missing`: rows
-    whose file is not on this disk (a round marks them, whatever their
-    rule). `busy`: due, but a running job names them."""
-
     looked_at: int = 0
     rules: list[RuleCount] = []
     missing: int = 0
@@ -120,8 +74,6 @@ def _sha256(path: Path) -> str:
 
 
 def _asset_of(file: Download, path: Path) -> str | None:
-    """The file's copy in its owner's part of the asset store, found by
-    content (`<sha256>__<name>`), for a row that does not know it yet."""
     root = assets_root_for_user(file.user_id)
     found = next(root.glob(f"{_sha256(path)}__*"), None)
     return None if found is None else str(found)
@@ -132,8 +84,6 @@ def _digest(asset: str) -> str:
 
 
 def _look(file: Download, *, write: bool) -> _Judged:
-    """`file` checked against the disk; with `write`, the asset copy found
-    for a row that lacks it is saved on the row."""
     path = Path(file.file_path)
     on_disk = path.is_file()
     asset = file.asset_path
@@ -166,8 +116,6 @@ def _rule(seen: _Judged, now: datetime) -> str | None:
 
 
 def _judge(looked: list[_Judged], now: datetime, *, write: bool) -> list[_Judged]:
-    """Each with what uses it (one query for them all) and its rule; with
-    `write`, a use moves the row's `last_used_at`."""
     named = {
         n.fragment: n for n in naming_each([s.fragment for s in looked if s.fragment])
     }
@@ -187,8 +135,6 @@ def _judge(looked: list[_Judged], now: datetime, *, write: bool) -> list[_Judged
 
 
 def _size(path: Path) -> int:
-    """The bytes deleting `path` gives back: none while another name (a
-    hard link in the asset store) still holds them."""
     try:
         st = path.stat()
     except FileNotFoundError:
@@ -207,9 +153,6 @@ def _delete(path: Path) -> int:
 
 
 def _keeps_asset(seen: _Judged, now: datetime) -> bool:
-    """Whether the asset store's copy outlives the download: another stored
-    download is the same file, a job's result is it, or a clone used it
-    lately (only the `max` rule gets here with one)."""
     if seen.asset is None:
         return True
     if store.asset_shared(seen.file.id, seen.asset):
@@ -225,8 +168,6 @@ def _keeps_asset(seen: _Judged, now: datetime) -> bool:
 
 
 def _thumbnail(seen: _Judged) -> None:
-    """What the card shows once the file is gone, made now if missing.
-    Raises one of PREVIEW_ERRORS when it cannot be made."""
     shown = previews.ResultPreview(
         source=seen.path, job_id=seen.file.job_id, index=seen.file.position
     )
@@ -238,8 +179,6 @@ def _thumbnail(seen: _Judged) -> None:
 
 
 def _started_since(seen: _Judged) -> bool:
-    """Read again, after the slow part (a poster): whether a job naming it
-    is running now, or one started since it was judged."""
     if seen.fragment is None:
         return False
     for named in naming_each([seen.fragment]):
@@ -250,10 +189,6 @@ def _started_since(seen: _Judged) -> bool:
 
 
 def _remove(seen: _Judged, now: datetime) -> int | None:
-    """The video of one due row removed; the bytes freed, or None when it
-    was asked for or used meanwhile and stays. The row is marked first (a
-    paste arriving now fetches it again); a file that cannot be deleted
-    puts the row back, for the next round."""
     file = seen.file
     if _started_since(seen) or not store.mark_removed(file.id, seen.idle_since, now):
         return None
@@ -267,13 +202,9 @@ def _remove(seen: _Judged, now: datetime) -> int | None:
 def _delete_files(seen: _Judged, now: datetime) -> int:
     file = seen.file
     if store.file_shared(file.id, file.file_path):
-        # Someone else's card is this same file (a link reused, not
-        # fetched again): this row is done with it, the file stays for theirs.
         return 0
     freed = _delete(seen.path)
     folder = seen.path.parent
-    # Its own folder, once the last file of the link is gone (a carousel's
-    # others may still be there); never the downloads root itself.
     if folder != DownloadConfig().output_dir and not any(folder.iterdir()):
         folder.rmdir()
     if classify_kind(seen.path.name) == "video":
@@ -317,8 +248,6 @@ def _idle_before(now: datetime) -> datetime:
 
 
 def _looked(batch: list[Download], done: Swept, *, write: bool) -> list[_Judged]:
-    """One row that cannot be read (its file, its owner's store) is logged
-    and left; the rest go on."""
     looked = []
     for file in batch:
         try:
@@ -335,8 +264,6 @@ def _looked(batch: list[Download], done: Swept, *, write: bool) -> list[_Judged]
 
 
 def sweep(now: datetime | None = None) -> Swept:
-    """One round at `now`: every stored download idle for a day is looked
-    at, a batch at a time, and what its rule says goes."""
     now = now or datetime.now(UTC)
     done = Swept()
     after_id = 0
@@ -348,7 +275,7 @@ def sweep(now: datetime | None = None) -> Swept:
         for seen in _judge(_looked(batch, done, write=True), now, write=True):
             try:
                 _sweep_one(seen, now, done)
-            except Exception:  # one row must not stop the others
+            except Exception:
                 logger.warning(
                     "downloads sweep: download %s (job %s) failed",
                     seen.file.id,
@@ -360,7 +287,6 @@ def sweep(now: datetime | None = None) -> Swept:
 
 
 def remove_old() -> None:
-    """The sweep's round."""
     done = sweep()
     logger.info(
         "downloads sweep: %s videos removed (%s unused, %s cloned, %s over the"
@@ -378,8 +304,6 @@ def remove_old() -> None:
 
 
 def _bytes(seen: _Judged, now: datetime) -> int:
-    """What removing it would free: the file, and the asset copy when that
-    goes too and is a copy of its own."""
     size = seen.path.stat().st_size
     if seen.asset is None or _keeps_asset(seen, now):
         return size
@@ -390,10 +314,6 @@ def _bytes(seen: _Judged, now: datetime) -> int:
 
 
 def dry_count(now: datetime | None = None) -> DryCount:
-    """What a round at `now` would remove, by rule; nothing is written or
-    deleted. A row whose file is not on this disk (dev on a copy of prod's
-    rows) is still counted under its rule, its use read from the file's
-    name: an estimate there, exact where the files are."""
     now = now or datetime.now(UTC)
     rules = {name: RuleCount(rule=name) for name in _RULES}
     count = DryCount()

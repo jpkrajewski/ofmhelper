@@ -1,7 +1,3 @@
-"""The self-hosted link provider ("self"): it is always keyed, serves its own
-rows as a LinkProvider, and reads its numbers from the click log by day and by
-hour. No HTTP, so these run straight on the database."""
-
 from datetime import UTC, datetime, timedelta
 
 from signin import make_user
@@ -24,7 +20,6 @@ def _client(user_id: int) -> LinkProvider:
 
 
 def _make_live_link(user_id: int, slug: str, host: str, destination: str) -> str:
-    """Generate one self link the way /links would, and return its remote id."""
     [link_id] = short_links.add_creating(
         user_id,
         "self",
@@ -86,7 +81,6 @@ def test_daily_and_hourly_come_from_the_click_log():
 
     noon = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
     five_days = noon - timedelta(days=5)
-    # Today: 2 landings, 1 continue-through. Five days ago: 3 and 2.
     _click(link_id, "view", noon)
     _click(link_id, "view", noon.replace(minute=5))
     _click(link_id, "click", noon.replace(minute=6), country="US")

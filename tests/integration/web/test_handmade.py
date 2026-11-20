@@ -1,10 +1,3 @@
-"""/handmade (features/handmade/service.py, owner 2026-11-15): a VA uploads
-the reels they made by hand and they stay on the server, one card each;
-nothing goes to Drive by itself. The owner sees their VAs' reels ("Done by
-VA") and picks where one goes: Upload to Drive -> /drive -> an account
-folder, the upload /clone uses; the card then says where it is. A VA never
-sends to Drive and never gets a Drive link."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
@@ -37,8 +30,6 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
 
 
 def _owner() -> TestClient:
-    """The owner, Google Drive connected, one phone with an Instagram login
-    whose folder a sweep made."""
     c = TestClient(app)
     user = sign_in(c, OWNER)
     user_repository().signed_in(user.id, "", f"fake-refresh:{OWNER}")
@@ -90,7 +81,7 @@ def test_a_vas_reels_stay_on_the_server_one_card_each(drive):
         job = get_job(job_id)
         assert job is not None
         assert (job.status, job.error, len(job.result)) == ("done", None, 1)
-    assert _drive_files(drive) == []  # nothing went to Drive by itself
+    assert _drive_files(drive) == []
     page = va.get("/handmade").text
     assert page.count('data-task="handmade_upload"') == 2
     assert "Upload to Drive" not in page
@@ -160,10 +151,9 @@ def test_only_a_va_uploads_here(drive):
 
 
 def test_the_owner_can_send_a_reel_into_the_vas_own_folder(drive):
-    """The VA's own folder is one of the choices (owner 2026-11-15)."""
     owner = _owner()
     va = _va()
-    drive_folders.sync()  # the VA's own folder
+    drive_folders.sync()
     job_id = va.post("/handmade/run", files=_reels("a.mp4")).json()["job_id"]
     va_user = users.by_email(VA)
     assert va_user is not None
@@ -188,7 +178,7 @@ def test_the_owner_can_send_a_reel_into_the_vas_own_folder(drive):
     assert owner_user is not None
     (folder,) = drive.named(VA, owner_user.drive_root_id or "")
     assert len(drive.names_in(folder)) == 1
-    assert again.json()["queued"] == 0  # never twice
+    assert again.json()["queued"] == 0
     assert "In Drive: <a" in owner.get("/handmade").text
     assert (
         owner.post("/clone/drive-upload", json={"job_ids": [job_id]}).status_code == 400

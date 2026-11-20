@@ -1,14 +1,3 @@
-"""The "Chats unanswered" message to Telegram every 10 minutes
-(features/chatting/wait_events.py): one message per look naming, per platform,
-each model with fans waiting and how long each has waited, by the pop-up's own
-5-minute rule -- nothing when nobody waits, and only after those chats were read
-from the platform again. Fanvue is left out for now
-(`OFM_CHATTING_EVENTS_PLATFORMS_OFF`).
-
-And 5 minutes after each fan message, by webhook or sync (rechecks.py): the list
-at once if that fan still waits and nobody was told yet (prod 2026-11-06: three
-fans who wrote at 18:50-18:55 were told at 19:07, by the look)."""
-
 import threading
 import time
 from http import HTTPStatus
@@ -29,7 +18,6 @@ from ofmhelpers.web.main import app
 
 NOW = time.time()
 LOOK = 600
-# The pop-up's rule: a fan waiting longer is unanswered.
 LIMIT = 300
 
 
@@ -47,7 +35,6 @@ def fanvue_on(monkeypatch):
 
 @pytest.fixture
 def every_platform_read(monkeypatch) -> list[set[str]]:
-    """Every platform read here, its fresh read changing nothing; who was read."""
     read: list[set[str]] = []
 
     def fresh(_platform, usernames):
@@ -123,8 +110,6 @@ def test_waiting_fans_are_listed_by_platform_and_model_in_one_message():
 @pytest.mark.usefixtures("every_platform_read")
 def test_every_look_lists_who_still_waits_and_a_restart_in_one_look_sends_once():
     _fan_wrote("Carl", ago_s=600, platform="stacked", model="danewalkerjohnson")
-    # The next look's start: Carl has waited past 5 minutes by then, wherever NOW
-    # falls in its own look.
     look = NOW - NOW % LOOK + LOOK
 
     emit_waiting(look + 1)
@@ -179,7 +164,6 @@ def test_a_fan_without_a_name_still_counts():
 
 @pytest.mark.usefixtures("fanvue_on")
 def test_a_platform_not_read_on_this_server_is_not_listed():
-    """What a server without the login stored can be days old (Fanvue on dev)."""
     _fan_wrote("Anna", ago_s=600)
 
     assert emit_waiting(NOW) == 0
@@ -239,7 +223,6 @@ def test_a_new_list_deletes_the_one_before_and_the_last_stays_when_nobody_waits(
 
 
 def test_a_model_that_cannot_be_read_does_not_drop_the_others(monkeypatch):
-    """Two models on one platform, one read fails: the other is still listed."""
     from types import SimpleNamespace
 
     from ofmhelpers.features.chatting import sync as chat_sync
@@ -294,9 +277,6 @@ def test_nobody_listening_reads_nothing(monkeypatch, every_platform_read):
     assert every_platform_read == []
 
 
-# --- 5 minutes after each fan message (rechecks.py) -----------------------------
-
-
 def _one_list(*fans_waited: tuple[str, str], model: str = "fake_creator") -> str:
     lines = [f"- {fan} (unanswered {w})" for fan, w in fans_waited]
     head = f"Chats unanswered ({len(lines)}): @{model}"
@@ -334,12 +314,12 @@ def test_a_fan_answered_within_five_minutes_is_not_told(stacked):
     now = time.time()
     stacked.fan_writes("ann", now - 60)
     sync(stacked.source)
-    stacked.model_replies("ann", now - 30)  # only the fresh read sees it
+    stacked.model_replies("ann", now - 30)
     reads = stacked.chat_reads()
 
     assert recheck_due(now + LIMIT) == 0
 
-    assert stacked.chat_reads() > reads  # the recheck did read the chat again
+    assert stacked.chat_reads() > reads
     assert _sent() == []
 
 
@@ -414,10 +394,7 @@ def test_fanvue_messages_plan_no_recheck_while_it_is_off():
 
 @pytest.mark.usefixtures("every_platform_read")
 def test_prod_2026_11_06_each_fan_is_told_within_five_minutes_and_a_poll():
-    """Three fans of one Stacked model wrote at 18:50:45, 18:51:19 and 18:55:08;
-    the 15-minute look alone told them at 19:07. Each is named by the first
-    15 s poll after their 5 minutes."""
-    base = NOW - 3600  # 18:50:00
+    base = NOW - 3600
     wrote = {"fan_a": base + 45, "fan_b": base + 79, "fan_c": base + 308}
     for fan, at in wrote.items():
         _fan_wrote(fan, NOW - at, platform="stacked", model="danewalkerjohnson")
@@ -431,7 +408,7 @@ def test_prod_2026_11_06_each_fan_is_told_within_five_minutes_and_a_poll():
         rechecks.plan(ChatPlatform.STACKED, read, at)
 
     named_at: dict[str, float] = {}
-    for poll in range(int(17 * 60 / 15)):  # 18:50:00 .. 19:07:00
+    for poll in range(int(17 * 60 / 15)):
         at = base + poll * 15
         if recheck_due(at):
             for fan in wrote:
@@ -440,11 +417,10 @@ def test_prod_2026_11_06_each_fan_is_told_within_five_minutes_and_a_poll():
 
     assert named_at.keys() == wrote.keys()
     assert all(named_at[f] - wrote[f] <= LIMIT + 1 + 15 for f in wrote)
-    assert len(_sent()) == 3  # a new list per fan, each replacing the last
+    assert len(_sent()) == 3
 
 
 def _carl_planned(at: float) -> None:
-    """Carl wrote at `at`, his recheck planned."""
     _fan_wrote("Carl", NOW - at, platform="stacked", model="danewalkerjohnson")
     read = ChatRead(
         channel_id="chat-Carl",
@@ -500,8 +476,6 @@ def test_a_recheck_whose_list_failed_is_tried_at_the_next_poll(monkeypatch):
 
 
 def test_a_recheck_during_a_look_waits_for_it_and_sends_nothing_more(monkeypatch):
-    """The look and the recheck are two sweeps: at once, both would find Carl untold
-    and both send."""
     reading, go = threading.Event(), threading.Event()
 
     def slow_read(_platform, usernames):
@@ -516,7 +490,7 @@ def test_a_recheck_during_a_look_waits_for_it_and_sends_nothing_more(monkeypatch
     assert reading.wait(10)
     recheck = threading.Thread(target=recheck_due, args=(NOW,))
     recheck.start()
-    recheck.join(1)  # it waits on the lock the look holds
+    recheck.join(1)
     assert recheck.is_alive()
 
     go.set()
@@ -529,12 +503,7 @@ def test_a_recheck_during_a_look_waits_for_it_and_sends_nothing_more(monkeypatch
 def test_a_recheck_that_cannot_wait_out_a_slow_list_skips_and_comes_back(
     monkeypatch,
 ):
-    """Prod 2026-11-07 18:07: Stacked's 429s kept a list over the lock's 120 s,
-    the recheck waiting on it made its own unlocked and two lists went out a
-    second apart. Now the lock is renewed while the list is made, and a caller
-    that cannot take it in time makes none: its recheck is due again at the
-    next poll."""
-    monkeypatch.setattr(rechecks, "_TELL_LOCK_S", 0.6)  # renewed every 0.2 s
+    monkeypatch.setattr(rechecks, "_TELL_LOCK_S", 0.6)
     monkeypatch.setattr(rechecks, "_TELL_WAIT_S", 0.2)
     reading, go = threading.Event(), threading.Event()
 
@@ -548,10 +517,10 @@ def test_a_recheck_that_cannot_wait_out_a_slow_list_skips_and_comes_back(
     look = threading.Thread(target=emit_waiting, args=(NOW,))
     look.start()
     assert reading.wait(10)
-    time.sleep(1.5)  # the list outlives the lock's own life
+    time.sleep(1.5)
 
     assert recheck_due(NOW) == 0
-    assert len(rechecks.take_due(NOW + 15)) == 1  # due again at the next poll
+    assert len(rechecks.take_due(NOW + 15)) == 1
 
     go.set()
     look.join(10)

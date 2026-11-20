@@ -1,13 +1,3 @@
-/*
- * "Start posting content" (base.html .posting-banner): a pop-up while the
- * daily posting window is open (web/posting.py), with a chime and a desktop
- * notification (notify.js). Shown on load inside the window and at its start
- * on a page left open; hidden at its end. Dismissed (x), it stays away for
- * that day's window, on every page. The chime and the desktop notification
- * come once per window per browser (localStorage); a window already open
- * when the first click unlocks sound then chimes.
- * Times are Unix seconds (UTC).
- */
 (() => {
     const banner = document.querySelector(".posting-banner");
     if (!banner || !window.Notifier) return;
@@ -29,7 +19,7 @@
         try {
             window.localStorage.setItem(key, String(start));
         } catch {
-            // private window: only for this page
+
         }
     }
 
@@ -52,7 +42,7 @@
         banner.hidden = !open || remembered("posting-dismissed");
         if (open) announce();
         const next = (open ? end : start) - now;
-        // Timers drift while a laptop sleeps: re-check at least every minute.
+
         setTimeout(tick, Math.min(Math.max(next, 1), 60) * 1000);
     }
 

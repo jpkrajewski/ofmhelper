@@ -1,7 +1,3 @@
-"""Which Drive folders belong to which Instagram login -- its account folder
-and the POSTED folder inside it -- and the files seen posted (/drive). Drive
-ids only; Drive itself is `ofmhelpers.integrations.gdrive`."""
-
 import time
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
@@ -23,12 +19,8 @@ from ofmhelpers.db.repositories.cached_repository import (
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.schemas.drive import AccountScan, StoredFolder, VaFolder
 
-# pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
 _SYNC_LOCK_KEY = 0x0D21_5E00
 
-# The foreign keys a sweep's write can lose a race against: the login or VA
-# deleted by a request between the sweep reading it and writing its row
-# (prod job drive_sync 9e928539, 2026-11-15).
 _LOGIN_FK = ("drive_account_folders_login_id_fkey", "drive_posted_files_login_id_fkey")
 _VA_FK = ("drive_va_folders_user_id_fkey",)
 
@@ -43,9 +35,6 @@ class DriveFolderRepository(CachedRepository):
 
     @cached
     def account_folders(self, roots: list[str]) -> list[StoredFolder]:
-        """The logins' folders in any of `roots` (each owner's current
-        "ALL ACCOUNTS"); rows of any other root are left out (an old root,
-        or prod's in a dev copy of its database)."""
         with session_scope() as s:
             rows = (
                 s.execute(
@@ -61,7 +50,6 @@ class DriveFolderRepository(CachedRepository):
                     login_id=r.login_id,
                     folder_id=r.folder_id,
                     name=r.name,
-                    # Never None here: the query keeps rows of `roots` only.
                     root_folder_id=r.root_folder_id or "",
                     posted_folder_id=r.posted_folder_id,
                     scan=(
@@ -74,8 +62,6 @@ class DriveFolderRepository(CachedRepository):
 
     @cached
     def va_folders(self, user_ids: list[int]) -> list[VaFolder]:
-        """The stored folders of the VAs `user_ids`, whatever root (the
-        caller checks it is the owner's current one)."""
         with session_scope() as s:
             rows = (
                 s.execute(
@@ -98,8 +84,6 @@ class DriveFolderRepository(CachedRepository):
 
     @invalidates_cache
     def save_va_folder(self, folder: VaFolder) -> bool:
-        """The VA's folder, made, found or renamed: one row per VA. False:
-        the VA was deleted meanwhile, nothing saved."""
         values = {
             "folder_id": folder.folder_id,
             "name": folder.name,
@@ -121,9 +105,6 @@ class DriveFolderRepository(CachedRepository):
 
     @contextmanager
     def sync_lock(self) -> Iterator[bool]:
-        """Whether this caller holds the one sweep lock (Postgres advisory,
-        session level): never waits; a crashed holder's connection closing
-        frees it, no expiry to outlive."""
         with session_scope() as s:
             held = bool(
                 s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar()
@@ -138,9 +119,6 @@ class DriveFolderRepository(CachedRepository):
     def save_account_folder(
         self, login_id: int, folder_id: str, name: str, root: str
     ) -> bool:
-        """A changed folder id drops the POSTED id with it: that one was
-        inside the old folder. False: the login was deleted meanwhile,
-        nothing saved."""
         values = {
             "folder_id": folder_id,
             "name": name,
@@ -170,7 +148,6 @@ class DriveFolderRepository(CachedRepository):
 
     @invalidates_cache
     def save_scans(self, scans: dict[int, dict], at: float) -> None:
-        """Each login's account folder as just read (login id -> scan)."""
         if not scans:
             return
         with session_scope() as s:
@@ -182,14 +159,10 @@ class DriveFolderRepository(CachedRepository):
                 )
 
     @invalidates_cache
-    def logins_changed(self) -> None:
-        """A login or phone was deleted: the database dropped its folder rows
-        (ON DELETE CASCADE) behind this cache's back."""
+    def logins_changed(self) -> None: ...
 
     @invalidates_cache
     def forget_account_folder(self, login_id: int) -> None:
-        """Its folder is gone from Drive: the next sweep makes or finds one
-        again, and its POSTED folder with it."""
         with session_scope() as s:
             s.execute(
                 delete(DriveAccountFolderRow).where(
@@ -199,7 +172,6 @@ class DriveFolderRepository(CachedRepository):
 
     @invalidates_cache
     def save_posted_folder(self, login_id: int, folder_id: str | None) -> None:
-        """`None` forgets it: the next sweep finds or makes one again."""
         with session_scope() as s:
             s.execute(
                 update(DriveAccountFolderRow)
@@ -215,10 +187,6 @@ class DriveFolderRepository(CachedRepository):
         files: list[tuple[str, str, str]],
         seen_at: float,
     ) -> int | None:
-        """Adds the (id, name, kind) files not seen before, as seen in the
-        account folder `folder_id`; how many were new. A file already
-        recorded keeps its first time (a re-run, or it went out and back in,
-        never counts twice). None: the login was deleted meanwhile."""
         if not files:
             return 0
         rows = [

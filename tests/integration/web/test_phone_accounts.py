@@ -1,9 +1,3 @@
-"""A phone's Instagram login is an /accounts account: adding (or renaming)
-it tracks the handle and scans it, the account lists the phone, and
-/phones shows each login's followers and sorts phones by them -- for any
-service whose services.json entry names a tracked platform. Instagram here
-is the fake (OFM_FAKE_EXTERNALS), so the scan is real code, offline."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
@@ -37,7 +31,6 @@ def _add(admin: TestClient, phone: int, service: str, username: str) -> int:
 
 
 def _tracked() -> dict[str, int | None]:
-    """handle -> followers of every tracked account."""
     return {a.handle: a.followers for a in list_accounts()}
 
 
@@ -46,7 +39,6 @@ def test_an_instagram_login_is_tracked_scanned_and_shows_its_phone(admin):
     _add(admin, phone, "instagram", "@Yuki_Kanasiva")
     _add(admin, phone, "gmail", "yuki@gmail.com")
 
-    # The handle as Instagram writes it; scanned at once (worker inline here).
     assert _tracked() == {"yuki_kanasiva": 850}
     html = admin.get("/accounts").text
     assert "@yuki_kanasiva" in html
@@ -115,7 +107,6 @@ def test_follower_counts_are_compact(n, shown):
 
 
 def test_editing_a_login_never_brings_back_an_account_removed_by_hand(admin):
-    """Changing a password is no reason to re-add what an admin removed."""
     login = _add(admin, _phone("Phone 07"), "instagram", "yuki_kanasiva")
     untrack([a.id for a in list_accounts()])
 
@@ -148,8 +139,6 @@ def test_a_failing_tracker_never_fails_the_saved_login(admin, monkeypatch):
 
 
 def test_the_sort_the_page_leaves_out_of_the_url_is_the_servers_default(admin):
-    """phones.js drops the default sort from the URL, so it must be the
-    server's default -- and "Sort: Name" must stay in it."""
     from repo_paths import SRC
 
     from ofmhelpers.schemas import PhoneQuery

@@ -1,9 +1,3 @@
-"""The "Mass message sent" message to Telegram (features/reports/mass.py): sent
-the moment a mass message is stored, one line per model since the last daily
-report and no count (owner 2026-11-07: "it's just info"), each list taking the
-place of the one before -- the daily report's Chatting part too -- like "Chats
-unanswered". Fanvue is left out for now (`OFM_CHATTING_EVENTS_PLATFORMS_OFF`)."""
-
 import time
 from http import HTTPStatus
 
@@ -57,7 +51,6 @@ def test_a_mass_message_is_told_at_once_without_a_count(stacked):
     _mass_by_webhook(stacked, "mass-1")
     _mass_by_webhook(stacked, "mass-2")
 
-    # The second names the same model: the same list, sent once.
     assert [m.text for m in fake_telegram().sent] == [_list(stacked.model)]
 
 
@@ -82,11 +75,10 @@ def test_a_platform_left_out_tells_nothing(monkeypatch):
 
 
 def test_the_daily_reports_chatting_part_takes_its_place(stacked, monkeypatch):
-    """The report and the live list are one message in the chat: the newest."""
     now = time.time()
     monkeypatch.setenv("OFM_REPORTS_TIMEZONE", "UTC")
     monkeypatch.setenv("OFM_REPORTS_DAILY_AT", time.strftime("%H:%M", time.gmtime(now)))
-    daily.run(now - 86400)  # the baseline, a day back
+    daily.run(now - 86400)
     _mass_stored(ChatPlatform.STACKED, stacked.model, "mass-1", at=now - 60)
     mass.tell_mass(now - 59)
     live = list(fake_telegram().sent)

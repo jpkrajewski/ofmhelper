@@ -1,9 +1,3 @@
-"""Reference images over kie.ai's limits are shrunk before upload.
-
-An oversized reference used to upload fine and then fail createTask with a
-422 "reference_image_urls file size exceeds limit" (a 40MB, 12000px-wide
-character sheet, in practice)."""
-
 import os
 
 import pytest
@@ -23,7 +17,6 @@ def client(tmp_path):
 
 
 def noisy_png(path, size):
-    """Random pixels, so the PNG is big and doesn't compress away."""
     Image.frombytes("RGB", size, os.urandom(size[0] * size[1] * 3)).save(path)
     return path
 

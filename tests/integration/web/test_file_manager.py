@@ -1,10 +1,3 @@
-"""
-/file-manager as the last resort (prod, 2026-10-22: a finished run lost its
-card buttons and the file list could not tell one result from another):
-newest first, images and videos with a thumbnail, opening in the browser;
-download and delete as before. Admin only.
-"""
-
 import io
 import os
 import shutil
@@ -158,9 +151,6 @@ def test_a_non_admin_sees_no_file(root):
         )
         assert r.status_code == 403
     c.close()
-
-
-# --- by user, then section ----------------------------------------------------
 
 
 @pytest.fixture

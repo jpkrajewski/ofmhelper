@@ -1,11 +1,3 @@
-"""
-/cookies: the signed-in person's own cookies.txt -- upload, replace, remove.
-Every user, admins included, sees and manages only their own; the page never
-shows a cookie value, only which sites the file covers and whether it holds
-an Instagram login (`features/cookies/service.py`; `stores.cookies` also says
-whose cookies each background scan and download uses).
-"""
-
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import Response
 
@@ -44,9 +36,6 @@ def form(request: Request, owner_id: OwnerId, note: str | None = None) -> Respon
 
 @router.post("")
 def upload_cookies(request: Request, owner_id: OwnerId, file: UploadFile) -> Response:
-    """A plain `def`, so FastAPI runs it in its threadpool: the file is read,
-    parsed and stored -- and the page re-rendered on a refusal -- off the
-    event loop."""
     try:
         service.upload(owner_id, file.file, file.filename, file.size)
     except RefusedError as exc:  # silent: shown on the page

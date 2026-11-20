@@ -1,6 +1,3 @@
-"""A link on a link provider (/links) with its daily numbers, the list's
-query, and the "Generate links" form."""
-
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
@@ -20,14 +17,10 @@ def utc_today() -> date:
 
 
 def ctr(views: int, clicks: int) -> float | None:
-    """Clicks per landing view, in percent; None without views."""
     return clicks / views * 100 if views else None
 
 
 class LinkPeriod(BaseModel):
-    """A period of the period selector: the last `days` UTC days, today
-    included."""
-
     days: int
 
     @property
@@ -73,7 +66,6 @@ class ShortLink(BaseModel):
 
     @property
     def address(self) -> str:
-        """The short URL without its scheme."""
         return self.url.removeprefix("https://") or f"{self.domain}/{self.slug}"
 
     @property
@@ -95,16 +87,11 @@ class ShortLink(BaseModel):
 
 
 class AccountLinks(BaseModel):
-    """The links that bridge from one account."""
-
     account_id: int
     links: list[ShortLink]
 
 
 class PlannedLink(BaseModel):
-    """A link about to be made ("creating"): where it will sit, where it
-    sends, the account it bridges from and the creator it is for."""
-
     slug: str
     domain: str
     destination: str
@@ -114,23 +101,16 @@ class PlannedLink(BaseModel):
 
 
 class LinkAddress(BaseModel, frozen=True):
-    """Where a link sits on its provider."""
-
     domain: str
     slug: str
 
 
 class LinkSyncKey(BaseModel, frozen=True):
-    """One sync: a user's links on one provider."""
-
     user_id: int
     provider: str
 
 
 class LinkSync(BaseModel):
-    """A sync's state: when it last ran, whether one is claimed now, its last
-    error and the plan's quota then."""
-
     user_id: int
     provider: str
     synced_at: float | None = None
@@ -148,8 +128,6 @@ class LinkSort(StrEnum):
 
 
 class LinkQuery(BaseModel):
-    """The list's query string. `period` None: the configured default."""
-
     q: str = Field(default="", max_length=64)
     provider: str = Field(default="", max_length=32)
     creator: str = Field(default="", max_length=64)
@@ -197,7 +175,6 @@ class LinkQuery(BaseModel):
         return self.link(order=flipped)
 
     def ordered(self, links: list[ShortLink], days: int) -> list[ShortLink]:
-        """In `direction`; links without the number last either way."""
         keys: dict[LinkSort, Callable[[ShortLink], Any]] = {
             LinkSort.CLICKS: lambda x: x.clicks(days),
             LinkSort.VIEWS: lambda x: x.views(days),
@@ -223,8 +200,6 @@ class LinkQuery(BaseModel):
 
 
 class LinkPage(BaseModel):
-    """One page of the filtered, sorted list."""
-
     rows: list[ShortLink]
     total: int
     page: int
@@ -254,12 +229,9 @@ class LinkPage(BaseModel):
 
 
 class LinkSummary(BaseModel):
-    """The KPI row over the filtered links."""
-
     links: int
     views: int
     clicks: int
-    # Not behind an 18+ confirmation (known only where the provider says).
     ungated: int
 
     @property
@@ -277,24 +249,16 @@ class LinkSummary(BaseModel):
 
 
 class ProviderState(BaseModel):
-    """A provider as /links shows it for the signed-in person: whether they
-    have a key, the last sync and its error, the plan's quota then."""
-
     key: str
     label: str
     has_key: bool
     synced_at: float | None = None
-    # A sync is due or running now (asked for after Generate / Delete /
-    # Sync, or the sweep's turn): the page says so and reloads when done.
     syncing: bool = False
     error: str | None = None
     usage: Usage | None = None
 
 
 class GenerateLinks(BaseModel):
-    """The Generate links dialog: one link per Instagram account, all to
-    one target page of one creator (model), always 18+ gated."""
-
     provider: str
     creator: CreatorName
     target: str
@@ -308,9 +272,6 @@ class GenerateLinks(BaseModel):
         if info is None:
             msg = f"Unknown link provider: {self.provider}"
             raise ValueError(msg)
-        # A provider whose domains are ours and added at runtime (self) has
-        # none in the static config; the route checks its domain against the
-        # live list.
         if info.domains and self.domain not in info.domains:
             msg = f"{info.label} has no domain {self.domain}"
             raise ValueError(msg)

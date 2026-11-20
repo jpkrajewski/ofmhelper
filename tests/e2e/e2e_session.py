@@ -1,6 +1,3 @@
-"""A logged-in browser tab for the e2e suite (imported by its conftest and
-tests; pytest puts this directory on sys.path, there is no tests package)."""
-
 import re
 lazy from pathlib import Path
 
@@ -11,21 +8,14 @@ from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST, FakeKie
 from ofmhelpers.integrations.instagram.fake import cdn_reply
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 
-# A person's "DEV - ALL ACCOUNTS" lives in their own fake My Drive.
 DEV_ROOT = "DEV - ALL ACCOUNTS"
 
 
-# The browsers sit where the app's first zone is (schemas/time_zones.py):
-# the page takes its zone from the browser, and one drawn in another zone
-# reloads itself once to follow (static/js/time-zone.js).
 TIME_ZONE = "Europe/Warsaw"
 
 
 def connect_google(session: Session, email: str) -> None:
-    """Links a Google account (the fake consent screen) to the signed-in
-    session on /account: their Drive is connected from then on."""
     session.goto("/account")
-    # The page's own link: base.html also carries a hidden "Reconnect" one.
     session.page.click('#main a[href^="/auth/google/start?link=1"]')
     session.page.fill("#fake-email", email)
     with session.page.expect_navigation():
@@ -33,7 +23,6 @@ def connect_google(session: Session, email: str) -> None:
 
 
 def my_root(drive, email: str) -> str:
-    """The id of `email`'s "DEV - ALL ACCOUNTS" in the fake Drive."""
     (root,) = drive.named(DEV_ROOT, f"mydrive-{email}")
     return root
 
@@ -41,15 +30,11 @@ def my_root(drive, email: str) -> str:
 def log_in(
     browser: Browser, base_url: str, email: str, password: str, state: Path
 ) -> None:
-    """Signs in once through the login form and saves the cookies to
-    `state`: every test of that role starts from them."""
     context = browser.new_context(base_url=base_url, timezone_id=TIME_ZONE)
     page = context.new_page()
     page.goto("/login")
     page.fill("#email", email)
     page.fill("#password", password)
-    # Wait for the redirect, not for network idle: the landing page it
-    # lands on keeps streaming media, which never goes idle.
     with page.expect_navigation():
         page.click("button[type=submit]")
     assert "/login" not in page.url, "login failed -- wrong email or password?"
@@ -58,8 +43,6 @@ def log_in(
 
 
 _CDN = re.compile(rf"^https://{re.escape(GLOBAL_CDN_HOST)}/")
-# Where kie.ai hosts a result: a card plays it from there while the job
-# still downloads it.
 _KIE_RESULTS = re.compile(rf"^https://{re.escape(RESULT_HOST)}/")
 
 
@@ -83,9 +66,6 @@ def _serve_cdn(route: Route) -> None:
 
 
 class Session:
-    """One logged-in tab (its own browser context), recording every JS
-    error and failed request, traced so a failure can be replayed."""
-
     def __init__(self, browser: Browser, base_url: str, state: Path) -> None:
         self.context = browser.new_context(
             base_url=base_url,
@@ -94,8 +74,6 @@ class Session:
             timezone_id=TIME_ZONE,
         )
         self.context.tracing.start(screenshots=True, snapshots=True)
-        # Pages load reel videos and thumbnails straight from Instagram's
-        # CDN: the browser gets them from the same fake as the app.
         self.context.route(_CDN, _serve_cdn)
         self.context.route(_KIE_RESULTS, _serve_kie_result)
         self.page = self.context.new_page()
@@ -126,6 +104,5 @@ class Session:
         return response.status
 
     def close(self, trace: Path | None) -> None:
-        """Ends the tab; `trace` keeps the Playwright trace there."""
         self.context.tracing.stop(path=trace)
         self.context.close()

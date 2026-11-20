@@ -1,6 +1,3 @@
-"""links/: the provider and target configs, slugs made from handles, the
-Bouncy analytics spans, and the numbers /links derives from stored days."""
-
 from datetime import date, timedelta
 
 import pytest

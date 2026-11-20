@@ -1,12 +1,4 @@
 {% import "components/ui.html" as ui %}
-{# One watched profile in /reels' watch list (`watched`:
-   schemas.WatchedProfile; `groups`: every group, for the dropdown that
-   moves it; `board`: schemas.Leaderboard, whose `top_views` and
-   `top_reels` rows get a badge saying why): one list row per profile --
-   name, badge, ! (the last scan's error), remove on the first line;
-   two-week views, reels and followers with the group dropdown on the
-   second. data-pending while its
-   first scan runs -- what static/js/reels.js polls on. #}
 {% import "_reel_counts.html" as rc %}
 {% import "_icons.html" as ic %}
 <li class="reels-watch-item" data-username="{{ watched.username }}"

@@ -1,29 +1,3 @@
-"""One generation on any provider: submit (or resume), wait, save the result.
-
-The only place the request lifecycle is written. A provider adapter answers
-single calls; this decides what to do with each answer:
-
-- a job that already has an accepted request (`tasks.recall`) resumes it
-  instead of submitting again -- a re-run never pays twice;
-- a new request goes through `self_heal.new_task`: what is resent, waited
-  for or never sent again when a submit's answer is lost -- one policy for
-  every provider, each declaring on `Provider` how it is found again;
-- a request that failed because the provider could not fetch a reference
-  from this server (`TaskState.unfetched`: nothing made or paid) is sent
-  again after each `unfetched_retry_waits_s`, the last time with lighter
-  references (`Provider.send_lighter`);
-- a status check that fails transiently is retried until the deadline, a
-  finished request is downloaded (`self_heal.download`: a failed download
-  tried again a few times, the result is paid for), a failed one fails the
-  job;
-- past the deadline the request stays remembered and the job fails with
-  `ProviderTimeoutError`, which recovery later finishes;
-- a finished request stays remembered until its job is saved
-  (`stores.jobs.run_job` forgets it): the tool's tail (CapCut export,
-  asset store) can still be cut off by a restart, and a re-run then
-  downloads the same result again instead of paying (prod, 2026-10-22).
-"""
-
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -81,7 +55,6 @@ def _task_id(
 
 
 def wait(provider: Provider, task_id: str, kind: OutputKind) -> TaskState:
-    """Poll with backoff until the request ends or the deadline passes."""
     s = settings.aigen
     timeout_s = s.video_poll_timeout_s if kind == "video" else s.poll_timeout_s
     deadline = time.monotonic() + timeout_s
@@ -98,8 +71,6 @@ def wait(provider: Provider, task_id: str, kind: OutputKind) -> TaskState:
             if state.state == "failed" or state.urls:
                 return state
             if state.state == "done":
-                # Finished and paid, nothing to fetch yet: forgetting it here
-                # would pay again on the next run.
                 logger.warning("task %s finished without a result yet", task_id)
         time.sleep(interval)
         interval = max(min(interval * 1.5, s.poll_max_interval_s), floor)
@@ -130,12 +101,6 @@ def generate(
     on_result_urls: OnResultUrls | None = None,
     part: int = 0,
 ) -> list[Path]:
-    """Run `payload` on `spec` for `job_id` and save every result locally.
-    `on_result_urls` gets the hosted results the moment they exist, before
-    the download -- the page shows them while it runs. `part`: which of
-    the job's requests this is, when it makes several (`tasks`). `payload` may
-    be a function: it uploads the references, so it runs only when a request is
-    really sent -- a resumed job needs neither its upload nor its files."""
     with logfire.span(
         "generation {provider} {model}",
         provider=provider.name,
@@ -152,8 +117,6 @@ def generate(
             state = wait(provider, task_id, spec.kind)
             if not state.unfetched or sent > len(waits):
                 break
-            # Nothing made, nothing paid: the same request, sent again; the
-            # last time with lighter references, where the provider has them.
             lighter = sent == len(waits) and provider.send_lighter()
             logger.warning(
                 "job %s: %s task %s could not fetch a reference (%s); "

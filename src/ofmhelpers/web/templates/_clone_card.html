@@ -1,16 +1,7 @@
-{# One /clone gallery card: the shared card, plus -- while it runs and once
-   it has failed -- a big first frame of the video it clones (no file name:
-   owner 2026-11-12; ten runs side by side are told apart by the picture;
-   static/js/clone.js `showSource` draws the same on a card that fails while
-   the page is open), where its video went in Drive and "Upload to Drive" in
-   its ⋯ menu (clone.js opens the picker); × on an uploaded one takes it
-   back out (Drive trash). #}
 {% extends "_gallery_card.html" %}
 {% block lead %}{% if job.source and not (job.status == "done" and job.assets) %}
     <img class="result-video" data-clone-source src="{{ job.source.thumb_url }}" alt="{{ job.source.name }}" loading="lazy" decoding="async" onerror="this.hidden=true">
 {% endif %}{% endblock %}
-{# A VA never opens Drive (owner 2026-11-15: "cutting VAs from direct google
-   drive access"): "In Drive" without the link and without x. #}
 {% block below %}
     {% set in_drive = request is not defined or can(request, "drive-upload") %}
     <ul class="drive-states">
@@ -24,9 +15,6 @@
         </li>
         {%- endfor -%}
     </ul>
-{# A done clone goes on to /edit or /clone-long with its video picked
-   (clone.js posts `/clone/{job}/handoffs`; a card that finishes live gets
-   the same control from clone.html's `card-send-to`). Not on /handmade. #}
 {% if job.task == "clone" and job.status == "done" and job.assets|selectattr("kind", "equalto", "video")|list %}
     {% include "_clone_send_to.html" %}
 {% endif %}

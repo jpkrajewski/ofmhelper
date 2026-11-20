@@ -1,9 +1,3 @@
-"""People who sign in (`users`), the Google/Apple accounts linked to them
-(`user_identities`), their set-password links (`password_links`) and their
-own provider keys (`user_api_keys`). Reads of a user are cached; anything
-returning a secret (the Google refresh token, an API key, a password hash)
-never is: those must not reach Redis."""
-
 import hashlib
 import time
 from datetime import UTC, datetime
@@ -28,8 +22,6 @@ from ofmhelpers.schemas.users import LinkedAccount, Role, SavedKey, SavedKeys, U
 
 
 def _credential_stamp(password_hash: str) -> str:
-    """Changes with the password; "" without one. A truncated digest of
-    the (salted) hash: safe in the cache and in the session cookie."""
     if not password_hash:
         return ""
     return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
@@ -66,9 +58,7 @@ def _linked_account(row: UserIdentityRow) -> LinkedAccount:
     )
 
 
-class OwnsDataError(ValueError):
-    """A user who still owns jobs, phones, accounts or watched profiles:
-    not deleted (their data would be orphaned); deactivate them instead."""
+class OwnsDataError(ValueError): ...
 
 
 class UserRepository(CachedRepository):
@@ -90,7 +80,6 @@ class UserRepository(CachedRepository):
 
     @cached
     def list_all(self) -> list[User]:
-        """Admins first, then by email."""
         with session_scope() as s:
             rows = s.execute(select(UserRow)).scalars().all()
             found = [_user(r) for r in rows]
@@ -121,8 +110,6 @@ class UserRepository(CachedRepository):
         password_account: bool = False,
         owner_id: int | None = None,
     ) -> User | None:
-        """None when the email is taken -- also by a request racing this
-        one (one INSERT ... ON CONFLICT DO NOTHING: never an IntegrityError)."""
         with session_scope() as s:
             row = s.scalars(
                 insert(UserRow)
@@ -143,7 +130,6 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def update(self, user_id: int, **fields: object) -> User | None:
-        """Sets `fields` (role, active, name); None when there is no such user."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             if row is None:
@@ -155,7 +141,6 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def end_sessions(self, user_id: int) -> None:
-        """Logout: every session of theirs signed in before now is out."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             if row is not None:
@@ -163,7 +148,6 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def seen(self, user_id: int, at: float) -> None:
-        """Their last action was at `at` (epoch seconds)."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             if row is not None:
@@ -171,10 +155,6 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def end_idle_sessions(self, user_id: int) -> bool:
-        """Ends their sessions unless they were already ended since their
-        last action; whether this call was the one that did. One statement:
-        of two callers at the same moment (the idle sweep, a sign-in) only
-        one gets True."""
         with session_scope() as s:
             ended = s.execute(
                 update(UserRow)
@@ -191,9 +171,6 @@ class UserRepository(CachedRepository):
             return ended.first() is not None
 
     def idle_vas(self, before: float) -> list[User]:
-        """Active VAs whose last action is older than `before` (epoch
-        seconds) and who have not been logged out since it: still signed in
-        as far as anyone recorded. Not cached: the idle sweep's own read."""
         cutoff = datetime.fromtimestamp(before, tz=UTC)
         with session_scope() as s:
             rows = s.scalars(
@@ -211,8 +188,6 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def signed_in(self, user_id: int, name: str, refresh_token: str | None) -> None:
-        """Stamps a sign-in; keeps a newer refresh token (Google sends one
-        only when it asked for consent)."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             if row is None:
@@ -225,7 +200,6 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def delete(self, user_id: int) -> bool:
-        """Raises `OwnsDataError` while anything is theirs (RESTRICT)."""
         try:
             with session_scope() as s:
                 row = s.get(UserRow, user_id)
@@ -242,13 +216,11 @@ class UserRepository(CachedRepository):
             raise OwnsDataError(msg) from exc
 
     def refresh_token(self, user_id: int) -> str:
-        """Decrypted: never cached."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             return row.google_refresh_token if row else ""
 
     def api_keys(self, user_id: int) -> SavedKeys:
-        """Each provider's key, decrypted: never cached."""
         with session_scope() as s:
             rows = s.execute(
                 select(UserApiKeyRow).where(UserApiKeyRow.user_id == user_id)
@@ -258,8 +230,6 @@ class UserRepository(CachedRepository):
             )
 
     def keys_in_slot(self, slot: str) -> list[str]:
-        """Every active admin's saved key of `slot`, decrypted (the agency's
-        chat logins: a Stacked key saved on /account). Never cached."""
         key, user = UserApiKeyRow, UserRow
         with session_scope() as s:
             rows = s.execute(
@@ -271,7 +241,6 @@ class UserRepository(CachedRepository):
             return [r.api_key for r in rows if r.api_key]
 
     def set_api_key(self, user_id: int, provider: str, api_key: str) -> None:
-        """Stores the key; "" removes it."""
         with session_scope() as s:
             s.execute(
                 delete(UserApiKeyRow).where(
@@ -287,8 +256,6 @@ class UserRepository(CachedRepository):
                         api_key=api_key,
                     )
                 )
-
-    # --- linked Google / Apple accounts ----------------------------------
 
     @cached
     def user_for_identity(self, provider: str, subject: str) -> int | None:
@@ -310,9 +277,6 @@ class UserRepository(CachedRepository):
     def link_identity(
         self, user_id: int, provider: str, subject: str, email: str
     ) -> bool:
-        """False when that account is already linked to someone else.
-        Insert first (ON CONFLICT DO NOTHING), then read who has it: two
-        concurrent first sign-ins never collide on the primary key."""
         with session_scope() as s:
             s.execute(
                 insert(UserIdentityRow)
@@ -346,17 +310,13 @@ class UserRepository(CachedRepository):
                 if row is not None:
                     row.google_refresh_token = ""
 
-    # --- passwords ---------------------------------------------------------
-
     def password_hash(self, user_id: int) -> str:
-        """Never cached."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             return row.password_hash if row else ""
 
     @invalidates_cache
     def set_password_hash(self, user_id: int, password_hash: str) -> None:
-        """Also voids every set-password link of the user."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             if row is None:
@@ -368,9 +328,6 @@ class UserRepository(CachedRepository):
     def replace_password_hash(
         self, user_id: int, expected: str, password_hash: str
     ) -> bool:
-        """Compare-and-swap (security audit 2026-11-18): sets the hash only
-        while it is still `expected`, the one that was verified; False when
-        the password changed meanwhile. Also voids the set-password links."""
         with session_scope() as s:
             swapped = s.execute(
                 update(UserRow)
@@ -386,7 +343,6 @@ class UserRepository(CachedRepository):
     def add_password_link(
         self, user_id: int, token_hash: str, expires_at: float
     ) -> None:
-        """The user's only link: an older one stops working."""
         with session_scope() as s:
             s.execute(delete(PasswordLinkRow).where(PasswordLinkRow.user_id == user_id))
             s.add(
@@ -396,7 +352,6 @@ class UserRepository(CachedRepository):
             )
 
     def link_user(self, token_hash: str, now: float) -> int | None:
-        """Whose unexpired link this is; None when unknown or expired."""
         with session_scope() as s:
             row = s.get(PasswordLinkRow, token_hash)
             if row is None or row.expires_at < now:

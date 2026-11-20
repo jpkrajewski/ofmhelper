@@ -1,12 +1,3 @@
-"""The downloads sweep (features/downloads/cleanup.py; owner 2026-11-11): a
-downloaded video no job used leaves the server a day after it was last asked
-for, one a clone used 14 days after its last use, any 30 days after it was
-downloaded. Its poster, its row and its card stay; a video a running job
-names, or one whose poster cannot be made, is left alone.
-
-No network and no ffmpeg: links "download" to small files, posters are
-stand-ins (`download_files.py`), so this runs in the default suite."""
-
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,8 +31,6 @@ def assets(tmp_path, monkeypatch) -> Path:
 
 @pytest.fixture(autouse=True)
 def two_mounts(monkeypatch) -> None:
-    """As on the server: `downloads/` and the asset store are two mounts,
-    a hard link between them fails and the store gets a copy of its own."""
 
     def no_link(*_args, **_kwargs) -> None:
         msg = "Invalid cross-device link"
@@ -61,7 +50,6 @@ def posters(monkeypatch) -> None:
 
 
 def _download(assets: Path, *links: str) -> str:
-    """A finished download of `links`, made just now by the agency."""
     job_id = create_job("download_media", {"urls": list(links)})
     kwargs = {
         "urls": list(links),
@@ -78,7 +66,6 @@ def _in(seconds: float) -> datetime:
 
 
 def _clone_of(job_id: str, *, finished: bool = True) -> str:
-    """A clone that names the download's copy in the asset store."""
     clone = create_job("clone", {"reference_videos": [row(job_id).asset_path]})
     if finished:
         run_job(clone, list, {})
@@ -129,7 +116,7 @@ def test_what_stays_of_a_removed_video_is_its_poster_its_row_and_its_job(
     done = cleanup.sweep(_in(2 * DAY))
 
     assert not Path(file.file_path).exists()
-    assert not Path(file.file_path).parent.exists()  # its own folder, now empty
+    assert not Path(file.file_path).parent.exists()
     assert not Path(file.asset_path).exists()
     assert not preview.exists()
     assert _poster(job).read_bytes() == b"RIFF"
@@ -141,13 +128,10 @@ def test_what_stays_of_a_removed_video_is_its_poster_its_row_and_its_job(
     )
     assert after.removed_at is not None
     assert get_job(job).status == "done"
-    # Both copies: the two mounts cannot hard-link, each is its own file.
     assert done.freed == 2 * size
 
 
 def test_a_hard_linked_copy_is_counted_once(assets, posters, monkeypatch):
-    """One mount (dev, a test folder): the store's file is the download's
-    under a second name, and the bytes come back with the last name."""
     monkeypatch.setattr(asset_store.os, "link", _LINK)
     job = _download(assets, LINK)
     file = row(job)
@@ -192,9 +176,6 @@ def test_a_use_moves_last_used_to_the_clones_start(assets, posters):
 
 @pytest.mark.parametrize(("age_s", "stored"), [(-MINUTE, True), (MINUTE, False)])
 def test_any_video_goes_30_days_after_it_was_downloaded(assets, posters, age_s, stored):
-    """A clone used it two days before the round: far from its 14 days, so
-    only the 30-day rule can take it. The clone's own copy (the asset
-    store's) stays for its Recreate; the download's goes."""
     job = _download(assets, LINK)
     backdate(job, 28 * DAY + age_s)
     file = row(job)
@@ -228,7 +209,6 @@ def test_a_video_a_running_job_names_is_never_removed(assets, posters):
 
 
 def test_a_download_being_fetched_again_is_left_alone(assets, posters):
-    """Its own job is running: the files are being written."""
     job = _download(assets, LINK)
     file = row(job)
     reopen_job(job)
@@ -259,7 +239,7 @@ def test_a_video_whose_poster_cannot_be_made_stays(assets, monkeypatch):
 
 def test_a_poster_already_made_is_not_made_again(assets, posters, monkeypatch):
     job = _download(assets, LINK)
-    assert _poster(job).exists()  # made when the job finished
+    assert _poster(job).exists()
 
     def not_again(*_args, **_kwargs) -> None:
         msg = "the poster is there already"
@@ -283,7 +263,6 @@ def test_a_file_already_gone_from_disk_is_only_marked(assets, posters):
     after = row(job)
     assert after.stored is False
     assert after.removed_at is not None
-    # Nothing else was touched: its copy in the store is another file's business.
     assert Path(file.asset_path).exists()
 
 
@@ -318,7 +297,6 @@ def test_one_row_that_fails_does_not_stop_the_rest(
 
     assert (done.removed, done.failed) == (1, 1)
     assert row(fine).stored is False
-    # Still there, and still said to be: the next round tries again.
     assert stuck_file.exists()
     assert row(stuck).stored is True
     assert row(stuck).removed_at is None
@@ -329,8 +307,6 @@ def test_one_row_that_fails_does_not_stop_the_rest(
 def test_the_same_video_downloaded_twice_keeps_its_one_copy_in_the_store(
     assets, posters
 ):
-    """Two downloads of the same bytes share one file in the store: it goes
-    with the last of them."""
     first = _download(assets, LINK)
     second = _download(assets, OTHER)
     Path(row(second).file_path).write_bytes(Path(row(first).file_path).read_bytes())
@@ -382,15 +358,12 @@ def test_the_dry_count_says_what_a_round_would_remove_and_removes_nothing(
     assert (count.missing, count.busy) == (0, 0)
     assert all(path.exists() for path in files)
     assert row(unused).stored is True
-    # Not even the use is written.
     assert row(cloned).last_used_at == row(cloned).created_at
 
 
 def test_the_dry_count_reads_a_use_from_the_name_when_the_file_is_not_here(
     assets, posters
 ):
-    """Dev on a copy of prod's rows: no file, no `asset_path` yet. A clone
-    that names `<sha256>__<name>` still counts as its use."""
     job = _download(assets, LINK)
     file = row(job)
     _clone_of(job)
@@ -407,7 +380,6 @@ def test_the_dry_count_reads_a_use_from_the_name_when_the_file_is_not_here(
 
 @pytest.fixture
 def real_queue(monkeypatch):
-    """Jobs wait in Redis from here on, instead of running inline."""
 
     def switch_on() -> None:
         monkeypatch.setenv("OFM_RQ_ASYNC", "true")
@@ -418,8 +390,6 @@ def real_queue(monkeypatch):
 
 
 def test_the_sweep_is_put_in_the_workers_line_once(real_queue):
-    """Its disk and ffmpeg work is a worker's; a round while the last one
-    still waits adds nothing."""
     (sweep,) = [s for s in sweeps.sweeps() if s.name == "downloads cleanup"]
     real_queue()
 

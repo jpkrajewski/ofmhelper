@@ -1,5 +1,3 @@
-"""web/clone_long/models.py: how a long video is split and priced."""
-
 import itertools
 
 import pytest
@@ -15,14 +13,14 @@ def _lengths(seconds: float) -> list[float]:
     ("seconds", "lengths"),
     [
         (3.0, [3.0]),
-        (15.0, [15.0]),  # exactly the limit: one piece
-        (15.2, [8.0, 7.2]),  # a 0.2 s tail would stutter: evened out
-        (20.0, [14.0, 6.0]),  # long first piece, the rest is the tail
-        (32.0, [11.0, 11.0, 10.0]),  # 14 + 14 + 4 would stutter: evened out
-        (35.0, [14.0, 14.0, 7.0]),  # long pieces, a decent tail
+        (15.0, [15.0]),
+        (15.2, [8.0, 7.2]),
+        (20.0, [14.0, 6.0]),
+        (32.0, [11.0, 11.0, 10.0]),
+        (35.0, [14.0, 14.0, 7.0]),
         (45.0, [15.0, 15.0, 15.0]),
-        (50.0, [14.0, 14.0, 14.0, 8.0]),  # as long as the cap allows
-        (44.6, [14.8, 14.8, 15.0]),  # must exceed 14 to fit four... three pieces
+        (50.0, [14.0, 14.0, 14.0, 8.0]),
+        (44.6, [14.8, 14.8, 15.0]),
         (71.0, [14.0, 14.0, 14.0, 14.0, 15.0]),
         (600.0, [15.0] * 40),
     ],
@@ -41,7 +39,6 @@ def test_the_pieces_cover_the_video_once_none_over_the_limit(seconds):
     assert sum(p.length for p in plan.pieces) == pytest.approx(seconds)
     assert all(0 < p.length <= 15 for p in plan.pieces)
     assert plan.count == -(-seconds // 15)
-    # No stuttering sliver: every piece is at least a third of a full one.
     assert min(p.length for p in plan.pieces) >= 15 / 3 - 1e-6
 
 
@@ -75,7 +72,7 @@ WAN3 = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
         ((1280, 720), "16:9"),
         ((1080, 1920), "9:16"),
         ((1080, 1080), "1:1"),
-        ((1080, 1350), "3:4"),  # 4:5 is not offered: nearest
+        ((1080, 1350), "3:4"),
         ((2560, 1080), "21:9"),
         ((1440, 1080), "4:3"),
     ],
@@ -89,7 +86,7 @@ def test_a_shape_asks_for_the_nearest_offered_ratio(size, ratio):
     [
         ((1920, 1080), 720, (1280, 720)),
         ((1080, 1920), 1280, (720, 1280)),
-        ((1080, 1350), 1024, (818, 1024)),  # 4:5 exactly, even sides
+        ((1080, 1350), 1024, (818, 1024)),
         ((1280, 720), 721, (1280, 720)),
     ],
 )
@@ -102,10 +99,9 @@ def test_a_shape_at_a_height_keeps_its_aspect_with_even_sides(size, height, expe
 @pytest.mark.parametrize(
     ("size", "expected"),
     [
-        # 4K phone video, landscape
         ((3840, 2160), Shape(width=1920, height=1080)),
-        ((2160, 3840), Shape(width=1080, height=1920)),  # and upright
-        ((1080, 1350), None),  # short side already 1080
+        ((2160, 3840), Shape(width=1080, height=1920)),
+        ((1080, 1350), None),
         ((1280, 720), None),
         ((1440, 1800), Shape(width=1080, height=1350)),
         ((4000, 4000), Shape(width=1080, height=1080)),

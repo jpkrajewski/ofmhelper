@@ -1,10 +1,3 @@
-"""What /pictures does behind its routes
-(web/routers/image_tools/pictures.py): presets -- the owner's own, the agency's
-shared with everyone (`stores.picture_presets`), their images saved in the
-owner's part of the asset store --, what the page's form shows, and a submit:
-one job per picture to recreate, each checked against the model before
-anything is queued."""
-
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
@@ -41,12 +34,7 @@ TASK = "pictures"
 LABEL = "Pictures"
 
 
-# --- the page ------------------------------------------------------------------
-
-
 class FormView(BaseModel):
-    """The form's part of the page; each field is a name the template reads."""
-
     presets: list[PicturePreset]
     selected: int | None
     providers: list[ProviderChoice]
@@ -60,7 +48,6 @@ class FormView(BaseModel):
 
 
 def form_view(owner_id: int, actor: str, preset: int | None) -> FormView:
-    """`preset`: the one the page opens on, when the asker may see it."""
     presets = picture_presets.visible(owner_id)
     ids = [p.id for p in presets]
     return FormView(
@@ -79,12 +66,7 @@ def form_view(owner_id: int, actor: str, preset: int | None) -> FormView:
     )
 
 
-# --- presets -------------------------------------------------------------------
-
-
 class PresetFields(Protocol):
-    """A preset form as its route read it (`PresetForm`)."""
-
     name: str
     prompt: str
     aspect_ratio: str
@@ -100,8 +82,6 @@ def visible(preset_id: int, owner_id: int) -> PicturePreset:
 
 
 def image_thumb(preset_id: int, index: int, owner_id: int) -> Path:
-    """A preset image as a small webp (made once and kept): a reference can
-    be a 25 MB PNG."""
     preset = visible(preset_id, owner_id)
     if not 0 <= index < len(preset.images) or not Path(preset.images[index]).is_file():
         msg = "No such image"
@@ -117,7 +97,6 @@ def image_thumb(preset_id: int, index: int, owner_id: int) -> Path:
 
 
 def _preset_aspect(value: str) -> str | None:
-    """A form's shape: "" = the picture's own (None)."""
     if not value:
         return None
     if value not in PRESET_ASPECTS:
@@ -127,8 +106,6 @@ def _preset_aspect(value: str) -> str | None:
 
 
 def _saved_images(uploads: list[UploadFile], root: Path) -> list[str]:
-    """New preset images into the owner's asset store (deduped by
-    content); anything but an image is refused."""
     paths = []
     for upload in uploads:
         if not upload.filename:
@@ -164,8 +141,6 @@ def update_preset(
     owner_id: int,
     assets_root: Path,
 ) -> PicturePreset:
-    """`keep`: the indexes of the current images to keep, in order; new
-    images go after them."""
     preset = visible(preset_id, owner_id)
     if not preset.mine:
         msg = "Only its owner edits a preset"
@@ -187,19 +162,13 @@ def update_preset(
 
 
 def delete_preset(preset_id: int, owner_id: int) -> int:
-    """The deleted preset's id."""
     if not picture_presets.delete(preset_id, owner_id):
         msg = "No such preset of yours"
         raise NotFoundError(msg)
     return preset_id
 
 
-# --- runs ------------------------------------------------------------------------
-
-
 class Submitted(Protocol):
-    """The /pictures run form as its route read it (`PictureRunForm`)."""
-
     provider: str
     api_key: str
     preset: int
@@ -216,7 +185,6 @@ def _target(provider: str) -> PictureTarget:
 
 
 def _key(form: Submitted, target: PictureTarget, owner_id: int) -> str:
-    """The key the runs go out on: `owner_id`'s for the target's model."""
     api_key = Keys.of(owner_id).for_run(form.provider, target.model, form.api_key)
     if not api_key:
         msg = "API key is required"
@@ -241,7 +209,6 @@ def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
 def _runs(
     chosen: PicturePreset, target: PictureTarget, paths: list[str]
 ) -> list[dict[str, Any]]:
-    """Each picture's run, provider-neutral, checked against the model."""
     if len(chosen.images) + 1 > target.max_images:
         msg = (
             f"{chosen.name} has {len(chosen.images)} pictures; Nano Banana Pro"
@@ -278,9 +245,6 @@ def start(
     owner_id: int,
     assets_root: Path,
 ) -> JobsQueued:
-    """One job per picture to recreate, each checked against the model
-    before anything is queued. `run`: the worker function the router owns
-    (RQ stores it by path). The key goes to the worker only."""
     chosen = visible(form.preset, owner_id)
     target = _target(form.provider)
     api_key = _key(form, target, owner_id)
@@ -298,7 +262,6 @@ def start(
 
 
 def describe_preset(params: dict[str, Any]) -> str:
-    """A card's meta line: the preset it ran."""
     name = params.get("preset_name")
     return f"{LABEL} · {name}" if name else LABEL
 
@@ -311,8 +274,6 @@ def run_picture(
     model: str,
     **params: Any,
 ) -> list[ResultFile]:
-    """The worker side (and recovery's re-run): the job's provider-neutral
-    params onto its target's fields, then `run_ai`."""
     fields = values(PICTURE_TARGETS[provider], params).model_dump()
     return run_ai(
         job_id, api_key, assets_root, provider=provider, model=model, **fields

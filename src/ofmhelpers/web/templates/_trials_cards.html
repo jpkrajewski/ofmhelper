@@ -1,10 +1,5 @@
 {% import "components/ui.html" as ui %}
 {% import "_icons.html" as ic %}
-{# /trials/{login} cards: the folder page renders them all, GET .../cards
-   the ones trials.js asks for (it swaps each by data-key when its
-   data-stamp moved). Expects `view` (`trials.folder.FolderView`), `reels`
-   (made copies, newest made first), `pending` (reels Generate trials is
-   still making), `failed` (reels it could not make), in that order. #}
 {% for reel in reels %}
 {% set busy = reel.key in view.busy %}
 {% call ui.card(hook="tr-reel", attrs={"id": "reel-" ~ reel.key, "data-key": reel.key, "data-stamp": view.stamp(reel), "data-busy": busy}) %}

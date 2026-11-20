@@ -1,10 +1,4 @@
 {% import "components/ui.html" as ui %}
-{# /drive's cards, counts and folders: the page renders it from each
-   folder's last read (no Drive call), GET /drive/live from Drive now, and
-   drive.js swaps that in. Expects `board` (schemas.DriveBoard).
-   A card is /phones' card (the phone's drawing, label, model · color ·
-   owner on one line) with the Instagram account's Drive folder where
-   /phones lists logins; grid or list (layout.js). #}
 {% import "_icons.html" as ic %}
 {% set cards = board.cards %}
 {% if not board.live %}
@@ -77,8 +71,6 @@
 {% call ui.empty() %}No Instagram logins yet. <a href="/phones">Add one on Phones</a>{% endcall %}
 {% endif %}
 
-{# Each VA's own folder (features/drive/va_folders.py), by their name: where
-   their handmade reels land from /handmade. #}
 {% if board.va_folders %}
 <section class="dr-vas" data-va-folders>
     <h2>VAs</h2>

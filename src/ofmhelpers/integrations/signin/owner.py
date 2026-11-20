@@ -1,14 +1,3 @@
-"""Sign in as the app owner: the admin password (`APP_PASSWORD_ADMIN`) alone
-opens the agency admin (the password account, stores/users.py). One more
-provider on /login: its consent screen is this app's own password page
-(`/auth/owner/consent`, routers/auth.py), which on the right password comes
-back to `/auth/owner/callback` like Google does -- so the state cookie,
-`next`, logging and refusals are the same code for every provider.
-
-The code it hands back is a signed, short-lived token of the sign-in's
-nonce (`ofm_signin` cookie): it opens nothing but that one sign-in.
-Never linkable to a user (/account): it is no one's own account."""
-
 import hmac
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -17,7 +6,6 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations.signin.base import SignInError, TokenReply
 from ofmhelpers.schemas.users import Identity
 
-# How long the password page's code may take to reach the callback.
 _CODE_TTL_S = 60
 SUBJECT = "app-owner"
 
@@ -29,7 +17,6 @@ def _codes() -> URLSafeTimedSerializer:
 
 
 def password_ok(password: str) -> bool:
-    """Whether `password` is the admin password (constant-time)."""
     admin = settings.web.app_password_admin
     return bool(admin) and hmac.compare_digest(
         password.encode(), (admin or "").encode()
@@ -37,8 +24,6 @@ def password_ok(password: str) -> bool:
 
 
 def owner_code(nonce: str) -> str:
-    """What the password page sends to the callback once the password was
-    right."""
     return _codes().dumps(nonce)
 
 
@@ -46,7 +31,6 @@ class Owner:
     name = "owner"
     label = "Big G Login"
     callback_method = "GET"
-    # Its consent screen is ours, under fake externals too.
     local_consent = True
     linkable = False
     connects_drive = False
@@ -56,11 +40,11 @@ class Owner:
 
     def consent_url(
         self,
-        redirect_uri: str,  # noqa: ARG002 -- the callback is fixed
+        redirect_uri: str,  # noqa: ARG002
         state: str,
-        nonce: str,  # noqa: ARG002 -- the page reads it from the state cookie
+        nonce: str,  # noqa: ARG002
         *,
-        connect: bool,  # noqa: ARG002 -- never linked
+        connect: bool,  # noqa: ARG002
     ) -> str:
         return f"/auth/owner/consent?state={state}"
 

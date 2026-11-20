@@ -1,22 +1,5 @@
-/*
- * Colors asset references typed into a prompt -- tokens like [Image1],
- * [Video 2], @image_1, @audio1 -- per media type (image / video / audio).
- *
- * A <textarea> can't render colored text, so this uses the standard
- * backdrop-overlay technique: the textarea is wrapped in a .prompt-wrap, a
- * .prompt-backdrop div behind it renders the SAME text (transparent color)
- * with <mark> backgrounds under each reference token, and the textarea sits
- * on top with a transparent background. The backdrop must match the
- * textarea's font/padding/border metrics exactly (see .prompt-backdrop in
- * components.css) or the highlights drift out of alignment.
- *
- * Applies to every `textarea.prompt-input` on the page. Programmatic value
- * changes (e.g. click-to-reuse restoring a prompt) must dispatch an "input"
- * event for the highlight to refresh -- generate_form.html's restore code
- * does.
- */
 (() => {
-    // (?!\w) keeps "@imagery" from lighting up as "@image".
+
     const TOKEN_RE = /(\[\s*(image|video|audio)\s*_?\s*\d*\s*\]|@(image|video|audio)_?\d*(?!\w))/gi;
 
     function escapeHtml(text) {
@@ -42,8 +25,7 @@
 
         function sync() {
             let text = textarea.value;
-            // A trailing newline renders as zero height in a div but as a
-            // visible extra line in a textarea -- pad it so heights match.
+
             if (text.endsWith("\n")) text += " ";
             backdrop.innerHTML = highlight(text);
             backdrop.scrollTop = textarea.scrollTop;
@@ -62,7 +44,5 @@
         document.querySelectorAll("textarea.prompt-input").forEach(initPromptHighlight);
     });
 
-    // A prompt shown as text somewhere else (/clone's Start dialog): its
-    // references marked the same way, as safe HTML.
     window.PromptHighlight = { html: highlight };
 })();

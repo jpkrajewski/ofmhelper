@@ -1,8 +1,3 @@
-"""/viral: an Instagram profile in, its most played reels out. Apify is
-faked at the wire (apify/fake.py: the Instagram fake's profiles, videos on
-its CDN); jobs run inline. sheep_love33's reels have 3M (pinned), 1.5M,
-900k, 620k, 260k, 130k, 61k and 21k plays."""
-
 import io
 import zipfile
 from pathlib import Path
@@ -67,13 +62,11 @@ def test_a_search_keeps_the_most_played_reels_downloaded(client):
     assert all(
         Path(p).is_file() and Path(p).suffix == ".mp4" for p in job.local_paths()
     )
-    # Read the newest 200 (the default), every paid add-on off; paid per reel.
     sent = fake_apify().inputs[0]
     assert sent["username"] == [PROFILE]
     assert sent["resultsLimit"] == 200
     assert not any(sent[k] for k in sent if k.startswith("include"))
     assert job.params["scanned"] == 8
-    # Priced from the charged reels: Apify's own total lags behind.
     assert job.params["cost_usd"] == pytest.approx(8 * USD_PER_REEL + START_USD)
 
 
@@ -213,8 +206,6 @@ def test_a_picture_only_reel_gets_its_sound_back(tmp_path):
 
 
 def test_an_age_restricted_profile_says_so():
-    """Prod 2026-11-13, @bigboylazar: the actor answered "Restricted
-    profile" and the card said "No reels" about a profile full of them."""
     item = DatasetItem.model_validate(
         {"url": "https://www.instagram.com/shy", "error": "Restricted profile"}
     )

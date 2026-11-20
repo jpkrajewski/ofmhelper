@@ -1,26 +1,3 @@
-"""APIYI faked at the wire (OFM_FAKE_EXTERNALS, tests): `GET /v1/models`,
-`POST /wan/api/v1/services/aigc/video-generation/video-synthesis` and
-`GET /v1/tasks/{id}`, answered the way docs.apiyi.com's wan3 pages describe
-them, plus the OSS host its `result_url`s point at.
-
-Like the real one: only `FAKE_KEY` is accepted (else 401); a submit without
-`X-DashScope-Async: enable` is refused; a submit is answered 200 and its
-problems come later, as a `failed` task -- media that is not a public https
-link, `first_frame`/`last_frame` mixed with `reference_*`, a `duration`
-that is not an integer, a lower-case `resolution`; the result host answers
-403 to a request carrying `Authorization`. A task is `submitted` /
-`in_progress` for `polls_until_done` reads, then `completed`.
-
-The other families (Gemini, the images API, Seedance, Veo) are
-`fake_families.py`'s, reached through `families`.
-
-`refuse_next` makes the next submit answer that (HTTP status, code,
-message) instead, `refuse_reads` the next task reads answer those in turn,
-`fail_next` the next task end `failed` with (code, message), `lose_next` the
-next submit be made but its answer time out; `created` records each submit
-body.
-"""
-
 import itertools
 import json
 import threading
@@ -47,7 +24,6 @@ _RESOLUTIONS = frozenset({"480P", "720P", "1080P"})
 
 
 def error(status: int, code: str, message: str) -> FakeReply:
-    """The gateway's OpenAI-style error body."""
     return FakeReply.json_body(
         {"error": {"message": message, "type": "new_api_error", "code": code}},
         status=status,
@@ -55,7 +31,6 @@ def error(status: int, code: str, message: str) -> FakeReply:
 
 
 def _problem(body: dict[str, Any]) -> tuple[str, str] | None:
-    """What the upstream fails a queued task for, if anything."""
     media = body.get("input", {}).get("media") or []
     types = {m.get("type") for m in media}
     if types & _FRAMES and types & _REFERENCES:
@@ -79,11 +54,8 @@ class FakeApiyi:
         self.refuse_next: tuple[int, str, str] | None = None
         self.fail_next: tuple[str, str] | None = None
         self.refuse_reads: list[tuple[int, str, str]] = []
-        # The next submit is made, then its answer never arrives (a timeout).
         self.lose_next = False
         self.model_lists = 0
-        # A key of another token group -> the models it lists (`GET
-        # /v1/models`); `FAKE_KEY` is a Wan&HappyHorse key.
         self.key_models: dict[str, list[str]] = {}
         self.families = FakeFamilies(polls_until_done)
         self._ids = itertools.count(1)
@@ -156,8 +128,6 @@ class FakeApiyi:
             state = "submitted" if polls == 1 else "in_progress"
             return self._read(task_id, state, progress="30%")
         if found["failure"]:
-            # APIYI's real failed task (tests/fixtures/providers/apiyi): the
-            # code only inside the message, no `code` field.
             code, message = found["failure"]
             said = f"[{code}] {message}"
             return self._read(
@@ -193,7 +163,6 @@ def fake_apiyi() -> FakeApiyi:
 
 def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> FakeReply:
     if request.headers.get("Authorization"):
-        # The real OSS link answers 403 to a request with our key on it.
         return FakeReply(body=b"AccessDenied", status=403)
     if urlsplit(request.url or "").path.endswith(".png"):
         return FakeReply(

@@ -1,9 +1,3 @@
-"""Every model of every provider, read from each provider's `catalog.json`.
-
-Loaded once per process: the files ship with the code and only change with a
-deploy (Higgsfield's is rebuilt by `scripts/sync_higgsfield_catalog.py`).
-"""
-
 import json
 from functools import lru_cache
 
@@ -16,8 +10,6 @@ from ofmhelpers.utils.registry import Registry
 
 @lru_cache(maxsize=1)
 def catalog() -> Registry[ModelSpec]:
-    """Every model by `ModelSpec.key`, providers in discovery order and each
-    provider's models in its file's order (the form lists them that way)."""
     adapter = TypeAdapter(list[ModelSpec])
     specs: dict[str, ModelSpec] = {}
     for cls in provider_classes().all():

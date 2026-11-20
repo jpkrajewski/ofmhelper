@@ -1,8 +1,3 @@
-"""Every upload `/run` route is a plain `def`: they hash and copy uploaded files
-with blocking I/O, and inside an `async def` that ran on uvicorn's one event
-loop -- one big upload froze every other request (galleries, polling, pages).
-A plain `def` runs in FastAPI's threadpool instead."""
-
 import inspect
 
 from fastapi.routing import APIRoute

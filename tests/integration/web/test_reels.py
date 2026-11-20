@@ -1,7 +1,3 @@
-"""/reels: a watch list of Instagram profiles in groups, one paged feed of
-their viral reels, scans in the background (first on add, then every 12 h),
-and the picked reels handed to /clone."""
-
 import io
 import json
 import zipfile
@@ -76,9 +72,6 @@ def _found(
 
 @pytest.fixture
 def scans(monkeypatch):
-    """Every scan finds `_found(username)`; the usernames scanned, in order.
-    The test suite runs enqueued jobs inline, so a scan queued by POST
-    /reels/watch has run by the time the response is back."""
     seen: list[str] = []
 
     def fake_scan(_client, username, min_views, max_duration_s, max_age_s, limit):
@@ -134,7 +127,6 @@ def test_adding_scans_the_new_profiles_in_the_background(client, scans):
 
     html = client.get("/reels").text
     assert 'data-code="r_sheep_love33"' in html
-    # Only a lazy thumbnail is in the page; the video is created on hover.
     assert 'loading="lazy"' in html
     assert "<video" not in html
     assert f'data-video-url="{CDN.format("a")}"' in html
@@ -244,7 +236,6 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(client, monkeypatch):
 
 
 def test_a_cookies_upload_leaves_a_job_row_for_the_unlock(client):
-    """Work a person starts has a row: theirs, done once the worker ran it."""
     from ofmhelpers.db.stores.jobs import history
     from ofmhelpers.db.stores.users import agency_id
 
@@ -340,7 +331,7 @@ def test_not_found_is_retried_on_another_proxy_and_never_drops_the_profile(
     assert used == ["real", "real", "real"]
     assert watched is not None
     assert "no such profile (3 tries)" in watched.error
-    assert watched.result is not None  # the last good scan stays on show
+    assert watched.result is not None
 
 
 def _not_found(_client, username, *_args):
@@ -373,7 +364,7 @@ def test_a_new_profile_the_login_still_sees_is_kept(monkeypatch):
 def test_a_private_profile_is_not_added_but_a_known_one_turning_private_stays(
     client, scans, monkeypatch
 ):
-    client.post("/reels/watch", data={"profiles": "known"})  # scanned fine
+    client.post("/reels/watch", data={"profiles": "known"})
 
     def private(_client, username, *_args):
         msg = "profile is private"
@@ -385,7 +376,7 @@ def test_a_private_profile_is_not_added_but_a_known_one_turning_private_stays(
     assert get_watched("new_private") is None
     known = get_watched("known")
     assert known.error == "profile is private"
-    assert known.result is not None  # its good reels stay
+    assert known.result is not None
 
 
 def test_instagram_errors_on_every_try_are_shown_and_the_batch_goes_on(
@@ -423,7 +414,7 @@ def test_tries_that_never_reach_instagram_record_nothing(monkeypatch):
     watch("y")
     reel_watch.scan_all(["x", "y"])
     x = get_watched("x")
-    assert (x.pending, x.error) == (True, None)  # still due, nothing blamed
+    assert (x.pending, x.error) == (True, None)
     assert get_watched("y").error is None
 
 
@@ -439,7 +430,6 @@ def test_a_network_outage_stops_the_batch_without_blaming_anyone(monkeypatch):
     for u in ("x", "y", "z"):
         watch(u)
     reel_watch.scan_all(["x", "y", "z"])
-    # x kills the only proxy, y goes direct and fails: the batch stops there.
     assert used == [("x", "http://a:1"), ("y", None)]
     assert [(p.pending, p.error) for p in list_watched()] == [(True, None)] * 3
 
@@ -541,14 +531,12 @@ def test_feed_filters_by_rank_and_group_together(client, monkeypatch):
     assert 'data-code="huge"' in html
     assert 'data-code="small"' not in html
     assert 'data-code="other"' not in html
-    # Each chip row keeps the other's choice.
     assert 'href="/reels?group=gay&amp;rank=epic"' in html
     assert 'href="/reels?rank=legendary"' in html
     assert 'data-gallery-endpoint="/reels/feed?group=gay&amp;rank=legendary"' in html
 
 
 def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
-    """Uncommon = 100k-200k only; scrolling keeps group and rank."""
     monkeypatch.setenv("OFM_IG_FEED_PAGE_SIZE", "2")
     views = [150_000, 140_000, 130_000, 120_000, 110_000, 2_000_000, 300_000, 60_000]
     profiles = [
@@ -576,7 +564,6 @@ def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
         assert f'data-code="{other}"' not in first
     assert 'data-next-offset="2"' in first
 
-    # What gallery-scroll.js asks for on scroll: the same filters, next offset.
     page2 = client.get(
         "/reels/feed", params={"group": "gay", "rank": "uncommon", "offset": 2}
     ).text
@@ -586,7 +573,7 @@ def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
         "/reels/feed", params={"group": "gay", "rank": "uncommon", "offset": 4}
     ).text
     assert 'data-code="c110000"' in last
-    assert "gallery-sentinel" not in last  # the scroll ends
+    assert "gallery-sentinel" not in last
     for page in (page2, last):
         for other in ("c2000000", "c300000", "c60000"):
             assert f'data-code="{other}"' not in page
@@ -603,9 +590,9 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
         )
 
     profiles = [
-        found("small_viral", 10_000, 120_000),  # 12x its followers
-        found("mid", 50_000, 160_000),  # 3.2x
-        found("big", 1_000_000, 900_000),  # 0.9x
+        found("small_viral", 10_000, 120_000),
+        found("mid", 50_000, 160_000),
+        found("big", 1_000_000, 900_000),
     ]
     monkeypatch.setattr(
         reels, "list_watched", lambda _group=None, _owner=None: profiles
@@ -848,7 +835,7 @@ def test_a_batch_stops_when_every_retry_is_rate_limited(monkeypatch):
 
     monkeypatch.setattr(reel_watch, "scan_watched", scan)
     reel_watch.scan_all(["x", "y"])
-    assert used == ["x", "x"]  # both proxies tried for x, y left for later
+    assert used == ["x", "x"]
 
 
 def test_unwatch_needs_a_watched_profile(client):
@@ -865,20 +852,15 @@ def test_sweeper_rescans_only_stale_profiles_once(scans, monkeypatch):
     reel_watch.scan_watched("fresh")
     assert scans == ["fresh"]
 
-    # "fresh" was scanned just now; "stale" never was.
     assert reel_watch.queue_due_scans() == ["stale"]
     assert scans == ["fresh", "stale"]
     stale = get_watched("stale")
     assert stale is not None
     assert stale.result is not None
-    # Nothing is due again until the interval has passed.
     assert reel_watch.queue_due_scans() == []
 
 
 def test_with_rescans_off_only_a_first_scan_runs(scans, monkeypatch):
-    """Rescans off (the default since 2026-10-23): a scanned profile is
-    never due again however old its scan; one never scanned still is --
-    by the sweeper and by Add alike."""
     monkeypatch.setenv("OFM_IG_RESCAN_INTERVAL_S", "0")
     watch("old")
     reel_watch.scan_watched("old")
@@ -904,12 +886,10 @@ def test_a_claimed_profile_is_not_claimed_twice():
     watch("x")
     assert claim_due(0, 3600) == ["x"]
     assert claim_due(0, 3600) == []
-    # ...until the claim expires (a scan killed mid-way).
     assert claim_due(0, 0) == ["x"]
 
 
 def _watching(monkeypatch, *codes: str) -> None:
-    """The signed-in person watches a profile whose scan found `codes`."""
     found = _found("u")
     found.reels = [found.reels[0].model_copy(update={"code": code}) for code in codes]
     profiles = [WatchedProfile(user_id=1, username="u", added_at=0, result=found)]
@@ -936,7 +916,6 @@ def test_clone_downloads_picked_reels_and_opens_clone_with_them(client, monkeypa
     videos = parse_qs(urlsplit(redirect).query)["video"]
     assert [Path(v).name.split("__", 1)[1] for v in videos] == ["A1.mp4", "B2.mp4"]
 
-    # /clone opens with exactly those videos picked.
     html = client.get(redirect).text
     form_tag = html.split('id="clone-form"', 1)[1].split(">", 1)[0]
     prefill = json.loads(form_tag.split("data-prefill-videos='", 1)[1].split("'", 1)[0])
@@ -947,8 +926,6 @@ def test_clone_downloads_picked_reels_and_opens_clone_with_them(client, monkeypa
 def test_a_reel_of_no_watched_profile_is_404_and_fetches_nothing(
     client, monkeypatch, url
 ):
-    """The picks are checked against the person's own watch list, like a
-    cover: a reel of a profile somebody else watches is not theirs to fetch."""
     _watching(monkeypatch, "A1")
     fetched: list[str] = []
     monkeypatch.setattr(
@@ -986,7 +963,6 @@ def test_download_answers_one_mp4_or_a_zip_of_several(client, tmp_path, monkeypa
     assert r.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
         assert sorted(zf.namelist()) == ["A1.mp4", "B2.mp4"]
-    # Nothing stays on the server once the file is sent.
     assert not any((tmp_path / "uploads" / "reels").iterdir())
 
 
@@ -1011,8 +987,6 @@ def test_clone_page_drops_prefill_paths_outside_the_store(client, tmp_path):
 
 
 def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
-    """A reel stored by an older scan (30 s cap) disappears as soon as the
-    cap drops, not at the profile's next rescan."""
 
     def stored(username, length):
         result = _found(username, code=f"c_{username}")
@@ -1037,9 +1011,6 @@ def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
     assert 'data-code="c_long"' not in html
 
 
-# --- thumbnails ------------------------------------------------------------------
-
-
 def _jpeg(width: int = 1080, height: int = 1920) -> bytes:
     from PIL import Image
 
@@ -1050,8 +1021,6 @@ def _jpeg(width: int = 1080, height: int = 1920) -> bytes:
 
 @pytest.fixture
 def cdn(monkeypatch, tmp_path):
-    """Instagram's CDN for covers: the URLs asked, answering a full-size
-    JPEG (or `status`). Previews kept under this test's own uploads root."""
     from ofmhelpers.features.reels import thumbs as reel_thumbs
 
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads-root"))
@@ -1066,7 +1035,6 @@ def cdn(monkeypatch, tmp_path):
         return response
 
     monkeypatch.setattr(reel_thumbs.outbound, "get", get)
-    # The CDN's host resolves to a public address (no DNS in tests).
     monkeypatch.setattr(reel_thumbs, "_addresses", lambda _host: ["157.240.1.1"])
     return asked, state
 
@@ -1119,8 +1087,6 @@ def test_thumbnail_of_a_reel_not_watched_is_404_and_fetches_nothing(
 def test_thumbnail_of_a_profile_someone_else_watches_is_404_like_a_missing_one(
     client, scans, cdn
 ):
-    """The scan and the kept cover are shared; fetching it is only for who
-    watches the profile."""
     from signin import sign_in
 
     client.post("/reels/watch", data={"profiles": "user1", "group": "asian"})
@@ -1136,8 +1102,6 @@ def test_thumbnail_of_a_profile_someone_else_watches_is_404_like_a_missing_one(
 
 
 def test_thumbnail_instagram_refuses_is_404_and_retried_later(client, monkeypatch, cdn):
-    """An expired cover URL (403) is not kept: the next scan's fresh URL
-    gets its chance."""
     asked, state = cdn
     _one_profile(monkeypatch)
     state["status"] = 403

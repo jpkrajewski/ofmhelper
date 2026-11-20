@@ -1,8 +1,3 @@
-{# /clone's SOP dialog, filled by clone-sop.js from `GET /clone/examples`:
-   per example ONE video -- the original on the left, its clone on the right,
-   in step -- and the prompt that made it; "Use this prompt" puts that prompt
-   in the form. The examples are fixed (features/clone/examples.py): nothing
-   here edits one. #}
 {% import "components/ui.html" as ui %}
 {% for e in examples %}
 <article class="sop-example" data-example-id="{{ e.id }}" data-prompt="{{ e.prompt }}">

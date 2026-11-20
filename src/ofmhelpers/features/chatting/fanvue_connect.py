@@ -1,6 +1,3 @@
-"""Connecting a Fanvue account: Fanvue has no API keys, so someone authorises the app
-once in their browser. A connected account is read from the next sync on."""
-
 import secrets
 
 from ofmhelpers.cache import delete_text, get_text, set_text
@@ -31,8 +28,6 @@ def can_connect() -> bool:
 
 
 def connect_url() -> str:
-    """Where to send the browser. The verifier waits in Redis, under a state only
-    this browser's trip carries."""
     pkce = oauth.pkce_pair()
     state = secrets.token_urlsafe(32)
     set_text(_state_key(state), pkce.verifier, settings.fanvue.connect_ttl_s)
@@ -40,8 +35,6 @@ def connect_url() -> str:
 
 
 def finish(code: str, state: str) -> bool:
-    """Fanvue sent the browser back. False when the trip is not ours or Fanvue
-    refused; the reason is in the log, not on the page."""
     verifier = get_text(_state_key(state))
     if verifier is None:
         logger.warning("fanvue connect: unknown or expired state")

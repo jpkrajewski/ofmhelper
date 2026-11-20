@@ -1,21 +1,3 @@
-"""Image models over the OpenAI images API (`/v1/images/generations`,
-`/v1/images/edits`), answered in the request (`sync.py`). docs.apiyi.com
-gpt-image-2 / -all / -vip, seedream-image, flux pages (2026-11-06).
-
-- GPT-Image-2 (`gpt-image-2`, `-all`, `-vip`): JSON for text-to-image;
-  reference images make it an edit, multipart `/v1/images/edits` with the
-  files (`image[]` on the official model, `image` repeated on -all/-vip).
-  The official model refuses `response_format` (always base64); -all/-vip
-  are asked for base64.
-- Seedream: JSON `/v1/images/generations` only, references in `image` (an
-  array of data URLs), `watermark: false` always (flash marks otherwise);
-  the answer is a URL (24 h), fetched by the runner.
-- FLUX: JSON `/v1/images/generations`, references in `input_image`,
-  `input_image_2`.. (data URLs; 8 on FLUX.2 pro/max/flex, 4 on klein, 1 on
-  Kontext); the answer is a URL alive ~10 min (the runner fetches it at
-  once).
-"""
-
 from typing import Any
 
 from pydantic import Field
@@ -33,7 +15,6 @@ lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 GENERATIONS = "/v1/images/generations"
 EDITS = "/v1/images/edits"
 IMAGES = "image_urls"
-# Fields of ours that are not the API's.
 _OURS = frozenset({IMAGES, "aspect_ratio"})
 
 
@@ -50,7 +31,6 @@ class ImagesAnswer(Lenient):
         images = [("image/png", d.b64_json) for d in self.data if d.b64_json]
         if not urls and not images:
             msg = f"{PROVIDER}: the image answer held no image"
-            # Paid or not, nothing to fetch: never sent again either.
             raise ProviderUnavailableError(msg, maybe_made=False)
         return Made(urls=urls, images=images)
 
@@ -61,7 +41,6 @@ def _refs(payload: Payload) -> list[str]:
 
 
 def _api_fields(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
-    """The API's own fields: the model, every default sent, ours left out."""
     values = with_defaults(spec, payload)
     return {
         "model": spec.model_id,
@@ -71,7 +50,6 @@ def _api_fields(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
 
 class GptImage(SyncImages):
     prefixes = ("gpt-image",)
-    # -all/-vip: 10 MB a file (gateway); the official model takes 50 MB.
     _LIMITS = ImageLimits(max_bytes=10 * 1000 * 1000, max_side=8000)
 
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
@@ -99,7 +77,6 @@ class GptImage(SyncImages):
 
 class Seedream(SyncImages):
     prefixes = ("seedream",)
-    # Base64 references: the docs keep them under ~6 MB in all.
     _TOTAL_BYTES = 6 * 1000 * 1000
 
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
@@ -121,15 +98,12 @@ class Seedream(SyncImages):
 
 class Flux(SyncImages):
     prefixes = ("flux",)
-    # Inputs: 64 px to 4 MP, 20 MB each.
     _LIMITS = ImageLimits(max_bytes=20 * 1000 * 1000, max_side=1920)
 
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
         fields = _api_fields(spec, payload)
         refs = _refs(payload)
         if refs:
-            # An edit: the output follows `aspect_ratio` (else the first
-            # input); `size` is not an edit field.
             fields.pop("size", None)
             ratio = payload.get("aspect_ratio")
             if ratio:
@@ -140,7 +114,4 @@ class Flux(SyncImages):
         response = client.submit(
             GENERATIONS, json=fields, timeout=settings.apiyi.image_timeout_s
         )
-        # Its URLs die in ~10 min: the runner reads the task at once and
-        # downloads it then, with its retries (a fetch failing here would
-        # lose a paid image).
         return parsed(response, ImagesAnswer, PROVIDER).made()

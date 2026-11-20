@@ -1,8 +1,3 @@
-"""/distribution's accounts, model presets and queues
-(`distribution_channels`, `distribution_presets`, `distribution_posts`,
-alembic 9909cfa699f9). Nothing cached: the sweep and the publish job write
-as the page reads, and cookies never reach Redis."""
-
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select, update
@@ -31,7 +26,6 @@ from ofmhelpers.schemas.distribution import (
     PostStatus,
 )
 
-# Tries a post that must never be retried gets (above any max_attempts).
 _FINAL = 1_000_000
 _C = DistributionChannelRow
 _P = DistributionPostRow
@@ -84,15 +78,12 @@ def _post(row: DistributionPostRow) -> Post:
 
 
 class DistributionRepository:
-    # Channels.
-
     def channels_of(self, user_id: int) -> list[Channel]:
         with session_scope() as s:
             rows = s.scalars(select(_C).where(_C.user_id == user_id).order_by(_C.id))
             return [_channel(r) for r in rows]
 
     def all_channels(self) -> list[Channel]:
-        """Everyone's (the report CLI)."""
         with session_scope() as s:
             rows = s.scalars(select(_C).order_by(_C.user_id, _C.id))
             return [_channel(r) for r in rows]
@@ -103,7 +94,6 @@ class DistributionRepository:
             return _channel(row) if row is not None else None
 
     def running(self) -> list[Channel]:
-        """Every channel that posts: connected, not stopped or paused."""
         with session_scope() as s:
             rows = s.scalars(
                 select(_C)
@@ -112,8 +102,6 @@ class DistributionRepository:
                     _C.paused_at.is_(None),
                     _C.error.is_(None),
                     _C.cookies != "",
-                    # security audit 2026-11-18: a deactivated owner's
-                    # accounts post nothing.
                     UserRow.active.is_(True),
                 )
             )
@@ -131,8 +119,6 @@ class DistributionRepository:
         cookies: str,
         expires_at: float | None,
     ) -> Channel:
-        """The account with these cookies (a new one, or new cookies for
-        one), its stop cleared."""
         values = {
             "cookies": cookies,
             "cookies_expire_at": _at(expires_at),
@@ -161,8 +147,6 @@ class DistributionRepository:
     def set_cookies(
         self, channel_id: int, cookies: str, expires_at: float | None
     ) -> None:
-        """What Pinterest renewed, kept (only while the account is not
-        stopped: a logged-out session is never saved over the last one)."""
         with session_scope() as s:
             s.execute(
                 update(_C)
@@ -183,8 +167,6 @@ class DistributionRepository:
         with session_scope() as s:
             s.execute(update(_C).where(_C.id == channel_id).values(**values))
 
-    # Presets.
-
     def presets_of(self, user_id: int) -> list[ModelPreset]:
         with session_scope() as s:
             rows = s.scalars(
@@ -198,7 +180,6 @@ class DistributionRepository:
             return ModelPreset.model_validate(data) if data is not None else None
 
     def save_preset(self, user_id: int, preset: ModelPreset) -> None:
-        """Stored, or the one of that key replaced (its link kept)."""
         data = preset.model_dump(mode="json")
         with session_scope() as s:
             s.execute(
@@ -210,7 +191,6 @@ class DistributionRepository:
             )
 
     def model_links(self, user_id: int) -> list[ModelLink]:
-        """Each of the owner's models' self link, where it has one."""
         with session_scope() as s:
             rows = s.execute(
                 select(_M.key, ShortLinkRow.id, ShortLinkRow.url)
@@ -227,10 +207,7 @@ class DistributionRepository:
                 .values(link_id=link_id)
             )
 
-    # Posts.
-
     def add_posts(self, channel_id: int, found: list[NewPost]) -> int:
-        """The files not queued yet, queued; how many were new."""
         if not found:
             return 0
         rows = [{"channel_id": channel_id, **f.model_dump()} for f in found]
@@ -249,10 +226,6 @@ class DistributionRepository:
             return _post(row) if row is not None else None
 
     def next_post(self, channel: Channel, max_attempts: int) -> Post | None:
-        """The one to publish next: what none of the owner's accounts pinned
-        yet first (accounts do not all post the same reel), queued before
-        failed ones with tries left, at random within that (so every
-        model's content goes out, in proportion to how much there is)."""
         other = aliased(_P)
         mates = select(_C.id).where(_C.user_id == channel.user_id)
         pinned_elsewhere = (
@@ -280,8 +253,6 @@ class DistributionRepository:
             return _post(row) if row is not None else None
 
     def failing(self, channel_ids: list[int], since_s: float) -> list[Failing]:
-        """The channels whose pins over the last `since_s` seconds all
-        failed (none went up), with the last reason."""
         if not channel_ids:
             return []
         since = datetime.now(UTC) - timedelta(seconds=since_s)
@@ -310,7 +281,6 @@ class DistributionRepository:
             return [Failing(channel_id=c, error=e or "") for c, e in rows]
 
     def last_published(self, channel_ids: list[int]) -> float | None:
-        """When the last pin of these channels went up."""
         if not channel_ids:
             return None
         with session_scope() as s:
@@ -329,8 +299,6 @@ class DistributionRepository:
             return found is not None
 
     def claim(self, post_id: int, title: str, description: str, link: str) -> bool:
-        """It is `publishing` now with what it is pinned with, one more try
-        counted; False: someone else took it, or it is done."""
         with session_scope() as s:
             took = s.execute(
                 update(_P)
@@ -369,7 +337,6 @@ class DistributionRepository:
             )
 
     def failed(self, post_id: int, error: str, *, final: bool = False) -> None:
-        """Failed; `final`: never tried again (its tries used up)."""
         values: dict[str, object] = {"status": PostStatus.failed, "error": error}
         if final:
             values["attempts"] = _FINAL
@@ -381,7 +348,6 @@ class DistributionRepository:
             )
 
     def failed_in_a_row(self, channel_id: int, n: int) -> bool:
-        """The channel's last `n` tried posts all failed."""
         with session_scope() as s:
             last = s.scalars(
                 select(_P.status)
@@ -392,7 +358,6 @@ class DistributionRepository:
         return len(last) == n and all(x == PostStatus.failed for x in last)
 
     def requeue(self, post_id: int, error: str) -> None:
-        """Back in line, this try not counted (the site said wait, not no)."""
         with session_scope() as s:
             s.execute(
                 update(_P)
@@ -405,9 +370,6 @@ class DistributionRepository:
             )
 
     def cut_off(self, older_than_s: float, error: str, alive: set[str]) -> int:
-        """Posts left `publishing` longer than a job may run whose job no
-        worker holds and no queue has (`alive`: its worker was killed):
-        failed, so they are tried again."""
         before = datetime.now(UTC) - timedelta(seconds=older_than_s)
         with session_scope() as s:
             done = s.execute(
@@ -423,7 +385,6 @@ class DistributionRepository:
             return len(done.all())
 
     def counts(self, channel_id: int) -> PostCounts:
-        """A channel's queue in numbers."""
         midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         found = PostCounts()
         with session_scope() as s:
@@ -442,7 +403,6 @@ class DistributionRepository:
         return found
 
     def recent(self, channel_ids: list[int], limit: int) -> list[Post]:
-        """The latest activity of these channels first."""
         if not channel_ids:
             return []
         with session_scope() as s:
@@ -455,9 +415,6 @@ class DistributionRepository:
             return [_post(r) for r in rows]
 
     def pins_by_day(self, channel_ids: list[int], since: date) -> list[PinDay]:
-        """Per channel, model and UTC day from `since`: pins made (by when
-        they went up; `ig` = those with no link) and pins failed (by when
-        they were tried)."""
         if not channel_ids:
             return []
         start = datetime.combine(since, datetime.min.time(), UTC)

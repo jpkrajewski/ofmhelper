@@ -1,21 +1,3 @@
-"""Seedance 2.0 / 2.5 over Volcengine Ark's task API (docs.apiyi.com
-seedance2 pages, 2026-11-06), on a SeeDance2-group key.
-
-- Submit `POST /seedance/api/v3/contents/generations/tasks` -> top-level `id`
-  ("cgt-..."); read `GET .../tasks/{id}`: queued/running (pending),
-  succeeded (`content.video_url`: signed TOS link, 24 h, fetched without our
-  key), failed/expired. Every call sends `Accept-Encoding: identity`: the
-  gateway labels plain bodies gzip (truncated JSON, random 400s otherwise).
-- Body `{model, content: [...], resolution, ratio, duration,
-  generate_audio, watermark: false, seed}`: one `text` item, then the media
-  items in field order with their `role` (`x-role`): first_frame,
-  last_frame, reference_image, reference_video, reference_audio. Images,
-  videos and audio go as links to this server.
-- Realistic faces are refused as references (anti-deepfake: 403) unless
-  ingested in APIYI's asset library (`asset://`); not wired here.
-- 2.5: a first-frame task takes only `ratio: adaptive` (sent so).
-"""
-
 import re
 from typing import Any
 
@@ -50,10 +32,8 @@ _KIND = {
     "reference_video": "video_url",
     "reference_audio": "audio_url",
 }
-# Our prompts cite "@Image1"/"@Video1"; Seedance's examples "@图像1"/"@视频1".
 _CITE = re.compile(r"@(Image|Video|Audio)(\d+)")
 _CITE_AS = {"Image": "图像", "Video": "视频", "Audio": "音频"}
-# Moderation, as Ark words it in a failed task's code.
 _REFUSED = re.compile(r"sensitive|moderat|risk|safety|PUBLIC_", re.IGNORECASE)
 
 
@@ -95,8 +75,6 @@ class Link(BaseModel):
 
 
 class Item(BaseModel):
-    """One `content` entry: the text, or a reference under its kind's key."""
-
     type: str
     text: str | None = None
     image_url: Link | None = None
@@ -106,9 +84,6 @@ class Item(BaseModel):
 
 
 class Body(BaseModel):
-    """Ark's task body: `settings` go beside `model` and `content`, by the
-    names and in the order the catalog's schema gives them."""
-
     model: str
     content: list[Item]
     settings: dict[str, Any]

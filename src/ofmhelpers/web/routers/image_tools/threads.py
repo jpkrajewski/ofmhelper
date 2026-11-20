@@ -1,9 +1,3 @@
-"""/threads: pictures for Threads from one POSTED reel. The same phone cards
-as /trials; an account's page lists its POSTED reels, one click makes
-pictures of one (stills written as the phone's own photos) into
-THREADS/<reel> next to POSTED in its Drive folder. The page refreshes
-itself while a reel is being made. The work: `features.threads`."""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
@@ -23,13 +17,19 @@ def _threads(login_id: int, user: CurrentUser, scope: Scope) -> service.Threads:
     return service.Threads(uid=user.id, scope=scope, login_id=login_id)
 
 
-# The signed-in person's /threads of the login in the path.
 Threads = Annotated[service.Threads, Depends(_threads)]
 
 
+def _index_cards(user: CurrentUser, scope: Scope) -> service.PhoneCards:
+    return service.Threads.phone_cards(user.id, scope)
+
+
+IndexCards = Annotated[service.PhoneCards, Depends(_index_cards)]
+
+
 @router.get("")
-def threads_page(request: Request, user: CurrentUser, scope: Scope) -> Response:
-    return render(request, "threads.html", board=service.board(user.id, scope))
+def threads_page(request: Request, cards: IndexCards) -> Response:
+    return render(request, "threads.html", board=cards.board, progress=cards.progress)
 
 
 @router.get("/{login_id}")

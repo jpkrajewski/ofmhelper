@@ -1,15 +1,6 @@
-"""
-Unit tests for web/db/repository.py -- the only layer allowed to touch the DB.
-Covers create -> get round-trips and the atomicity guarantee that replaced the
-old JSON file's documented read-modify-write race: two near-simultaneous status
-updates must never leave a torn/half-written row.
-"""
-
 import os
 import threading
 
-# The app (test_pages_answer_while_the_cache_is_down) reads it at import:
-# set here like every app test, not left to another module collected first.
 from redis import Redis
 from signin import make_user
 
@@ -32,9 +23,6 @@ def test_job_create_get_round_trip():
 
 
 def test_update_status_is_atomic_under_concurrent_writers():
-    """Ten threads each write a distinct result to the same job at once. Every
-    write must succeed and the final row must equal exactly one writer's value
-    -- never a partial mix (the race the lock-free JSON file couldn't guard)."""
     repo = JobRepository()
     job_id = repo.create("seedance", {})
 
@@ -56,7 +44,7 @@ def test_update_status_is_atomic_under_concurrent_writers():
     assert not errors
     final = repo.get(job_id)
     assert final.status == "done"
-    assert final.result in values  # exactly one writer's value, intact
+    assert final.result in values
 
 
 def test_update_status_failure_path_records_error_not_result():
@@ -82,16 +70,13 @@ def test_job_get_is_served_from_cache_until_a_write_invalidates_it():
 
     first = repo.get(job_id)
 
-    # Mutate the row directly, bypassing the repo (and its bump()), to prove
-    # the get() below is answered from cache rather than a fresh DB read.
     with session_scope() as s:
         s.get(JobRow, job_id).status = "done"
-    assert repo.get(job_id) == first  # still cached, stale on purpose
+    assert repo.get(job_id) == first
 
-    repo.update_status(job_id, "done")  # goes through the repo -> bumps cache
+    repo.update_status(job_id, "done")
 
     assert repo.get(job_id).status == "done"
-    # A second repo sharing the same cache namespace sees the invalidation too.
     other_repo = JobRepository(cache=RepositoryCache(get_redis(), namespace))
     assert other_repo.get(job_id).status == "done"
 
@@ -107,20 +92,16 @@ def test_repository_cache_bump_invalidates_all_prior_reads():
     first = cache.get_or_set("get", ("x",), loader)
     second = cache.get_or_set("get", ("x",), loader)
     assert first == second
-    assert len(calls) == 1  # second call was a cache hit
+    assert len(calls) == 1
 
     cache.bump()
 
     third = cache.get_or_set("get", ("x",), loader)
-    assert len(calls) == 2  # bump() forced a fresh load
+    assert len(calls) == 2
     assert third != first
 
 
 def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):
-    """A repository is a singleton built on first use. Built under another
-    OFM_REDIS_URL (an e2e test seeding the e2e app's Redis), it once kept
-    reading that cache in every later test on the worker: the app's user
-    ids, not the suite's (2026-10-23). Each call takes the URL in force."""
     suite_url = os.environ["OFM_REDIS_URL"]
     other_url = suite_url.rsplit("/", 1)[0] + "/14"
     monkeypatch.setenv("OFM_REDIS_URL", other_url)
@@ -135,14 +116,10 @@ def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):
 
 
 def _dead_redis() -> Redis:
-    """A broker that never answers in time (nothing listens on port 1)."""
     return Redis.from_url("redis://127.0.0.1:1/0", socket_connect_timeout=0.2)
 
 
 def test_an_unreachable_cache_reads_and_writes_through_to_the_database():
-    """Redis is an optimisation: down or timing out, reads come from the
-    database and writes still save (2026-10-24: a Redis stall made every
-    page 500 through the signed-in user's cached read)."""
     repo = JobRepository(cache=RepositoryCache(_dead_redis(), "job"))
     job_id = repo.create("seedance", {"prompt": "hi"})
     assert repo.get(job_id).status == "running"
@@ -152,8 +129,6 @@ def test_an_unreachable_cache_reads_and_writes_through_to_the_database():
 
 
 def test_pages_answer_while_the_cache_is_down(monkeypatch):
-    """The whole request path: signed in, a gallery page and Show hidden's
-    fragment render with Redis unreachable."""
     from fastapi.testclient import TestClient
     from signin import sign_in
 

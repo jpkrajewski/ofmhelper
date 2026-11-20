@@ -1,10 +1,3 @@
-"""/clone-links reviews (web/clone_links/review.py): a done run's video
-checked, then uploaded into its owner's GOOD REELS or TRIAL REELS; claimed
-by one worker at a time; resumed by recovery when cut off, when an upload
-failed for a reason that may pass, or when a run never got its review --
-never a second check of a saved one, never a second copy in Drive; a card
-that names every failure in fixed words."""
-
 import time
 from pathlib import Path
 
@@ -14,7 +7,7 @@ from clone_links_helpers import (
     GOOD,
     REEL,
     client,
-    clone_links_env,  # noqa: F401 -- the fixture, used by `pytestmark`
+    clone_links_env,  # noqa: F401
     files_in,
 )
 from logfire.testing import CaptureLogfire
@@ -60,8 +53,6 @@ def _video(tmp_path: Path, name: str = "clone.mp4") -> Path:
 
 
 def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> str:
-    """A finished /clone-links run of `email`'s whose one result is `video`
-    (None: only the provider's copy)."""
     job_id = create_job(
         review.RUN_TASK, {"link": REEL, "mirror": mirror}, actor=str(_owner(email))
     )
@@ -77,7 +68,6 @@ def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> 
 
 
 def _reviewed(tmp_path: Path, email: str = ANN) -> tuple[str, Path]:
-    """A done run of `email`'s, its review started and run (inline)."""
     video = _video(tmp_path)
     job_id = _done_run(video, email)
     review.start_reviews(job_id, _owner(email), [str(video)])
@@ -90,7 +80,6 @@ def _row(job_id: str):
 
 
 def _set(review_id: int, **values) -> None:
-    """A row as a killed worker or an old run left it."""
     with session_scope() as s:
         s.execute(
             update(CloneFromLinkRow)
@@ -106,9 +95,6 @@ def _long_ago() -> float:
 def _card(c, job_id: str) -> dict:
     [state] = c.get("/clone-links/reviews", params={"job": job_id}).json()
     return state
-
-
-# --- the review ----------------------------------------------------------------
 
 
 def test_a_good_video_lands_in_good_reels_with_its_check_kept(tmp_path):
@@ -165,8 +151,6 @@ def test_a_glitchy_video_lands_in_trial_reels_with_its_glitches(tmp_path):
 def test_a_check_that_raises_still_sends_the_video_to_trial_reels(
     tmp_path, monkeypatch, capfire: CaptureLogfire
 ):
-    """Not an LLM failure (a bug, an SDK error): no verdict, fixed words on
-    the card, the raw text only in the log and the span."""
     drive = fake_drive()
     ann = client(ANN)
 
@@ -347,11 +331,7 @@ def test_start_reviews_never_raises_even_when_nothing_can_be_saved(
     assert review.start_reviews(job_id, _owner(), [str(video)]) == []
 
 
-# --- one worker at a time --------------------------------------------------------
-
-
 def test_a_review_is_claimed_once(tmp_path):
-    """A second queued job for the same review does nothing."""
     client(ANN)
     video = _video(tmp_path)
     job_id = _done_run(video)
@@ -373,9 +353,6 @@ def test_a_review_is_claimed_once(tmp_path):
 def test_a_run_whose_row_was_taken_over_writes_and_uploads_nothing(
     tmp_path, monkeypatch
 ):
-    """Worker A stalls in its check; recovery hands the row to worker B,
-    which finishes it. A's check is kept, but A neither moves the row nor
-    uploads a second copy."""
     drive = fake_drive()
     client(ANN)
     video = _video(tmp_path)
@@ -430,9 +407,6 @@ def test_a_queued_review_is_restarted_only_once_really_stale():
     assert row.attempts == 0
 
 
-# --- whose ---------------------------------------------------------------------
-
-
 def test_another_users_row_is_never_shown_or_restarted(tmp_path):
     client(ANN)
     client(BOB)
@@ -448,12 +422,7 @@ def test_another_users_row_is_never_shown_or_restarted(tmp_path):
     assert row.status == "failed"
 
 
-# --- recovery ------------------------------------------------------------------
-
-
 def test_a_cut_off_review_is_queued_again_once(tmp_path):
-    """Its worker was killed mid-check (a deploy): recovery queues it once,
-    it finishes, and the next sweep leaves it alone."""
     drive = fake_drive()
     ann = client(ANN)
     video = _video(tmp_path)
@@ -551,15 +520,13 @@ def test_a_full_drive_is_tried_again_only_once_it_has_room(tmp_path):
     assert _row(job_id).attempts == 1
 
     drive.set_storage(limit=100 * 10**9)
-    drive_space(_owner())  # a page asks Google: room again
+    drive_space(_owner())
 
     assert review.resume_reviews()[f"review {_row(job_id).id}"] == "retried"
     assert _row(job_id).status == "done"
 
 
 def test_an_upload_cut_off_after_it_reached_drive_is_adopted_not_doubled(tmp_path):
-    """Killed between Drive's answer and the row's update: the next run
-    finds the file in the folder and keeps it."""
     drive = fake_drive()
     client(ANN)
     video = _video(tmp_path)
@@ -607,8 +574,6 @@ def test_a_queue_failure_is_queued_again(tmp_path, monkeypatch):
 
 
 def test_a_done_run_without_a_review_gets_one(tmp_path):
-    """Its review never started (a DB hiccup at the end of the run): the
-    card says so, then recovery starts it."""
     drive = fake_drive()
     ann = client(ANN)
     video = _video(tmp_path)
@@ -641,8 +606,6 @@ def test_a_done_run_kept_only_by_the_provider_is_marked_once(tmp_path):
 
 
 def test_recovery_never_starts_another_users_review_on_a_run(tmp_path):
-    """A job's review row belongs to the job's owner, whoever recovery
-    sweeps for."""
     client(ANN)
     client(BOB)
     video = _video(tmp_path)

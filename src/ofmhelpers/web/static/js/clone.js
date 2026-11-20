@@ -1,28 +1,5 @@
-/*
- * /clone page controller.
- *
- * Submit: the Start dialog asks first (clone-picks.js), then one POST
- * queues a Wan 3.0 run per video and answers with their
- * cards already rendered (the same _clone_card.html the gallery uses,
- * newest first), so they go in place -- no reload -- and generation.js
- * polls them like any other card. XHR rather than fetch only for upload
- * progress: several videos can take a while to send.
- *
- * Recreate (a card's ⋯ menu, or a failed card's button): the subject
- * images, that card's video and its settings back in the form. Files come
- * back as "existing" picker entries, so nothing is uploaded again.
- *
- * Upload to Drive (a card's ⋯ menu): the picker dialog lists the account
- * folders, fewest files waiting first; search, a model filter, folders the
- * video is already in marked; the last picked ones (and model) are picked
- * again. Each card lists where its video went, polled while uploads run.
- *
- * Prefill: /reels sends the picked reels here as ?video= paths, which the
- * server checks and hands over in data-prefill-videos.
- */
 (() => {
     const DRIVE_POLL_MS = 3000;
-    // The picker's last choice, per browser.
 
     function setStatus(statusEl, message, isError) {
         statusEl.innerHTML = "";
@@ -41,14 +18,12 @@
         }
     }
 
-    // What the server would reject anyway, caught before any upload starts.
     function validate(form, formData) {
         const maxVideos = Number(form.dataset.maxVideos);
         const maxImages = Number(form.dataset.maxImages);
         const videos = manifestCount(formData, "videos");
         const images = manifestCount(formData, "image");
-        // No key field to fill (a VA runs on the owner's saved key): the
-        // server picks it.
+
         const keyField = form.querySelector('[name="api_key"]');
         if (keyField && !keyField.disabled && !String(formData.get("api_key") || "").trim()) return "Enter the API key.";
         if (images < 1) return "Pick at least one subject image.";
@@ -75,8 +50,6 @@
         return `Request failed (${xhr.status}).`;
     }
 
-    // A card while the videos upload: the gallery's card shape, a progress
-    // bar in place of the media.
     function buildUploadingCard(videoCount) {
         const card = document.createElement("div");
         card.className = "result-item";
@@ -106,7 +79,7 @@
         const submitBtn = form.querySelector('button[type="submit"]');
         const empty = document.getElementById("clone-empty");
         let uploading = false;
-        // Not while cards are only hidden ("Show hidden" says so).
+
         const showEmpty = () => {
             empty.hidden =
                 gallery.querySelector(".result-item") !== null ||
@@ -118,8 +91,7 @@
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             if (uploading) return;
-            // Recreate of a clone whose video was removed: the picker is
-            // downloading it again (file-picker.js `restore`).
+
             if (window.FilePicker.restoring()) {
                 setStatus(statusEl, "Wait: a video is downloading again.", true);
                 return;
@@ -129,8 +101,7 @@
                 setStatus(statusEl, invalid, true);
                 return;
             }
-            // Start asks first (clone-picks.js); its chips may change the
-            // prompt or audio, so the form is read again after.
+
             if (!(await window.ClonePicks.confirm(form))) return;
             const formData = window.FilePicker.collectFormData(new FormData(form));
 
@@ -141,8 +112,6 @@
             const pending = buildUploadingCard(manifestCount(formData, "videos"));
             gallery.prepend(pending);
 
-            // Leaving the page asks first while the videos go up
-            // (upload-guard.js).
             let guarded = () => {};
             const done = () => {
                 guarded();
@@ -159,7 +128,7 @@
             xhr.addEventListener("load", () => {
                 done();
                 if (xhr.status === 401) {
-                    // session.js only wraps fetch; same redirect for XHR.
+
                     const login = JSON.parse(xhr.responseText || "{}").login_url;
                     window.location.href = login || "/login";
                     return;
@@ -174,14 +143,13 @@
                 const holder = document.createElement("div");
                 holder.innerHTML = data.html;
                 const cards = [...holder.children];
-                // live-gallery.js may have drawn some already while the
-                // request was still in flight.
+
                 cards.forEach((card) => {
                     gallery.querySelector(`[data-job-id="${card.dataset.jobId}"]`)?.remove();
                 });
                 pending.replaceWith(...cards);
                 window.Generation.resumePendingCards();
-                // The images usually stay for the next run; the videos don't.
+
                 window.FilePicker.clearPicker(
                     form.querySelector('.file-picker[data-field="videos"]')
                 );
@@ -199,7 +167,6 @@
         });
     }
 
-    // The form visibly fills; no message on top of it.
     function fillForm(form, params) {
         window.FilePicker.setExisting("image", params.reference_images || []);
         window.FilePicker.setExisting("videos", params.reference_videos || []);
@@ -235,16 +202,13 @@
         });
     }
 
-    // --- where each card's video went in Drive ---------------------------------
-
     function driveStateItem(upload) {
         const li = document.createElement("li");
         li.dataset.status = upload.status;
         li.dataset.login = upload.login_id;
         if (upload.status === "done") {
             li.append("In Drive: ");
-            // Only who may upload gets the link and x (clone.html renders
-            // that template for them alone): a VA never opens Drive.
+
             const remove = document.getElementById("card-drive-remove")
                 ?.content.firstElementChild.cloneNode(true);
             if (!remove) {
@@ -262,7 +226,7 @@
             li.append(" ", remove);
         } else if (upload.status === "failed") {
             const span = document.createElement("span");
-            // The reason on the card itself: Safari shows no hover text.
+
             span.textContent = `Drive upload to ${upload.folder_name} failed${upload.error ? `: ${upload.error}` : ""}`;
             li.appendChild(span);
         } else {
@@ -300,17 +264,8 @@
             .catch(() => setTimeout(() => pollDrive(jobIds), DRIVE_POLL_MS));
     }
 
-    // A card that finished while the page was open gets what a reloaded
-    // one has: its Drive states and "Upload to Drive" in the menu.
-    // --- the video a card clones -------------------------------------------------
-
     const SOURCE_THUMB_PX = 400;
 
-    // The first reference video of the card's run: its first frame, and its
-    // name as it was picked (the store's "<sha256>__" prefix off) for the
-    // alt text, as features/clone/service.py `source` gives a server-drawn
-    // card. Null for a file that is not the store's (its names carry their
-    // hash).
     function sourceOf(card) {
         let params = {};
         try {
@@ -329,8 +284,6 @@
         };
     }
 
-    // A card that failed while the page is open (generation.js drew it
-    // again) gets the picture _clone_card.html draws on top of a failed card.
     function showSource(card) {
         if (!card.matches(".result-item") || card.querySelector("[data-clone-source]")) return;
         const source = sourceOf(card);
@@ -362,13 +315,11 @@
         const item = document.getElementById("card-drive-item");
         const list = card.querySelector(".menu-list");
         if (!item || !list) return;
-        // Before Hide/Unhide, as on a reloaded card.
+
         const node = item.content.firstElementChild.cloneNode(true);
         list.insertBefore(node, list.querySelector(".hide-btn"));
     }
 
-    // [Edit | Clone long] on a done card: the server registers the clone's
-    // video in this person's store and answers the page to open with it.
     function initSendTo(gallery) {
         gallery.addEventListener("click", async (e) => {
             const btn = e.target.closest(".send-to-edit, .send-to-long");
@@ -399,10 +350,6 @@
         });
     }
 
-    // --- the Drive picker ------------------------------------------------------
-
-    // "Upload to Drive" opens /drive with this video on top: the account
-    // card clicked there is where it goes (drive.js).
     function initDriveUpload(gallery) {
         gallery.addEventListener("click", (e) => {
             const btn = e.target.closest(".drive-upload-btn");
@@ -410,7 +357,7 @@
             const jobId = btn.closest(".result-item")?.dataset.jobId;
             if (jobId) window.location.href = `/drive?upload=${encodeURIComponent(jobId)}`;
         });
-        // × on an uploaded video: back out of that folder (Drive trash).
+
         gallery.addEventListener("click", (e) => {
             const btn = e.target.closest(".drive-remove");
             if (!btn) return;
@@ -438,8 +385,7 @@
         const gallery = document.getElementById("clone-gallery");
         gallery.addEventListener("gallery:card-ready", (e) => decorateFinished(e.target));
         gallery.addEventListener("gallery:card-failed", (e) => showSource(e.target));
-        // The generated video is on the card: the frame of the video it
-        // clones would be a second picture above it.
+
         gallery.addEventListener("gallery:card-preview", (e) => {
             e.target.querySelector("[data-clone-source]")?.remove();
         });
@@ -448,7 +394,7 @@
         initPrefill(form);
         initDriveUpload(gallery);
         initSendTo(gallery);
-        // Uploads still on their way when the page opened.
+
         const pending = [...gallery.querySelectorAll('.drive-states li[data-status="queued"]')]
             .map((li) => li.closest(".result-item").dataset.jobId);
         if (pending.length) pollDrive([...new Set(pending)]);

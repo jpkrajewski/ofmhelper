@@ -1,11 +1,3 @@
-"""
-A page's guided tour (ui.tour, static/js/tour.js; owner 2026-11-14): /generate,
-/clone and /download-assets light up the VA's job one control at a time. The steps
-are on the page for everyone behind "How to"; a VA's are marked to start by
-themselves, once per sign-in (the browser part: tests/e2e/test_tour_page.py).
-Every step points at a control that is really on the page.
-"""
-
 import re
 
 import pytest
@@ -47,13 +39,11 @@ def test_a_vas_page_starts_its_tour_by_itself_once_per_sign_in(page, count):
     tip = _tip(html)
 
     assert " data-auto hidden>" in tip
-    # When this session signed in: what the browser compares against.
     (login,) = re.findall(r'data-login="(\d+)"', tip)
     assert int(login) > 0
     assert len(_steps(html)) == count
     assert "tour-open" in html
     assert "js/tour.js" in html
-    # The same sign-in, the same mark: a reload does not start it again.
     assert f'data-login="{login}"' in client.get(page).text
 
 

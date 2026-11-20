@@ -1,9 +1,3 @@
-"""A finished job's video handed on to another tool's page, already picked
-there: a download's to /clone or /clone-long, a clone's to /edit or
-/clone-long (owner 2026-11-16: "there is no option to click edit from
-clone"). Moved here from `features/downloads/media.py`, which keeps its
-route."""
-
 from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlencode
@@ -16,8 +10,6 @@ from ofmhelpers.features.refusals import NotFoundError, RefusedError
 
 
 class SendTarget(StrEnum):
-    """Where a job's video can be sent on."""
-
     CLONE = "clone"
     CLONE_LONG = "clone-long"
     EDIT = "edit"
@@ -28,17 +20,12 @@ class SendTarget(StrEnum):
 
     @property
     def one_only(self) -> bool:
-        """/clone takes one run per video; /clone-long and /edit one video."""
         return self is not SendTarget.CLONE
 
 
 def _kept_videos(
     paths: list[str | None], assets_root: Path, *, one_only: bool
 ) -> list[str]:
-    """A job's files may live outside the asset store the pages pick from
-    (a download's area, the provider's output folder); each video is
-    registered into this session's store (as /reels does) so the page opens
-    with it picked."""
     videos: list[str] = []
     for path in paths:
         if path is None:
@@ -61,11 +48,6 @@ def send(
     readers: str | frozenset[str],
     assets_root: Path,
 ) -> Redirect:
-    """The URL that opens `target` with the job's video already picked.
-    `index`: that file, what a card sends; none: all its videos (/clone) or
-    its first. The job must be one `readers` see (the asker's own, or for an
-    owner a VA's too); its video files are registered into the asker's store
-    (`assets_root`) before being handed over."""
     if target not in SendTarget:
         msg = "Unknown target"
         raise RefusedError(msg)

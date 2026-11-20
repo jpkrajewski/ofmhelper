@@ -1,6 +1,3 @@
-"""What /drive shows behind its routes (web/routers/inventory/drive.py): the
-board with the /clone video waiting for its folder, and one file's preview."""
-
 from pydantic import BaseModel
 
 from ofmhelpers.db.stores import drive_uploads as upload_store
@@ -18,18 +15,12 @@ logger = get_logger(__name__)
 
 
 class Source(BaseModel):
-    """A tool whose finished video `/drive?upload=<job>` may name: its task,
-    where its files are served (the routers know both) and the page the
-    picker goes back to once it went up (/clone, /handmade)."""
-
     task: str
     files_prefix: str
     page: str
 
 
 class PageView(BaseModel):
-    """/drive: each field is a name `drive.html` reads."""
-
     board: DriveBoard
     pick: UploadPick | None
 
@@ -42,9 +33,6 @@ class Thumb(BaseModel):
 def _upload_pick(
     readers: Readers, job_id: str, sources: list[Source]
 ) -> UploadPick | None:
-    """The video `?upload=` names, when it is a finished run the session
-    reads: their own, or one of their VAs' (the owner uploads what the VA
-    made: `uploads.queue_uploads` takes the same readers)."""
     job = get_job(job_id, readers)
     source = next((s for s in sources if job and s.task == job.task), None)
     if job is None or source is None or job.status != "done":
@@ -70,9 +58,6 @@ def _upload_pick(
 def page_view(
     scope: int, viewer: int, readers: Readers, upload: str, sources: list[Source]
 ) -> PageView:
-    """At once, from each folder's last read: no Drive call. `upload`: a run
-    whose video goes into the account card clicked; `readers`: whose runs
-    that may be (the session's own and their VAs')."""
     return PageView(
         board=folders.board(owner=scope, viewer=viewer, live=False),
         pick=_upload_pick(readers, upload, sources) if upload else None,
@@ -80,8 +65,6 @@ def page_view(
 
 
 def preview(login_id: int, file_id: str, scope: int) -> Thumb:
-    """A file's preview in `login_id`'s folder; none to show is
-    `NotFoundError`."""
     try:
         found = folders.thumbnail(login_id, file_id, scope)
     except (DriveError, SignInError) as exc:

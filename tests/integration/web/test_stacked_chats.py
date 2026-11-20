@@ -1,7 +1,3 @@
-"""What only Stacked does: reactions it shows on a chat's messages alone, blocked fans,
-destinations made here, one per creator. What every platform does is in
-test_chat_platforms.py."""
-
 import time
 from http import HTTPStatus
 
@@ -9,9 +5,9 @@ import pytest
 import requests
 from chat_platforms import StackedDriver
 from fastapi.testclient import TestClient
+from notifications_socket import agency_notifications
 
 from ofmhelpers.db.stores import chats
-from ofmhelpers.features.chatting.alerts import chat_alerts
 from ofmhelpers.features.chatting.service import platform_models
 from ofmhelpers.features.chatting.sync import run_when_due, sync
 from ofmhelpers.features.chatting.webhooks import ensure_destinations
@@ -37,14 +33,12 @@ def side(monkeypatch):
 
 
 def _popups():
-    return [f"{p.text}: @{p.username}" for p in chat_alerts().popups]
+    return [f"{p.text}: {p.title}" for p in agency_notifications()]
 
 
 def test_a_creator_an_agency_key_adds_is_listed_before_any_chat_is_read(
     side, monkeypatch
 ):
-    # Owner 2026-11-16: "why is new stacked model not visible? it should just
-    # sync when there is new creator in agency".
     monkeypatch.setenv("STACKED_API_KEY_AGENCY", stacked_fake.AGENCY_KEY)
 
     sync(side.source)
@@ -127,9 +121,6 @@ def test_a_destination_is_made_once_with_every_event(side, monkeypatch):
 def test_a_creator_moving_to_the_agency_key_takes_its_destination_along(
     side, monkeypatch
 ):
-    # Owner 2026-11-16: the agency key serves its creators. The destination the
-    # creator's own key made goes, once: left, it would deliver here with a
-    # secret no longer held, and failed signatures turn Stacked's address away.
     monkeypatch.setenv("OFM_CHATTING_WEBHOOK_BASE_URL", "https://example.invalid/")
     side.fake.webhooks.clear()
     ensure_destinations()
@@ -148,15 +139,12 @@ def test_a_creator_moving_to_the_agency_key_takes_its_destination_along(
         w for w in chats.webhooks(PLATFORM) if w.model_id == stacked_fake.CREATOR
     )
     assert row.webhook_id == moved["id"]
-    # Settled: a round asks only the agency key, about its destinations.
     assert {path for _, path in side.fake.calls} <= {"/external-service/v1/webhooks"}
 
 
 def test_a_move_that_cannot_retire_the_old_destination_waits_for_the_next_round(
     side, monkeypatch
 ):
-    # Kimi review 2026-11-17: made anyway, the old destination was never asked
-    # about again and kept delivering with a secret no longer held.
     monkeypatch.setenv("OFM_CHATTING_WEBHOOK_BASE_URL", "https://example.invalid/")
     side.fake.webhooks.clear()
     ensure_destinations()
@@ -184,7 +172,6 @@ def test_a_move_that_cannot_retire_the_old_destination_waits_for_the_next_round(
 
 
 def test_a_destination_at_another_address_is_never_replaced(side, monkeypatch):
-    """Dev and production share the credentials."""
     monkeypatch.setenv("OFM_CHATTING_WEBHOOK_BASE_URL", "https://example.invalid/")
     theirs = {"id": "wh_theirs", "url": "https://elsewhere.invalid/x", "events": []}
     side.fake.webhooks[stacked_fake.CREATOR] = [theirs]
@@ -218,7 +205,6 @@ def three_chats_are_a_bulk_send(monkeypatch):
 
 
 def _two_rounds() -> None:
-    """The first reads what was sent, the next sees it stored."""
     run_when_due(PLATFORM)
     run_when_due(PLATFORM)
 

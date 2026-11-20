@@ -1,5 +1,3 @@
-"""gdrive/models.py DriveFile.kind: what icon /drive draws for an item."""
-
 import pytest
 
 from ofmhelpers.integrations.gdrive.models import (
@@ -17,7 +15,6 @@ from ofmhelpers.integrations.gdrive.models import (
         ("photo.jpg", "image/jpeg", "image"),
         ("folder", FOLDER_MIME, "folder"),
         ("notes.pdf", "application/pdf", "file"),
-        # Drive reports a phone upload as a generic type: the name decides.
         ("reel.mp4", "application/octet-stream", "video"),
         ("reel.mov", "application/octet-stream", "video"),
         ("pic.png", "application/octet-stream", "image"),

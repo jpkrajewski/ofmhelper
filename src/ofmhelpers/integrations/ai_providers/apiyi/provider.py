@@ -1,14 +1,3 @@
-"""APIYI (api.apiyi.com) behind the shared `Provider` interface: one gateway in
-front of several APIs, each a family in `families/` (Wan over DashScope,
-Seedance, Veo, Nano Banana over Gemini, GPT-Image / Seedream / FLUX over
-OpenAI images). This class only dispatches: a model's family by its id, a
-task's by the tag in its id; the key by the model's token group
-(`keys.key_for`).
-
-Self-heal (`self_heal.py`): no APIYI API has an idempotency key, a callback
-or a task list, so a submit whose answer is lost is never sent again (never
-paid twice), as on RunningHub."""
-
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -69,11 +58,6 @@ class ApiyiProvider(Provider):
 
     @classmethod
     def slot_of_key(cls, api_key: str) -> str | None:
-        """The slot of the token group `api_key` is in, read from the models
-        it lists (free, once per key per `OFM_APIYI_KEY_CHECK_TTL_S`). A key
-        saved under another group's slot is found out here (prod 2026-11-11:
-        a Wan-group key saved as the default one failed every image run with
-        "wrong API key"). APIYI not answering or refusing the key: None."""
         try:
             return slot_listing(ApiyiClient(api_key).model_ids())
         except ProviderError:
@@ -91,10 +75,6 @@ class ApiyiProvider(Provider):
         return settings.apiyi.min_poll_interval_s
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
-        """No idempotency key on APIYI (ours only names the job in the log); a
-        re-run resumes the remembered task, nothing resends a submit. An
-        admin key is swapped for the key of the model's group first; the
-        runner remembers the key the task was made with."""
         self._use_key(key_for(spec.model_id, self.api_key))
         family = family_for(spec.model_id)
         own = family.submit(self.client, spec, payload, idempotency_key)

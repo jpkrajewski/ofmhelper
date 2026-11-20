@@ -1,6 +1,3 @@
-"""Each builder against the bytes of the real iPhone 17 Pro Max recordings
-the profile was decoded from (identical in all 7)."""
-
 import datetime
 
 from ofmhelpers.media.recorder import atoms, load_profile
@@ -8,7 +5,6 @@ from ofmhelpers.media.recorder.models import GeoPoint, Recording
 
 PROFILE = load_profile("iphone17")
 
-# Atom bodies (after size + type) as found in IMG_0042..0063.
 VIDEO_HDLR = (
     "000000006d686c72766964656170706c000000000000000010436f7265204d6564696120566964656f"
 )
@@ -60,9 +56,7 @@ def test_video_track_meta_matches_the_recordings():
     raw = meta.to_bytes()
     assert raw[8:34].hex() == "00000022" + "68646c72" + META_HDLR[:36]
     assert b"iPhone 17 Pro Max front camera 2.715mm f/1.9" in raw
-    # Locale US/eng on the lens keys, as the recordings carry it.
     assert bytes.fromhex("00000001555315c7") + b"F1.90" in raw
-    # Maker notes as 4-byte signed ints (type 21).
     assert bytes.fromhex("0000001500000000") + (6).to_bytes(4, "big") in raw
 
 

@@ -53,6 +53,13 @@ repos:
         files: ^\.github/workflows/
         pass_filenames: false
         args: [.github/workflows]
+      # No comments, no docstrings (CLAUDE.md): only the staged files here;
+      # tests/unit/architecture/test_no_comments.py checks the whole repo in CI.
+      - id: no-comments
+        name: no comments or docstrings (changed files, in Docker)
+        entry: docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -T tests uv run --frozen python scripts/check_no_comments.py
+        language: system
+        types_or: [python, javascript, css, html]
       # .env is gitignored; this is the backstop (the Drive key lives there).
       - id: no-env-files
         name: forbid .env files

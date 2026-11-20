@@ -1,9 +1,3 @@
-"""
-Covers ofmhelpers/config/settings.py + config/__init__.py: the centralized
-env-var/config layer every other module now reads through instead of
-os.getenv/os.environ directly.
-"""
-
 import os
 import re
 
@@ -51,7 +45,6 @@ ALL_ENV_VARS = [
     "OFM_COOKIES_FROM_BROWSER",
     "HF_TOKEN",
     "HUGGINGFACE_TOKEN",
-    # ... and the ones that used to be literals in library code.
     "OFM_UPLOADS_ROOT",
     "OFM_CACHE_TTL_S",
     "OFM_REFS_RECENT_USED_LIMIT",
@@ -78,8 +71,6 @@ ALL_ENV_VARS = [
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    """Clears every var this module knows about, so defaults tests never
-    see the real repo-root .env leak in via the shared process environment."""
     for var in ALL_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
 
@@ -122,17 +113,12 @@ def test_web_settings_defaults_match_pre_refactor_values(clean_env):
     s = WebSettings(_env_file=None)
     assert s.app_password_admin is None
     assert s.kie_ai_api_key_admin is None
-    # Was 500: prod was full in 9 days, and one 120-link /clone-links
-    # Generate deleted 120 of everyone's oldest cards (review #3).
     assert s.max_jobs == 5000
     assert s.recovery_sweep_interval_s == 300
     assert s.gallery_limit == 20
 
 
 def test_each_worker_pool_has_its_own_size(clean_env, monkeypatch):
-    """The default queue, /clone-links' own queue, the previews queue and the
-    media and events queues are separate pools (the first, second and last in
-    compose `worker`, the others in preview-worker / media-worker)."""
     s = InfraSettings(_env_file=None)
     assert (s.rq_workers, s.clone_links_workers, s.preview_workers) == (10, 5, 1)
     assert (s.media_workers, s.events_workers) == (1, 1)
@@ -167,8 +153,6 @@ def test_kieai_settings_defaults_match_pre_refactor_values(clean_env):
 
 
 def test_aigen_settings_keep_the_kie_era_defaults(clean_env):
-    """What moved from KieAISettings to the provider-shared group kept its
-    default, so a deployment that sets nothing behaves as before."""
     s = AigenSettings(_env_file=None)
     assert s.out_dir == "/app/kieai_out"
     assert s.resume_max_age_s == 48 * 3600
@@ -223,13 +207,6 @@ def test_no_stray_env_reads_outside_settings():
     )
 
 
-# ── Phase 3: values that used to be literals in library code ────────────────
-#
-# The point of each assertion below is that the *default* still equals what the
-# hardcoded literal was, so moving it into settings changed no behaviour for a
-# deployment that sets nothing.
-
-
 def test_kieai_endpoints_and_timeouts_default_to_the_previous_literals(clean_env):
     s = KieAISettings(_env_file=None)
     assert s.jobs_base == "https://api.kie.ai/api/v1/jobs"
@@ -252,8 +229,6 @@ def test_uploads_root_and_cache_ttl_default_to_the_previous_literals(clean_env):
 
 
 def test_uploads_root_is_overridable(monkeypatch):
-    """Every per-tool upload dir derives from this one, so an override has to
-    reach all of them -- see features/assets/store.py `uploads_root()`."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", "/data/uploads")
     assert InfraSettings(_env_file=None).uploads_root == "/data/uploads"
 
@@ -262,12 +237,7 @@ def test_downloader_timeout_defaults_to_the_previous_literal(clean_env):
     assert DownloadersSettings(_env_file=None).image_download_timeout_s == 600
 
 
-# --- the `settings` container: built once per environment ---------------------
-
-
 def test_a_group_is_built_once_while_the_environment_holds(monkeypatch):
-    """Building a group reads .env and validates every field: /reels did it
-    310 times per request (prod, 2026-10-22)."""
     from ofmhelpers.config import Settings
 
     monkeypatch.setenv("OFM_GALLERY_LIMIT", "7")
@@ -307,7 +277,6 @@ def test_a_group_follows_an_edited_env_file(monkeypatch, tmp_path):
 
 
 def test_fake_externals_are_refused_in_production(monkeypatch):
-    """The fakes sign anyone in as any email: production must not start."""
     monkeypatch.setenv("OFM_ENV", "production")
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
     with pytest.raises(ValidationError, match="OFM_FAKE_EXTERNALS"):
@@ -338,17 +307,12 @@ def test_no_gemini_key_is_no_keys(monkeypatch):
 
 
 def test_a_deployment_must_say_which_it_is(monkeypatch):
-    """OFM_ENV has no default: "development" assumed on a server whose .env
-    lost the key would let it touch nothing live, silently. Nothing starts
-    instead (dev's compose overlay and this suite say development)."""
     monkeypatch.delenv("OFM_ENV")
     with pytest.raises(ValidationError, match="OFM_ENV"):
         InfraSettings(_env_file=None)
 
 
 def test_the_compose_database_password_comes_from_the_environment(monkeypatch):
-    """Not a literal in the code: POSTGRES_PASSWORD, what compose gives the
-    postgres service too; unset, the value every existing volume has."""
     monkeypatch.delenv("OFM_DATABASE_URL")
     monkeypatch.setenv("POSTGRES_PASSWORD", "s3cret")
     assert InfraSettings(_env_file=None).database_url == (

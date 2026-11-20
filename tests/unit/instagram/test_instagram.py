@@ -1,6 +1,3 @@
-"""instagram/: what the logged-out GraphQL answers are read as, and which
-reels a scan keeps."""
-
 import time
 
 import pytest
@@ -162,12 +159,10 @@ def test_empty_profile_page_is_missing_only_when_the_crawler_agrees(monkeypatch)
         "get",
         lambda *_a, **_k: _Page('<meta property="og:type" content="profile" />'),
     )
-    # The account exists: the empty page was Instagram withholding it.
     assert isinstance(client._missing("throttled"), InstagramRateLimitedError)
 
 
 def test_gated_media_is_none():
-    # What the logged-out query answers for a reel hidden from visitors.
     page = MediaPage.model_validate({"data": {"xig_polaris_media": None}})
     assert ReelMedia.from_page(page) is None
 
@@ -272,7 +267,6 @@ def test_unresolvable_viral_reel_is_listed_not_dropped():
     found = scan_profile(client, "u", 500, 30, 14 * DAY, 100)
     gated = found.reels[0]
     assert (gated.code, gated.video_url, gated.duration_s) == ("gated", None, None)
-    # Its date comes from the id when the reel itself could not be read.
     assert abs(gated.taken_at - (time.time() - DAY)) < 60
     assert [r.code for r in found.reels] == ["gated", "ok"]
 
@@ -281,7 +275,6 @@ DAY = 86400
 
 
 def _pk(days_ago: float) -> str:
-    """A media id posted `days_ago` (Instagram ids carry their post time)."""
     ms = (time.time() - days_ago * DAY - 1314220021.721) * 1000
     return str(int(ms) << 23)
 
@@ -300,16 +293,11 @@ def test_reel_shortcode_decodes_to_its_media_id():
 
 
 def test_media_id_carries_its_post_time():
-    # A real reel: pk 4009547404732106606 has taken_at 1792195349.
     summary = ReelSummary(pk="4009547404732106606", code="Dekxh8BJYdu")
     assert abs(summary.posted_at - 1792195349) < 60
 
 
 class FakeClient:
-    """Profile of 100 followers; each reel (code, views, length s, days ago,
-    pinned). `on_timeline`: the codes the posts timeline also carries (with
-    their mp4 + length); the rest only `media` can resolve."""
-
     def __init__(self, reels, private=False, on_timeline=()):
         self._on_timeline = set(on_timeline)
         self.timeline_reads = 0
@@ -352,7 +340,6 @@ class FakeClient:
             )
 
     def media(self, pk):
-        """A length of None: a reel nothing could resolve (gated, no login)."""
         code, length = self._lengths[pk]
         self.media_calls.append(code)
         if length is None:
@@ -374,12 +361,10 @@ def test_timeline_covers_reels_so_only_the_rest_cost_a_call_each():
     found = scan_profile(client, "u", 500, 30, 14 * DAY, 100)
     assert [r.code for r in found.reels] == ["a", "b", "gated"]
     assert client.media_calls == ["gated"]
-    # The timeline is read only until seven posts in a row are past the window.
     assert client.timeline_reads == 10
 
 
 def test_six_unflagged_pins_do_not_end_the_read():
-    # A profile can pin 6 reels, and Instagram does not always flag them.
     client = FakeClient(
         [
             *[(f"pin{i}", 10, 5, 100 + i, False) for i in range(6)],
@@ -410,7 +395,6 @@ def test_scan_keeps_recent_viral_reels_best_first():
     )
     assert [r.code for r in found.reels] == ["best", "ok"]
     assert found.reels[0].ratio == 20
-    # The old pinned reel is skipped; the first old unpinned one ends the scan.
     assert found.scanned == 4
     assert "low" not in client.media_calls
     assert "pinned_old" not in client.media_calls
@@ -460,15 +444,12 @@ class _Response:
         return self._body
 
 
-# The logged-in web app's page: its viewer and request token.
 _LOGGED_IN_PAGE = (
     '"actorID":"999","DTSGInitialData",[],{"token":"dtsg-1"} "LSD",[],{"token":"lsd-1"}'
 )
 
 
 class _LoggedInSession:
-    """The uploaded login: GET answers `page`, POSTs answer `pages` in turn."""
-
     def __init__(self, page: str, pages: list[dict]) -> None:
         self.page = page
         self.pages = pages
@@ -526,15 +507,12 @@ def test_reels_logged_in_stops_at_the_last_page():
 
 def test_reels_logged_in_without_a_working_login_is_none():
     assert _with_login(None).reels_logged_in("d", "42", 10) is None
-    # A dead login gets the logged-out page: no viewer on it.
     dead = _LoggedInSession('"actorID":null', [])
     assert _with_login(dead).reels_logged_in("d", "42", 10) is None
     assert dead.sent == []
 
 
 class _Answer:
-    """A GraphQL answer: HTTP 200, `body` as its JSON."""
-
     status_code, ok, is_redirect = 200, True, False
     url = "https://www.instagram.com/api/graphql"
 
@@ -546,9 +524,6 @@ class _Answer:
 
 
 def test_a_graphql_rate_limit_is_a_rate_limit_not_an_empty_timeline(monkeypatch):
-    """Instagram answers the posts query 200 with only "Rate limit exceeded"
-    (2026-10-23): read as an account with nothing posted, a scan kept no
-    video and never tried another proxy."""
     client = InstagramClient()
     limited = {
         "errors": [
@@ -571,16 +546,12 @@ def test_a_hidden_accounts_error_still_ends_its_timeline_quietly(monkeypatch):
 
 
 class _PostsRefused(FakeClient):
-    """Instagram throttling the logged-out posts query on its own."""
-
     def timeline(self, _username):
         msg = "Instagram is rate-limiting — wait a few minutes"
         raise InstagramRateLimitedError(msg)
 
 
 def test_refused_posts_are_read_reel_by_reel():
-    """2026-10-23: the posts query was refused while the reels tab and single
-    posts answered -- the scan still gets every reel's mp4 and length."""
     client = _PostsRefused(
         [("a", 900, 5, 1, False), ("b", 800, 6, 2, False)], on_timeline={"a", "b"}
     )
@@ -592,8 +563,6 @@ def test_refused_posts_are_read_reel_by_reel():
 
 
 def test_a_refused_single_post_fails_the_scan():
-    """Reel by reel is the last way: a refusal there is the scan's (the
-    caller tries the next proxy), never a reel left without its video."""
 
     class _AllRefused(_PostsRefused):
         def media(self, _pk):

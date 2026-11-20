@@ -1,13 +1,3 @@
-"""What /distribution does behind its routes (web/routers/distribution.py):
-a manager's view (owner 2026-11-18: "all i wanna see and hear is if the
-operation is going good and if its working") -- one verdict on whether it
-works and what is wrong, pins today, link clicks today and over 7 days --
-and the bulk upload of Pinterest accounts (any number of cookies.txt files:
-each checked with Pinterest, every model's content queued for it). Accounts
-belong to no model (owner: "system just distributes the content, we just
-provide accounts"). Nothing to click: the posting, retries and waits are
-the sweep's (`sweep.py`)."""
-
 import datetime
 import time
 from typing import TYPE_CHECKING, BinaryIO
@@ -39,7 +29,6 @@ PLATFORM = "pinterest"
 NOT_LOGGED_IN = "Not logged in to Pinterest: log in on pinterest.com and export again"
 FAILED = "Something went wrong with this file"
 TOO_BIG = "Not a cookies.txt (over 20 MB)"
-# A whole browser's export; only its pinterest.com cookies are kept.
 _MAX_COOKIES = 20_000_000
 _WEEK_DAYS = 7
 _EXPIRY_WARN_S = 7 * 86400
@@ -47,17 +36,11 @@ _FAILING_S = 86400
 
 
 class Upload(BaseModel, arbitrary_types_allowed=True):
-    """One cookies.txt as the form sent it."""
-
     name: str
-    # A Protocol: nothing for Pydantic to check it against (a spooled temp
-    # file is no `BinaryIO` subclass).
     file: SkipValidation[BinaryIO]
 
 
 class Added(BaseModel):
-    """What one uploaded file became."""
-
     file: str
     account: str = ""
     queued: int = 0
@@ -65,12 +48,9 @@ class Added(BaseModel):
 
 
 class Health(BaseModel):
-    """Is it working, in one line, and what is wrong (nothing: it works)."""
-
     ok: bool
     headline: str
     problems: list[str] = []
-    # When the last pin went up (epoch s); None: none yet.
     last_pin_at: float | None = None
 
 
@@ -141,8 +121,6 @@ def _health(channels: list[Channel], counts: dict[int, PostCounts]) -> Health:
 
 
 class Distribution(BaseModel, frozen=True):
-    """The signed-in person's /distribution: `scope` owns the rows."""
-
     uid: int
     scope: int
 
@@ -168,10 +146,6 @@ class Distribution(BaseModel, frozen=True):
         )
 
     def add(self, uploads: list[Upload]) -> list[Added]:
-        """Every file as one more account; what each became. Accounts belong
-        to no model: every model's content is spread over all of them. The
-        content is read once for all of them (a Drive read per file kept a
-        bulk upload past the proxy's time limit)."""
         added = [self._add_one(u) for u in uploads]
         repo = store.repository()
         new = [

@@ -1,7 +1,3 @@
-"""The test image has every binary the suite drives (Dockerfile `test`
-stage). Missing one fails here, loudly, instead of tests skipping
-themselves into a green run."""
-
 import shutil
 
 import pytest

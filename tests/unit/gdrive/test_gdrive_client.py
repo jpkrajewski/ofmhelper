@@ -1,9 +1,3 @@
-"""ofmhelpers.integrations.gdrive: the real googleapiclient over a scripted transport --
-queries quoted, a hand-made folder reused, a missing or trashed folder a
-`FolderGoneError`, a full Drive a `DriveFullError`, Google refusing the
-sign-in a `DriveAuthError` with a message a page may show, other failures a
-`DriveError`, previews at the asked size."""
-
 import json
 from urllib.parse import parse_qs, urlparse
 
@@ -121,7 +115,6 @@ def test_refusal_is_a_drive_error_not_http_error(monkeypatch):
 
 
 def _refused(reason: str, message: str) -> tuple[dict, dict]:
-    """Drive's 403 body, as files.create answers it."""
     return (
         {"status": "403"},
         {
@@ -146,9 +139,6 @@ def test_a_full_drive_is_a_drive_full_error(monkeypatch):
 
 
 def _person(*responses: tuple[dict, object]) -> Drive:
-    """A Drive as a person whose access token is minted from their refresh
-    token at the first call, through the scripted transport (the token
-    endpoint answers first)."""
     credentials = UserCredentials(
         token=None,
         refresh_token="1//refresh",
@@ -161,8 +151,6 @@ def _person(*responses: tuple[dict, object]) -> Drive:
 
 
 def test_a_revoked_grant_is_a_drive_auth_error_with_a_safe_message(monkeypatch):
-    """Google answers a revoked or expired refresh token with invalid_grant;
-    its tuple repr reached every /clone-links card (review 2026-10-25)."""
     monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
     drive = _person(
         (
@@ -201,8 +189,6 @@ def test_drive_unticked_on_the_consent_screen_is_a_drive_auth_error(monkeypatch)
 
 
 def test_googles_token_endpoint_down_is_no_auth_error():
-    """A retryable refresh failure is Google's outage, not the grant:
-    reconnecting would not help."""
     failure = drive_client._failure(
         RefreshError("server_error: try later", retryable=True), "Folder 1"
     )
@@ -246,8 +232,6 @@ def test_file_reads_parents_and_the_preview_link():
 
 
 def test_trash_file_asks_first_and_never_updates_a_missing_id():
-    """An update of a missing id answers 500 about one time in five (probed
-    2026-10-24), the get a 404: gone is told by the get."""
     drive, http = _drive(
         ({"status": "404"}, {"error": {"code": 404, "message": "File not found"}})
     )
@@ -332,8 +316,6 @@ def test_file_kinds_and_links():
 
 
 class _NoNetwork:
-    """An httplib2 transport whose every request fails like a DNS miss."""
-
     def request(self, *_args, **_kwargs):
         import httplib2
 
@@ -374,9 +356,6 @@ def test_connect_keeps_one_drive_per_thread_and_bounds_interactive_calls(
 
 
 def test_a_resumable_uploads_308_is_not_followed_as_a_redirect():
-    """Drive answers each unfinished chunk with 308 Resume Incomplete;
-    httplib2 following it failed every real upload ("Redirected but the
-    response is missing a Location: header", dev 2026-10-22)."""
     from ofmhelpers.integrations.gdrive.client import _transport
 
     http = _transport(10)

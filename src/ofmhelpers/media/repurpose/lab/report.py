@@ -1,19 +1,3 @@
-"""After a search: what worked, as files a person reads, a CLI:
-
-    python -m ofmhelpers.media.repurpose.lab.report CLIPS_DIR OUT_DIR --workers 16
-
-From OUT/results.jsonl it writes OUT/report/:
-- `knobs.csv` -- each knob alone (ablation): % found per method, VMAF,
-  sound change, per strength;
-- `trials.csv` -- every random throw and search trial, means over its clips;
-- `presets/stealth_*.json` -- three picks (video part + audio part each,
-  `strip` device), loadable by `Repurpose.apply_json_preset(path)` and
-  droppable into repurpose/presets/;
-- `validation.csv` -- those presets on every clip x 2 seeds;
-- `examples/*.mp4` -- source | copy side by side, the copy's sound;
-- `index.html` -- all of it on one page.
-"""
-
 import argparse
 import csv
 import html
@@ -32,15 +16,10 @@ from ofmhelpers.media.repurpose.lab.measure import Measurement, measure
 from ofmhelpers.media.repurpose.lab.space import BY_NAME, Part, preset
 
 _METHODS = ("pdq", "phash", "dhash", "whash", "sscd", "tmk")
-# Video picks: the lowest caught % at or above this much under an untouched
-# copy's VMAF (the device's encode alone costs ~5; VMAF capped there).
 _VIDEO_PICKS = {"safe": 1.0, "balanced": 3.0, "wild": 8.0}
-# Audio picks: the lowest Chromaprint % within this much more sound change
-# than an untouched copy (dB); wild: any.
 _AUDIO_PICKS = {"safe": 1.5, "balanced": 3.0, "wild": 99.0}
 _VALIDATION_SEEDS = (11, 12)
 _EXAMPLE_CLIPS = 2
-# A method that finds this much of a copy caught it (checker.CAUGHT_SHARE).
 CAUGHT_PERCENT = 50
 
 

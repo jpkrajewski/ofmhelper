@@ -1,7 +1,3 @@
-"""Social accounts /accounts tracks, their scan history, and creators.
-Each account and creator belongs to a user; `owner` limits a call to that
-user's rows (None: everyone's, for system work). Scans run per row."""
-
 import time
 from typing import Any
 lazy from collections.abc import Sequence
@@ -55,8 +51,6 @@ def _account(row: TrackedAccountRow, creator: str | None) -> TrackedAccount:
 
 
 def _creator_id(s: Session, name: str | None, user_id: int) -> int | None:
-    """`user_id`'s creator called `name`, created on first use; None for
-    none."""
     if not name:
         return None
     s.execute(
@@ -74,9 +68,6 @@ def _creator_id(s: Session, name: str | None, user_id: int) -> int | None:
 def _baselines(
     s: Session, cutoff: float | None, account_id: int | None
 ) -> dict[int, tuple[int, float]]:
-    """Per account (or only `account_id`), the newest snapshot taken at or
-    before `cutoff` -- or, with no cutoff, the oldest one: (followers,
-    taken_at)."""
     snap = AccountSnapshotRow
     query = select(snap.account_id, snap.followers, snap.taken_at).distinct(
         snap.account_id
@@ -93,10 +84,6 @@ def _baselines(
 
 
 def _post_views(s: Session, account_id: int | None) -> dict[int, list[PostViews]]:
-    """Per account (or only `account_id`), its kept posts: views and publish
-    time only, what view windows need. Retention is applied when a scan
-    succeeds, never on read: an account that stopped syncing (banned,
-    untracked) keeps showing what its last successful sync saw."""
     post = TrackedPostRow
     query = select(post.account_id, post.views, post.posted_at)
     if account_id is not None:
@@ -108,8 +95,6 @@ def _post_views(s: Session, account_id: int | None) -> dict[int, list[PostViews]
 
 
 def _upsert_posts(s: Session, account_id: int, posts: list[dict], now: float) -> None:
-    """Inserts the scan's posts; one already kept (same platform id) gets
-    its latest views, URLs and `last_seen_at` instead of a duplicate."""
     if not posts:
         return
     rows = [
@@ -138,8 +123,6 @@ def _upsert_posts(s: Session, account_id: int, posts: list[dict], now: float) ->
 
 
 def _last_success(s: Session, account_id: int) -> float | None:
-    """When the account's newest snapshot (its last successful scan) was
-    taken; None before the first."""
     snap = AccountSnapshotRow
     return s.execute(
         select(func.max(snap.taken_at)).where(snap.account_id == account_id)
@@ -149,12 +132,6 @@ def _last_success(s: Session, account_id: int) -> float | None:
 def _covered_since(
     s: Session, row: TrackedAccountRow, reach: float | None, cutoff: float
 ) -> float | None:
-    """The publish time the kept posts are complete from after this scan.
-    A scan reaching back to the previous successful one (`reach`: the time
-    it read every post back to) extends the coverage before it; one that
-    does not (a gap: untracked, banned, a capped read after a long pause)
-    starts it over at its own reach, since posts in the gap were never
-    read. Never older than `cutoff`: pruned posts are not there to count."""
     if reach is None:
         return row.covered_since
     last = _last_success(s, row.id)
@@ -166,12 +143,6 @@ def _covered_since(
 def _merge_rename(
     s: Session, row: TrackedAccountRow, platform_account_id: str | None
 ) -> TrackedAccountRow:
-    """`row` scanned as the account the platform calls
-    `platform_account_id`. When an older row already carries that id, the
-    account was renamed and added again under its new handle: the older row
-    takes the new handle and `row`'s snapshots, posts, creator and notes,
-    and `row` -- the duplicate -- goes. Returns the row the scan belongs
-    to. Platforms without ids (None) never merge."""
     if platform_account_id is None:
         return row
     acc = TrackedAccountRow
@@ -226,7 +197,6 @@ def _merge_rename(
     return older
 
 
-# Accounts with their creator's name.
 _ACCOUNTS = select(TrackedAccountRow, CreatorRow.name).outerjoin(
     CreatorRow, TrackedAccountRow.creator_id == CreatorRow.id
 )
@@ -238,11 +208,6 @@ def _with_baselines(
     periods_days: list[int],
     account_id: int | None,
 ) -> list[TrackedAccount]:
-    """The `_ACCOUNTS` results as accounts, each with `baselines`: per
-    period, the newest snapshot at least that old (none for an account
-    tracked for less), `first`: its first snapshot, for growth since it
-    was added, `latest`: its newest one (the last successful sync), and
-    `post_views`: its kept posts' views and publish times."""
     now = time.time()
     first = _baselines(s, None, account_id)
     latest = _baselines(s, now, account_id)
@@ -264,7 +229,6 @@ def _with_baselines(
 
 
 def _snapshot_baseline(snap: tuple[int, float] | None) -> Baseline | None:
-    """A `_baselines` (followers, taken_at) that is no period's: days 0."""
     if snap is None:
         return None
     return Baseline(days=0, followers=snap[0], taken_at=snap[1])
@@ -282,10 +246,6 @@ class TrackedAccountRepository(CachedRepository):
         user_id: int,
         revive: bool = True,
     ) -> bool:
-        """True when the account is new to `user_id`, or was untracked and is
-        tracked again -- the same row, its whole history kept, due for a
-        scan now. Adding one already tracked only assigns it to `creator`,
-        when one is given."""
         acc = TrackedAccountRow
         same = (acc.user_id == user_id, acc.platform == platform, acc.handle == handle)
         with session_scope() as s:
@@ -324,8 +284,6 @@ class TrackedAccountRepository(CachedRepository):
     def list_all(
         self, periods_days: list[int], owner: int | None = None
     ) -> list[TrackedAccount]:
-        """`owner`'s tracked accounts, newest first, with their growth
-        baselines and their posts' views (see `_with_baselines`)."""
         with session_scope() as s:
             rows = s.execute(
                 _ACCOUNTS.where(
@@ -339,8 +297,6 @@ class TrackedAccountRepository(CachedRepository):
 
     @cached
     def get(self, account_id: int, periods_days: list[int]) -> TrackedAccount | None:
-        """One account, tracked or not, with its baselines and its kept
-        posts, in full."""
         with session_scope() as s:
             rows = s.execute(_ACCOUNTS.where(TrackedAccountRow.id == account_id)).all()
             if not rows:
@@ -366,7 +322,6 @@ class TrackedAccountRepository(CachedRepository):
 
     @cached
     def history(self, account_id: int, since: float) -> list[Snapshot]:
-        """The account's snapshots taken since `since`, oldest first."""
         snap = AccountSnapshotRow
         with session_scope() as s:
             rows = s.execute(
@@ -391,8 +346,6 @@ class TrackedAccountRepository(CachedRepository):
     def set_creator(
         self, account_ids: list[int], creator: str | None, owner: int | None = None
     ) -> int:
-        """Assigns the accounts (of `owner`) to `creator` (None: unassigned),
-        a creator of each account's own owner; how many exist."""
         acc = TrackedAccountRow
         with session_scope() as s:
             rows = s.execute(
@@ -424,9 +377,6 @@ class TrackedAccountRepository(CachedRepository):
 
     @invalidates_cache
     def untrack(self, account_ids: list[int], owner: int | None = None) -> int:
-        """Stops scanning the accounts and hides them from the list; every
-        record (profile, posts, snapshots, notes) stays, and adding the
-        handle again resumes the same account. How many were tracked."""
         acc = TrackedAccountRow
         with session_scope() as s:
             untracked = s.execute(
@@ -443,8 +393,6 @@ class TrackedAccountRepository(CachedRepository):
 
     @invalidates_cache
     def mark_due(self, account_ids: list[int]) -> None:
-        """Makes the accounts due now (and drops any claim), so the next
-        sweep scans them."""
         with session_scope() as s:
             s.execute(
                 update(TrackedAccountRow)
@@ -454,9 +402,6 @@ class TrackedAccountRepository(CachedRepository):
 
     @invalidates_cache
     def make_due(self, owner: int | None, claim_ttl_s: float) -> list[int]:
-        """Makes every tracked account of `owner` due now, except one
-        claimed within `claim_ttl_s` (its scan is queued or running: a second
-        click or a sweep in progress queues nothing twice). The ids made due."""
         acc = TrackedAccountRow
         now = time.time()
         with session_scope() as s:
@@ -476,11 +421,6 @@ class TrackedAccountRepository(CachedRepository):
     def claim_due(
         self, interval_s: float, claim_ttl_s: float, max_interval_s: float
     ) -> list[int]:
-        """Marks every tracked account not scanned for its interval (and
-        not claimed within `claim_ttl_s`) as claimed, in one UPDATE, and
-        returns their ids: of two sweepers racing, each account goes to
-        exactly one. The interval is `interval_s`, doubled per consecutive
-        failed scan, up to `max_interval_s`."""
         now = time.time()
         acc = TrackedAccountRow
         backoff = func.least(
@@ -511,20 +451,6 @@ class TrackedAccountRepository(CachedRepository):
         retention_days: int,
         error: str | None,
     ) -> None:
-        """One transaction, one clock, the account's row locked (concurrent
-        scans of one account serialize).
-
-        A failed scan (no `metrics`) only records its error and counts the
-        failure: every number, post and snapshot stays as the last
-        successful sync left it (a banned account keeps its data until it
-        is reachable again).
-
-        A successful one: a renamed account (another row already carries
-        the platform's id for it) is merged into that row first (see
-        `_merge_rename`); then the posts it read within retention are
-        upserted, coverage updated (see `_covered_since`), a snapshot
-        appended, and posts older than retention pruned -- by age only,
-        never because a scan did not return them."""
         now = time.time()
         acc = TrackedAccountRow
         with session_scope() as s:

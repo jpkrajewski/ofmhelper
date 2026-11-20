@@ -1,9 +1,3 @@
-"""Instagram refuses the server's IP logged out (login-page redirect) and an
-uploaded login that went bad answers 400 (prod, 2026-10-21): every /download
-of a reel failed. Instagram URLs now go logged out through the proxies first --
-metadata via the proxy, the file from the CDN direct -- and the login + no
-proxy try comes last. Other sites keep the single plain try."""
-
 import sys
 from types import SimpleNamespace
 
@@ -18,9 +12,6 @@ COOKIES = "/app/cookies/cookies.txt"
 
 
 class FakeYtDlp:
-    """Records each YoutubeDL's options and calls; `fails(opts)` decides
-    which extractions raise."""
-
     def __init__(self, out, fails=lambda opts: False):
         self.out = out
         self.fails = fails
@@ -99,7 +90,6 @@ def test_failing_proxies_fall_back_to_the_login_direct(monkeypatch, tmp_path):
 
     assert result.success
     proxied = [opts["proxy"] for kind, opts in fake.calls if kind == "info"]
-    # 1 + OFM_IG_PROXY_RETRIES proxies, each a different one.
     assert len(proxied) == 2
     assert len(set(proxied)) == 2
     kind, last = fake.calls[-1]

@@ -1,6 +1,3 @@
-{# One model's settings and file pickers, built from its input schema
-   (aigenproviders/spec.py). Swapped into /generate's form by ai-form.js on
-   every model change. The prompt is the page's own box, so it is skipped. #}
 {% import "_file_picker.html" as fp %}
 <legend>{{ spec.label }}</legend>
 {% for f in spec.form_fields if f.name != "prompt" %}

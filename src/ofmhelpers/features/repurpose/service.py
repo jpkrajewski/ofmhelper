@@ -1,8 +1,3 @@
-"""What /repurpose does behind its routes
-(web/routers/video_tools/repurpose.py): one video in, N repurposed copies out
-(`ofmhelpers.media.repurpose`), each scored against its source
-(`repurpose.checker`); what its page shows; a run's cards."""
-
 import secrets
 from pathlib import Path
 from typing import Any, Protocol
@@ -43,15 +38,10 @@ DEFAULT_DEVICE = "strip"
 
 DEFAULT_PRESET = "medium"
 
-# An intermediate the iphone17 device makes itself: not a choice.
 _HIDDEN_DEVICES = {"master"}
 
-# What a preset in the page (and in a job's params) leaves out: the special
-# parts are merged in when picked, the device has its own select.
 _PAGE_ONLY = {"label", "video_special", "audio_special", "device", "device_special"}
 
-# checker.HashKind values as a card names them (strings: the checker's
-# imagehash/pdqhash load only in the job).
 _HASH_NAMES = {
     "pdq": "PDQ",
     "phash": "pHash",
@@ -74,8 +64,6 @@ def _devices() -> list[tuple[str, str]]:
 
 
 def _presets() -> dict[str, dict[str, Any]]:
-    """Ready-made presets as their files hold them (only what each sets:
-    repurpose.js lays the special parts over the plain ones)."""
     return {
         name: load_preset(name).model_dump(mode="json", exclude_unset=True)
         for name in preset_names()
@@ -83,7 +71,6 @@ def _presets() -> dict[str, dict[str, Any]]:
 
 
 def _score(report: CheckReport) -> CopyScore:
-    """Every method as the share of the copy it finds in the source."""
     shares = [(str(h.kind), h.sequence.share) for h in report.hashes] + [
         (d.kind, d.sequence.share) for d in report.descriptors
     ]
@@ -125,8 +112,7 @@ def run_repurpose(
     preset_name: str = "",
     special: bool = False,
 ) -> list[RepurposeResult]:
-    """Every copy with its own seed, then scored against the source."""
-    del preset_name, special  # the page's, kept on the job for Recreate
+    del preset_name, special
     directory = Path(job_dir)
     preset_file = directory / "preset.json"
     preset_file.write_text(
@@ -151,7 +137,6 @@ def run_repurpose(
 
 
 def cards(job: Job) -> list[RepurposeCard]:
-    """A done job as one card per copy; any other as its one card."""
     base: dict[str, Any] = {
         "task_label": "Repurpose",
         "poll_prefix": PREFIX,
@@ -180,7 +165,6 @@ def cards(job: Job) -> list[RepurposeCard]:
 
 
 def cards_of(job_id: str, actor: str) -> list[RepurposeCard]:
-    """The asker's own job as the gallery draws it."""
     job = get_job(job_id, actor)
     if job is None:
         msg = "Job not found"
@@ -189,8 +173,6 @@ def cards_of(job_id: str, actor: str) -> list[RepurposeCard]:
 
 
 class PageView(BaseModel):
-    """/repurpose: each field is a name `repurpose.html` reads."""
-
     cards: list[RepurposeCard]
     knob_groups: list[KnobGroup]
     presets: dict[str, dict[str, Any]]
@@ -216,8 +198,6 @@ def page_view(actor: str) -> PageView:
 
 
 class Submitted(Protocol):
-    """The /repurpose form as its route read it (`RepurposeForm`)."""
-
     video: list[UploadFile]
     video_manifest: str
     preset: str

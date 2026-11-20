@@ -1,9 +1,3 @@
-"""kie.ai, Higgsfield, RunningHub, Elyum and APIYI behind the shared interface, on
-their fakes and on the real APIs: a wrong key is refused the same way
-everywhere (free), and the cheapest job runs end to end (its real side is
-marked `paid`: a few cents per provider, run only by `scripts/test.sh paid`;
-keys from .env)."""
-
 import pytest
 from PIL import Image
 
@@ -29,9 +23,6 @@ PROVIDERS = {
     "elyum": (ElyumProvider, f"ek_live_{BAD_KEY}", ELYUM_FAKE_KEY),
     "apiyi": (ApiyiProvider, f"sk-{BAD_KEY}", APIYI_FAKE_KEY),
 }
-# A task id nobody has, in each provider's own format: RunningHub's are
-# numeric, and it refuses a UUID with 1007 "failed to parse request body"
-# before it looks at the key.
 UNKNOWN_TASK = {
     "kie": "00000000-0000-0000-0000-000000000000",
     "higgsfield": "00000000-0000-0000-0000-000000000000",
@@ -39,8 +30,6 @@ UNKNOWN_TASK = {
     "elyum": "g_000000000000",
     "apiyi": "00000000-0000-4000-8000-000000000000",
 }
-# Presumed cheapest model per provider (Lite / Turbo tier); Elyum's
-# catalog has video only: Wan 3.0 at its shortest and lowest, $0.08.
 CHEAPEST = {
     "kie": "kie:seedream/5-lite-text-to-image",
     "higgsfield": "higgsfield:z-image/turbo",
@@ -50,7 +39,6 @@ CHEAPEST = {
 }
 CHEAPEST_SETTINGS = {
     "elyum": {"resolution": "480p", "duration": 2, "audio": False},
-    # APIYI: Wan 3.0 at 480P, 2 s: $0.0588.
     "apiyi": {"resolution": "480P", "duration": 2, "audio": False},
 }
 
@@ -103,6 +91,5 @@ def test_the_cheapest_job_runs_end_to_end_on_the_fake(
 @pytest.mark.live
 @pytest.mark.paid
 def test_the_cheapest_job_runs_end_to_end_for_real(real_env, provider_name):
-    """PAID: a few cents per provider. Only `scripts/test.sh paid`."""
     cls, _, _ = PROVIDERS[provider_name]
     _cheapest_job(cls, cls.default_key())

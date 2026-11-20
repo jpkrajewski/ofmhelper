@@ -1,19 +1,3 @@
-"""Turn a video in another container the app accepts (.mov, .m4v, .webm,
-.mkv) into an MP4, for providers that take MP4 only (Higgsfield). On prod
-on 2026-11-02, an iPhone .mov reference failed a /clone run before it was
-uploaded.
-
-The conversion loses as little as possible. H.264 video and AAC/MP3 audio
-are copied into the MP4 unchanged: a remux loses no quality and takes about
-a second. Other video (HEVC from an iPhone, VP9 from .webm, ProRes) is
-encoded to H.264 at CRF 17, which is visually lossless. Other audio (PCM,
-ALAC, Opus) is encoded to AAC. Only the first video stream and the first
-audio stream are kept; a .mov's timecode and data tracks are dropped.
-
-An HDR picture that has to be encoded is first converted to BT.709 SDR
-(`utils.hdr`). Without that step, 8-bit H.264 from it looks washed out.
-"""
-
 import hashlib
 import os
 import tempfile
@@ -24,14 +8,11 @@ from pydantic import BaseModel, ConfigDict
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.hdr import sdr_filters
 
-# Containers `as_mp4` converts. An .mp4 is used as it is.
 CONVERTIBLE_SUFFIXES = frozenset({".mov", ".m4v", ".webm", ".mkv"})
 MP4_SUFFIX = ".mp4"
 
-# Codecs an MP4 carries that every provider decodes: copied unchanged.
 _COPIED_VIDEO = frozenset({"h264"})
 _COPIED_AUDIO = frozenset({"aac", "mp3"})
-# Visually lossless H.264 (x264's own guidance puts 17-18 there).
 _CRF = 17
 _AUDIO_BITRATE = "192k"
 
@@ -47,8 +28,6 @@ class _Stream(BaseModel):
 
 
 class _Probe(BaseModel):
-    """`ffprobe -show_streams -of json`: the file's streams in order."""
-
     model_config = ConfigDict(extra="ignore")
 
     streams: list[_Stream] = []
@@ -102,9 +81,6 @@ def _audio_args(audio: _Stream | None) -> list[str]:
 
 
 def _mp4_args(probe: _Probe, src: Path, dest: Path) -> list[str]:
-    """The ffmpeg command writing `src` to `dest` as an MP4 (see the module
-    docstring for what is copied and what is encoded). Raises `ValueError`
-    when `src` has no video stream."""
     video = probe.first("video")
     if video is None:
         msg = f"{src.name} has no video stream"
@@ -131,9 +107,6 @@ def _mp4_args(probe: _Probe, src: Path, dest: Path) -> list[str]:
 
 
 def _dest(src: Path, dest_dir: Path) -> Path:
-    """The copy's name. It changes whenever the source does (path, size or
-    mtime), so a stale copy, or another file with the same stem, is never
-    reused."""
     stat = src.stat()
     digest = hashlib.sha256(
         f"{src.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode()
@@ -142,14 +115,6 @@ def _dest(src: Path, dest_dir: Path) -> Path:
 
 
 def as_mp4(src: Path, dest_dir: Path, timeout_s: int) -> Path:
-    """`src` itself when it is an MP4 or not a convertible video. Otherwise
-    an MP4 copy in `dest_dir`, made once and then reused; the original is
-    left untouched. The copy only ever appears complete: ffmpeg writes to a
-    temp file beside it, which is moved into place when done. A run killed
-    mid-encode therefore never leaves half a video for the next upload, and
-    two workers can make the same copy at once. Raises `RuntimeError`
-    (ffmpeg failed or timed out), `FileNotFoundError` (no ffmpeg, no `src`)
-    or `ValueError` (no video stream)."""
     if src.suffix.lower() not in CONVERTIBLE_SUFFIXES:
         return src
     dest = _dest(src, dest_dir)

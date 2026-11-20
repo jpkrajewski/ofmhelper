@@ -1,8 +1,3 @@
-"""/viral in a real browser: a profile in, the page waits on the search and
-shows the profile's reels most played first, each with Download, all of
-them as one zip (Apify faked: apify/fake.py serves the Instagram fake's
-sheep_love33, 8 reels, the most played 3M)."""
-
 import re
 
 import pytest
@@ -11,7 +6,6 @@ lazy from e2e_session import Session
 
 pytestmark = pytest.mark.e2e
 
-# The search runs on the worker; the page polls every 3 s.
 RESULT_TIMEOUT_MS = 45_000
 
 

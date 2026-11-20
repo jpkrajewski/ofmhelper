@@ -1,12 +1,3 @@
-"""A cookies.txt (Netscape format) held as text, never as a shared file.
-
-Each user's own cookies live encrypted in Postgres (`db/stores/cookies.py`);
-the code that needs a jar gets the text from its caller and turns it into
-what its tool takes here: a temporary file for yt-dlp / gallery-dl
-(`cookie_file`, deleted on exit, mode 0600) or an `http.cookiejar` for
-`requests` (`load_jar`). Nothing here logs a cookie value.
-"""
-
 import os
 import tempfile
 from contextlib import contextmanager
@@ -25,16 +16,11 @@ _INSTAGRAM = "instagram.com"
 _INSTAGRAM_LOGIN = "sessionid"
 
 
-class CookieFileError(ValueError):
-    """Not a cookies.txt anything here can read: the message says why, in
-    words the person uploading it can act on."""
+class CookieFileError(ValueError): ...
 
 
 @contextmanager
 def cookie_file(cookies: str | None) -> Iterator[str | None]:
-    """`cookies` as a file only this process user can read, for the
-    duration of the block (yt-dlp may write it back; that copy is
-    discarded). None in, None out: run without a login."""
     if not cookies:
         yield None
         return
@@ -48,8 +34,6 @@ def cookie_file(cookies: str | None) -> Iterator[str | None]:
 
 
 def load_jar(cookies: str) -> MozillaCookieJar:
-    """The parsed jar. Raises CookieFileError when it is not Netscape
-    cookies.txt."""
     with cookie_file(cookies) as path:
         jar = MozillaCookieJar()
         try:
@@ -59,8 +43,6 @@ def load_jar(cookies: str) -> MozillaCookieJar:
                 "Not a cookies.txt file: export one in Netscape format "
                 '(it starts with "# Netscape HTTP Cookie File")'
             )
-            # `from None`: the parser's error quotes the bad line, which is
-            # a cookie (any site's) of the person's own file: never logged.
             raise CookieFileError(msg) from None
     return jar
 
@@ -84,10 +66,6 @@ def _site(site: CookieSite, found: list[Cookie]) -> SiteCookies:
 
 
 def summarize(cookies: str, sites: Sequence[CookieSite] = ()) -> CookieJarSummary:
-    """Which sites `cookies` covers, whether it logs into Instagram, and per
-    known site (`sites`) its cookies' names and login. Raises
-    CookieFileError for a file that is not cookies.txt or holds no
-    cookie."""
     jar = load_jar(cookies)
     found = list(jar)
     if not found:

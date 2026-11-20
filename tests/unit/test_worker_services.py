@@ -1,9 +1,3 @@
-"""The worker containers (docker-compose.yml) and the two deploy paths
-(scripts/deploy.sh, .github/workflows/deploy.yml) stay in step: every queue
-`ofmhelpers.worker` serves has its service, both deploys build, stop and
-start every app service, and a worker gets time to finish its job on
-`compose stop`. A service left off one deploy keeps running old code."""
-
 from pathlib import Path
 from typing import Any
 
@@ -41,13 +35,10 @@ def _compose() -> Compose:
 
 
 def _app_services() -> set[str]:
-    """The services built from this repo's image."""
     return {name for name, s in _compose().services.items() if s.build == "."}
 
 
 def _worker_queues() -> dict[str, set[str]]:
-    """service -> the queues its `python -m ofmhelpers.worker [queue ...]`
-    serves."""
     found = {}
     for name, service in _compose().services.items():
         cmd = service.command
@@ -58,8 +49,6 @@ def _worker_queues() -> dict[str, set[str]]:
 
 
 def _compose_calls(path: Path, verb: str) -> list[set[str]]:
-    """The services each `$compose <verb> ...` line of a deploy names, in
-    order (flags and anything after `;` left out)."""
     calls = []
     for line in path.read_text(encoding="utf-8").splitlines():
         _, found, rest = line.partition(f"$compose {verb} ")
@@ -70,9 +59,6 @@ def _compose_calls(path: Path, verb: str) -> list[set[str]]:
 
 
 def test_every_queue_is_served_by_one_worker_service():
-    """The network queues share `worker` (a pool each, `worker.QueueGroup`);
-    what encodes has a service of its own, for its CPU and memory limits. A
-    queue no service names would fill up with nobody taking from it."""
     assert _worker_queues() == {
         "worker": {"default", "clone-links", "events"},
         "preview-worker": {"previews"},
@@ -84,15 +70,11 @@ def test_every_queue_is_served_by_one_worker_service():
 
 
 def test_the_edit_worker_has_three_cpus_and_two_gb():
-    """A 14 s 1440p 60 fps cut: 15 s at 1.5 CPUs, 7 s at 3 (2026-11-06); the
-    RAM cap keeps a runaway ffmpeg in its own container."""
     edit = _compose().services["edit-worker"].model_dump()
     assert (edit["cpus"], edit["mem_limit"]) == (3.0, "2g")
 
 
 def test_a_worker_finishes_its_job_on_compose_stop():
-    """Docker's default 10 s SIGKILLed /clone-links reviews mid-LLM call or
-    mid-upload on every deploy (review #4)."""
     services = _compose().services
     assert {
         name: services[name].stop_grace_period for name in WORKERS
@@ -109,17 +91,12 @@ def test_both_deploys_build_and_start_every_app_service(path: Path):
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
 def test_both_deploys_stop_the_workers_before_the_app(path: Path):
-    """The workers drain (up to their grace period) while the app still
-    serves; only then does the app stop for the migration."""
     workers = set(_worker_queues())
     assert workers == WORKERS
     assert _compose_calls(path, "stop") == [workers | {"sweeps"}, {"ofmhelpers"}]
 
 
 def test_the_sweeps_have_one_service_of_their_own():
-    """Their own process (`ofmhelpers/sweeps.py`), never the web app's: a
-    second web process would run every sweep twice. Time to finish the
-    Telegram read on `compose stop` (OFM_TELEGRAM_ASK_WAIT_S, 10 s)."""
     services = _compose().services
     running = [name for name, s in services.items() if "ofmhelpers.sweeps" in s.command]
     assert running == ["sweeps"]
@@ -128,26 +105,18 @@ def test_the_sweeps_have_one_service_of_their_own():
 
 
 def test_a_worker_service_can_be_scaled():
-    """A fixed `container_name` refuses `--scale` (two containers, one name).
-    More load = more worker processes or containers per queue."""
     services = _compose().services
     named = {name for name in (*WORKERS, "sweeps") if services[name].container_name}
     assert named == set()
 
 
 def test_every_app_service_runs_the_release_image():
-    """One image, named by the commit it was built from (OFM_RELEASE, set by
-    both deploys): the build is the artifact, and the one before is kept."""
     images = {_compose().services[name].image for name in _app_services()}
     assert images == {"ofmhelpers-app:${OFM_RELEASE:-dev}"}
 
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
 def test_both_deploys_keep_the_previous_release_image(path: Path):
-    """The server builds the image, so the one it replaces is the only way
-    back without a rebuild: it is tagged with its commit, the deploy reuses a
-    commit's image when it is still there, and the clean-up spares the
-    release it replaced."""
     text = path.read_text(encoding="utf-8")
     assert 'release="ofmhelpers-app:$OFM_RELEASE"' in text
     assert 'docker image inspect "$release" >/dev/null 2>&1 || $compose build' in text
@@ -167,8 +136,6 @@ def test_both_deploys_take_only_a_commit_of_main(path: Path):
 
 
 def test_the_manual_deploy_never_commits_or_pushes():
-    """Until 2026-11-11 it ran `git add -A`, committed, pushed main and
-    deployed, with no CI in between."""
     code = [
         line.strip()
         for line in DEPLOYS[0].read_text(encoding="utf-8").splitlines()
@@ -185,15 +152,11 @@ def test_the_manual_deploy_never_commits_or_pushes():
 
 def test_the_deploy_workflow_takes_a_sha_by_hand():
     workflow = yaml.safe_load(DEPLOYS[1].read_text(encoding="utf-8"))
-    # PyYAML reads the key `on` as True.
     inputs = workflow[True]["workflow_dispatch"]["inputs"]
     assert inputs["sha"]["required"] is False
 
 
 def test_the_database_and_redis_passwords_are_required_never_a_default():
-    """Not written into the file, and no fallback: a known password let any
-    container on the network into Postgres, and Redis had none (security
-    audit 2026-11-18). Compose stops when .env lacks either."""
     services = _compose().services
     postgres = services["postgres"].model_dump()["environment"]
     app = services["ofmhelpers"].model_dump()["environment"]
@@ -212,22 +175,18 @@ def test_the_database_and_redis_passwords_are_required_never_a_default():
 
 
 def test_both_deploys_set_the_database_password_from_env_after_the_app_stops():
-    """The image reads POSTGRES_PASSWORD only when the volume is made: each
-    deploy makes it the user's password (a rotation = a new .env value),
-    with the app down, and recreates Redis only once the workers are."""
     for deploy in DEPLOYS:
         text = deploy.read_text(encoding="utf-8")
         stop_app = text.index("stop ofmhelpers")
+        backing = text.index("up -d --wait postgres redis")
         password = text.index("sh -s < scripts/postgres_password.sh")
-        redis = text.index("up -d --wait redis")
         start = text.index("up -d --no-deps --force-recreate migrate")
-        assert stop_app < password < redis < start
-        assert "postgres redis pot-provider" not in text
+        assert stop_app < backing < password < start
+        assert "up -d --remove-orphans pot-provider" in text
+        assert "postgres pot-provider" not in text
 
 
 def test_no_image_floats_on_a_tag_alone():
-    """`:latest` is a different build every pull: dev, CI and a rebuilt
-    server would each run their own."""
     images = [
         s.image for s in _compose().services.values() if s.image and s.build is None
     ]
@@ -237,8 +196,6 @@ def test_no_image_floats_on_a_tag_alone():
 
 
 def test_dev_says_it_is_development_and_puts_nginx_in_front():
-    """OFM_ENV has no default: the overlay names it on every app service.
-    nginx there uses the site file the server does (nginx/ofmhelpers.conf)."""
     text = (REPO / "docker-compose.dev.yml").read_text(encoding="utf-8")
     dev = yaml.safe_load(text)["services"]
     for name in (*_app_services(), "tests"):
@@ -258,8 +215,6 @@ def test_dev_says_it_is_development_and_puts_nginx_in_front():
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
 def test_both_deploys_keep_only_a_days_build_cache(path: Path):
-    """Prod 2026-11-08: `--max-used-space 5gb` left 8 GB of build cache on
-    Docker 29, the disk at 93%."""
     prunes = [
         line.strip()
         for line in path.read_text(encoding="utf-8").splitlines()
@@ -269,16 +224,12 @@ def test_both_deploys_keep_only_a_days_build_cache(path: Path):
 
 
 def _mount_of(path: str, volumes: list[str]) -> str:
-    """The container path of the mount `path` is in: the longest one."""
     targets = [volume.split(":")[1] for volume in volumes]
     return max((t for t in targets if path.startswith(f"{t}/")), key=len)
 
 
 @pytest.mark.parametrize("name", ["ofmhelpers", *sorted(WORKERS)])
 def test_results_land_in_the_asset_stores_mount(name: str):
-    """The asset store hard-links each result (`register_generated_asset`);
-    across two mounts the link fails and it copied: every result twice,
-    17.5 GB of prod's 72 GB disk (2026-11-11)."""
     service = _compose().services[name].model_dump()
     env = dict(line.split("=", 1) for line in service["environment"])
 
@@ -289,9 +240,6 @@ def test_results_land_in_the_asset_stores_mount(name: str):
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
 def test_both_deploys_fail_when_the_sweeps_or_a_worker_did_not_stay_up(path: Path):
-    """`/health` is the web app only (Kimi review 2026-11-11): a sweeps or
-    worker container crashing at its start would be a green deploy with
-    recovery, the scans and every queue dead."""
     text = path.read_text(encoding="utf-8")
     services = "sweeps worker preview-worker media-worker edit-worker"
     assert f"for service in {services}; do" in text
@@ -301,8 +249,6 @@ def test_both_deploys_fail_when_the_sweeps_or_a_worker_did_not_stay_up(path: Pat
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
 def test_both_deploys_keep_the_image_of_the_one_running_app_container(path: Path):
-    """`ps -a` also lists stopped and one-off containers: two ids made
-    `previous` two lines, it matched no image, and the kept release was removed."""
     text = path.read_text(encoding="utf-8")
     assert "running=$($compose ps -q ofmhelpers | head -n 1)" in text
     assert "ps -aq ofmhelpers" not in text

@@ -1,5 +1,3 @@
-"""kie.ai behind the shared `Provider` interface."""
-
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -35,10 +33,6 @@ class KieProvider(Provider):
         return self.client.upload_local_file(str(path), max_bytes=max_bytes)
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
-        """kie.ai has no idempotency key; a re-run never resubmits anyway
-        (the runner resumes the remembered task), and createTask is never
-        retried by the client. Its callback names a task whose answer was
-        lost."""
         return self.client.create_task(
             spec.model_id,
             payload,
@@ -75,8 +69,6 @@ class KieProvider(Provider):
 
     @staticmethod
     def _result_urls(record: KieRecord) -> list[str]:
-        """A finished (paid) task whose `resultJson` cannot be read is asked
-        again, not failed: the job stays resumable instead of forgetting it."""
         try:
             return record.result_urls
         except (ValueError, AttributeError, TypeError) as exc:

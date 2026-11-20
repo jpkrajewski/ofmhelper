@@ -1,8 +1,3 @@
-"""A chat is one fan and one model. A delivery signed with model A's secret
-that names model B's chat (its channel, or a message in it) changes nothing
-of B's (security audit 2026-11-18: the signature chose the model, the body
-chose the chat)."""
-
 import time
 
 from ofmhelpers.db.stores import chats
@@ -43,7 +38,6 @@ def test_a_reply_signed_for_another_model_does_not_answer_its_fan():
 
     assert kept is False
     assert _waiting() == [("bob", "bob-chat")]
-    # Bob's own reply still answers.
     assert chats.record_events(PLATFORM, _read("bob", "bob-chat", reply))
     assert _waiting() == []
 

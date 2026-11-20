@@ -1,12 +1,3 @@
-"""picture_presets.aspect_ratio: a preset's fixed output shape ("3:4");
-NULL (every existing preset) keeps following the picture to recreate.
-
-Revision ID: 4e5f6a7b8c9d
-Revises: 9c1d2e3f4a5b
-Create Date: 2026-11-01 00:10:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

@@ -1,8 +1,3 @@
-"""What /account does behind its routes (web/routers/account.py): the page
-as it shows, a password changed, the person's own API keys saved or removed,
-a linked account unlinked. Each write answers a `Notice`: the page again with
-a message or an error."""
-
 from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict, SkipValidation
@@ -33,8 +28,6 @@ from ofmhelpers.schemas.users import LinkedAccount
 logger = get_logger(__name__)
 
 UNKNOWN_PROVIDER = "Unknown provider"
-# What /account says after a provider's consent: the outcome in the query
-# string -> its sentence and the page's status.
 _LINK_NOTES = {
     "taken": ("That {} account is already linked to someone else.", 409),
     "failed": ("Connecting your {} account failed: try again.", 400),
@@ -43,62 +36,44 @@ _LINK_NOTES = {
 
 
 class Notice(BaseModel):
-    """What the page says on top after a write, and its status."""
-
     message: str | None = None
     error: str | None = None
     status_code: int = 200
 
 
 class TelegramCard(BaseModel):
-    """/account's Telegram card: whether this person linked their chat."""
-
     linked: bool
 
 
 class TelegramConnect(BaseModel):
-    """Connect Telegram: the bot's one-time link, or why there is none."""
-
     url: str | None = None
     notice: Notice = Notice()
 
 
 class PageView(BaseModel):
-    """/account: each field is a name `account.html` reads."""
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     user: User | None
     linked: dict[str, LinkedAccount]
     providers: SkipValidation[list[Provider]]
-    # provider -> (label, the saved key's last characters).
     keys: dict[str, tuple[str, str | None]]
     min_length: int
     message: str | None
     error: str | None
-    # None: no bot is read on this server (dev), no card.
     telegram: TelegramCard | None = None
 
 
 class PasswordChange(BaseModel):
-    """`user`: set when the password changed -- the session to keep signed in
-    (every other session of theirs is out now)."""
-
     notice: Notice
     user: User | None = None
 
 
 class KeyedProvider(BaseModel):
-    """A provider a run needs a key for."""
-
     name: str
     label: str
 
 
 def keyed_providers() -> list[KeyedProvider]:
-    """Each generation provider's key slots (`Provider.key_slots`: one, or
-    APIYI's one per token group), then link providers (one sharing a name
-    comes once, as the link provider)."""
     labels = {
         slot.id: slot.label
         for cls in provider_classes().all()
@@ -113,8 +88,6 @@ def _stacked() -> KeyedProvider:
 
 
 def keyed_for(user: User | None) -> list[KeyedProvider]:
-    """The key slots `user` saves: every provider's, and Stacked for who may
-    open the chats (they are the agency's: `features/chatting/stacked_keys.py`)."""
     found = keyed_providers()
     if user is not None and allowed(user.role, Area.CHATTING):
         found.append(_stacked())
@@ -122,7 +95,6 @@ def keyed_for(user: User | None) -> list[KeyedProvider]:
 
 
 def _stacked_refusal(api_key: str) -> str | None:
-    """Why Stacked will not read chats with `api_key`, or None."""
     try:
         StackedClient(api_key).me()
     except StackedAuthError, StackedForbiddenError:  # silent: shown on the page
@@ -141,7 +113,6 @@ def page_view(user_id: int, notice: Notice) -> PageView:
         linked={a.provider: a for a in users.linked_accounts(user_id)},
         providers=linkable(),
         keys={
-            # security audit 2026-11-18: a short key must not show half itself.
             p.name: (p.label, key_tail(saved.get(p.name) or ""))
             for p in keyed_for(user)
         },
@@ -155,7 +126,6 @@ def page_view(user_id: int, notice: Notice) -> PageView:
 
 
 def connect_telegram(user_id: int) -> TelegramConnect:
-    """The bot's link for this person (`features/account/telegram.py`)."""
     try:
         return TelegramConnect(url=telegram.connect_url(user_id))
     except UnavailableError as exc:  # silent: logged in connect_url, shown here
@@ -163,12 +133,10 @@ def connect_telegram(user_id: int) -> TelegramConnect:
 
 
 def disconnect_telegram(user_id: int) -> None:
-    """Their events go back to nobody's chat (an admin's: the agency's)."""
     telegram.unlink(user_id)
 
 
 def link_notice(google: str, apple: str) -> Notice:
-    """How connecting an account went, as the callback's redirect says."""
     for label, outcome in (("Google", google), ("Apple", apple)):
         if outcome not in _LINK_NOTES:
             continue
@@ -193,8 +161,6 @@ def change_password(
 
 
 def keys_form(fields: Mapping[str, object]) -> ApiKeysForm:
-    """The keys form: its fields come from data (`key_<provider>` per keyed
-    provider; a Remove button posts `remove=<provider>`)."""
     known = [p.name for p in (*keyed_providers(), _stacked())]
     form = ApiKeysForm(
         keys={name: str(fields.get(f"key_{name}", "")) for name in known},
@@ -206,7 +172,6 @@ def keys_form(fields: Mapping[str, object]) -> ApiKeysForm:
 
 
 def save_keys(user_id: int, form: ApiKeysForm) -> Notice:
-    """One form, one Save for every provider's key."""
     known = {p.name: p.label for p in keyed_for(users.get_user(user_id))}
     if (set(form.keys) | {form.remove} - {None}) - set(known):
         raise NotFoundError(UNKNOWN_PROVIDER)
@@ -227,10 +192,6 @@ def save_keys(user_id: int, form: ApiKeysForm) -> Notice:
 
 
 def unlink(user_id: int, provider: str) -> PasswordChange:
-    """Stops signing in with that account (and, for Google, Drive uploads as
-    it). Refused (`notice` with an error) when it is the only way left to
-    sign in; else `user` is the session to keep signed in (every other
-    session of theirs is out now)."""
     if provider not in providers() or not providers()[provider].linkable:
         raise NotFoundError(UNKNOWN_PROVIDER)
     user = users.get_user(user_id)
@@ -243,7 +204,5 @@ def unlink(user_id: int, provider: str) -> PasswordChange:
             )
         )
     users.unlink_identity(user_id, provider)
-    # security audit 2026-11-18: a session that came in with that account is
-    # out; the router keeps the requester's own.
     users.end_sessions(user_id)
     return PasswordChange(notice=Notice(), user=users.get_user(user_id))

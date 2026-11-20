@@ -1,8 +1,3 @@
-"""The daily report end to end: a baseline the first time, then since it: each
-model's clicks, CTR, subscribers, conversion and sales (Stacked's API at the wire,
-Fanvue's stored webhooks), each account's views, who sent a mass message -- as
-the Telegram messages the group gets (both fakes at the wire)."""
-
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -34,7 +29,7 @@ NOW = time.time()
 T0 = NOW - _DAY
 TODAY = datetime.fromtimestamp(NOW, UTC).date()
 YESTERDAY = TODAY - timedelta(days=1)
-_STACKED_MODEL = "fake_creator"  # the fake's CREATOR's username
+_STACKED_MODEL = "fake_creator"
 
 
 @pytest.fixture(autouse=True)
@@ -42,10 +37,7 @@ def _services(fake_externals, monkeypatch):
     monkeypatch.setenv("OFM_TELEGRAM_BOT_TOKEN", TOKEN)
     monkeypatch.setenv("OFM_TELEGRAM_CHAT_IDS", "111")
     monkeypatch.setenv("STACKED_API_KEY_DANE", CREATOR_KEY)
-    # Fanvue's webhooks reach this server: its numbers are real.
     monkeypatch.setenv("FANVUE_EVENT_SECRET", "fanvue-secret")
-    # On UTC's clock at this very minute: the day before is the baseline, now the
-    # report (no summer-time day can move either).
     monkeypatch.setenv("OFM_REPORTS_TIMEZONE", "UTC")
     monkeypatch.setenv(
         "OFM_REPORTS_DAILY_AT", datetime.fromtimestamp(NOW, UTC).strftime("%H:%M")
@@ -54,7 +46,6 @@ def _services(fake_externals, monkeypatch):
 
 
 def _written() -> None:
-    """Rows written straight to the tables: the repositories' cached reads go."""
     get_redis().flushdb()
 
 
@@ -166,7 +157,7 @@ def _what_came_in(dane: int, rachel: int) -> None:
     _days(rachel, (TODAY, 50, 50))
     for n in range(8):
         fake_stacked().subscribed(CREATOR, NOW - 3600 - n)
-    fake_stacked().subscribed(CREATOR, T0 - 60)  # before the window
+    fake_stacked().subscribed(CREATOR, T0 - 60)
     fake_stacked().sold(CREATOR, 10_000, NOW - 600)
     fake_stacked().sold(CREATOR, 2_500, NOW - 500)
     _fanvue(DeliveryKind.SUBSCRIBED, "s1", NOW - 3600)
@@ -181,7 +172,6 @@ def _what_came_in(dane: int, rachel: int) -> None:
         ),
         _STACKED_MODEL,
     )
-    # Fanvue is left out of chatting messages for now.
     chats.save_notification(
         ChatPlatform.FANVUE,
         ChatDelivery(kind=DeliveryKind.MASS, model_id="fv", event_id="m1", at=NOW - 60),
@@ -314,9 +304,6 @@ def test_fanvue_without_its_webhooks_here_says_nothing_not_zero(agency, monkeypa
     assert "Sales: —" in walker
 
 
-# --- `money` typed to the bot (features/reports/asks.py) ------------------------
-
-
 _MONEY = """Clicks / Rev (Last 24H):
 
 Dane:
@@ -344,9 +331,6 @@ Sales: —"""
 
 @pytest.fixture
 def live(agency, monkeypatch) -> None:
-    """The last 24 hours as the providers tell them: Dane's Oopsie page clicked
-    3 hours ago (and 30 hours ago: outside), Rachel's never; the fan sites'
-    subs and sales of `_what_came_in`."""
     monkeypatch.setenv("OOPSIE_API_KEY_ADMIN", OOPSIE_FAKE_KEY)
     dane, rachel = _the_day_before(agency)
     _what_came_in(dane, rachel)
@@ -359,9 +343,6 @@ def live(agency, monkeypatch) -> None:
 @pytest.mark.parametrize("typed", ["money", "Money ", "/money", "/money@ofm_fake_bot"])
 @pytest.mark.usefixtures("live")
 def test_money_typed_in_the_group_is_answered_with_the_last_24_hours(typed):
-    """Clicks asked of the provider by the hour, subs and sales of the same 24
-    hours, in the chat that asked only; the daily report untouched (no run
-    taken, nothing synced)."""
     fake_telegram().wrote(111, text=typed)
 
     asks.answer_asks()
@@ -383,8 +364,6 @@ def test_an_ask_leaves_a_job_row_with_the_word_and_never_the_chat():
 
 
 def test_an_answered_ask_is_logged_without_its_chat(agency, caplog):
-    """Where a message goes is never logged (senders/CLAUDE.md); prod's first
-    asks wrote the group's id to Logfire."""
     fake_telegram().wrote(111, text="money")
     with caplog.at_level(logging.INFO, logger=asks.__name__):
         asks.answer_asks()
@@ -488,9 +467,6 @@ def test_a_report_block_in_parts_keeps_each_part_in_its_own_place():
     assert [p.replaces for p in parts] == ["slot", "slot:2"]
 
 
-# --- each link's clicks under its model (owner 2026-11-08) ------------------------
-
-
 def _dane_links(agency: int, *slugs: str) -> dict[str, int]:
     return {
         slug: _link(
@@ -517,7 +493,6 @@ def test_each_link_of_a_model_is_listed_under_its_clicks_most_first(agency):
 
     daily.run(NOW)
 
-    # danenydon got no clicks: not listed.
     assert _dane_block()[:4] == [
         "Clicks: 3.9k",
         "- oop.si/danywalking: 3.8k",

@@ -1,7 +1,3 @@
-{# /phones History dialog, filled by phones-history.js from
-   `GET /phones/revisions`: the person's phones after each change, newest
-   first. Restore goes back to that line (asked first). The script prints
-   each <time> in the reader's zone. #}
 {% import "components/ui.html" as ui %}
 {% for r in revisions %}
 <li class="ph-revision" data-revision-id="{{ r.id }}">

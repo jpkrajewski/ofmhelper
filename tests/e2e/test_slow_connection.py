@@ -1,9 +1,3 @@
-"""A gallery of heavy results must cost a slow connection kilobytes, not the
-results: /clone's 4K exports (~28 Mbit/s) and /generate's multi-MB PNGs never
-showed for a partner on a slow line (prod, 2026-10-21). In a real browser:
-the page loads posters and small previews only, no video starts loading
-before it is played, and Download still gets the original."""
-
 import os
 import subprocess
 lazy from pathlib import Path
@@ -21,13 +15,10 @@ pytestmark = pytest.mark.e2e
 
 VIDEOS = 4
 IMAGES = 4
-# What the gallery may transfer in media, as a share of its results. The test
-# images are noise (webp's worst case); real generations compress far better.
 MEDIA_BUDGET_SHARE = 0.05
 
 
 def _video(path: Path) -> Path:
-    """1 s of 4K at the bitrate of a real export."""
     subprocess.run(
         [
             "ffmpeg",
@@ -52,15 +43,12 @@ def _video(path: Path) -> Path:
 
 
 def _image(path: Path) -> Path:
-    """A noisy 2048x2048 PNG: incompressible, like a real generation."""
     Image.frombytes("RGB", (2048, 2048), os.urandom(2048 * 2048 * 3)).save(path)
     return path
 
 
 @pytest.fixture
 def heavy_gallery(tmp_path, monkeypatch) -> list[Path]:
-    """Finished jobs from before previews existed: nothing made ahead, so
-    the page's own requests make them."""
     monkeypatch.setattr(jobs_store, "_queue_previews", lambda job_id: None)
     video, image = _video(tmp_path / "export.mp4"), _image(tmp_path / "gen.png")
     sources = [video] * VIDEOS + [image] * IMAGES
@@ -89,7 +77,6 @@ def test_a_heavy_gallery_loads_only_previews(admin: Session, heavy_gallery):
     for i in range(VIDEOS):
         assert videos.nth(i).get_attribute("preload") == "none"
         assert videos.nth(i).get_attribute("poster").endswith("/poster")
-    # Every image shown is a decoded preview, not a broken one.
     images = admin.page.locator("img.result-image")
     assert images.count() == IMAGES
     for i in range(IMAGES):
@@ -108,9 +95,6 @@ def test_a_heavy_gallery_loads_only_previews(admin: Session, heavy_gallery):
 def test_a_video_with_no_preview_yet_plays_its_original_url(
     admin: Session, heavy_gallery
 ):
-    """Its own URL, never `/preview`: that URL serves the small copy once it is
-    made, and a player holding the original's length then got 416s (prod
-    2026-11-07)."""
     admin.goto("/generate")
     video = admin.page.locator("video.result-video").first
     src = video.get_attribute("src")
@@ -120,6 +104,5 @@ def test_a_video_with_no_preview_yet_plays_its_original_url(
     with admin.page.expect_response(lambda r: r.url.endswith(src)) as played:
         video.evaluate("v => { v.muted = true; return v.play(); }")
     assert played.value.headers["content-type"] == "video/mp4"
-    # Download is still the original.
     download = admin.page.locator(".download-btn").first.get_attribute("href")
     assert download.endswith("?dl=1")

@@ -1,20 +1,11 @@
-"""A package the lock holds only as source is compiled in every image build,
-and uv does not lock the tools that build runs: each must be pinned exactly in
-pyproject's `[tool.uv] build-constraint-dependencies`, or the production
-builder runs whatever PyPI serves that minute (audit 2026-11-18)."""
-
 import tomllib
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).parents[2]
-# What each source-only package's own `build-system.requires` names, read from
-# its locked sdist. A new version or a new source-only package: read its
-# requires, pin each, then add it here.
 BUILD_REQUIRES = {
     "pdqhash": ("0.2.8", {"setuptools", "wheel", "numpy", "cython"}),
-    # No wheel for Python 3.15 yet (pre-commit and the test tools need it).
     "pyyaml": ("6.0.3", {"setuptools", "cython"}),
 }
 

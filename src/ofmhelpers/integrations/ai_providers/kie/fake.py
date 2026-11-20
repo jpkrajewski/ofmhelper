@@ -1,14 +1,3 @@
-"""kie.ai faked at the wire (OFM_FAKE_EXTERNALS, tests): the file-stream
-upload, createTask, recordInfo and the result download, answered the way
-kie.ai does (HTTP 200, the outcome in the body's `code`), so the real
-`KieAIClient` and provider run unchanged.
-
-Only `FAKE_KEY` is accepted; any other key gets kie.ai's code 401 (the app
-shows "kie.ai: wrong API key"). A task reports "generating" for
-`polls_until_done` reads, then "success" with one result URL on the fake
-result host. Nothing is paid, nothing leaves the process.
-"""
-
 import itertools
 import json
 import threading
@@ -30,7 +19,6 @@ _DENIED = {"code": 401, "msg": "You do not have access permissions"}
 class FakeKie:
     def __init__(self, polls_until_done: int = 2) -> None:
         self.polls_until_done = polls_until_done
-        # task id -> {"model", "polls"}; createTask calls in order.
         self.tasks: dict[str, dict] = {}
         self.created: list[str] = []
         self._ids = itertools.count(1)

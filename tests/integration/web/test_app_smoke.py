@@ -1,10 +1,3 @@
-"""
-"Does the app actually start, and does every page load" -- as real pytest,
-not one-off verification scripts. Anyone (including future-me) can catch a
-broken route or a lifespan crash by just running `pytest`, and it stays
-checked on every future change instead of evaporating after one manual run.
-"""
-
 from html.parser import HTMLParser
 
 import pytest
@@ -15,8 +8,6 @@ from signin import sign_in
 from ofmhelpers.features.jobs import sweeps
 from ofmhelpers.web.main import app
 
-# "/" is the public ReachModels landing page (with the application form), not
-# an internal page -- see settings.web.public_paths.
 PROTECTED_PAGES = [
     "/home",
     "/generate",
@@ -32,7 +23,6 @@ PROTECTED_PAGES = [
 
 
 def _nav_paths(html: str) -> list[str]:
-    """The header's page links, in order."""
 
     class SiteNav(HTMLParser):
         inside = False
@@ -74,8 +64,6 @@ def test_removed_pages_are_gone(path):
 
 
 def test_app_starts_and_stops_cleanly():
-    """`with TestClient(...)` is what actually drives the ASGI lifespan
-    (startup/shutdown events) -- a bare TestClient(app) never runs it."""
     with TestClient(app) as client:
         r = client.get("/health")
         assert r.status_code == 200
@@ -83,9 +71,6 @@ def test_app_starts_and_stops_cleanly():
 
 
 def test_the_web_process_runs_no_sweep(monkeypatch):
-    """The sweeps are a process of their own (`ofmhelpers/sweeps.py`, the
-    `sweeps` compose service): started by the app as well, a second web
-    process would run every one of them twice."""
     started = []
 
     async def loop(sweep: sweeps.Sweep) -> None:
@@ -148,11 +133,6 @@ def test_va_password_also_logs_in():
 
 
 def test_generation_js_disables_submit_button_with_a_cooldown():
-    """Static check on the shipped JS -- there's no browser/JS runtime in
-    this test suite to actually click a button and watch a timer, so this
-    locks in that the cooldown logic (disable on submit, a 3s constant,
-    scheduled re-enable) is present and wired, guarding against it being
-    silently removed later. It does not verify real click timing."""
     client = TestClient(app)
     js = client.get("/static/js/generation.js").text
 

@@ -1,17 +1,9 @@
-"""Stitch several images into one side-by-side character sheet."""
-
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
 
 def combine_side_by_side(sources: list[Path], dest: Path) -> Path:
-    """Place `sources` left to right, in order, with no gap, and save the
-    result losslessly as PNG at `dest`.
-
-    Every panel is scaled to the tallest source's height (aspect ratio kept),
-    so the sharpest input is never downscaled to match a smaller one. EXIF
-    rotation is applied first, otherwise a phone photo lands sideways."""
     panels = []
     for src in sources:
         with Image.open(src) as img:

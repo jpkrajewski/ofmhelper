@@ -1,20 +1,3 @@
-"""Elyum faked at the wire (OFM_FAKE_EXTERNALS, tests): `POST /v1/files`,
-`POST /v1/generations` and `GET /v1/generations/{id}`, answered the way
-Elyum documents them (elyum.ai/open/docs: real HTTP statuses, the error
-envelope), plus the file host its output URLs point at.
-
-Only `FAKE_KEY` is accepted; any other key gets `401 auth`. A generation is
-queued/running for `polls_until_done` reads, then `succeeded` with one
-output: an mp4 for a video model of the catalog, else a png. A repeated
-`Idempotency-Key` returns the generation already made (no second one).
-`refuse_next` makes the next create answer that (HTTP status, code,
-message) instead (402 insufficient_balance, 429 concurrency ...),
-`fail_next` the next generation end `failed` with that (code, message),
-`lose_next` the next create be made but its answer time out;
-`created` records each (body, Idempotency-Key), `uploads` each uploaded
-file name.
-"""
-
 import itertools
 import json
 import re
@@ -63,7 +46,6 @@ class FakeElyum:
         self.created: list[tuple[dict[str, Any], str]] = []
         self.refuse_next: tuple[int, str, str] | None = None
         self.fail_next: tuple[str, str] | None = None
-        # The next create is made, then its answer never arrives (a timeout).
         self.lose_next = False
         self.uploads: list[str] = []
         self._ids = itertools.count(1)

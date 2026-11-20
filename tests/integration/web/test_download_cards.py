@@ -1,6 +1,3 @@
-"""/download-assets: every file of a download is its own card, reloaded as when
-it finishes on the page, and a card's Clone sends that card's video."""
-
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -32,7 +29,6 @@ def client(assets) -> TestClient:
 
 
 def _download(client, tmp_path: Path, *names: str, failed: str | None = None) -> str:
-    """A finished download_media job of those files, all from one link."""
     folder = tmp_path / "downloads"
     folder.mkdir(exist_ok=True)
     paths = []
@@ -89,8 +85,6 @@ def test_what_failed_shows_once(client, tmp_path):
 
 
 def test_a_failed_link_says_why_on_the_card_not_in_a_tooltip(client, tmp_path):
-    """Owner 2026-11-15: "1 link failed" with the reason in a tooltip nobody
-    hovers over. The link, short, and the reason are on the card."""
     reel = "https://www.instagram.com/reel/Dc_a7TBJZ1L/?utm_source=ig_web_copy_link"
     folder = tmp_path / "downloads"
     folder.mkdir()
@@ -133,7 +127,6 @@ def test_only_a_video_card_can_be_sent_to_clone(client, tmp_path):
 
 
 def test_the_owner_sends_a_vas_download_on_to_edit(client, tmp_path, assets):
-    # Owner 2026-11-17 on /download-assets: "where is my clone long and edit".
     va = sign_in(TestClient(app), "va@example.com", Role.VA)
     users.set_owner(va.id, client.user.id)
     folder = tmp_path / "downloads"

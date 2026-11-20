@@ -1,9 +1,3 @@
-"""Photo presets and the photo writer (`media/repurpose/photos`): every
-preset loads, a value that would fail a job is refused when the preset is
-loaded, a still is never asked for past the video's last frame (review
-2026-11-18: 1 seed in 6 failed so), and a set is made of different
-pictures carrying the phone's EXIF."""
-
 import json
 import random
 import subprocess
@@ -28,9 +22,6 @@ THREADS = json.loads(
 
 
 def _clip(path: Path, seconds: float, *, audio_s: float | None = None) -> Path:
-    """A moving test picture (each moment a different frame), its sound
-    `audio_s` long (longer than the picture: the container's duration is
-    then past the last frame)."""
     args = ["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi"]
     args += ["-i", f"testsrc2=size=180x320:rate=30:duration={seconds}"]
     if audio_s is not None:
@@ -40,7 +31,6 @@ def _clip(path: Path, seconds: float, *, audio_s: float | None = None) -> Path:
 
 
 def _preset(tmp_path: Path, **lens: object) -> str:
-    """The threads preset, small and quick: 4 pictures at 256 px."""
     raw = json.loads(json.dumps(THREADS))
     raw["pictures"] = 4
     raw["lens"].update({"short_side": 256, **lens})
@@ -89,15 +79,13 @@ def test_a_preset_is_a_name_or_a_path_and_an_unknown_one_names_the_known(tmp_pat
 
 @pytest.mark.parametrize("seed", ["a", "b", "c", "d", "e", "f"])
 def test_no_still_is_asked_for_past_the_last_frame(tmp_path, seed):
-    """Sound longer than the picture and a short clip: the moments come from
-    the frames, so the last slice's still is a real frame."""
     clip = _clip(tmp_path / "v.mp4", 1, audio_s=1.4)
     how = load_photo_preset("threads").stills
 
     stills = _Video.of(clip, 30).stills(30, how, random.Random(seed))  # noqa: S311 - not cryptography
 
-    assert len(stills) >= 25  # 29 usable frames over 30 slices
-    assert max(s.at for s in stills) < 29 / 30  # never the last frame
+    assert len(stills) >= 25
+    assert max(s.at for s in stills) < 29 / 30
 
 
 def test_a_set_is_different_pictures_with_the_phones_exif(tmp_path):

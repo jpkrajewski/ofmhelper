@@ -1,15 +1,3 @@
-"""chat_notifications: new subscribers and big sales, for the pop-ups
-
-Kept in the database, not Redis: a sale nobody was online for must still be there
-when someone signs in, and a platform repeating an event must not show it twice. New
-table only; nothing moves.
-
-Revision ID: a9b8c7d6e5f4
-Revises: b7a6c5d4e3f2
-Create Date: 2026-11-05 04:20:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

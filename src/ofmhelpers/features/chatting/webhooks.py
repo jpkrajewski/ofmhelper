@@ -1,16 +1,3 @@
-"""Chat platforms' webhooks feeding /chatting, whichever platform: a fan's message or a
-model's reply is stored the moment it happens, and a finished mass message, a new
-subscriber or a big sale becomes a pop-up. What a platform does differently is all in
-its `ChatSource`.
-
-The destination is made by itself on every server with a public address: a sweep
-makes one per owner and keeps its secret. An owner is whoever the platform ties a
-destination to: one model, or an agency covering all of its models. A platform can
-instead have one destination set up on its own site, covering every model with one
-secret (`ChatSource.shared_secret`): then there is nothing to make. Without a public
-HTTPS address (dev) there is none, and the sync does the work. A destination existing
-proves nothing, so a model counts as delivering only while its replies actually arrive."""
-
 import time
 from typing import Any
 lazy from collections.abc import Mapping
@@ -24,6 +11,7 @@ from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
 from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.sources import configured_sources
+from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.features.reports.mass import tell_mass
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import (
@@ -39,16 +27,12 @@ lazy from ofmhelpers.schemas.chatting import ChatModel
 logger = get_logger(__name__)
 
 _SHARED_DESTINATION = "shared"
-# A bulk send noticed by its size, not told of by the platform.
 _BULK_SEND = "bulk:"
-# A delivery not understood is named by at most this many keys / characters each.
 _KEYS_MAX = 12
 _NAME_MAX = 60
 
 
 def _public_base() -> str:
-    """`OFM_CHATTING_WEBHOOK_BASE_URL`, else this server if it is public HTTPS, else
-    nothing: platforms refuse anything else."""
     base = settings.chatting.webhook_base_url or settings.web.base_url
     return base.rstrip("/") if base.startswith("https://") else ""
 
@@ -63,21 +47,14 @@ def _alive_key(platform: ChatPlatform, username: str) -> str:
 
 
 def sync_done_key(platform: ChatPlatform) -> str:
-    """Set while the platform's full read is not due. Deleting it makes the next
-    sync round a full one."""
     return f"chatting:sync-done:{platform.value}"
 
 
 def mass_pending_key(platform: ChatPlatform) -> str:
-    """Set by a mass message whose answers only a full read can find. Its own key: one
-    arriving during a full round must make the next round full too."""
     return f"chatting:mass-pending:{platform.value}"
 
 
 def models_delivering(platform: ChatPlatform) -> set[str]:
-    """Models with a destination at this server's address and a reply delivered
-    within `webhook_quiet_s`. A dev database copied from production holds production's
-    destinations, which deliver elsewhere."""
     url = webhook_url(platform)
     if not url:
         return set()
@@ -95,8 +72,6 @@ def can_make_webhooks() -> bool:
 def _save_rows(
     source: ChatSource, models: list[ChatModel], made: CreatedSubscription
 ) -> None:
-    """One row per model the destination covers, so a delivery finds its model's
-    name; they share the secret."""
     for model in models:
         chats.save_webhook(
             source.platform,
@@ -116,9 +91,6 @@ def _ensure_owner(
     mine: dict[str, ChatWebhook],
     url: str,
 ) -> None:
-    """Leaves one working destination at `url` covering `models`. Another server may
-    be using the credentials, so only one at this very address is ever replaced: dev
-    and production cannot take each other's."""
     found = source.subscriptions(models[0])
     working = {
         s.id for s in found if s.url == url and set(source.events) <= set(s.events)
@@ -160,9 +132,6 @@ def _ensure_owner(
 
 
 def cover_models(source: ChatSource, models: list[ChatModel]) -> None:
-    """A destination set up on the platform's own site: nothing to make, only which
-    models its one secret speaks for, kept up by every sync round. Written only when
-    something changed."""
     secret = source.shared_secret()
     if not secret:
         return
@@ -179,8 +148,6 @@ def cover_models(source: ChatSource, models: list[ChatModel]) -> None:
 
 
 def ensure_destinations() -> None:
-    """One sweep round: every model of every platform is covered. One owner failing
-    does not stop the others, and is tried again next round."""
     for source in configured_sources():
         url = webhook_url(source.platform)
         if source.shared_secret():
@@ -200,8 +167,6 @@ def ensure_destinations() -> None:
 
 
 def note_bulk_sends(source: ChatSource) -> None:
-    """A bulk send with no event of its own becomes a mass message pop-up, the one
-    time, however long it takes to go out."""
     if not source.bulk_sends_unflagged:
         return
     platform = source.platform
@@ -228,7 +193,6 @@ def note_bulk_sends(source: ChatSource) -> None:
 
 
 def _already_noticed(source: ChatSource, username: str) -> bool:
-    """A platform's mass message event for a bulk send already shown by its size."""
     if not source.bulk_sends_unflagged:
         return False
     since = time.time() - settings.chatting.mass_gap_s
@@ -266,7 +230,6 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
     elif delivery.kind == DeliveryKind.SUBSCRIBED:
         chats.save_notification(platform, delivery, username)
     elif delivery.kind == DeliveryKind.SALE:
-        # Every sale for the daily report; a big one also for the pop-up.
         chats.save_sale(platform, delivery, username)
         if (delivery.amount_cents or 0) > settings.chatting.sale_notify_cents:
             chats.save_notification(platform, delivery, username)
@@ -277,20 +240,15 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
 
 
 def _shows_replies(delivery: ChatDelivery) -> bool:
-    """A model's own reply arriving is what lets webhooks stand in for the sync: a
-    platform may be sending other events and not these."""
     return delivery.read is not None and any(
         not event.from_fan for event in delivery.read.events
     )
 
 
-class _Top(RootModel[dict[str, Any]]):
-    """A delivery's top level, read only to name it in a log line."""
+class _Top(RootModel[dict[str, Any]]): ...
 
 
 def _named(raw: bytes) -> str:
-    """What a delivery not understood was: its `type` and top-level keys, names
-    only (the values may be a fan's words)."""
     try:
         top = _Top.model_validate_json(raw).root
     except ValidationError:  # silent: told as "not a JSON object"
@@ -302,7 +260,6 @@ def _named(raw: bytes) -> str:
 
 
 def _failed_fields(exc: ValidationError) -> str:
-    """Where and how it failed (`data.fan: missing`), never the input."""
     errors = exc.errors(include_input=False, include_url=False, include_context=False)
     return "; ".join(
         f"{'.'.join(str(part) for part in e['loc']) or '-'}: {e['type']}"
@@ -311,11 +268,6 @@ def _failed_fields(exc: ValidationError) -> str:
 
 
 def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
-    """One delivery. False when no destination signed it: nothing is believed. An
-    event kept once is kept again harmlessly: platforms repeat until answered, and an
-    answer means it is stored. A signed one that cannot be understood is logged and
-    answered too: retries would not change it, and the sync catches the message. A
-    delivery for a model this signature does not cover changes nothing."""
     if source.answers_unsigned(raw, headers):
         return True
     platform = source.platform
@@ -353,7 +305,6 @@ def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
                     settings.chatting.webhook_quiet_s,
                 )
     except ValidationError as exc:  # silent: may quote a fan's words
-        # No exc_info: the error text quotes the input, which may be a fan's words.
         logger.warning(
             "%s delivery not understood: %d fields (%s) of %s",
             platform.value,
@@ -362,6 +313,6 @@ def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
             _named(raw),
         )
     except DataError:  # silent: the database's text may quote a fan's words
-        # Retries would not change it, and a failing address gets disabled.
         logger.warning("%s delivery not storable", platform.value)
+    notifications.changed()
     return True

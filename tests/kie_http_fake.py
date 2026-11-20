@@ -1,8 +1,3 @@
-"""Patch kie.ai's HTTP at the wire: every client call goes through one
-`requests.Session.request` (uploads and the task queue) plus `requests.head`
-(the upload cache's liveness check). `mreq.post` is that session call, named
-for what the upload tests send through it."""
-
 from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest import mock

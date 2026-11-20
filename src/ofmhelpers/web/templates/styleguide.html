@@ -130,6 +130,13 @@
     <script src="{{ static_url('js/tour.js') }}" defer></script>
     {% endcall %}
 
+    {% call ui.card("Notifications") %}
+    {{ ui.notifications_menu([
+        {"title": "@model_a", "text": "Chats unanswered (3)", "url": "#", "kind": "warn"},
+        {"title": "@ann.ig", "text": "Threads pictures ready: VID_1.mp4", "url": "#", "kind": "info"},
+    ]) }}
+    {% endcall %}
+
     {% call ui.card("Time zone") %}
     {{ ui.clock_now(time_zones[0]) }}
     {{ ui.time_zone_menu(time_zones, time_zones[0]) }}

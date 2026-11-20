@@ -1,8 +1,3 @@
-"""Gemini through `ofmhelpers.integrations.llm` with Google's API faked at the wire
-(llm/gemini/fake.py under the real SDK): media inline or uploaded, what is
-retried and how long it waits, and every failure as the error the caller
-gets -- never a raw SDK exception."""
-
 import importlib
 import time
 from pathlib import Path
@@ -35,9 +30,6 @@ class Verdict(BaseModel):
 
 
 class _Clock:
-    """`time` as the llm modules see it: a sleep is noted and moves the
-    clock on, never waited."""
-
     def __init__(self) -> None:
         self.slept: list[float] = []
 
@@ -50,13 +42,7 @@ class _Clock:
 
 @pytest.fixture
 def clock(fake_externals, monkeypatch) -> _Clock:
-    """Gemini on its fake, on a clock that never waits (only the llm
-    modules': ffmpeg's own waits are real)."""
     monkeypatch.setenv("GEMINI_API_KEY", FAKE_KEY)
-    # Google's client is loaded on first use (a lazy import, 0.63 s on an
-    # idle machine, 2026-11-14): inside the first ask of a test process it
-    # ate over a second of the deadline these tests measure to the second
-    # (298.777 of 300, 28.951 of 30 in full parallel runs). Loaded here.
     importlib.import_module("google.genai.errors")
     importlib.import_module("google.genai.types")
     found = _Clock()
@@ -67,7 +53,6 @@ def clock(fake_externals, monkeypatch) -> _Clock:
 
 @pytest.fixture
 def waits(clock) -> list[float]:
-    """The seconds every retry and file poll would have slept."""
     return clock.slept
 
 
@@ -81,7 +66,6 @@ def media(tmp_path) -> tuple[Path, Path]:
 
 
 def _media(body: dict, kind: str) -> list[dict]:
-    """The request's `inlineData` or `fileData` parts' bodies."""
     snake = {"inlineData": "inline_data", "fileData": "file_data"}[kind]
     return [
         found
@@ -110,11 +94,9 @@ def test_small_media_goes_inside_the_request_with_the_schema(waits, media):
     config = body["generationConfig"]
     assert config["responseMimeType"] == "application/json"
     assert config["responseJsonSchema"]["required"] == ["ok", "problems"]
-    # Deprecated for Gemini 3.x (ignored, a 400 in later generations).
     assert "temperature" not in config
     assert body["systemInstruction"]["parts"][0]["text"] == "You check videos."
     assert waits == []
-    # OFM_LLM_TIMEOUT_S, less the moment reading the media took.
     assert fake_gemini().timeouts == [pytest.approx(300, abs=1)]
 
 
@@ -147,9 +129,7 @@ def test_an_answer_asked_again_counts_the_tokens_of_both(waits):
 
 
 def test_an_outage_stops_at_the_deadline_not_after_every_retry(clock):
-    """A check has one deadline: no retry waits past it, and every request
-    gets only the time left (the configured 300 s otherwise)."""
-    for _ in range(5):  # down for every try `OFM_LLM_RETRIES` 4 allows
+    for _ in range(5):
         fake_gemini().fail_next(503, "UNAVAILABLE", "The model is overloaded")
     deadline = clock.monotonic() + 30
 
@@ -157,7 +137,6 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(clock):
         get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict, deadline=deadline)
 
     assert str(err.value) == "Gemini took too long"
-    # 5 s and 10 s fit; the 3rd try's 20 s wait would end past the deadline.
     assert clock.slept == [5.0, 10.0]
     assert fake_gemini().timeouts == [
         pytest.approx(30, abs=1),
@@ -187,7 +166,7 @@ def test_a_big_file_is_uploaded_waited_on_and_deleted_after(waits, media, monkey
     assert _media(body, "inlineData") == []
     [part] = _media(body, "fileData")
     assert _mime(part) == "video/mp4"
-    assert waits == [2.0, 2.0]  # PROCESSING twice, then ACTIVE
+    assert waits == [2.0, 2.0]
     assert fake_gemini().files == {}
     assert fake_gemini().deleted == ["files/fake-1"]
 
@@ -198,7 +177,7 @@ def test_a_file_google_cannot_process_is_an_input_error(waits, media, monkeypatc
     with pytest.raises(LLMInputError, match="Gemini could not process clip.mp4"):
         get_llm(LLMUse.VIDEO).ask(Prompt.of("Check", media[1]), Verdict)
     assert fake_gemini().requests == []
-    assert fake_gemini().files == {}  # deleted even so
+    assert fake_gemini().files == {}
 
 
 def test_a_rate_limit_waits_googles_hint_then_answers(waits):
@@ -208,12 +187,11 @@ def test_a_rate_limit_waits_googles_hint_then_answers(waits):
     found = get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
 
     assert found.ok is True
-    assert waits == [7.0, 10.0]  # Google's hint, then 5 s x 2 for the 2nd try
+    assert waits == [7.0, 10.0]
     assert len(fake_gemini().requests) == 3
 
 
 def test_a_hint_longer_than_the_longest_wait_fails_at_once(waits, monkeypatch):
-    """A daily quota used up says "retry in hours": nobody waits for that."""
     monkeypatch.setenv("OFM_LLM_RETRY_MAX_WAIT_S", "30")
     fake_gemini().fail_next(429, "RESOURCE_EXHAUSTED", "Daily quota", 3600)
     with pytest.raises(LLMUnavailableError, match="rate limited or out of free quota"):
@@ -262,7 +240,7 @@ def test_an_answer_in_another_shape_twice_is_an_output_error(waits):
     fake_gemini().answer_next({"verdict": "fine"})
     with pytest.raises(LLMOutputError, match="Gemini answered in the wrong shape"):
         get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
-    assert len(fake_gemini().requests) == 2  # asked once more first
+    assert len(fake_gemini().requests) == 2
 
 
 def test_media_a_provider_does_not_read_is_refused_before_sending(waits, media):

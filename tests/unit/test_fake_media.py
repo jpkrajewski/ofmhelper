@@ -1,7 +1,3 @@
-"""utils/fake_media.py: the fakes' mp4, made once even when many threads ask
-for it first (a reel download pool did: two threads raced on one temp file,
-`FileNotFoundError` on the rename)."""
-
 from concurrent.futures import ThreadPoolExecutor
 
 from ofmhelpers.media import fake_media

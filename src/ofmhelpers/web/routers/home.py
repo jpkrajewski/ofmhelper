@@ -1,8 +1,3 @@
-"""/home (where a signed-in person lands: a card per page they may open,
-from `schemas.nav.NAV`; admins also get the Server section, which fetches
-/home/server once the page is open) and /health (the Docker and uptime
-probe, public)."""
-
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
@@ -29,8 +24,6 @@ def home(request: Request) -> Response:
     dependencies=[Access(Area.HOME), Can(Action.SERVER_STATUS)],
 )
 def server(request: Request) -> Response:
-    """The Server section's body: CPU, RAM, disk, uploads, database,
-    Redis, queues, running jobs (features/server)."""
     return render(
         request, "_server_status.html", server=server_status(), duration=duration
     )

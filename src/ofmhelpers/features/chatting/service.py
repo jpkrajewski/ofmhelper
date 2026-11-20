@@ -1,5 +1,3 @@
-"""What a model's /chatting page shows, from the stored history."""
-
 import time
 from datetime import datetime
 from statistics import mean
@@ -37,14 +35,10 @@ def _when(epoch: float, zone: str) -> str:
 
 
 def _waits(messages: list[FanMessage]) -> list[FanMessage]:
-    """One entry per wait: a fan's messages until the model's next one share that
-    reply, and the wait runs from the first of them. `messages` come newest
-    first, so the last one kept per wait is its first."""
     return list({(m.channel_id, m.replied_at): m for m in messages}.values())
 
 
 def _urgent_first(wait: FanMessage) -> tuple[bool, float]:
-    """Fans still waiting on top, longest wait first; then answered, newest first."""
     if wait.replied_at is None:
         return (False, wait.sent_at)
     return (True, -wait.sent_at)
@@ -61,9 +55,6 @@ def _late(wait: FanMessage, now: float, zone: str) -> LateWait:
 
 
 def model_report(platform: ChatPlatform, username: str, zone: str) -> ModelReport:
-    """The look-back's average response time, and each wait past the limit,
-    answered or not, its times in `zone`. A fan still waiting stays, however long
-    ago they wrote; one answered counts while the answer is recent."""
     now = time.time()
     limit_s = settings.chatting.unanswered_after_s
     lookback_s = settings.chatting.lookback_s
@@ -82,16 +73,12 @@ def model_report(platform: ChatPlatform, username: str, zone: str) -> ModelRepor
 def open_model(
     user_id: int, platform: ChatPlatform, username: str, zone: str
 ) -> ModelReport:
-    """A model's page. Opening it makes them one of this person's recent ones,
-    unless that name is no model there: a typo is not offered back."""
     if username in platform_models(platform):
         remember(user_id, platform, username)
     return model_report(platform, username, zone)
 
 
 def platform_models(platform: ChatPlatform) -> list[str]:
-    """Every model with chats read, anyone just connected, and every creator the
-    platform's keys reach, all before their first read."""
     connected = {a.username for a in chats.accounts(platform) if not a.is_agency}
     reached = set(reached_names(platform))
     return sorted(set(chats.models(platform)) | connected | reached)

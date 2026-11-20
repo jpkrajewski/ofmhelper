@@ -1,9 +1,3 @@
-"""Dev runs on a copy of the prod database (scripts/prod_to_dev.sh) and signs
-in with the same Google client: background work that would reach prod's
-people is production-only unless dev's .env asks for it (security audit
-2026-11-18). The suite turns each on in tests/conftest.py; here they are off
-as a dev box has them."""
-
 from ofmhelpers.config import settings
 from ofmhelpers.features.jobs import sweeps
 
@@ -14,7 +8,6 @@ def _drive_sweep():
 
 
 def test_the_drive_sweep_runs_on_production_only_unless_asked(monkeypatch):
-    # Google sign-in set up (fakes are refused in production).
     monkeypatch.setattr(sweeps.drive_folders, "enabled", lambda: True)
     monkeypatch.delenv("OFM_DRIVE_SWEEP")
 

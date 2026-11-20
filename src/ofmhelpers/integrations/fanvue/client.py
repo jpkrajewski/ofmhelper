@@ -1,8 +1,3 @@
-"""Fanvue's public API, the read calls this app makes plus webhook destinations.
-Through `integrations.outbound`. Nothing here can message a fan or mark a chat read: reading
-messages defaults to marking them read on Fanvue, so `markAsRead=false` goes on every
-call."""
-
 import time
 from http import HTTPStatus
 from typing import Any
@@ -37,9 +32,6 @@ logger = get_logger(__name__)
 
 
 class FanvueClient:
-    """One connected account. `token` gives a live access token each time it is
-    asked, so a long round outlives the short-lived one it started with."""
-
     def __init__(self, token: Callable[[], str]) -> None:
         self._token = token
         self._session = outbound.mount(requests.Session())
@@ -49,7 +41,6 @@ class FanvueClient:
         return _parsed(FanvueUser, self._get("users/me"))
 
     def managed_creators(self) -> Iterator[ChatUser]:
-        """The creators an agency account's seat is assigned to."""
         cursor: str | None = None
         while True:
             page = _parsed(
@@ -62,8 +53,6 @@ class FanvueClient:
             cursor = page.next_cursor
 
     def chats(self, creator_uuid: str | None) -> Iterator[FanvueChat]:
-        """Chats, latest activity first; `creator_uuid` for an agency acting for a
-        creator. Pages are fetched as they are consumed."""
         path = f"creators/{creator_uuid}/chats" if creator_uuid else "chats"
         cursor: str | None = None
         while True:
@@ -85,8 +74,6 @@ class FanvueClient:
         fan_uuid: str,
         before: DateFilter | None = None,
     ) -> MessagesPage:
-        """A chat's messages newest first, mass messages that reached this fan
-        included, never marking them read."""
         prefix = f"creators/{creator_uuid}/chats" if creator_uuid else "chats"
         return _parsed(
             MessagesPage,
@@ -100,12 +87,9 @@ class FanvueClient:
         )
 
     def subscriptions(self) -> list[SubscriptionItem]:
-        """The webhook destinations made for this account."""
         return _parsed(SubscriptionsPage, self._get("webhooks/subscriptions")).data
 
     def subscribe(self, url: str, events: list[str]) -> CreatedSubscriptionReply:
-        """A new destination. Fanvue checks the address first with an unsigned call,
-        and the signing secret comes only in this answer."""
         return _parsed(
             CreatedSubscriptionReply,
             self._change(
@@ -117,7 +101,6 @@ class FanvueClient:
         self._change("DELETE", f"webhooks/subscriptions/{subscription_id}")
 
     def _change(self, method: str, path: str, **kwargs: Any) -> Any:
-        """Not retried: it may have worked."""
         try:
             r = self._session.request(
                 method,
@@ -135,7 +118,6 @@ class FanvueClient:
         return {"Authorization": f"Bearer {self._token()}"}
 
     def _get(self, path: str, **params: Any) -> Any:
-        """One read, tried again on a dropped connection, a 429 or a 5xx."""
         for attempt in range(1, settings.fanvue.tries):
             try:
                 r = self._request(path, params)
@@ -168,8 +150,6 @@ class FanvueClient:
 
 
 def _parsed[T: BaseModel](model: type[T], reply: Any) -> T:
-    """`reply` as `model`, or a `FanvueError`, so a caller has one failure to
-    handle. The fields are named, never their values: they may be a fan's words."""
     try:
         return model.model_validate(reply)
     except ValidationError as exc:
@@ -178,8 +158,6 @@ def _parsed[T: BaseModel](model: type[T], reply: Any) -> T:
 
 
 def _chat(raw: dict[str, Any]) -> FanvueChat | None:
-    """One chat of a page; None (logged) when it cannot be read, so it does not
-    cost the rest of the page."""
     try:
         return FanvueChat.model_validate(raw)
     except ValidationError as exc:  # silent: the error quotes a chat, a fan's words
@@ -195,7 +173,6 @@ def _retried(r: requests.Response) -> bool:
 
 
 def _retry_wait(r: requests.Response) -> float:
-    """What a 429 or a database-timeout 503 asks for (capped), else the plain pause."""
     try:
         return min(float(r.headers["Retry-After"]), settings.fanvue.max_wait_s)
     except KeyError, ValueError:  # silent: no Retry-After number: the plain pause
@@ -203,7 +180,6 @@ def _retry_wait(r: requests.Response) -> float:
 
 
 def _ok(r: requests.Response) -> Any:
-    """The answer's JSON, or the matching error."""
     if r.ok:
         try:
             return r.json() if r.content else None

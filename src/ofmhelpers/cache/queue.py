@@ -1,25 +1,3 @@
-"""
-The job queues: first in, first out, on RQ. A route does
-`JobQueue(name=QueueName.MEDIA).put(run_job, job_id, fn, kwargs)` (`enqueue(...)` for
-the default queue) and returns at once; a worker process takes the job at the
-front of the line and writes its status to Postgres (db/stores/jobs.py), which
-the API reads back.
-
-Which queues exist, how many worker processes each has and their priority is
-configuration (`config/settings.py`: `QueueName`, `InfraSettings.queues`); one
-process is one job at a time. A module moves its work onto a queue by calling its
-`put`.
-
-Logfire: every `put` logs the queue, the function and how many are ahead of it;
-every run is the worker's `rq {func}` span with its queue and how long it waited
-(worker.py); `rq_job_id` ties the two together. Never a job's arguments: they
-carry API keys.
-
-It lives beside `redis.py` because that is what it is built on -- the queues are
-the durable half of what this app keeps in Redis, the caches are the throwaway
-half.
-"""
-
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 lazy from collections.abc import Callable
@@ -38,12 +16,6 @@ logger = get_logger(__name__)
 
 
 def get_queue(name: QueueName = QueueName.DEFAULT) -> Queue:
-    """A Queue bound to the shared Redis connection, with the generous default
-    job timeout our long-polling generation jobs need (see settings).
-
-    is_async comes from config: prod hands jobs to the worker; the test suite
-    forces synchronous execution so enqueue() runs the job inline, matching the
-    old BackgroundTasks behavior TestClient relied on."""
     return Queue(
         name.value,
         connection=get_redis(),
@@ -53,8 +25,6 @@ def get_queue(name: QueueName = QueueName.DEFAULT) -> Queue:
 
 
 class QueueJob(BaseModel):
-    """A job a worker took off a queue: what its span records."""
-
     rq_job_id: str
     func: str
     queue: QueueName
@@ -63,8 +33,6 @@ class QueueJob(BaseModel):
 
     @classmethod
     def taken(cls, job: Job, queue: Queue) -> Self:
-        """`func` is the description `JobQueue.put` gave it, and `enqueued_at`
-        was set by enqueuing it (RQ types it optional)."""
         waited = datetime.now(UTC) - cast("datetime", job.enqueued_at)
         return cls(
             rq_job_id=job.id,
@@ -75,18 +43,13 @@ class QueueJob(BaseModel):
         )
 
 
-# A `put_once` job that waits or runs: its key is taken.
 _IN_LINE = frozenset(
     {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED}
 )
-# A failed one is kept an hour for a look, then its key is free anyway.
 _ONCE_FAILURE_TTL_S = 3600
 
 
 class Line(BaseModel, frozen=True):
-    """A queue's line: the app job ids waiting, first in line first, and how
-    many jobs are being run ahead of them all."""
-
     running: int = 0
     waiting: list[str] = []
 
@@ -94,16 +57,11 @@ class Line(BaseModel, frozen=True):
         return job_id in self.waiting
 
     def ahead(self, job_id: str) -> int | None:
-        """How many jobs are ahead of it, the ones being run included; None
-        when it does not wait here. Queued twice: its last place."""
         places = [i for i, waiting in enumerate(self.waiting) if waiting == job_id]
         return self.running + places[-1] if places else None
 
 
 class JobQueue(BaseModel, frozen=True):
-    """One first-in first-out line of background work: `put` joins the back,
-    the queue's worker processes take from the front."""
-
     name: QueueName
 
     def put(
@@ -116,26 +74,10 @@ class JobQueue(BaseModel, frozen=True):
         at_front: bool = False,
         **kwargs: Any,
     ) -> Any:
-        """`fn(*args, **kwargs)` to the back of the line. `job_timeout`: its time
-        limit once started, when it may run longer than the default (a long
-        /clone video, made in pieces); waiting in line does not count. `retry`:
-        RQ tries it again after it raised (the worker pool runs RQ's scheduler,
-        so the waits hold). `failure_ttl`: how long RQ keeps it once it failed
-        for good (RQ's default: a year). `at_front`: it joins the front of the
-        line, not the back -- work someone watches a spinner for, on a queue
-        that also carries work nobody waits on (an /edit cut ahead of the
-        pages' light copies): it waits at most for the jobs being run.
-
-        In synchronous mode (settings.infra.rq_async is False -- the test suite)
-        it is called directly, in-process: no RQ, no serialization, so tests can
-        still monkeypatch a task fn with a lambda."""
         if not settings.infra.rq_async:
             return fn(*args, **kwargs)
         queue = get_queue(self.name)
         ahead = queue.started_job_registry.count + (0 if at_front else queue.count)
-        # RQ's default description -- what the worker logs for every job it
-        # starts -- is the call with its arguments, and those carry the kie.ai
-        # API key a job runs with. The function name is all the log needs.
         rq_job = queue.enqueue(
             fn,
             *args,
@@ -156,10 +98,6 @@ class JobQueue(BaseModel, frozen=True):
         return rq_job
 
     def put_once(self, key: str, fn: Callable[[], Any]) -> bool:
-        """`fn()` to the back of the line as the one job `key` (letters,
-        digits, dashes): nothing while the `key` put before still waits or
-        runs, so repeated work (a sweep's round) never piles up behind
-        itself. True when put. Synchronous mode: called directly."""
         if not settings.infra.rq_async:
             fn()
             return True
@@ -177,9 +115,6 @@ class JobQueue(BaseModel, frozen=True):
         return True
 
     def drop(self, job_id: str) -> bool:
-        """Takes app job `job_id` (`run_job`'s first argument) out of the line
-        if it still waits; a started one runs on. False when it was not
-        waiting or it cannot tell (the synchronous test mode, Redis down)."""
         if not settings.infra.rq_async:
             return False
         try:
@@ -188,8 +123,6 @@ class JobQueue(BaseModel, frozen=True):
             for rq_job in waiting:
                 if rq_job is None or not rq_job.args or str(rq_job.args[0]) != job_id:
                     continue
-                # Off the line first (a worker taking it meanwhile wins: 0),
-                # then its record, else it stays in Redis for good.
                 if not queue.remove(rq_job):
                     return False
                 rq_job.delete(remove_from_queue=False)
@@ -201,9 +134,6 @@ class JobQueue(BaseModel, frozen=True):
         return False
 
     def line(self) -> Line:
-        """Who waits, first in line first, by app job id (`run_job`'s first
-        argument), and how many jobs are being run. Empty when nothing waits
-        or it cannot tell (the synchronous test mode, Redis down)."""
         if not settings.infra.rq_async:
             return Line()
         try:
@@ -218,19 +148,6 @@ class JobQueue(BaseModel, frozen=True):
 
 
 def active_job_ids() -> set[str] | None:
-    """The app job ids (`run_job`'s first argument) queued on a job queue
-    (`JOB_QUEUES`), being taken off one by a worker, or being run by a live
-    worker; None when it cannot tell (the synchronous test mode, Redis down).
-    A worker killed mid-job (a deploy) stops counting once its heartbeat key
-    expires.
-
-    Read in the order a job moves, so one queued or starting is never
-    missed: each queue's list, then its intermediate list (a worker's
-    dequeue BLMOVEs the job there; the worker registers the job's execution
-    (rq 3.0 `prepare_execution`, read back by `get_current_job_id`) before
-    its work horse takes the job off that list), then the workers. A job a
-    worker died holding in the intermediate list counts until rq's own
-    cleanup fails it (about a minute)."""
     if not settings.infra.rq_async:
         return None
     try:
@@ -252,14 +169,11 @@ def active_job_ids() -> set[str] | None:
 
 
 class QueueLoad(BaseModel):
-    """One job queue right now (/home's Server section)."""
-
     name: str
     workers: int
     busy: int
     waiting: int
     failed: int
-    # How long the first job in line has waited (None: nobody waits).
     oldest_wait_s: float | None
 
 
@@ -274,9 +188,6 @@ def _waited_s(queue: Queue) -> float | None:
 
 
 def queue_loads() -> list[QueueLoad]:
-    """Every queue (`QueueName`): its worker processes (busy = running a
-    job), how many wait, how many failed (rq keeps them a while), how long
-    the first in line has waited. Empty when Redis cannot be read."""
     try:
         workers = Worker.all(connection=get_redis())
         loads = []
@@ -300,16 +211,11 @@ def queue_loads() -> list[QueueLoad]:
 
 
 class RunningJob(BaseModel, frozen=True):
-    """The RQ job this process runs now: the queue it came from and its time
-    limit, so it can be put back in the same line (`runner.Requeued`)."""
-
     queue: QueueName
     timeout: int | None = None
 
 
 def running_job() -> RunningJob | None:
-    """The RQ job being run here; None outside a worker (the web app, the
-    synchronous test mode)."""
     job = get_current_job()
     if job is None:
         return None
@@ -318,7 +224,6 @@ def running_job() -> RunningJob | None:
 
 
 def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
-    """`put` on the default queue."""
     return JobQueue(name=QueueName.DEFAULT).put(
         fn, *args, job_timeout=job_timeout, **kwargs
     )
@@ -332,7 +237,6 @@ def enqueue_to(
     at_front: bool = False,
     **kwargs,
 ):
-    """`put` on `queue`."""
     return JobQueue(name=queue).put(
         fn, *args, job_timeout=job_timeout, at_front=at_front, **kwargs
     )

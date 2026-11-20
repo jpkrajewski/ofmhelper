@@ -1,8 +1,3 @@
-"""What /clone-long does behind its routes
-(web/routers/generation/clone_long.py): what its form shows, a run's card,
-and a submit measured, priced, checked piece by piece and only then queued --
-the stored price is the server's, never the browser's."""
-
 import subprocess
 from pathlib import Path
 from typing import Any, Protocol
@@ -38,8 +33,6 @@ DEFAULT_RESOLUTION = "720P"
 
 
 class FormView(BaseModel):
-    """The form's part of the page; each field is a name the template reads."""
-
     prefill_video: list[str]
     providers: list[ProviderChoice]
     selected_provider: str
@@ -52,8 +45,6 @@ class FormView(BaseModel):
 
 
 def form_view(actor: str, assets_root: Path, videos: list[str]) -> FormView:
-    """`videos`: the `?video=` paths another page hands over. One video: a
-    download sends its first (clone-long clones one video)."""
     return FormView(
         prefill_video=keep_videos(videos, assets_root)[:1],
         providers=provider_choices(list(TARGETS)),
@@ -68,7 +59,6 @@ def form_view(actor: str, assets_root: Path, videos: list[str]) -> FormView:
 
 
 def card(job: Job) -> TaskCard:
-    """A run as the shared gallery card, labelled with its price."""
     usd = job.params.get("usd")
     pieces = job.params.get("pieces")
     noun = "piece" if pieces == 1 else "pieces"
@@ -89,8 +79,6 @@ def cards(jobs: list[Job]) -> list[TaskCard]:
 
 
 class Submitted(Protocol):
-    """The /clone-long form as its route read it (`LongCloneForm`)."""
-
     provider: str
     api_key: str
     prompt: str
@@ -102,8 +90,6 @@ class Submitted(Protocol):
 
 
 class Measured(BaseModel):
-    """A video's length and shape as it plays."""
-
     seconds: float
     shape: Shape
 
@@ -116,7 +102,6 @@ def _one(paths: list[str], kind: str, label: str) -> str:
 
 
 def _measure(path: str) -> Measured:
-    """Refused when unreadable or over the longest video taken."""
     tools = VideoTools(settings.web.ffmpeg_timeout_s)
     try:
         found = Measured(
@@ -139,8 +124,6 @@ def _measure(path: str) -> Measured:
 
 
 def _require_choices(form: Submitted, owner_id: int) -> str:
-    """The form's picks checked; the key the run goes out on (`owner_id`'s
-    for the target's model, `Keys.for_run`)."""
     if form.provider not in TARGETS:
         msg = "That provider cannot clone"
         raise RefusedError(msg)
@@ -157,8 +140,6 @@ def _require_choices(form: Submitted, owner_id: int) -> str:
 
 
 def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
-    """One run queued: its job id. The key goes to the worker only, never into the params
-    its page shows."""
     api_key = _require_choices(form, owner_id)
     image = _one(
         build_ordered_paths(

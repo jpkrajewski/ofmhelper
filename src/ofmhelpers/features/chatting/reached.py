@@ -1,9 +1,3 @@
-"""The models a platform's keys reach, as the last sync round found them, so
-/chatting lists a creator before their first chat is read (one just linked to
-the agency: owner 2026-11-16, "it should just sync when there is new creator in
-agency"). Redis, like recent.py: a page list every round writes again; lost, a
-model hides only until the next round, a minute later."""
-
 from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.cache import get_text, set_text
@@ -28,7 +22,6 @@ def remember_reached(platform: ChatPlatform, usernames: list[str]) -> None:
 
 
 def reached_names(platform: ChatPlatform) -> list[str]:
-    """Empty when no round ran lately or Redis is unreachable."""
     raw = get_text(_key(platform))
     if raw is None:
         return []

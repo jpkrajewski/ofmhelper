@@ -1,11 +1,3 @@
-"""/accounts "Assign phone": an account added on /accounts has no phone, so
-no Drive folder. Its row links to /phones in pick mode (`?assign=<id>`); a
-click on a phone (`POST /phones/{id}/accounts`) saves it as that phone's
-login, and its Drive folder is made at once. A phone that already has an
-account of that service refuses until the page sends `replace`; the old one
-then leaves the phone as Remove login does. Instagram and Drive are the
-fakes (OFM_FAKE_EXTERNALS); queued work runs inline."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
@@ -24,8 +16,6 @@ ROOT = "agency-root-folder"
 
 @pytest.fixture
 def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
-    """The fake Drive with the agency's Google Drive connected (as
-    test_drive.py's)."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
@@ -49,7 +39,6 @@ def _phone(label: str) -> int:
 
 
 def _account(client: TestClient, handle: str) -> int:
-    """Added on /accounts: tracked, on no phone."""
     r = client.post("/accounts/add", json={"platform": "instagram", "handles": handle})
     assert r.status_code == 200, r.text
     return next(a.id for a in list_accounts() if a.handle == handle)
@@ -114,8 +103,6 @@ def test_a_phone_that_has_an_account_refuses_until_replace(client, drive):
 def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
     client, monkeypatch
 ):
-    # Prod job drive_sync 9e928539 (2026-11-15): the sync was queued with the
-    # new login, before the old one was deleted, read it and failed on its FK.
     phone = _phone("Phone 07")
     old = _account(client, "sheep_love33")
     assert _assign(client, phone, old).status_code == 201

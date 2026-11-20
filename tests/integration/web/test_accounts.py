@@ -1,7 +1,3 @@
-"""/accounts: tracked social accounts with creator, notes, followers, growth
-and views; scans in the background (first on add, then every 6 h), each
-batch rotating through the platform's proxies."""
-
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -63,8 +59,6 @@ def _no_retry_pause(monkeypatch):
 
 @pytest.fixture
 def client():
-    """An admin (sees the agency's accounts, which `track` makes):
-    ownership is test_ownership.py's."""
     c = TestClient(app)
     sign_in_agency(c)
     return c
@@ -90,8 +84,6 @@ def _stats(handle: str, followers: int = 1000, views: int = 500) -> AccountStats
 
 @pytest.fixture
 def fetches(monkeypatch):
-    """Every Instagram fetch finds `_stats(handle)`; the (handle, proxy)
-    pairs fetched, in order. Enqueued jobs run inline in the test suite."""
     seen: list[tuple[str, str | None]] = []
 
     def fake_fetch(_self, handle, proxy, cookies=None):
@@ -107,7 +99,6 @@ def _id(handle: str) -> int:
 
 
 def _snapshot(handle: str, followers: int, age_s: float) -> None:
-    """A snapshot of `handle` taken `age_s` ago."""
     with session_scope() as s:
         s.add(
             AccountSnapshotRow(
@@ -117,9 +108,6 @@ def _snapshot(handle: str, followers: int, age_s: float) -> None:
                 metrics={"followers": followers},
             )
         )
-
-
-# --- page -------------------------------------------------------------------
 
 
 def test_page_is_in_the_nav(client):
@@ -147,12 +135,10 @@ def test_add_tracks_and_scans(client, fetches):
     assert yuki.status == "active"
     assert yuki.followers == 1000
     assert yuki.views(7).views == 500
-    # Nothing was posted in the 7 days before: a confirmed 0, no percentage.
     assert yuki.views(7).previous == 0
     assert yuki.views(7).pct is None
     assert yuki.views(30).views == 500
     assert yuki.posts_in(7) == 1
-    # One sync is no baseline: no growth yet (a dash), not "+0".
     assert yuki.growth(7) is None
     assert list_creators() == ["Yuki K"]
 
@@ -177,8 +163,6 @@ def test_sync_scans_every_account_now(client, fetches):
 
 
 def test_sync_leaves_a_scan_already_queued_alone(client, fetches):
-    """A second click, or Sync while the 13:50 sweep runs, queues nothing
-    twice: the claimed rows show syncing until their scan lands."""
     track("instagram", "a")
     claim_due(0, 3600)
     fetches.clear()
@@ -188,7 +172,6 @@ def test_sync_leaves_a_scan_already_queued_alone(client, fetches):
     assert get_account(_id("a")).syncing
     html = client.get("/accounts").text
     assert "data-syncing" in html
-    # Nothing to click while it syncs.
     assert re.search(r'<button[^>]*id="accounts-sync"[^>]*disabled', html)
     assert "Syncing…" in html
     assert "data-syncing" in client.get(f"/accounts/{_id('a')}").text
@@ -278,13 +261,11 @@ def test_remove_untracks_but_keeps_every_record(client, fetches):
     assert r.json() == {"count": 1}
     assert client.post("/accounts/delete", json={"ids": [a]}).json() == {"count": 0}
     assert [x.handle for x in list_accounts()] == ["b"]
-    # Not scanned while untracked.
     assert a not in claim_due(0, 0)
-    # Its page, history, posts and notes are all still there.
     account = get_account(a)
     assert account.untracked_at is not None
     assert account.notes == "banned, appealing"
-    assert [p.id for p in account.posts] == ["new"]  # "old" is past retention
+    assert [p.id for p in account.posts] == ["new"]
     assert len(get_history(a).snapshots) == 1
     page = client.get(f"/accounts/{a}")
     assert page.status_code == 200
@@ -296,8 +277,8 @@ def test_adding_an_untracked_account_again_resumes_its_history(client, fetches):
     a = _id("a")
     client.post("/accounts/delete", json={"ids": [a]})
     r = client.post("/accounts/add", json={"platform": "instagram", "handles": "a"})
-    assert r.json()["added"] == ["a"]  # tracked again, rescanned right away
-    assert _id("a") == a  # the same account, not a new one
+    assert r.json()["added"] == ["a"]
+    assert _id("a") == a
     assert get_account(a).untracked_at is None
     assert len(get_history(a).snapshots) == 2
 
@@ -335,7 +316,7 @@ def test_growth_from_zero_followers_has_no_percentage(fetches):
 def test_views_not_covered_by_a_capped_scan_are_unknown(fetches):
     track("instagram", "a")
     stats = _stats("a")
-    stats.complete = False  # capped, and the oldest read post is 1 day old
+    stats.complete = False
     stats.posts = stats.posts[:1]
     record_scan(_id("a"), stats)
     a = list_accounts()[0]
@@ -361,9 +342,6 @@ def test_private_status():
     assert list_accounts()[0].status == "private"
 
 
-# --- list query -------------------------------------------------------------
-
-
 @pytest.fixture
 def three(fetches):
     for handle, followers, views in (("aa", 10, 5), ("bb", 30, 1), ("cc", 20, 9)):
@@ -372,12 +350,7 @@ def three(fetches):
     _snapshot("cc", 1, 2 * DAY)
 
 
-# --- rolling post storage ---------------------------------------------------
-
-
 class _Clock:
-    """The repository's clock, moved by hand."""
-
     def __init__(self) -> None:
         self.now = time.time()
 
@@ -407,7 +380,6 @@ def _scan(handle: str, now: float, *posts: PostStat, complete: bool = True) -> N
 
 
 def _scan_as(handle: str, account_id: str, now: float, *posts: PostStat) -> None:
-    """A scan of `handle` that the platform reports as `account_id`."""
     stats = _stats(handle)
     stats.profile.account_id = account_id
     stats.posts = list(posts)
@@ -416,15 +388,13 @@ def _scan_as(handle: str, account_id: str, now: float, *posts: PostStat) -> None
 
 
 def _kept(handle: str) -> dict[str, int]:
-    """The account's kept posts: id -> views."""
     return {p.id: p.views for p in get_account(_id(handle)).posts}
 
 
-RETENTION = 60 * DAY  # 2 x the longest default period (30 d)
+RETENTION = 60 * DAY
 
 
 def test_scan_appends_and_keeps_posts_it_did_not_return(clock):
-    # Example A.
     track("instagram", "aa")
     now = clock.now
     _scan("aa", now, _post("a", 20 * DAY, now), _post("b", 29 * DAY, now))
@@ -433,7 +403,6 @@ def test_scan_appends_and_keeps_posts_it_did_not_return(clock):
 
 
 def test_posts_past_retention_are_pruned(clock):
-    # Example B, with the cutoff boundary: on it is kept, a second past is not.
     track("instagram", "aa")
     now = clock.now
     _scan(
@@ -443,14 +412,13 @@ def test_posts_past_retention_are_pruned(clock):
         _post("edge", RETENTION, now),
         _post("gone", RETENTION + 1, now),
     )
-    assert set(_kept("aa")) == {"edge"}  # "old"/"gone" never stored
+    assert set(_kept("aa")) == {"edge"}
     clock.now += 1
     _scan("aa", clock.now, _post("new", 4 * 3600, clock.now))
-    assert set(_kept("aa")) == {"new"}  # "edge" aged past the cutoff
+    assert set(_kept("aa")) == {"new"}
 
 
 def test_a_post_seen_again_is_updated_not_duplicated(clock):
-    # Example C, and a retried scan.
     track("instagram", "aa")
     now = clock.now
     _scan("aa", now, _post("a", 10 * DAY, now, views=5))
@@ -462,7 +430,6 @@ def test_a_post_seen_again_is_updated_not_duplicated(clock):
 
 
 def test_empty_or_failed_scan_keeps_the_posts(clock):
-    # Example D.
     track("instagram", "aa")
     now = clock.now
     _scan("aa", now, _post("a", 5 * DAY, now), _post("b", 15 * DAY, now))
@@ -472,9 +439,6 @@ def test_empty_or_failed_scan_keeps_the_posts(clock):
 
 
 def test_a_kept_post_ages_out_on_the_next_successful_scan(clock):
-    # Example E. A banned account's scans fail for days: its data stays as
-    # its last successful sync left it, aged posts included, until a scan
-    # succeeds again.
     track("instagram", "aa")
     now = clock.now
     _scan("aa", now, _post("a", RETENTION - 3600, now), _post("b", 10 * DAY, now))
@@ -496,7 +460,6 @@ def test_one_accounts_scan_never_touches_anothers_posts(clock):
     _scan("aa", clock.now)
     with session_scope() as s:
         rows = s.query(TrackedPostRow.account_id, TrackedPostRow.views).all()
-    # aa's aged post is pruned; bb's same-id post stays until bb's own scan.
     assert rows == [(_id("bb"), 2)]
     assert _kept("bb") == {"same": 2}
 
@@ -516,11 +479,10 @@ def test_views_count_every_kept_post_not_only_the_latest_scan(clock):
     _scan("aa", now, _post("a", 3 * DAY, now, views=100))
     _scan("aa", now, _post("b", DAY / 2, now, views=5))
     [account] = list_accounts()
-    assert account.posts == []  # the list reads views and dates only
+    assert account.posts == []
     assert account.views(1).views == 5
     assert account.views(7).views == 105
     assert account.posts_in(7) == 2
-    # No period is precomputed: any number of days works.
     assert account.views(3).previous == 0
 
 
@@ -529,8 +491,8 @@ def test_coverage_widens_from_capped_to_complete_scans(clock):
     now = clock.now
     _scan("aa", now, _post("a", DAY, now), _post("b", 3 * DAY, now), complete=False)
     account = get_account(_id("aa"))
-    assert account.views(2).views == 1  # read back past 2 days
-    assert account.views(2).previous is None  # but not past 4
+    assert account.views(2).views == 1
+    assert account.views(2).previous is None
     assert account.views(7) is None
     _scan("aa", now, _post("a", DAY, now), complete=True)
     account = get_account(_id("aa"))
@@ -549,12 +511,7 @@ def test_a_private_account_claims_no_coverage(clock):
     assert account.views(1) is None
 
 
-# --- corner cases -------------------------------------------------------------
-
-
 def test_a_capped_scan_after_a_gap_does_not_claim_the_gap(clock):
-    # Fully read, then unreachable for 10 days; the first scan back is
-    # capped and reads only 2 days: what was posted in the gap is unknown.
     track("instagram", "aa")
     now = clock.now
     _scan("aa", now, _post("a", 20 * DAY, now))
@@ -563,10 +520,8 @@ def test_a_capped_scan_after_a_gap_does_not_claim_the_gap(clock):
     record_scan(_id("aa"), None, "profile not found (4 tries)")
     _scan("aa", clock.now, _post("b", 2 * DAY, clock.now), complete=False)
     account = get_account(_id("aa"))
-    assert account.views(1).views == 0  # within the 2 days read
-    assert account.views(7) is None  # the gap was never read
-    # A capped scan that does reach back to the previous one keeps the
-    # coverage it had.
+    assert account.views(1).views == 0
+    assert account.views(7) is None
     clock.now += 3600
     _scan("aa", clock.now, _post("b", 2 * DAY + 3600, clock.now), complete=False)
     assert get_account(_id("aa")).views(1) is not None
@@ -574,8 +529,6 @@ def test_a_capped_scan_after_a_gap_does_not_claim_the_gap(clock):
 
 
 def test_coverage_never_reaches_past_retention(clock, monkeypatch):
-    # With 1/7 d periods posts are kept 14 d: a later 30 d window must not
-    # read as covered from posts that were pruned.
     monkeypatch.setenv("OFM_ACCOUNTS_PERIODS_DAYS", "[1, 7]")
     monkeypatch.setenv("OFM_ACCOUNTS_DEFAULT_PERIOD_DAYS", "7")
     track("instagram", "aa")
@@ -597,9 +550,6 @@ def test_an_account_untracked_after_its_claim_is_not_scanned(fetches):
 
 
 def test_a_renamed_account_merges_into_its_history(clock):
-    # @old is tracked and synced, gets banned and renamed to @new; @new is
-    # added: once scanned, it is the same account -- one row, both
-    # histories, under the new handle.
     track("instagram", "old", "Mia")
     old_id = _id("old")
     now = clock.now
@@ -627,26 +577,22 @@ def test_failing_accounts_back_off_and_recover(clock):
     _scan("aa", clock.now)
     for _ in range(5):
         record_scan(a, None, "profile not found (4 tries)")
-    # 5 failures: 100 s doubled 5 times, capped at 1000 s.
     clock.now += 999
     assert claim_due(100, 0, 1000) == []
     clock.now += 2
     assert claim_due(100, 0, 1000) == [a]
-    # One failure: twice the interval.
     _scan("aa", clock.now)
     record_scan(a, None, "profile not found (4 tries)")
     clock.now += 150
     assert claim_due(100, 0, 1000) == []
     clock.now += 100
     assert claim_due(100, 0, 1000) == [a]
-    # A success resets it.
     _scan("aa", clock.now)
     clock.now += 101
     assert claim_due(100, 0, 1000) == [a]
 
 
 def _handles(client, **params) -> list[str]:
-    """The rows /accounts shows for `params`, in page order."""
     html = client.get("/accounts", params=params).text
     shown = [h for h in ("aa", "bb", "cc") if f">@{h}<" in html]
     return sorted(shown, key=lambda h: html.index(f">@{h}<"))
@@ -655,7 +601,6 @@ def _handles(client, **params) -> list[str]:
 def test_sort(client, three):
     assert _handles(client, sort="followers") == ["bb", "cc", "aa"]
     assert _handles(client, sort="views") == ["cc", "aa", "bb"]
-    # Only cc has two syncs; the rest have no growth yet and go last.
     assert _handles(client, sort="growth")[0] == "cc"
     assert _handles(client, sort="newest") == ["cc", "bb", "aa"]
     assert _handles(client, sort="handle") == ["aa", "bb", "cc"]
@@ -703,7 +648,7 @@ def test_verified_badge_and_creator_text(client, fetches):
     html = client.get("/accounts").text
     assert 'class="accounts-verified"' in html
     assert '<span class="accounts-creator-tag">Mia</span>' in html
-    assert 'class="accounts-creator"' not in html  # not editable in the row
+    assert 'class="accounts-creator"' not in html
 
 
 def test_clicking_the_current_sort_flips_its_order(client, three):
@@ -728,19 +673,16 @@ def test_filters(client, three):
 
 
 def test_blank_filter_fields_mean_unset(client, three):
-    """The filter form submits untouched selects as empty parameters."""
     r = client.get(
         "/accounts?q=&sort=&platform=instagram&creator=&status=&page=&per_page="
     )
     assert r.status_code == 200
-    # ... and the default sort is by followers.
     assert _handles(client, q="", status="", sort="") == ["bb", "cc", "aa"]
 
 
 def test_paging(client, three):
     html = client.get("/accounts", params={"per_page": 2, "page": 2}).text
     assert "Showing 3\N{EN DASH}3 of 3 accounts" in html
-    # Past the last page lands on the last page.
     assert (
         "Showing 3\N{EN DASH}3"
         in client.get("/accounts", params={"per_page": 2, "page": 9}).text
@@ -761,7 +703,6 @@ def test_period_selector_and_summary(client, three):
     html = client.get("/accounts", params={"period": 30}).text
     assert "Views · 30d" in html
     assert 'value="30" selected' in html
-    # Not a configured period: the default one.
     assert "Views · 7d" in client.get("/accounts", params={"period": 5}).text
     summary = AccountSummary.of(list_accounts(), 7)
     assert (summary.accounts, summary.followers, summary.views) == (3, 60, 15)
@@ -803,9 +744,6 @@ def test_ago():
     ]
 
 
-# --- analytics ----------------------------------------------------------------
-
-
 def test_analytics_page(client, fetches):
     client.post("/accounts/add", json={"platform": "instagram", "handles": "yuki"})
     _snapshot("yuki", 900, 2 * DAY)
@@ -815,14 +753,12 @@ def test_analytics_page(client, fetches):
     assert "1 post · last 7 days, by views" in html
     assert "https://x/new" in html
     assert "Posted 1 d ago" in html
-    assert "https://x/old" not in html  # outside the period
+    assert "https://x/old" not in html
     assert "History" not in html
     assert "data-fchart" in html
     assert "main" in html
-    # Assign link: straight to /links with this account selected.
     assert f'href="/links?account={_id("yuki")}"' in html
     assert "Assign link" in html
-    # A period with no posts falls back to the latest synced ones.
     track("instagram", "quiet")
     stats = _stats("quiet")
     stats.posts = stats.posts[1:]
@@ -859,11 +795,7 @@ def test_history_daily_rows_oldest_first():
     ]
 
 
-# --- follower chart ------------------------------------------------------------
-
-
 def _snaps(*pairs: tuple[float, int]) -> list[Snapshot]:
-    """Snapshots from (taken_at, followers), oldest first."""
     return [
         Snapshot(taken_at=t, followers=f, metrics={"followers": f}) for t, f in pairs
     ]
@@ -894,17 +826,14 @@ def test_chart_lays_out_points_and_rounds_the_y_range_to_nice_steps():
     assert round(chart.pct, 1) == 10.2
     assert [p.x for p in chart.points] == [0, 50, 100]
     assert [p.change for p in chart.points] == [None, 713, 2_900]
-    # 35,287..38,900 padded to 34,750..39,250: five 1,000 gridlines.
     assert [t.label for t in chart.y_ticks] == ["35k", "36k", "37k", "38k", "39k"]
     assert [t.y for t in chart.y_ticks] == pytest.approx(
         [94.44, 72.22, 50, 27.78, 5.56], abs=0.01
     )
-    # Every point sits inside the plot, the highest nearest the top.
     assert all(0 <= p.y <= 100 for p in chart.points)
     assert chart.points[2].y < chart.points[1].y < chart.points[0].y
     assert len(chart.lines) == 1
     assert chart.gaps == []
-    # Dots only at the ends.
     assert [d.followers for d in chart.dots] == [35_287, 38_900]
     assert [t.x for t in chart.x_ticks] == [0, 50, 100]
 
@@ -916,7 +845,7 @@ def test_flat_line_sits_mid_plot():
     assert chart.delta == 0
     assert chart.pct == 0
     zero = FollowerChart.of(_snaps((0, 0), (DAY, 0)), daily=True, gap_s=2 * DAY)
-    assert all(0 <= p.y <= 100 for p in zero.points)  # never a range below 0
+    assert all(0 <= p.y <= 100 for p in zero.points)
     assert zero.pct is None
 
 
@@ -924,21 +853,18 @@ def test_big_jump_keeps_every_point_in_the_plot():
     chart = FollowerChart.of(
         _snaps((0, 100), (DAY, 120), (2 * DAY, 2_500_000)), daily=True, gap_s=2 * DAY
     )
-    # Scaled to the jump: 0..2.75M, the small start flat on the floor.
     assert [round(p.y) for p in chart.points] == [100, 100, 9]
     assert [t.label for t in chart.y_ticks] == ["0", "1M", "2M"]
     assert chart.points[-1].change == 2_499_880
 
 
 def test_daily_chart_puts_each_day_under_its_own_label():
-    """Points sit on their UTC day, not their sync time: a late-evening
-    sync is not drawn next to the following day's label."""
     day0 = 300 * DAY
     chart = FollowerChart.of(
         _snaps(
-            (day0 + 23 * 3600, 352),  # Oct 20-ish, 23:00
-            (2 * DAY + day0 - 3 * 3600 + 3360, 600),  # next day, 20:56
-            (2 * DAY + day0 + 3600, 788),  # the day after, 01:00
+            (day0 + 23 * 3600, 352),
+            (2 * DAY + day0 - 3 * 3600 + 3360, 600),
+            (2 * DAY + day0 + 3600, 788),
         ),
         daily=True,
         gap_s=1.5 * DAY,
@@ -948,7 +874,6 @@ def test_daily_chart_puts_each_day_under_its_own_label():
     assert [t.taken_at // DAY for t in chart.x_ticks] == [300, 301, 302]
     assert chart.span_days == 2
     assert chart.gaps == []
-    # The y-range hugs the data: 300..850, gridlines at 400/600/800.
     assert [t.label for t in chart.y_ticks] == ["400", "600", "800"]
     assert all(0 < p.y < 100 for p in chart.points)
 
@@ -970,7 +895,6 @@ def test_missed_syncs_break_the_line_with_a_dashed_gap():
     )
     assert len(chart.lines) == 2
     assert len(chart.gaps) == 2
-    # The last point is alone after its gap: it gets a dot (and is the end).
     assert [d.followers for d in chart.dots] == [10, 20]
     lone = FollowerChart.of(
         _snaps((0, 10), (5 * DAY, 15), (10 * DAY, 20)), daily=True, gap_s=1.5 * DAY
@@ -990,23 +914,21 @@ def test_tick_labels_carry_the_decimals_the_step_needs():
 def test_history_chart_starts_at_the_growth_baseline_and_is_daily_past_two_days():
     now = 100 * DAY
     history = _history(
-        (now - 9 * DAY, 1),  # older than the baseline: left out
-        (now - 8 * DAY, 100),  # newest a full period old: the baseline
+        (now - 9 * DAY, 1),
+        (now - 8 * DAY, 100),
         (now - 3 * DAY, 110),
-        (now - 3 * DAY + 3600, 120),  # same UTC day: the day's last counts
+        (now - 3 * DAY + 3600, 120),
         (now - 1, 150),
     )
     chart = history.follower_chart(7, rescan_s=6 * 3600, now=now)
     assert chart.daily
     assert [p.followers for p in chart.points] == [100, 120, 150]
-    # UTC days 92, 97, 99: placed by day, not by sync time.
     assert [p.x for p in chart.points] == pytest.approx([0, 500 / 7, 100])
     assert chart.delta == 50
-    # 24 hours: every sync, no daily folding.
     short = history.follower_chart(1, rescan_s=6 * 3600, now=now)
     assert not short.daily
     assert [p.followers for p in short.points] == [120, 150]
-    assert len(short.gaps) == 1  # three days apart, rescans every 6 h
+    assert len(short.gaps) == 1
 
 
 def test_chart_delta_matches_the_growth_kpi(client, fetches):
@@ -1027,22 +949,20 @@ def test_analytics_page_draws_the_follower_chart(client, fetches):
     assert "data-fchart" in html
     assert 'data-step="day"' in html
     assert 'class="fchart-line"' in html
-    # Start, now and change, and a data table row per point.
     assert ">900<" in html
     assert ">1,000<" in html
     assert "+100" in html
     assert "(+11.1%)" in html
     assert html.count("<tr data-x=") == 4
-    assert "<small>8 days</small>" in html  # first point to last, not the count
-    assert ">+50<" in html  # 900 -> 950
+    assert "<small>8 days</small>" in html
+    assert ">+50<" in html
     assert "Not enough history yet" not in html
     assert 'src="/static/js/account-chart.js' in html
-    assert 'class="fchart-gap"' in html  # nothing between 8 and 2 days ago
-    # 24 hours: every sync, from the baseline a day back.
+    assert 'class="fchart-gap"' in html
     html = client.get(f"/accounts/{_id('yuki')}", params={"period": 1}).text
     assert 'data-step="sync"' in html
     assert html.count("<tr data-x=") == 2
-    assert "Dashed: no syncs in between." in html  # 24 h apart, rescans every 6 h
+    assert "Dashed: no syncs in between." in html
 
 
 def test_analytics_page_without_enough_history_says_so(client):
@@ -1056,9 +976,6 @@ def test_analytics_page_without_enough_history_says_so(client):
     assert "Not enough history yet: the chart needs two syncs" in html
     assert "One so far: 1,000 followers" in html
     assert "data-fchart" not in html
-
-
-# --- tracker ----------------------------------------------------------------
 
 
 def test_due_accounts_are_claimed_once_and_rescanned_after_the_interval(
@@ -1088,8 +1005,6 @@ def test_sweep_queues_one_job_per_batch_with_staggered_proxies(monkeypatch):
 
 
 def _failing(monkeypatch, outcomes):
-    """Each fetch takes the next outcome: an exception is raised, anything
-    else is a successful scan. Returns the proxies used."""
     used: list[str | None] = []
     it = iter(outcomes)
 
@@ -1137,8 +1052,6 @@ def test_rate_limit_on_every_try_stops_the_batch(monkeypatch):
     used = _failing(monkeypatch, [RateLimitedError("429")] * 2)
     account_tracker.scan_accounts("instagram", [_id("x"), _id("y")])
     assert len(used) == 2
-    # Nobody got through: each row says so, its claim released for the next
-    # scan (a standing claim would retry, and pay Apify, every claim TTL).
     assert all(
         a.error == account_tracker.UNREACHED and not a.syncing for a in list_accounts()
     )

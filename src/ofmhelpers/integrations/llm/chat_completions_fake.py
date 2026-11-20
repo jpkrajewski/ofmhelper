@@ -1,15 +1,3 @@
-"""An OpenAI-style `/chat/completions` vendor faked at the wire
-(OFM_FAKE_EXTERNALS, tests), behind an `httpx.MockTransport`: one per
-vendor (its `fake.py`), each with its host, key, models and image cap.
-
-The answer is the next queued one (`answer_next`, `fail_next`,
-`filter_next`), else the plainest value the request's strict JSON Schema
-allows (`fakes.example`); every answer reports `USAGE`. Like the vendors:
-any key but the fake's is a 401, a model not offered a 404, more images
-than the cap a 400, and a schema not in strict form (an open object, an
-optional property) a 400.
-"""
-
 import json
 import threading
 from typing import Any
@@ -18,7 +6,6 @@ import httpx
 
 from ofmhelpers.integrations.llm.fakes import example
 
-# The tokens every answer reports, as the vendors write them.
 USAGE = {"prompt_tokens": 900, "completion_tokens": 60, "total_tokens": 960}
 
 
@@ -39,7 +26,6 @@ def _error(
 
 
 def _not_strict(node: Any) -> str | None:
-    """Why `node` is not a strict-mode schema, if it is not."""
     if isinstance(node, list):
         return next((r for r in map(_not_strict, node) if r), None)
     if not isinstance(node, dict):
@@ -62,14 +48,10 @@ class FakeChatCompletions:
         self.key = key
         self.models = models
         self.max_images = max_images
-        # Every chat/completions body, oldest first, and the read timeout
-        # (s) each was sent with.
         self.requests: list[dict[str, Any]] = []
         self.timeouts: list[float | None] = []
         self._replies: list[httpx.Response | str] = []
         self._lock = threading.Lock()
-
-    # --- test hooks ---------------------------------------------------------
 
     def answer_next(self, answer: dict[str, Any] | str) -> None:
         with self._lock:
@@ -84,8 +66,6 @@ class FakeChatCompletions:
             self._replies.append(_error(code, message, retry_after_s))
 
     def misanswer_next(self, generated: str) -> None:
-        """The next answer fails the vendor's own schema check (Groq's 400
-        `json_validate_failed`, the text it generated attached)."""
         with self._lock:
             self._replies.append(
                 _error(
@@ -97,14 +77,11 @@ class FakeChatCompletions:
             )
 
     def filter_next(self) -> None:
-        """The next answer is stopped by the vendor's content filter."""
         with self._lock:
             self._replies.append(self._completion(None, "content_filter"))
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._answer)
-
-    # --- the wire -----------------------------------------------------------
 
     def _answer(self, request: httpx.Request) -> httpx.Response:
         if request.url.host != self.host:

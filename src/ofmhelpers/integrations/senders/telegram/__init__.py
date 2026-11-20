@@ -1,5 +1,3 @@
-"""Telegram: the app's bot posts events to its chats. See ../CLAUDE.md."""
-
 from ofmhelpers.integrations.senders.telegram.client import (
     TelegramClient,
     TelegramError,

@@ -1,7 +1,3 @@
-"""A public bridge address answers only with a link of the host's current
-owner (or of a shared host): a removed host re-added by someone else serves
-none of the earlier owner's links, and two owners never hold one self address."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user
@@ -84,12 +80,9 @@ def test_a_removed_host_re_added_by_another_owner_serves_none_of_the_old_links(b
     page = bridge.get("/dany", headers={"user-agent": IG_UA})
     assert page.status_code == 404
     assert "onlyfans.com/ann" not in page.text
-    # Ann's row is kept, only switched off.
     [row] = [x for x in short_links.list_links() if x.id == ann_link]
     assert row.status == "inactive"
 
-    # Her switched-off link still holds the address (one address, one link:
-    # owner 2026-11-18), so Bob's is numbered past it.
     assert "dany" in short_links.taken_slugs(bob.id, "self", HOST)
     with pytest.raises(DuplicateError, match="already taken"):
         _link(bob.id, "dany", "https://onlyfans.com/bob")
@@ -99,7 +92,7 @@ def test_a_removed_host_re_added_by_another_owner_serves_none_of_the_old_links(b
     assert '"https://onlyfans.com/bob"' in page.text
     assert bridge.get("/dany", headers={"user-agent": IG_UA}).status_code == 404
     assert _views(bob_link) == 1
-    assert _views(ann_link) == 1  # only her own earlier visit
+    assert _views(ann_link) == 1
 
 
 def test_a_shared_host_gives_one_self_address_to_one_owner():
@@ -110,7 +103,6 @@ def test_a_shared_host_gives_one_self_address_to_one_owner():
     _link(ann.id, "dany", "https://onlyfans.com/ann")
     assert "dany" in short_links.taken_slugs(bob.id, "self", HOST)
     assert "dany" in short_links.taken_slugs(ann.id, "self", HOST)
-    # Two Generates racing past the check: the database refuses the second.
     with pytest.raises(DuplicateError, match="already taken"):
         _link(bob.id, "dany", "https://onlyfans.com/bob")
 

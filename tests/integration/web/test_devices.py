@@ -1,9 +1,3 @@
-"""/phones: the agency's phones (catalog model and color, drawn) with
-their logins as compact rows; one account stored once and linked to every
-phone it is on; passwords and recovery codes encrypted at rest and never
-in the page -- fetched one login at a time; everyone views, reveals and
-exports, only an admin changes anything."""
-
 import os
 from io import BytesIO
 
@@ -47,8 +41,6 @@ def admin() -> TestClient:
 
 @pytest.fixture
 def va() -> TestClient:
-    """An admin by Google (sees every phone, the agency's included): the
-    page's features. Who sees whose phones: test_ownership.py."""
     c = TestClient(app)
     sign_in_agency(c)
     return c
@@ -72,7 +64,6 @@ def _add_login(device_id: int, service: str, username: str, **extra: str) -> int
 
 
 def _raw_login(login_id: int) -> tuple[str, str]:
-    """What Postgres actually holds, past the decrypting column type."""
     with session_scope() as s:
         row = s.execute(
             text("SELECT password, backup_codes FROM logins WHERE id = :i"),
@@ -84,9 +75,6 @@ def _raw_login(login_id: int) -> tuple[str, str]:
 def _count(name: str) -> int:
     with session_scope() as s:
         return s.execute(select(func.count()).select_from(table(name))).scalar_one()
-
-
-# --- catalog and drawings -----------------------------------------------------
 
 
 def test_catalog_has_every_family_and_tells_minis_apart():
@@ -136,13 +124,11 @@ def test_every_model_has_the_camera_its_generation_had():
     }
     for model_id, layout in layouts.items():
         assert _model(model_id).camera is layout, model_id
-    # LiDAR came with the 12 Pro.
     assert not _model("iphone-11-pro").lidar
     assert _model("iphone-12-pro").lidar
 
 
 def _lenses(svg: str) -> int:
-    """Lenses drawn: each has one pupil (#07070a)."""
     return svg.count('fill="#07070a"')
 
 
@@ -176,7 +162,6 @@ def test_drawings_differ_by_camera_size_and_color():
     assert 'width="64.20"' in mini
     assert 'width="71.50"' in regular
     assert "iPhone 12 mini back" in mini
-    # Not in the catalog: a plain phone, no camera.
     assert _lenses(render(None, None)) == 0
 
 
@@ -206,12 +191,8 @@ def test_phone_form_only_takes_what_the_model_came_in():
         DeviceFields(label="x", model_id="iphone-99")
     with pytest.raises(ValidationError, match="Pick a model"):
         DeviceFields(label="x", color_id="blue")
-    # Off-catalog phone: free-text model, no ids.
     other = DeviceFields(label="x", model_id="", custom_model="Galaxy S24")
     assert (other.model_id, other.custom_model) == (None, "Galaxy S24")
-
-
-# --- services -----------------------------------------------------------------
 
 
 def test_services_include_mail_providers_socials_and_custom():
@@ -241,7 +222,6 @@ def test_usernames_are_stored_the_way_the_service_writes_them():
     assert get_service("x").username("@SomeOne") == "someone"
     insta = get_service("instagram")
     assert insta.username("https://www.instagram.com/Yuki_K/") == "yuki_k"
-    # A custom site's username may be case-sensitive: only trimmed.
     assert get_service("custom").username("  JohnDoe ") == "JohnDoe"
 
 
@@ -250,11 +230,7 @@ def test_custom_service_needs_its_provider_name():
         LoginFields(service="custom", username="a")
     body = LoginFields(service="custom", provider=" Shopify ", username="me")
     assert body.provider == "Shopify"
-    # Only custom services keep a provider.
     assert LoginFields(service="gmail", provider="x", username="a@b.c").provider == ""
-
-
-# --- vault --------------------------------------------------------------------
 
 
 def test_secrets_are_ciphertext_in_the_database_and_absent_from_lists():
@@ -296,7 +272,6 @@ def test_a_changed_key_fails_loudly_where_secrets_are_read(monkeypatch, admin):
     monkeypatch.setenv("OFM_VAULT_KEY", Fernet.generate_key().decode())
     with pytest.raises(VaultError, match="do not decrypt"):
         store.secrets(login_id)
-    # The list needs no key: the page still renders.
     assert admin.get("/phones").status_code == 200
     r = admin.get(f"/phones/logins/{login_id}/secret")
     assert r.status_code == 500
@@ -321,9 +296,6 @@ def test_a_malformed_key_is_named(monkeypatch):
     monkeypatch.setenv("OFM_VAULT_KEY", "nope")
     with pytest.raises(VaultError, match="not a valid Fernet key"):
         _add_login(device, "gmail", "a@b.c", password="pw")
-
-
-# --- phones -------------------------------------------------------------------
 
 
 def test_phone_shows_its_catalog_details_and_drawing():
@@ -380,9 +352,6 @@ def test_delete_takes_only_the_logins_no_other_phone_has():
     assert not store.delete_device(first)
 
 
-# --- logins -------------------------------------------------------------------
-
-
 def test_one_account_on_two_phones_is_stored_once():
     first = _phone()
     second = _phone("Phone 02")
@@ -399,7 +368,6 @@ def test_one_account_on_two_phones_is_stored_once():
     ]
     assert devices[0].logins[0].elsewhere("Phone 01") == ["Phone 02"]
 
-    # Editing it changes it on both phones.
     store.update_login(
         login_id,
         LoginFields(service="gmail", username="team@gmail.com", password="new"),
@@ -419,7 +387,6 @@ def test_linking_never_overwrites_a_different_password():
         )
     with pytest.raises(DuplicateError, match="already on this phone"):
         store.add_login(first, LoginFields(service="gmail", username="a@b.c"))
-    # A login saved without a password takes the one typed when linked.
     nopw = _add_login(first, "x", "brand")
     store.add_login(second, LoginFields(service="x", username="brand", password="pw"))
     secrets = store.secrets(nopw)
@@ -466,12 +433,8 @@ def test_secrets_never_reach_the_redis_cache():
     store.export_devices()
     redis = get_redis()
     cached = [k for k in redis.scan_iter("cache:*") if redis.type(k) == b"string"]
-    # The reads above did go through the cache: there is something to check.
     assert cached
     assert not [k for k in cached if b"redis-must-not-see" in (redis.get(k) or b"")]
-
-
-# --- filters and sort ---------------------------------------------------------
 
 
 def test_query_filters_and_sorts():
@@ -494,9 +457,6 @@ def test_query_filters_and_sorts():
     assert PhoneQuery(owner="Bo").filtered
 
 
-# --- routes -------------------------------------------------------------------
-
-
 def test_page_lists_phones_without_any_secret(va):
     device = _phone(model_id="iphone-12-mini", color_id="purple")
     _add_login(device, "gmail", "a@b.c", password="pw-123", backup_codes="CODE-999")
@@ -510,13 +470,10 @@ def test_page_lists_phones_without_any_secret(va):
     assert "1 recovery-code set" in html
     assert "pw-123" not in html
     assert "CODE-999" not in html
-    # One copy button for the whole login, one Show for password + codes;
-    # every icon says what it does to a screen reader.
     assert 'aria-label="Copy login:password:codes (' in html
     assert 'aria-label="Show password and recovery codes (' in html
     assert "ph-copy-secret" not in html
     assert "ph-codes-toggle" not in html
-    # The viewer's own phones: they edit them.
     assert 'id="ph-add-open"' in html
 
 
@@ -542,7 +499,6 @@ def test_page_filters_by_query_string(va):
 
 
 def test_many_logins_fold_behind_more(va):
-    """Two rows show (iCloud + Instagram); the rest fold behind "N more"."""
     device = _phone()
     for i in range(5):
         _add_login(device, "custom", f"user{i}", provider=f"Site {i}")
@@ -576,7 +532,6 @@ def test_logins_ordered_icloud_instagram_gmail_first(va):
     _add_login(device, "icloud", "a@icloud.com")
     logins = store.list_devices()[0].logins
     assert [x.service for x in logins[:3]] == ["icloud", "instagram", "gmail"]
-    # Rest keep link order.
     assert [x.service for x in logins[3:]] == ["threads", "x"]
     html = va.get("/phones").text
     positions = [
@@ -615,14 +570,13 @@ def test_secret_route_is_for_everyone_and_logged(va, caplog):
     ],
 )
 def test_a_user_changes_nothing_of_anothers_phone(path, body):
-    """The agency's phone (an admin's): a user reaches none of it."""
     device = _phone()
     login_id = _add_login(device, "icloud", "keep@icloud.com")
     user = TestClient(app)
     sign_in(user)
     r = user.post(path.format(d=device, l=login_id), json=body)
     if path == "/phones/add":
-        assert r.status_code == 201  # their own new phone
+        assert r.status_code == 201
     else:
         assert r.status_code == 404
     d = next(d for d in store.list_devices() if d.label == "Phone 01")
@@ -686,9 +640,6 @@ def test_admin_flow(admin):
     assert missing.status_code == 404
 
 
-# --- export -------------------------------------------------------------------
-
-
 def _workbook(client: TestClient):
     r = client.get("/phones/export.xlsx")
     assert r.status_code == 200
@@ -730,15 +681,12 @@ def test_va_exports_every_active_phone_with_its_logins(va):
     assert row["Gmail"] == "one@gmail.com\ntwo@gmail.com"
     assert row["Gmail password"] == "g1\ng2"
     assert row["Instagram backup codes"] == "1\n2"
-    # A password starting with "=" stays text, never an Excel formula.
     assert row["Instagram password"] == "=SUM(A1)"
     assert row["Other"] == "Shopify: me"
-    # Only services some phone uses get columns.
     assert "Yahoo" not in row
 
     logins = _rows(book["Logins"])
     assert [(x["Service"], x["Username"]) for x in logins] == [
-        # Service order, as on the cards.
         ("iCloud", "p1@icloud.com"),
         ("Instagram", "yuki"),
         ("Gmail", "one@gmail.com"),
@@ -791,7 +739,5 @@ def test_accounts_page_shows_the_phone_in_place_of_notes(va):
     assert f'href="/phones#phone-{device}"' in html
     assert "/phones/drawing.svg?model=iphone-12&amp;color=green" in html
     assert "<span>Anna</span>" in html
-    # The other row has no phone.
     assert html.count("data-no-phone") == 1
-    # The phone card is the link's anchor.
     assert f'id="phone-{device}"' in va.get("/phones").text

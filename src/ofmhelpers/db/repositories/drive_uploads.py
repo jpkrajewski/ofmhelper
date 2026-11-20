@@ -1,6 +1,3 @@
-"""Clone results uploaded into account Drive folders (`drive_uploads`).
-Uncached: the clone page polls it while uploads run."""
-
 import time
 
 from sqlalchemy import and_, or_, select, update
@@ -39,10 +36,6 @@ class DriveUploadRepository(CachedRepository):
         stale_before: float,
         va_id: int | None = None,
     ) -> int | None:
-        """The upload's id, queued; None when this file is already in that
-        folder (an account's `login_id`, or a VA's own `va_id`) or on its way.
-        A failed one is queued again, and so is one still queued since before
-        `stale_before` (stranded)."""
         row = DriveUploadRow
         with session_scope() as s:
             found = s.execute(
@@ -85,13 +78,11 @@ class DriveUploadRepository(CachedRepository):
             return _upload(row) if row else None
 
     def uploader(self, upload_id: int) -> int | None:
-        """Whose Google account it goes up as; None when the row is gone."""
         with session_scope() as s:
             row = s.get(DriveUploadRow, upload_id)
             return row.user_id if row else None
 
     def file_id(self, upload_id: int) -> str | None:
-        """The uploaded file's Drive id (done uploads only)."""
         with session_scope() as s:
             row = s.get(DriveUploadRow, upload_id)
             return row.drive_file_id if row else None
@@ -99,8 +90,6 @@ class DriveUploadRepository(CachedRepository):
     def for_jobs(
         self, job_ids: list[str], uploaders: frozenset[int] | None = None
     ) -> list[DriveUpload]:
-        """Every upload of these jobs, oldest first; with `uploaders`, only
-        the ones those people made (their Google account put them there)."""
         if not job_ids:
             return []
         query = select(DriveUploadRow).where(DriveUploadRow.job_id.in_(job_ids))
@@ -111,7 +100,6 @@ class DriveUploadRepository(CachedRepository):
             return [_upload(r) for r in rows]
 
     def made_here(self, file_ids: list[str]) -> list[str]:
-        """Which of these Drive files an upload of ours made."""
         if not file_ids:
             return []
         with session_scope() as s:
@@ -123,7 +111,6 @@ class DriveUploadRepository(CachedRepository):
             return [file_id for file_id in found if file_id]
 
     def remove(self, upload_id: int, reason: str) -> None:
-        """No longer in its folder (trashed from /clone, or gone in Drive)."""
         with session_scope() as s:
             s.execute(
                 update(DriveUploadRow)
@@ -132,8 +119,6 @@ class DriveUploadRepository(CachedRepository):
             )
 
     def gone_from(self, login_id: int, present: set[str], before: float) -> int:
-        """Marks this login's done uploads, finished before `before`, whose
-        file is not in `present` as removed; how many."""
         with session_scope() as s:
             rows = s.execute(
                 select(DriveUploadRow).where(

@@ -1,7 +1,3 @@
-"""Tracked social media accounts, platform-agnostic: each platform
-(`platforms/`) turns a handle into `AccountStats`; `features/accounts/tracker.py`
-scans them on a schedule and `/accounts` shows them."""
-
 from ofmhelpers.integrations.socials.errors import (
     RateLimitedError,
     RetryableError,

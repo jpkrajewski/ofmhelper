@@ -1,8 +1,3 @@
-"""A Stacked key saved on /account (owner 2026-11-15: "is it easy for new
-users to connect their fanvue or stacked?"; before, one `.env` line per
-account and a container restart): checked with Stacked first, then read
-with the `.env` ones for the agency's chats. Only for who may open them."""
-
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient

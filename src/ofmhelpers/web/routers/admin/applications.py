@@ -1,11 +1,3 @@
-"""
-ofmhelpers/web/routers/admin/applications.py
-
-The CRM view of the public application form: every submission from the `/`
-landing page, newest first, with everything the applicant typed. Read and
-delete only -- the rows are written by routers/apply.py and never edited.
-"""
-
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 

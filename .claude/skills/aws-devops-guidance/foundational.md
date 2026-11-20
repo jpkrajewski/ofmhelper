@@ -28,7 +28,7 @@ Continuous integration
 - `DL.CI.1` Small batches into `dev`; one batch shipped before the next is started.
 - `DL.CI.2` `ci.yml` runs on every push; nobody starts a build by hand.
 - `DL.CI.3` Every build runs lint, types, tests in three groups, e2e (Playwright) and the Docker build. A new kind of check goes into CI and pre-commit, not into a habit.
-- `DL.CI.4` Failures are reported the same way every time: `reports/latest/report.json`, counts, each failure with its error text, the 10 slowest tests.
+- `DL.CI.4` Failures are reported the same way every time: `reports/latest/summary.txt` (`scripts/test_summary.py`, run by `test.sh`): counts, files that did not import, each failure with its error text, the 10 slowest tests, `RESULT GREEN` / `NOT GREEN`.
 
 Continuous delivery
 - `DL.CD.1` Each ship deploys. Small, frequent releases over big ones.

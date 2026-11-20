@@ -1,31 +1,3 @@
-"""clone_ai_checks + clone_from_links: is a generated video too glitchy to post, and
-where did it go?
-
-clone_ai_checks: one row per check (ofmhelpers.features.clone_links.ai_check): the verdict
-(GOOD/GLITCHY, NULL when the check itself failed -- `error`), the model's
-glitch percent, glitches and reasoning, and everything needed to debug it:
-prompt, raw answer, provider/model, the stills' times, attempts and
-timings, tokens used, and the kind of failure (`error_kind`: quota, setup,
-failed) with the provider's own text kept apart from the short `error`
-(`error_detail`, never shown). Optionally the job result it checked (SET NULL
-when that job is deleted). Deleted with its user.
-
-clone_from_links: one row per /clone-links result on its way to Drive: its
-check, then the upload into the owner's GOOD REELS or TRIAL REELS folder
-(status checking / uploading / done / failed), the result's local `path`
-(a cut-off review is queued again from it), `started_at` (when a worker
-claimed it; NULL = still queued) and `attempts`. One per result file.
-Deleted with its job (CASCADE: a reused job id never finds an old row) and
-with its user; its check may go first (SET NULL).
-
-New tables: nothing existing changes.
-
-Revision ID: a2b3c4d5e6f7
-Revises: f8a9b0c1d2e3
-Create Date: 2026-10-25 02:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -102,8 +74,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Only the checks' history and where results went; videos, jobs and the
-    # Drive files themselves are untouched.
     op.drop_table("clone_from_links")
     op.drop_index("ix_clone_ai_checks_job_id", table_name="clone_ai_checks")
     op.drop_table("clone_ai_checks")

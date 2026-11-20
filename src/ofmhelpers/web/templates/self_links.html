@@ -52,7 +52,6 @@
 </div>
 
 <div class="self-grid">
-    {# --- activity line chart (full width) --- #}
     {% call ui.card("Activity · " ~ ("by hour" if stats.by_hour else "by day"), hook="span-all") %}
         <div class="self-head">
             <div>
@@ -62,7 +61,6 @@
             <div class="self-head-side">{{ num.count(stats.visitors) }} unique · {{ num.count(stats.clicks) }} to destination</div>
         </div>
         {% if stats.chart.points %}
-        {# Positions are data: inline --x/--y/--at custom properties. #}
         {# djlint:off H021 #}
         <div class="self-chart" id="self-chart">
             <div class="self-chart-y">
@@ -86,7 +84,6 @@
         {% endif %}
     {% endcall %}
 
-    {# --- click-through funnel --- #}
     {% call ui.card("Click-through") %}
         <div class="stat-grid">
             {{ ui.stat("Views", num.count(stats.views)) }}
@@ -105,7 +102,6 @@
     {{ breakdown("Top browsers", stats.browsers) }}
     {{ breakdown("Referrers", stats.referrers) }}
 
-    {# --- per link (full width) --- #}
     {% call ui.card("Link performance", hook="span-all") %}
         {% if stats.links %}
         {% call ui.table() %}
@@ -127,7 +123,6 @@
         {% endif %}
     {% endcall %}
 
-    {# --- domains (full width) --- #}
     {% call ui.card("Domains", hook="span-all") %}
         <form method="post" action="/self-links/domains" class="self-domain-add">
             {% call ui.field("Add a domain", for_id="self-domain-host") %}

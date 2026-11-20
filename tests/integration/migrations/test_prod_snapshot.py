@@ -1,17 +1,3 @@
-"""Alembic migrations against a snapshot of the production database.
-
-`tests/fixtures/prod_snapshot.sql` is a plain `pg_dump` of production (real
-customer data: gitignored, never committed -- the repo is public). Refresh
-it before testing a migration (see CLAUDE.local.md); without it, these tests
-skip, as on CI. Each test loads it into its own throwaway database at the
-revision production is on, then runs the real migration files through
-`alembic.command`, exactly as the `migrate` service does on deploy.
-
-The round-trip test holds for any revision. A revision's own tests (`needs`)
-run while the snapshot predates it and skip once production has it -- add
-them for every new revision, and refresh the snapshot first.
-"""
-
 import os
 import subprocess
 from collections.abc import Iterator
@@ -29,8 +15,6 @@ from alembic import command
 
 SNAPSHOT = FIXTURES / "prod_snapshot.sql"
 
-# Opt-in (`scripts/test.sh snapshot`): real customer data, minutes per run.
-# The empty-database round trip runs every time (test_migrations.py).
 pytestmark = [
     pytest.mark.snapshot,
     pytest.mark.skipif(
@@ -52,9 +36,6 @@ def _alembic() -> Config:
 
 @pytest.fixture
 def snapshot_url(monkeypatch, test_database_url) -> Iterator[URL]:
-    """A fresh database holding the snapshot; Alembic and the app's settings
-    point at it."""
-    # Named after the test database: one per xdist worker.
     base = make_url(test_database_url)
     url = base.set(database=f"{base.database}_snapshot")
     admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
@@ -99,7 +80,6 @@ def _count(db: Engine, name: str) -> int:
 
 
 def _json_posts(db: Engine) -> set[StoredPost]:
-    """The posts as the old schema keeps them: each account's JSONB list."""
     with db.connect() as conn:
         rows = conn.execute(
             text(
@@ -127,7 +107,6 @@ def _table_posts(db: Engine) -> set[StoredPost]:
 
 
 def _fully_covered(db: Engine) -> dict[int, bool]:
-    """Per scanned account, whether every view window it stored was covered."""
     with db.connect() as conn:
         rows = conn.execute(
             text(
@@ -142,19 +121,13 @@ def _fully_covered(db: Engine) -> dict[int, bool]:
     return dict(rows)
 
 
-# --- every revision, whatever the snapshot is on ----------------------------
-
-
 def _pending(db: Engine, revision: str) -> bool:
-    """Whether `revision` is still to be applied on top of the snapshot."""
     script = ScriptDirectory.from_config(_alembic())
     ahead = script.iterate_revisions("head", _revision(db))
     return revision in {r.revision for r in ahead}
 
 
 def needs(revision: str):
-    """Runs a revision's own test only while the snapshot predates it: once
-    production has it, a fresh snapshot has nothing left for it to move."""
 
     def check(db: Engine) -> None:
         if not _pending(db, revision):
@@ -167,15 +140,10 @@ def _row_counts(db: Engine) -> dict[str, int]:
     return {t: _count(db, t) for t in inspect(db).get_table_names()}
 
 
-# Tables a revision deletes rows from on purpose, for good (a downgrade
-# cannot bring them back): d4e5f6a7b8c0 drops the bots' spam leads.
 _DELETES_FOR_GOOD = {"applications"}
 
 
 def test_upgrade_downgrade_upgrade_keeps_every_row(db):
-    """Up to head, back to production's revision, up again: every table
-    production has keeps its rows (but those of `_DELETES_FOR_GOOD`), and
-    head is reached twice the same way."""
 
     def kept(counts: dict[str, int]) -> dict[str, int]:
         return {t: n for t, n in counts.items() if t not in _DELETES_FOR_GOOD}
@@ -190,8 +158,6 @@ def test_upgrade_downgrade_upgrade_keeps_every_row(db):
     command.upgrade(_alembic(), "head")
     assert _row_counts(db) == at_head
 
-
-# --- per revision -------------------------------------------------------------
 
 TRACKED_POSTS = "f7a8b9c0d1e2"
 UNTRACKED = "a9b0c1d2e3f4"
@@ -342,8 +308,6 @@ def test_drive_folders_follow_their_login_and_drop_only_themselves(db):
 
 
 def test_posted_folders_keep_every_account_folder_and_day_folder(db):
-    """Every account folder keeps its row with no POSTED id yet (the first
-    sweep finds or makes one); the day folders' rows stay for a rollback."""
     needs(POSTED)(db)
     command.upgrade(_alembic(), "f4a5b6c7d8e9")
     with db.connect() as conn:
@@ -368,8 +332,6 @@ def test_posted_folders_keep_every_account_folder_and_day_folder(db):
 
 
 def test_finished_at_keeps_every_job_untimed(db):
-    """Old jobs never recorded a finish time: every row stays, with NULL
-    (no duration, so no estimate from them)."""
     needs(FINISHED_AT)(db)
     command.upgrade(_alembic(), POSTED)
     jobs = _count(db, "jobs")
@@ -385,8 +347,6 @@ def test_finished_at_keeps_every_job_untimed(db):
 
 
 def test_a_revision_on_production_is_no_longer_pending(db):
-    # What `needs` relies on: once the snapshot carries a revision, its own
-    # tests skip instead of failing on data it already moved.
     command.upgrade(_alembic(), "head")
     head = _revision(db)
     assert not _pending(db, head)
@@ -432,7 +392,7 @@ def test_owners_gives_every_row_to_the_password_admin_and_keeps_it(db):
     for name in owned:
         assert _count(db, name) == before[name], name
         assert (
-            _scalar(db, f"SELECT count(*) FROM {name} WHERE user_id <> {admin_id}")  # noqa: S608 -- constants
+            _scalar(db, f"SELECT count(*) FROM {name} WHERE user_id <> {admin_id}")  # noqa: S608
             == 0
         ), name
     assert _scalar(db, "SELECT is_password_account FROM users WHERE email = 'admin'")
@@ -440,8 +400,6 @@ def test_owners_gives_every_row_to_the_password_admin_and_keeps_it(db):
 
 
 def test_spam_drops_only_the_bots_leads(db):
-    """Production's leads: the bots' (a link in a field, a Telegram handle
-    with spaces) go, every other lead stays as it was."""
     needs(SPAM)(db)
     spam = (
         r"SELECT id FROM applications WHERE telegram_handle ~ '\s'"
@@ -458,8 +416,6 @@ def test_spam_drops_only_the_bots_leads(db):
 
 
 def test_hidden_keeps_every_job_shown(db):
-    """Production's jobs all stay, and none is hidden: every gallery looks
-    as it did."""
     needs(HIDDEN)(db)
     jobs = _count(db, "jobs")
     command.upgrade(_alembic(), "head")
@@ -468,8 +424,6 @@ def test_hidden_keeps_every_job_shown(db):
 
 
 def test_clone_ai_checks_adds_two_empty_tables_and_changes_no_row(db):
-    """clone_ai_checks + clone_from_links are new and empty; every table production
-    has keeps every row."""
     needs(REEL_CHECKS)(db)
     before = _row_counts(db)
     command.upgrade(_alembic(), "head")
@@ -480,8 +434,6 @@ def test_clone_ai_checks_adds_two_empty_tables_and_changes_no_row(db):
 
 
 def test_picture_presets_adds_an_empty_table_and_changes_no_row(db):
-    """picture_presets is new and empty; every table production has keeps
-    every row, and a downgrade drops only it."""
     needs(PICTURE_PRESETS)(db)
     before = _row_counts(db)
     command.upgrade(_alembic(), "head")
@@ -493,8 +445,6 @@ def test_picture_presets_adds_an_empty_table_and_changes_no_row(db):
 
 
 def test_preset_aspect_adds_an_empty_column_and_changes_no_row(db):
-    """picture_presets.aspect_ratio is new and NULL: every preset keeps
-    following its pictures; a downgrade drops only the column."""
     needs(PRESET_ASPECT)(db)
     before = _row_counts(db)
     command.upgrade(_alembic(), "head")
@@ -526,8 +476,6 @@ DAILY_REPORT = "e7f8a9b0c1d2"
 
 
 def test_daily_report_tables_start_with_every_stored_sale(db):
-    """chat_sales starts with the sales production kept for the pop-up; no report
-    has run yet."""
     needs(DAILY_REPORT)(db)
     command.upgrade(_alembic(), CHAT_ACCOUNTS_SERVER)
     kept = _scalar(
@@ -546,8 +494,6 @@ SELF_LINKS = "d5e6f7a8b9c0"
 
 
 def test_self_links_adds_two_empty_tables_and_changes_no_row(db):
-    """self_link_domains and self_link_clicks are new and empty; every table
-    production has keeps every row, and a downgrade drops only the two."""
     needs(SELF_LINKS)(db)
     before = _row_counts(db)
     command.upgrade(_alembic(), "head")
@@ -565,8 +511,6 @@ BRIDGE_INDEX = "e6f7a8b9c0d1"
 
 
 def test_bridge_index_and_browser_column_change_no_row(db):
-    """The bridge lookup index and self_link_clicks.browser are added without
-    touching any row count; a downgrade drops only them."""
     needs(BRIDGE_INDEX)(db)
     command.upgrade(_alembic(), SELF_LINKS)
     before = _row_counts(db)
@@ -582,8 +526,6 @@ def test_bridge_index_and_browser_column_change_no_row(db):
 JOB_OWNERS = "e3f4a5b6c7d9"
 _BEFORE_JOB_OWNERS = "d2e3f4a5b6c8"
 
-# A job's owner as the old schema says it: its actor when that is the id of
-# a user who exists, else nobody.
 _OWNERS_BY_ACTOR = (
     "SELECT j.id, u.id FROM jobs AS j LEFT JOIN users AS u"
     " ON j.actor ~ '^[0-9]+$' AND u.id::text = j.actor"
@@ -591,9 +533,6 @@ _OWNERS_BY_ACTOR = (
 
 
 def test_job_owners_keep_every_job_with_its_owner_and_its_cost(db):
-    """jobs.user_id: every job whose actor was an existing user's id keeps
-    that owner, anything else is nobody's, no job is lost; a cost kept in
-    meta is the cost_usd column and leaves meta, its generations stay."""
     needs(JOB_OWNERS)(db)
     command.upgrade(_alembic(), _BEFORE_JOB_OWNERS)
     jobs = _count(db, "jobs")
@@ -634,9 +573,6 @@ def test_job_owners_keep_every_job_with_its_owner_and_its_cost(db):
 
 DOWNLOADS = "f4b5c6d7e8a1"
 
-# Every file of every done download job that is somebody's, as the job's
-# JSONB result lists them: (job, the file's place among the job's files,
-# link, path).
 _DOWNLOADED_FILES = """
     SELECT j.id,
            (row_number() OVER (PARTITION BY j.id ORDER BY e.n, p.n) - 1)::int,
@@ -654,10 +590,6 @@ _DOWNLOADED_FILES = """
 
 
 def test_downloads_gets_one_row_per_file_of_every_download_job(db):
-    """downloads: every output file of every done download job that has an
-    owner is one row, at its place in the job, stored, last used when the
-    job started, its store copy not known yet; no other table changes, and
-    a downgrade drops only the new table."""
     needs(DOWNLOADS)(db)
     command.upgrade(_alembic(), JOB_OWNERS)
     before = _row_counts(db)
@@ -698,8 +630,6 @@ def test_downloads_gets_one_row_per_file_of_every_download_job(db):
 
 
 def test_job_owners_downgrade_puts_actor_and_the_meta_cost_back(db):
-    """Back on the old schema every job has the actor its owner was (a
-    non-user actor became nobody's for good) and its meta as it was."""
     needs(JOB_OWNERS)(db)
     command.upgrade(_alembic(), _BEFORE_JOB_OWNERS)
     owners = {
@@ -740,9 +670,6 @@ def test_clone_examples_adds_an_empty_table_and_changes_no_row(db):
 
 
 def test_phone_revisions_start_with_every_owners_phones_and_then_record(db):
-    """Each owner of a phone or a login gets one "baseline" revision holding
-    every row of theirs; no phone row changes; from then on the database
-    records a change by itself, and refuses a change to what it recorded."""
     needs(PHONE_REVISIONS)(db)
     before = _row_counts(db)
     owners = _scalar(db, _PHONE_OWNERS)
@@ -775,9 +702,6 @@ _HIDDEN_OTHER_JOBS = """
 
 
 def test_last_seen_starts_empty_and_every_card_a_va_hid_is_shown_again(db):
-    """No person has a last action yet (nobody is logged out as idle by the
-    first sweep); a VA's hidden jobs are shown again, everyone else's stay
-    hidden, and no row is lost."""
     needs(LAST_SEEN)(db)
     command.upgrade(_alembic(), "c8d9e0f1a2b4")
     with db.begin() as conn:
@@ -809,8 +733,6 @@ _VA_FOLDER_DELETE_RULE = """
 
 
 def test_va_folders_start_empty_and_follow_their_va(db):
-    """The table comes empty (the first sweep makes every VA's folder), no
-    other row changes, and a VA deleted takes their row with them."""
     needs(VA_FOLDERS)(db)
     before = _row_counts(db)
 
@@ -823,7 +745,6 @@ def test_va_folders_start_empty_and_follow_their_va(db):
 
 
 AUDIT = "a1b2c3d4e5f8"
-# (table, column before, column after) of every float that becomes a time.
 _STAMPED = (
     ("users", "created_at", "created_at"),
     ("user_identities", "linked_at", "created_at"),
@@ -853,9 +774,6 @@ def _column(db: Engine, sql: str) -> list[float]:
 
 
 def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
-    """Every float epoch becomes the same moment (to the microsecond), no row
-    is lost, the log starts empty, the oldest phone revision (stored in the
-    old shape) still restores, and from then on a change is recorded."""
     needs(AUDIT)(db)
     command.upgrade(_alembic(), "f1a2b3c4d5e7")
     epochs = {
@@ -872,7 +790,6 @@ def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
         after = _column(db, _EPOCHS_AFTER.format(table=t, column=new))
         was = epochs[(t, old)]
         assert len(after) == len(was), (t, old)
-        # timestamptz keeps microseconds: each moment within one of its float.
         assert all(abs(a - b) <= 1e-6 for a, b in zip(after, was, strict=True)), (
             t,
             old,
@@ -881,7 +798,7 @@ def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
         db,
         "SELECT min(id) FROM phone_revisions WHERE snapshot -> 'devices' -> 0 ? 'added_at'",
     )
-    assert oldest is not None  # production's revisions predate the stamps
+    assert oldest is not None
     with db.begin() as conn:
         restored = conn.execute(
             text(
@@ -910,7 +827,6 @@ EVENT_TARGETS = "b2c3d4e5f6a9"
 
 
 def test_event_targets_start_empty_and_change_no_row(db):
-    """Nobody has linked a chat yet: every event goes where it went."""
     needs(EVENT_TARGETS)(db)
     command.upgrade(_alembic(), AUDIT)
     before = _row_counts(db)
@@ -927,8 +843,6 @@ SELF_ADDRESS = "a7c3e9d41f2b"
 
 
 def test_self_link_addresses_become_unique_and_no_row_changes(db):
-    """Prod had no address held twice (2026-11-18): the unique index goes on
-    without a cleanup, and a downgrade drops only it."""
     needs(SELF_ADDRESS)(db)
     command.upgrade(_alembic(), DISTRIBUTION)
     before = _row_counts(db)

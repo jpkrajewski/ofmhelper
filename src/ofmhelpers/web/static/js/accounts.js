@@ -1,18 +1,3 @@
-/*
- * /accounts and /accounts/{id} page controller.
- *
- * Both pages are server-rendered from the query string: a select in a
- * form[data-autosubmit] (filters, period) submits it on change, blank
- * fields left out of the URL; the per-page select follows its option's
- * link. The search box filters the rendered rows instantly (their
- * data-search text). Everything that writes posts JSON:
- *   + Add account    -> POST /accounts/add, then reload (new rows syncing)
- *   selected rows    -> POST /accounts/creator (assign; "" unassigns) or
- *                       /accounts/delete, from the bar above the table
- *   Sync             -> POST /accounts/sync (every account now), then reload
- * While anything is syncing ([data-syncing]) the page reloads every POLL_MS,
- * unless something on it is being edited.
- */
 (() => {
 
     const POLL_MS = 8000;
@@ -39,7 +24,7 @@
         try {
             data = await response.json();
         } catch {
-            // not JSON: the status line below says enough
+
         }
         if (!response.ok) {
             const detail = data?.detail;
@@ -55,9 +40,8 @@
         return Number(el.closest("tr[data-id]").dataset.id);
     }
 
-    // --- filters and period -------------------------------------------------
     document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
-        // Blank fields stay out of the URL (the server reads them as unset too).
+
         form.addEventListener("submit", () => {
             form.querySelectorAll("input, select").forEach((field) => {
                 field.disabled = field.value === "";
@@ -72,7 +56,6 @@
         perPage.addEventListener("change", () => { window.location.href = perPage.value; });
     }
 
-    // --- add dialog ---------------------------------------------------------
     const dialog = $("accounts-add");
     if (dialog) {
         const addForm = $("accounts-add-form");
@@ -103,7 +86,6 @@
         });
     }
 
-    // --- instant search -----------------------------------------------------
     const search = $("accounts-search");
     if (search) {
         const noMatch = $("accounts-no-match");
@@ -119,7 +101,6 @@
         });
     }
 
-    // --- selection + bulk actions -------------------------------------------
     const bulk = $("accounts-bulk");
     const picks = () => [...document.querySelectorAll("tr:not([hidden]) .accounts-pick:checked")];
     if (bulk) {
@@ -160,7 +141,6 @@
         });
     }
 
-    // --- sync: every account now ---------------------------------------------
     const sync = $("accounts-sync");
     if (sync) {
         sync.addEventListener("click", async () => {
@@ -176,7 +156,6 @@
         });
     }
 
-    // --- syncing rows: reload until their numbers are in ----------------------
     if (document.querySelector("[data-syncing]")) {
         window.setInterval(() => {
             const busy = (dialog?.open) || picks().length

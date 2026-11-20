@@ -1,26 +1,9 @@
-/*
- * Hidden gallery cards (/generate, /clone, /clone-long, /download-assets).
- *
- * Hide in a card's ⋯ menu takes it out of the gallery at once and saves in
- * the background (POST /jobs/{id}/hidden; a failed save puts it back and
- * says so). The server leaves hidden jobs out of the gallery's pages; the
- * job and its files stay.
- *
- * "Show hidden (N)" in the toolbar under the title (_gallery_hidden.html)
- * switches the gallery to only the hidden cards -- `?hidden=1` on its
- * data-gallery-endpoint, paged by gallery-scroll.js like the normal list --
- * each with Unhide, which takes it out of that view. live-gallery.js is
- * paused meanwhile. "Hide hidden" (or the last Unhide, or starting a run)
- * switches back: the normal cards were only set aside, so they come back
- * as they were -- refetched only when an Unhide put a card back among them.
- */
 (() => {
-    // Per job, the last save: the next waits for it, so a quick Hide then
-    // Unhide reach the server in that order.
+
     const saving = new Map();
-    // The normal view's nodes while the hidden one shows (null: normal).
+
     let stash = null;
-    // An Unhide in the hidden view: the normal one needs its first page again.
+
     let unhidden = false;
 
     const gallery = () => document.querySelector("#results-panel .results");
@@ -30,18 +13,16 @@
         return Number(button.dataset.hiddenCount) || 0;
     }
 
-    // The button's label is its text after the icon.
     function setLabel(button, text) {
         const node = [...button.childNodes].reverse().find((n) => n.nodeType === Node.TEXT_NODE);
         if (node) node.nodeValue = ` ${text}`;
         else button.append(` ${text}`);
     }
 
-    // The toolbar row under the title is there only while one is hidden.
     function render(button, count) {
         const showing = stash !== null;
         button.dataset.hiddenCount = String(count);
-        // A row with another button (`data-keep`) stays: only this one goes.
+
         const row = button.closest(".ph-toolbar");
         const idle = count === 0 && !showing;
         const kept = "keep" in row.dataset;
@@ -51,8 +32,6 @@
         setLabel(button, showing ? "Hide hidden" : `Show hidden (${count})`);
     }
 
-    // The gallery's endpoint for the hidden view or the normal one: what a
-    // switch and every later page (gallery-scroll.js) fetch.
     function endpoint(list, hidden) {
         const url = new URL(list.dataset.galleryEndpoint, window.location.origin);
         if (hidden) url.searchParams.set("hidden", "1");
@@ -64,9 +43,6 @@
         return [...list.querySelectorAll(`.result-item[data-job-id="${CSS.escape(jobId)}"]`)];
     }
 
-    // The server's list for this view moved by `by` above the sentinel: the
-    // next page starts that much later (gallery-scroll.js skips a card it
-    // already has).
     function shiftSentinel(list, by) {
         const sentinel = list.querySelector(".gallery-sentinel");
         if (!sentinel) return;
@@ -101,8 +77,6 @@
         throw new Error(body.detail || `failed (${r.status})`);
     }
 
-    // Hide (normal view) or Unhide (hidden view): either way the card leaves
-    // the view it is in, at once.
     function setHidden(item, hidden) {
         const list = gallery();
         const button = toggleButton();
@@ -126,7 +100,7 @@
                 if (saving.get(jobId) === queued) saving.delete(jobId);
             })
             .catch((err) => {
-                // Back where it was, if that view is still the one shown.
+
                 if (stash === view) {
                     removed.forEach(([c, next]) =>
                         list.insertBefore(c, next?.parentNode === list ? next : null)
@@ -143,8 +117,7 @@
     async function showHidden(list, button) {
         button.disabled = true;
         try {
-            // A Hide clicked just before must be saved first, or its card
-            // would be missing from the hidden view.
+
             await Promise.allSettled([...saving.values()]);
             const cards = await fetchView(list, true);
             stash = document.createDocumentFragment();
@@ -173,19 +146,17 @@
         if (unhidden) refreshNormal(list);
     }
 
-    // After an Unhide: the first page again, so the card is back in its
-    // place; a card already on the page is moved, not redrawn.
     async function refreshNormal(list) {
         unhidden = false;
         try {
             await Promise.allSettled([...saving.values()]);
             const cards = await fetchView(list, false);
-            if (stash !== null) return; // switched to the hidden view meanwhile
+            if (stash !== null) return;
             const fresh = [...cards.childNodes].map((node) => {
                 const kept = node.dataset?.jobId && cardsOf(list, node.dataset.jobId);
                 return kept?.length ? kept : [node];
             });
-            // A run still being sent has no job yet: it stays on top.
+
             const sending = [...list.children].filter(
                 (el) => el.matches(".result-item") && !el.dataset.jobId
             );
@@ -209,7 +180,6 @@
         if (item) setHidden(item, item.classList.contains("hide-btn"));
     });
 
-    // Starting a run shows the normal view first: its card goes there.
     document.addEventListener(
         "submit",
         () => {

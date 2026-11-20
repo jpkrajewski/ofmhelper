@@ -1,13 +1,3 @@
-"""/accounts: a tracked social account with its numbers for a reporting
-period, the list's query (search, filters, sort, period, paging), a page of
-it and its totals, the analytics page's history and top posts, and what the
-page posts.
-
-Metric rules, everywhere: followers are a point-in-time total; views are
-per period (posts published in it, compared with the period before). A
-number is shown only from data that covers it: 0 is a confirmed zero, None
-(a dash) is "no data for that yet", a failed sync is its own warning."""
-
 import itertools
 import math
 import time
@@ -34,8 +24,6 @@ from ofmhelpers.schemas.socials import (
     platform_names,
 )
 
-# The creator filter's value for accounts with no creator. Creator names
-# cannot start with "(", so no real one collides with it.
 NO_CREATOR = "(none)"
 
 
@@ -47,12 +35,10 @@ def _creator_name(value: str) -> str:
     return name
 
 
-# A creator as stored: trimmed, single-spaced; "" = none.
 CreatorName = Annotated[str, AfterValidator(_creator_name)]
 
 
 def ago(ts: float, now: float | None = None) -> str:
-    """How long ago `ts` was: "just now", "5 min ago", "3 h ago", "2 d ago"."""
     seconds = max((now or time.time()) - ts, 0)
     for unit, size in (("d", 86400), ("h", 3600), ("min", 60)):
         if seconds >= size:
@@ -61,13 +47,10 @@ def ago(ts: float, now: float | None = None) -> str:
 
 
 def pct_change(now: int, before: int) -> float | None:
-    """Percent change; None without a non-zero base to compare with."""
     return (now - before) / before * 100 if before else None
 
 
 class Period(BaseModel):
-    """A reporting period of the period selector."""
-
     days: int
 
     @property
@@ -87,18 +70,12 @@ class AccountStatus(StrEnum):
 
 
 class Baseline(BaseModel):
-    """A snapshot's followers, and when it was taken (`days`: the period it
-    is the baseline of; 0 for the first/latest snapshot)."""
-
     days: int
     followers: int
     taken_at: float
 
 
 class Growth(BaseModel):
-    """Follower change. `full`: measured over the whole period; otherwise
-    since the account's first snapshot (tracked for less than the period)."""
-
     delta: int
     pct: float | None
     since: float
@@ -106,9 +83,6 @@ class Growth(BaseModel):
 
 
 class ViewsChange(BaseModel):
-    """A period's views and the change from the period before; `previous`
-    is None when the scan did not reach back that far."""
-
     views: int
     previous: int | None
 
@@ -118,9 +92,6 @@ class ViewsChange(BaseModel):
 
 
 class TopPosts(BaseModel):
-    """The analytics page's post ranking: every post of the period
-    (`in_period`), else the `top_posts` best of the latest scanned ones."""
-
     posts: list[PostStat]
     in_period: bool
 
@@ -131,7 +102,6 @@ class TopPosts(BaseModel):
 
 class TrackedAccount(BaseModel):
     id: int
-    # Whose it is.
     user_id: int
     platform: str
     handle: str
@@ -140,30 +110,21 @@ class TrackedAccount(BaseModel):
     added_at: float
     scanned_at: float | None = None
     claimed_at: float | None = None
-    # Its scan is queued or running (claimed, the claim not expired).
     syncing: bool = False
-    # Set once removed from tracking: not synced or listed, history kept.
     untracked_at: float | None = None
     error: str | None = None
-    # None until the first scan succeeds.
     profile: AccountProfile | None = None
     metrics: AccountMetrics | None = None
-    # Per period, the newest snapshot at least that old.
     baselines: list[Baseline] = []
     first: Baseline | None = None
     latest: Baseline | None = None
-    # The kept posts (every scan's, within retention), as much as view
-    # windows need: every period is derived from them on read. Complete
-    # from `covered_since` on (None: no scan read any yet).
     post_views: list[PostViews] = []
     covered_since: float | None = None
-    # Only loaded for the analytics page.
     posts: list[PostStat] = []
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> AccountStatus:
-        """An error wins (the previous numbers stay on show next to it)."""
         if self.error:
             return AccountStatus.ERROR
         if self.profile is None:
@@ -178,7 +139,6 @@ class TrackedAccount(BaseModel):
 
     @property
     def name(self) -> str:
-        """Display name, else the handle."""
         return (self.profile.display_name if self.profile else "") or self.handle
 
     @property
@@ -186,8 +146,6 @@ class TrackedAccount(BaseModel):
         return self.metrics.followers if self.metrics else None
 
     def growth(self, days: int) -> Growth | None:
-        """Followers gained over the period; since the first snapshot while
-        tracked for less; None until there are two snapshots."""
         if self.metrics is None:
             return None
         now = self.metrics.followers
@@ -206,8 +164,6 @@ class TrackedAccount(BaseModel):
         )
 
     def window(self, days: int) -> ViewWindow | None:
-        """The last `days` of the latest successful sync; None before one,
-        or when its read did not reach back that far."""
         if self.metrics is None or self.latest is None:
             return None
         found = ViewWindow.of(
@@ -216,7 +172,6 @@ class TrackedAccount(BaseModel):
         return found if found.covered else None
 
     def views(self, days: int) -> ViewsChange | None:
-        """The period's views, and those of the `days` before it."""
         if (last := self.window(days)) is None:
             return None
         both = self.window(2 * days)
@@ -231,7 +186,6 @@ class TrackedAccount(BaseModel):
         since = (self.scanned_at or time.time()) - days * 86400
         recent = [p for p in self.posts if p.posted_at >= since]
         if recent:
-            # Every post of the period, not a top N.
             ranked = sorted(recent, key=lambda p: p.views, reverse=True)
             return TopPosts(posts=ranked, in_period=True)
         ranked = sorted(self.posts, key=lambda p: p.views, reverse=True)[:limit]
@@ -252,14 +206,11 @@ class AccountSort(StrEnum):
 
 
 class AccountQuery(BaseModel):
-    """The list's query string. `period` None: the configured default."""
-
     q: str = Field(default="", max_length=64)
     platform: str = Field(default="", max_length=32)
     creator: str = Field(default="", max_length=64)
     status: AccountStatus | None = None
     sort: AccountSort = AccountSort.FOLLOWERS
-    # None: the sort's natural order (names A-Z, numbers high to low).
     order: SortOrder | None = None
     period: int | None = Field(default=None, ge=1, le=3650)
     page: int = Field(default=1, ge=1)
@@ -268,8 +219,6 @@ class AccountQuery(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _blank_is_unset(cls, data: Any) -> Any:
-        """The filter form submits every field, an untouched select as
-        `status=`: a blank parameter means its default, not a value."""
         if isinstance(data, Mapping):
             return {k: v for k, v in data.items() if v != ""}
         return data
@@ -290,14 +239,11 @@ class AccountQuery(BaseModel):
 
     @property
     def direction(self) -> SortOrder:
-        """The order in effect: the query's, else the sort's natural one."""
         if self.order is not None:
             return self.order
         return SortOrder.ASC if self.sort == AccountSort.HANDLE else SortOrder.DESC
 
     def sort_link(self, sort: AccountSort) -> str:
-        """A column header's link: that sort, its order flipped when it is
-        already the current one."""
         if sort != self.sort:
             return self.link(sort=sort, order=None)
         flipped = SortOrder.ASC if self.direction == SortOrder.DESC else SortOrder.DESC
@@ -306,7 +252,6 @@ class AccountQuery(BaseModel):
     def ordered(
         self, accounts: list[TrackedAccount], days: int
     ) -> list[TrackedAccount]:
-        """In `direction`; accounts without the number last either way."""
 
         def views(a: TrackedAccount) -> int | None:
             change = a.views(days)
@@ -331,8 +276,6 @@ class AccountQuery(BaseModel):
         return sorted(known, key=key, reverse=reverse) + unknown
 
     def link(self, path: str = "/accounts", **changes: object) -> str:
-        """`path` with this query, `changes` applied (page back to 1 unless
-        the change is the page); defaults left out."""
         update = {"page": 1, **changes}
         data = self.model_copy(update=update).model_dump(mode="json")
         defaults = AccountQuery().model_dump(mode="json")
@@ -343,15 +286,10 @@ class AccountQuery(BaseModel):
 
 
 class AccountSummary(BaseModel):
-    """The KPI row over the filtered accounts."""
-
     accounts: int
     followers: int
     views: int | None
-    # Private, or the last sync failed: the rows the page marks red.
     unreachable: int
-    # Synced from the platform's restricted (logged-out) view: their views
-    # miss the posts it hides there.
     limited: int
 
     @classmethod
@@ -368,8 +306,6 @@ class AccountSummary(BaseModel):
 
 
 class AccountPage(BaseModel):
-    """One page of the filtered, sorted list."""
-
     rows: list[TrackedAccount]
     total: int
     page: int
@@ -405,29 +341,19 @@ class Snapshot(BaseModel):
 
 
 class DailyRow(BaseModel):
-    """One day's last snapshot, and the follower change from the day
-    before it (None for the first day)."""
-
     day: str
     snapshot: Snapshot
     delta: int | None
 
 
-# Periods up to this many days chart every snapshot; longer ones one point
-# per UTC day (its last snapshot).
 CHART_RAW_MAX_DAYS = 2
-# Most horizontal gridlines the y-axis draws (3-5 come out).
 CHART_MAX_TICKS = 5
-# Headroom above the highest and below the lowest value, as a share of the
-# range, so neither touches the plot edge.
 CHART_PAD = 0.08
-# Most date labels under a daily chart; past that every n-th day.
 CHART_MAX_X_LABELS = 8
 _DAY_S = 86400
 
 
 def _nice_step(raw: float) -> int:
-    """The smallest 1/2/5 x 10^n step >= `raw`, at least 1."""
     if raw <= 1:
         return 1
     magnitude = 10 ** math.floor(math.log10(raw))
@@ -435,8 +361,6 @@ def _nice_step(raw: float) -> int:
 
 
 def tick_label(value: int, step: int, top: int) -> str:
-    """A y-axis label: "9,500" below 10k, "38.85k" below 1M, else "1.2M", with as
-    many decimals as `step` needs to tell neighbours apart."""
     if value == 0:
         return "0"
     for unit, suffix, floor in ((1_000_000, "M", 1_000_000), (1_000, "k", 10_000)):
@@ -447,9 +371,6 @@ def tick_label(value: int, step: int, top: int) -> str:
 
 
 class ChartPoint(BaseModel):
-    """One sync on the follower chart: where it sits (percent of the plot,
-    y from the top) and the change from the point before (None: first)."""
-
     taken_at: float
     followers: int
     change: int | None
@@ -468,18 +389,6 @@ class XTick(BaseModel):
 
 
 class FollowerChart(BaseModel):
-    """Followers over a period, laid out for an inline SVG in a 0..100 box
-    (stretched to the plot; labels and dots are HTML at the same percents).
-
-    The first point is the newest sync a full period old when there is one,
-    the Follower growth KPI's baseline, so start -> end is that KPI's
-    change. x is linear in time: daily charts place each point on its UTC
-    day (evenly spaced, the day's label right under it), the others at
-    the sync's own time. Missed syncs read as gaps: two points further
-    apart than `gap_s` are joined by a dashed connector (`gaps`) instead of
-    the line (`lines`). The y-range is the data padded a little and rounded
-    to 1/2/2.5/5 steps; a flat line sits mid-plot."""
-
     daily: bool
     points: list[ChartPoint] = []
     lines: list[str] = []
@@ -490,7 +399,7 @@ class FollowerChart(BaseModel):
 
     @property
     def ready(self) -> bool:
-        return len(self.points) >= 2  # noqa: PLR2004 -- a line needs two points
+        return len(self.points) >= 2  # noqa: PLR2004
 
     @property
     def start(self) -> ChartPoint:
@@ -502,7 +411,6 @@ class FollowerChart(BaseModel):
 
     @property
     def span_days(self) -> int:
-        """Calendar days (UTC) from the first point to the last."""
         return _day(self.end.taken_at) - _day(self.start.taken_at)
 
     @property
@@ -515,16 +423,13 @@ class FollowerChart(BaseModel):
 
     @classmethod
     def of(cls, snaps: list[Snapshot], daily: bool, gap_s: float) -> Self:
-        """`snaps` oldest first."""
-        if len(snaps) < 2:  # noqa: PLR2004 -- a line needs two points
+        if len(snaps) < 2:  # noqa: PLR2004
             return cls(
                 daily=daily,
                 points=[_point(s, None, 0, 0) for s in snaps],
             )
         values = [s.followers for s in snaps]
         low, high, step = _y_domain(min(values), max(values))
-        # Where each point sits on the time axis: its UTC day's start
-        # (daily), else the sync itself.
         slot = [_day(s.taken_at) * _DAY_S if daily else s.taken_at for s in snaps]
         t0 = slot[0]
         span_t = (slot[-1] - t0) or 1
@@ -552,7 +457,6 @@ class FollowerChart(BaseModel):
                 runs.append([p])
             else:
                 runs[-1].append(p)
-        # The ends, and any point a gap leaves alone (it has no line).
         dotted = {0, len(points) - 1} | {
             points.index(r[0]) for r in runs if len(r) == 1
         }
@@ -589,9 +493,6 @@ def _day(t: float) -> int:
 
 
 def _day_ticks(t0: float, span_t: float) -> list[XTick]:
-    """A label under every day of a daily chart, every n-th past
-    CHART_MAX_X_LABELS, counted back from the last day so it is always
-    labelled."""
     days = max(1, round(span_t / _DAY_S))
     every = -(-(days + 1) // CHART_MAX_X_LABELS)
     return [
@@ -601,18 +502,12 @@ def _day_ticks(t0: float, span_t: float) -> list[XTick]:
 
 
 def _steps() -> Iterator[int]:
-    """1, 2, 5, 10, 20, 25, 50, 100, ... -- gridline steps that read well."""
     yield from (1, 2, 5)
     for magnitude in itertools.count(1):
         yield from (int(m * 10**magnitude) for m in (1, 2, 2.5, 5))
 
 
 def _y_domain(low: int, high: int) -> tuple[int, int, int]:
-    """(bottom, top, step): `low..high` padded by CHART_PAD of the range
-    (never below 0), with the coarsest-needed step that still draws at most
-    CHART_MAX_TICKS gridlines, and the ends rounded to a quarter or half
-    step so the data fills the plot. A flat line gets one step either
-    side."""
     if low == high:
         step = _nice_step(max(1, high * 0.02))
         bottom = max(0, low - step)
@@ -623,8 +518,6 @@ def _y_domain(low: int, high: int) -> tuple[int, int, int]:
 
 
 def _y_fit(lo: float, hi: float, step: int) -> tuple[int, int, int] | None:
-    """`lo..hi` rounded out to a quarter (else half, else whole) `step`, or
-    None when that draws more than CHART_MAX_TICKS gridlines."""
     unit = next((step // n for n in (4, 2) if step % n == 0), step)
     bottom = math.floor(lo / unit) * unit
     top = math.ceil(hi / unit) * unit
@@ -638,7 +531,6 @@ class AccountHistory(BaseModel):
 
     @property
     def daily(self) -> list[DailyRow]:
-        """Oldest day first."""
         by_day: dict[str, Snapshot] = {}
         for snap in self.snapshots:
             by_day[time.strftime("%Y-%m-%d", time.gmtime(snap.taken_at))] = snap
@@ -653,17 +545,11 @@ class AccountHistory(BaseModel):
     def follower_chart(
         self, days: int, rescan_s: float, now: float | None = None
     ) -> FollowerChart:
-        """Followers over the last `days` days, from the newest snapshot a
-        period old (the growth baseline) when there is one: every sync for
-        short periods, else each day's last. A gap is more than two rescan
-        intervals (or a day and a half, daily) without a point."""
         since = (now or time.time()) - days * _DAY_S
         base = [s for s in self.snapshots if s.taken_at <= since][-1:]
         inside = [s for s in self.snapshots if s.taken_at > since]
         daily = days > CHART_RAW_MAX_DAYS
         if daily:
-            # One point per UTC day, its last sync; the baseline's day too
-            # (a sync later that day replaces it).
             by_day = {_day(s.taken_at): s for s in base + inside}
             base, inside = [], list(by_day.values())
         gap_s = max(2 * rescan_s, 1.5 * _DAY_S if daily else 0)
@@ -671,17 +557,11 @@ class AccountHistory(BaseModel):
 
 
 class AddAccounts(BaseModel):
-    """The Add accounts dialog: handles of one platform, one per line ("name",
-    "@name", a profile URL; anything after the handle ignored), all going
-    to `creator` when one is given."""
-
     platform: str
     handles: str
     creator: CreatorName = ""
 
     def parsed(self) -> list[str]:
-        """The stored handles, deduped, in order. Raises ValueError naming
-        the lines that are not one, so a bad paste adds nothing."""
         if self.platform not in platform_names():
             msg = f"Unknown platform: {self.platform}"
             raise ValueError(msg)

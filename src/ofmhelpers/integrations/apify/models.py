@@ -1,6 +1,3 @@
-"""Apify REST API (v2) shapes: the `data` envelope every answer comes in, a
-run, and an account's usage limits."""
-
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -31,7 +28,6 @@ class RunStatus(StrEnum):
 
 
 class _ChargeEvent(_Api):
-    # Absent for tiered prices: the run is then priced by Apify's total.
     event_price_usd: float | None = Field(default=None, alias="eventPriceUsd")
 
 
@@ -51,9 +47,6 @@ class ActorRun(_Api):
     id: str
     status: RunStatus
     default_dataset_id: str = Field(alias="defaultDatasetId")
-    # Apify's total for the run; a pay-per-event actor's events reach it only
-    # some time after the run ends (a 20-reel run: $0.001 when it turned
-    # SUCCEEDED, $0.053 later).
     usage_total_usd: float = Field(default=0.0, alias="usageTotalUsd")
     charged_event_counts: dict[str, int] = Field(
         default_factory=dict, alias="chargedEventCounts"
@@ -62,8 +55,6 @@ class ActorRun(_Api):
     status_message: str | None = Field(default=None, alias="statusMessage")
 
     def priced(self, counts: dict[str, int]) -> float:
-        """`counts` of this actor's events at their prices (an event
-        without a price counts nothing)."""
         per_event = self.pricing_info.pricing_per_event if self.pricing_info else None
         events = per_event.actor_charge_events if per_event else {}
         return sum(
@@ -74,11 +65,6 @@ class ActorRun(_Api):
 
     @property
     def cost_usd(self) -> float:
-        """What the run costs so far: its charged events at their prices, or
-        Apify's total when that is more (or the prices are unknown). The
-        charged counts lag too (a 71-reel run: 67 charged when it ended), so
-        a caller that knows what the actor charges for prices that
-        (`priced`)."""
         return max(self.priced(self.charged_event_counts), self.usage_total_usd)
 
 
@@ -87,10 +73,6 @@ class RunEnvelope(_Api):
 
 
 class DatasetItem(BaseModel):
-    """One item of a run's dataset. Its fields are the actor's own (kept as
-    sent, `read` maps them); an item the actor could not read carries
-    `error` instead."""
-
     model_config = ConfigDict(extra="allow")
 
     error: str | None = None
@@ -99,7 +81,6 @@ class DatasetItem(BaseModel):
     @field_validator("error", "url", mode="before")
     @classmethod
     def _as_text(cls, value: object) -> object:
-        """Only ever logged: whatever the actor put there, as text."""
         return value if value is None else str(value)
 
     @property
@@ -107,7 +88,6 @@ class DatasetItem(BaseModel):
         return "error" in self.model_fields_set
 
     def read[T: BaseModel](self, model: type[T]) -> T:
-        """The item as `model`; `ValidationError` when it does not fit."""
         return model.model_validate(self.model_dump(exclude_unset=True))
 
 

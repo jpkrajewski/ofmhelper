@@ -1,7 +1,3 @@
-"""/download-media: any links -- videos, photo posts, carousels -- in one go
-(`features.downloads.media`). Replaced the separate Download videos / Download
-images tools on /download-assets; their routes stay for their past jobs."""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Path
@@ -10,8 +6,6 @@ from pydantic import Field
 from ofmhelpers.auth.access import Area
 from ofmhelpers.features.assets import send as sending
 from ofmhelpers.features.downloads import again, media, sheet
-
-# Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.downloads.media import run_downloads as _run_downloads
 from ofmhelpers.features.downloads.service import Redirect
 from ofmhelpers.schemas import JobQueued
@@ -34,7 +28,6 @@ router = APIRouter(
 class SendForm(FormModel):
     job_id: str
     target: str
-    # The card's own file (`/files/{job}/{index}`).
     index: int | None = Field(default=None, ge=0)
 
 
@@ -52,9 +45,6 @@ def run(
 def sheet_downloads(
     actor: Actor, owner_id: OwnerId, assets_root: AssetsRoot
 ) -> SheetQueued:
-    """Today's column of the sheet in the person's Drive root: every link
-    not downloaded or queued before becomes one download job (`job_id`;
-    none when nothing is new). 429 while the button rests."""
     return sheet.start(actor, owner_id, assets_root)
 
 
@@ -62,17 +52,11 @@ def sheet_downloads(
 def send(
     form: Annotated[SendForm, Form()], actors: Actors, assets_root: AssetsRoot
 ) -> Redirect:
-    """Hand a finished download's video (the asker's own or their VA's) to
-    /clone, /clone-long or /edit: answers the URL to open with it already
-    picked."""
     return sending.send(form.job_id, form.target, form.index, actors, assets_root)
 
 
 @router.post("/{job_id}/replays", status_code=202, summary="Download it again")
 def replay(job_id: str, actor: Actor) -> JobQueued:
-    """A download whose video was removed, fetched again into the same job:
-    answers the job the page polls. A second click while it runs queues
-    nothing."""
     return again.replay(job_id, actor)
 
 
@@ -80,8 +64,6 @@ def replay(job_id: str, actor: Actor) -> JobQueued:
 def stored_file(
     job_id: str, index: Annotated[int, Path(ge=0)], actor: Actor
 ) -> again.StoredFile:
-    """Where a download's file is in the asker's part of the asset store:
-    what a clone's Recreate picks once the video is back."""
     return again.stored_file(job_id, index, actor)
 
 

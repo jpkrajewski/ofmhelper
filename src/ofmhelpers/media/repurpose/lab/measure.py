@@ -1,17 +1,3 @@
-"""One lab measurement: a copy of one sample with one trial's knobs, then
-
-- detection: `checker.check` -- every picture hash's in-order % and
-  Chromaprint's window % (`MethodScore` semantics: share of the copy found in
-  the source; 50+ = caught);
-- picture damage: VMAF of the copy against a reference that has the copy's
-  framing (same drawn speed / zoom / tilt / trims...) and none of its look,
-  encoded near-lossless -- so VMAF scores only what the look knobs and the
-  encode do. Needs an ffmpeg with libvmaf (`OFM_LAB_VMAF_FFMPEG`; Debian's
-  has none); without it the score falls back to SSIM x 100;
-- sound change: mean dB distance of the copy's log-band spectrogram from the
-  source's (same stretch, best offset): 0 = unchanged.
-"""
-
 import itertools
 import json
 import subprocess
@@ -41,7 +27,6 @@ logger = get_logger(__name__)
 DEVICE = "strip"
 _TIMEOUT_S = 900
 _FPS = 30
-# Every look field of VideoDraws, off: what the quality reference leaves out.
 _NO_LOOK = {
     "saturation": None,
     "contrast": None,
@@ -69,7 +54,6 @@ _FRAME = 512
 _HOP = 256
 _BANDS = 48
 _MAX_LAG = 40
-# Fewest overlapping frames / loud frames a comparison stands on.
 _MIN_FRAMES = 50
 _MIN_LOUD = 25
 
@@ -79,11 +63,8 @@ class Measurement(BaseModel):
     sample: str
     seed: int
     part: Part
-    # Picture hash -> % of the copy found in the source, in order.
     video: dict[str, int] = {}
-    # Chromaprint: % of the copy's ~2 s windows found.
     audio: int | None = None
-    # TMK+PDQF's raw level-2 similarity (0..1), where it ran.
     tmk_level2: float | None = None
     vmaf: float | None = None
     audio_change_db: float | None = None
@@ -98,8 +79,6 @@ class Measurement(BaseModel):
 def reference(
     draws: VideoDraws, fps: str | None, sample: Path, dst: Path, work: Path
 ) -> None:
-    """The copy's framing without its look, near-lossless, at the copy's
-    output rate (`fps`: the copy's `-r`; frames picked the same way)."""
     ref = VideoTransformer.from_draws(
         VideoSettings(), draws.model_copy(update=_NO_LOOK)
     )
@@ -191,7 +170,6 @@ def _pcm(path: Path, start: float | None, seconds: float | None) -> np.ndarray:
 
 
 def _bands(pcm: np.ndarray) -> np.ndarray:
-    """(frames, bands) log energies, dB."""
     frames = len(pcm) // _HOP - _FRAME // _HOP
     if frames <= 0:
         return np.zeros((0, _BANDS))
@@ -227,7 +205,7 @@ def audio_change_db(copy: Path, sample: Path, start: float, seconds: float) -> f
 
 
 def _require_step(result: RunResult) -> EncodeStep:
-    if result.step is None:  # only a recorder device skips our encode
+    if result.step is None:
         msg = f"device {DEVICE} made no encode step"
         raise RuntimeError(msg)
     return result.step
@@ -243,8 +221,6 @@ def measure(
     full: bool = False,
     keep: Path | None = None,
 ) -> Measurement:
-    """`full`: VMAF and the sound change both (a whole preset), else only
-    the one `part` needs. `keep`: copy the copy there."""
     started = time.monotonic()
     out = Measurement(trial=trial, sample=sample.stem, seed=seed, part=part)
     try:
@@ -262,7 +238,6 @@ def measure(
                 h.kind.value: round(h.sequence.share * 100) for h in report.hashes
             } | {d.kind: round(d.sequence.share * 100) for d in report.descriptors}
             if report.tmk:
-                # Scaled so TMK's own match line (both levels 0.7) sits at 50.
                 weaker = min(report.tmk.level1, report.tmk.level2)
                 out.video["tmk"] = min(100, round(weaker / report.tmk.threshold * 50))
                 out.tmk_level2 = report.tmk.level2

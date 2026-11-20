@@ -1,7 +1,3 @@
-"""ofmhelpers/sweeps.py, the sweeps container's entrypoint: the sweeps run in
-a process of their own (never the web app's), and `compose stop` (SIGTERM,
-every deploy) ends it cleanly."""
-
 import signal
 import subprocess
 import sys
@@ -64,8 +60,6 @@ def test_main_sets_up_logging_and_telemetry_then_runs_every_sweep(monkeypatch):
 
     monkeypatch.setattr(entrypoint, "run", run)
 
-    # In a thread of its own: e2e tests in the same worker leave Playwright's
-    # event loop running in this one, and `asyncio.run` refuses to nest.
     with ThreadPoolExecutor(1) as pool:
         pool.submit(entrypoint.main).result(timeout=30)
 

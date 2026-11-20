@@ -1,36 +1,3 @@
-"""Development only: a made-up month of a VA's work, to look at /vas and the
-galleries with (owner 2026-11-14: "i need fake VA data generations from many
-provides on gen ai and clone and fake downalkods to see how it looks like").
-
-    python -m ofmhelpers.features.vas.seed seed <va name or email>
-    python -m ofmhelpers.features.vas.seed clear
-
-Refused in production. Nothing is run and no provider is called: `seed`
-writes job rows as they would have ended -- clones on every priced /clone
-provider (kie.ai, Higgsfield, APIYI, ...), a failed clone, /generate runs,
-downloads, and the day's login and logout (or idle logout) -- over today,
-the last week and earlier this month. Each row copies the inputs and the
-result files of a real finished job of the VA's team (the owner's or a
-VA's), so its card shows a real picture or video; with no such job of a
-kind, that kind is left out. A card plays the result
-file itself until the preview backfill (`features/previews/backfill.py`, at
-the sweeps' next start) makes its light copy.
-
-Money is the app's own (`features/jobs/cost.py` `cost_of`): a clone's price
-is the /clone table's for its provider, resolution and length (kie.ai's as
-the provider would report it, the others as the app's estimate). A
-/generate run is written for one of a few models with a known price
-(`GENERATED`): what kie.ai reported for it on real runs, APIYI's published
-price per picture, or the /clone table for Higgsfield's Wan 3.0 video. A
-real run of an APIYI or Higgsfield model on /generate shows no price yet
-(their APIs report none and the app has no price list for /generate): the
-made-up ones show what such a run does cost. Higgsfield pictures are left
-out: no price of theirs is known here.
-
-Every row's id starts with `seed-`: `clear` deletes exactly those (their
-download rows go with them) and their previews. Running `seed` again clears
-first."""
-
 import argparse
 import random
 import uuid
@@ -59,16 +26,12 @@ from ofmhelpers.schemas.users import Role, User
 logger = get_logger(__name__)
 
 PREFIX = "seed-"
-# The days made up, as days before today: today, the last week, earlier.
 DAYS_BACK = (0, 1, 2, 3, 5, 6, 9, 12, 16, 20)
 RESOLUTION = "720P"
 FLAGGED = "Flagged content: the provider refused this video"
 
 
 class _Model(BaseModel):
-    """A /generate model a made-up run is written for. `usd`: its price per
-    run; None: the /clone table prices it by its length."""
-
     model_config = ConfigDict(frozen=True)
 
     provider: str
@@ -76,8 +39,6 @@ class _Model(BaseModel):
     usd: float | None = None
 
 
-# kie.ai: as it reported on real runs (dev 2026-11-11); APIYI: per picture,
-# docs.apiyi.com 2026-11-06 (integrations/ai_providers/apiyi/CLAUDE.md).
 GENERATED = (
     _Model(provider="kie", model="kie:seedream/4.5-edit", usd=0.0325),
     _Model(provider="apiyi", model="apiyi:gemini-3-pro-image", usd=0.09),
@@ -87,14 +48,11 @@ GENERATED = (
         model="higgsfield:alibaba/wan-3.0/reference-to-video",
     ),
 )
-# How far back real jobs are looked through for ones to copy.
 _SOURCES = 200
 _HOUR = 3600.0
 
 
 class Seeded(BaseModel):
-    """What `seed` wrote, by kind."""
-
     va: str
     days: int
     clones: int = 0
@@ -110,8 +68,6 @@ class Cleared(BaseModel):
 
 
 class _Sources(BaseModel):
-    """Real finished jobs of the team to copy inputs and results from."""
-
     clones: list[Job]
     generations: list[Job]
     downloads: list[Job]
@@ -139,8 +95,6 @@ def _team(va: User) -> frozenset[str]:
 
 
 def _real(task: str, team: frozenset[str]) -> list[Job]:
-    """The team's newest finished jobs of `task` whose files are there,
-    made-up ones left out."""
     found = list_jobs_page({task}, 0, _SOURCES, team, status="done").jobs
     return [job for job in found if not job.id.startswith(PREFIX) and job.result]
 
@@ -162,8 +116,6 @@ def _generation(provider: str, model: str, usd: float | None) -> GenerationRecor
 
 
 class _Work(BaseModel):
-    """The rows one VA's made-up work is written as."""
-
     model_config = ConfigDict(frozen=True)
 
     va: User
@@ -184,9 +136,6 @@ class _Work(BaseModel):
         )
 
     def clone(self, at: float, source: Job, provider: str, seconds: int) -> RecordedJob:
-        """A finished clone of `source`'s video on `provider`, priced by the
-        /clone table. kie.ai reports what a run cost, so its row carries the
-        amount as reported; the others get the app's estimate."""
         target = clone_targets().entries[provider]
         price = clone_pricing().entries[provider]
         params = {
@@ -218,8 +167,6 @@ class _Work(BaseModel):
     def generated(
         self, at: float, source: Job, model: _Model, seconds: int
     ) -> RecordedJob:
-        """A /generate run of `model`, shown with `source`'s result file:
-        its price per run, or (none) the /clone table's for `seconds`."""
         params = {**source.params, "provider": model.provider, "model": model.model}
         if model.usd is None:
             params |= {"resolution": RESOLUTION, "duration": seconds}
@@ -256,9 +203,6 @@ class _Work(BaseModel):
     def day(
         self, start: float, sources: _Sources, rng: random.Random, back: int
     ) -> list[RecordedJob]:
-        """One working day from `start` (its local midnight): login around
-        nine, clones through the day, a few generations and downloads, then
-        Logout -- or, every other day, nothing: the app logs them out idle."""
         at = start + 9 * _HOUR + rng.randint(0, 40) * 60
         rows = [self.event("login", at)]
         providers = _priced_providers()
@@ -284,7 +228,6 @@ class _Work(BaseModel):
 
 
 def _priced_providers() -> list[str]:
-    """The /clone providers with a price at `RESOLUTION`, in table order."""
     found = []
     for name, price in clone_pricing().entries.items():
         try:
@@ -300,12 +243,10 @@ def _zone() -> ZoneInfo:
 
 
 def _rows(va: User, sources: _Sources, now: datetime) -> list[RecordedJob]:
-    """Every made-up row up to `now`: today's day stops where the clock is,
-    with no logout yet when its end is still ahead."""
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     rows: list[RecordedJob] = []
     for back in DAYS_BACK:
-        rng = random.Random(f"{va.id}:{back}")  # noqa: S311 -- made-up data
+        rng = random.Random(f"{va.id}:{back}")  # noqa: S311
         start = (midnight - timedelta(days=back)).timestamp()
         rows += _Work(va=va).day(start, sources, rng, back)
     return [row for row in rows if row.created_at <= now.timestamp()]
@@ -327,9 +268,6 @@ def _count(rows: list[RecordedJob], va: User) -> Seeded:
 
 
 def seed(name: str, now: datetime | None = None) -> Seeded:
-    """A made-up month of the VA `name` (their name or email), replacing
-    the one made before. `now`: the moment it runs up to (default: this
-    one)."""
     _development_only()
     va = _va(name)
     clear()
@@ -347,7 +285,6 @@ def seed(name: str, now: datetime | None = None) -> Seeded:
 
 
 def clear() -> Cleared:
-    """Every made-up row and its previews."""
     _development_only()
     gone = delete_recorded(PREFIX)
     previews = [p for p in previews_dir().glob(f"{PREFIX}*") if p.is_file()]

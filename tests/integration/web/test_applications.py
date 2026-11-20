@@ -1,9 +1,3 @@
-"""
-Covers the public landing-page application form (routers/apply.py) and its
-admin-only CRM view (routers/admin/applications.py): submitting without a
-session, storing every field, and who may read the list.
-"""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
@@ -16,12 +10,10 @@ from ofmhelpers.web.routers.apply import form_token
 
 @pytest.fixture(autouse=True)
 def _no_fill_wait(monkeypatch):
-    """The form's "too fast" trap off: a test submits in milliseconds."""
     monkeypatch.setenv("OFM_APPLY_MIN_FILL_S", "0")
 
 
 def _form(**changes) -> dict:
-    """FORM as the served page posts it: with its form token."""
     return {**FORM, "form_token": form_token(), **changes}
 
 
@@ -67,7 +59,6 @@ def test_anonymous_submit_stores_every_field():
 def test_thank_you_modal_only_shows_after_a_submission():
     anon = TestClient(app)
 
-    # The closing script always ships; only the dialog itself is conditional.
     assert 'id="rm-thanks"' not in anon.get("/").text
 
     applied = anon.get("/?applied=1").text
@@ -154,8 +145,6 @@ def test_crm_page_is_admin_only(va_client):
 
 
 def test_crm_page_lists_a_lead_stored_before_the_contact_rule(client):
-    """Regression: the stored lead was validated with the form's rules, so one
-    accepted before "phone or Telegram" existed 500ed the whole CRM page."""
     ApplicationRepository().add(
         {"first_name": "Old", "last_name": "Lead", "email": "old@example.com"}
     )
@@ -166,9 +155,6 @@ def test_crm_page_lists_a_lead_stored_before_the_contact_rule(client):
     assert "old@example.com" in r.text
 
 
-# --- spam bots ------------------------------------------------------------------
-
-
 def _stored() -> int:
     return len(applications_store.list_applications())
 
@@ -176,7 +162,7 @@ def _stored() -> int:
 @pytest.mark.parametrize(
     "changes",
     [
-        {"website": "http://spam.example"},  # the honeypot
+        {"website": "http://spam.example"},
         {"form_token": ""},
         {"form_token": "forged"},
         {"telegram_handle": "coxkskvs tchbop"},

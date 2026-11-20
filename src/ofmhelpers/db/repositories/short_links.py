@@ -1,11 +1,3 @@
-"""Links on link providers (/links), their daily numbers, and each user's
-sync state per provider. Each link belongs to a user; `owner` limits a call
-to that user's rows (None: everyone's, for system work).
-
-Link lists are not cached: they join creators and tracked accounts, whose
-writes (/accounts) would not invalidate them. Only the sync state, which
-nothing else writes, is."""
-
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -41,7 +33,6 @@ from ofmhelpers.schemas.links import (
 from ofmhelpers.schemas.self_links import BridgeTarget, SelfLink
 lazy from ofmhelpers.schemas.links import PlannedLink
 
-# The statuses of a link the provider has.
 LIVE = ("active", "inactive")
 
 _LINKS = (
@@ -96,9 +87,6 @@ def _days(s: Session, link_ids: list[int], since: date) -> dict[int, list[DaySta
 
 
 def _taken(exc: IntegrityError) -> None:
-    """A link address already held (`uq_short_links_address` for the
-    owner's own, `uq_short_links_self_address` for anyone's self link) as
-    the refusal the page shows: two Generates racing for one slug."""
     text = str(exc.orig)
     if "uq_short_links_address" in text or "uq_short_links_self_address" in text:
         msg = "That address is already taken"
@@ -117,8 +105,6 @@ class ShortLinkRepository(CachedRepository):
     cache_namespace = "short_link"
 
     def list_all(self, owner: int | None, since: date) -> list[ShortLink]:
-        """`owner`'s links, newest first, each with its `days` since
-        `since`."""
         with session_scope() as s:
             rows = s.execute(
                 _LINKS.where(*mine(ShortLinkRow.user_id, owner)).order_by(
@@ -141,10 +127,6 @@ class ShortLinkRepository(CachedRepository):
             return [_link(*r) for r in rows]
 
     def active_self_link(self, host: str, slug: str) -> BridgeTarget | None:
-        """The live self-hosted bridge link on `host` with `slug` (the bridge
-        serves it); None when there is no active one. The host must be an
-        active domain that is shared (no owner) or the link's owner's own, so
-        a removed host re-added by someone else never serves the old links."""
         link, dom = ShortLinkRow, SelfLinkDomainRow
         with session_scope() as s:
             row = s.execute(
@@ -173,9 +155,6 @@ class ShortLinkRepository(CachedRepository):
     def provider_links(
         self, user_id: int, provider: str, statuses: tuple[str, ...]
     ) -> list[SelfLink]:
-        """`user_id`'s links on `provider` in any of `statuses`, as a local
-        provider (self) lists them: the fields of a RemoteLink, read straight
-        from our own rows."""
         link = ShortLinkRow
         with session_scope() as s:
             rows = s.execute(
@@ -201,7 +180,6 @@ class ShortLinkRepository(CachedRepository):
             ]
 
     def taken(self, user_id: int, provider: str) -> list[LinkAddress]:
-        """The address of every link `user_id` has on `provider`."""
         with session_scope() as s:
             rows = s.execute(
                 select(ShortLinkRow.domain, ShortLinkRow.slug).where(
@@ -211,7 +189,6 @@ class ShortLinkRepository(CachedRepository):
             return [LinkAddress(domain=d, slug=slug) for d, slug in rows]
 
     def slugs_on_domain(self, provider: str, domain: str) -> list[str]:
-        """Every owner's slugs on `domain` of `provider`."""
         with session_scope() as s:
             return list(
                 s.execute(
@@ -225,8 +202,6 @@ class ShortLinkRepository(CachedRepository):
     def add_creating(
         self, user_id: int, provider: str, links: list[PlannedLink]
     ) -> list[int]:
-        """New links, still to be made (status "creating"); each takes its
-        account's creator, or `creator` (a name of `user_id`'s)."""
         with session_scope() as s:
             ids = []
             for link in links:
@@ -260,7 +235,6 @@ class ShortLinkRepository(CachedRepository):
             return ids
 
     def created(self, link_id: int, remote: dict[str, Any]) -> None:
-        """The provider made it: its id, address and state."""
         with session_scope() as s:
             s.execute(
                 update(ShortLinkRow)
@@ -301,8 +275,6 @@ class ShortLinkRepository(CachedRepository):
     def set_creator(
         self, ids: list[int], creator: str | None, owner: int | None = None
     ) -> int:
-        """Assigns the links (of `owner`) to their owner's existing creator
-        `creator` (None: unassigned); how many were changed."""
         link = ShortLinkRow
         with session_scope() as s:
             rows = s.execute(
@@ -336,18 +308,6 @@ class ShortLinkRepository(CachedRepository):
         accounts: dict[str, int],
         create_ttl_s: float,
     ) -> None:
-        """What the provider lists now, in one transaction: each remote link
-        updates its row (matched by remote id, else by address: a link whose
-        job died after making it), or is added (on `accounts`' Instagram
-        account when its slug is one's: slug -> account id); rows it no
-        longer lists are deleted ("deleting" ones too: their delete went
-        through), "creating" ones older than `create_ttl_s` failed, and
-        "deleting" ones it still lists after `create_ttl_s` (their job was
-        lost) go back to their status. `days` (remote id -> days) replace the
-        stored ones."""
-        # A row's own stamps are the database's: `updated_at` moves with each
-        # real change (the stamp trigger), so a "deleting" one keeps the time
-        # its delete started.
         cutoff = datetime.now(UTC) - timedelta(seconds=create_ttl_s)
         link = ShortLinkRow
         with session_scope() as s:
@@ -388,8 +348,6 @@ class ShortLinkRepository(CachedRepository):
                     seen.add(row.id)
                     if row.updated_at >= cutoff:
                         continue
-                    # Its delete job was lost (a deploy): the link is still
-                    # there, back to what it is with the reason.
                     row.error = "Delete interrupted: delete it again"
                 row.remote_id = remote["remote_id"]
                 row.slug, row.domain = remote["slug"], remote["domain"]
@@ -407,7 +365,6 @@ class ShortLinkRepository(CachedRepository):
                 if row.id in seen:
                     continue
                 if row.status in (*LIVE, "deleting"):
-                    # Gone from the provider (a delete that went through).
                     s.delete(row)
                 elif row.status == "creating" and row.created_at < cutoff:
                     row.status = "failed"
@@ -438,8 +395,6 @@ class ShortLinkRepository(CachedRepository):
             ],
         )
 
-    # --- sync state -------------------------------------------------------
-
     @cached
     def syncs(self, owner: int | None = None) -> list[LinkSync]:
         with session_scope() as s:
@@ -464,9 +419,6 @@ class ShortLinkRepository(CachedRepository):
     def claim_due(
         self, pairs: list[LinkSyncKey], interval_s: float, claim_ttl_s: float
     ) -> list[LinkSyncKey]:
-        """Of `pairs` (user, provider), those not synced for `interval_s`
-        and not claimed within `claim_ttl_s`, claimed in one UPDATE: of two
-        sweepers racing, each pair goes to exactly one."""
         if not pairs:
             return []
         now = time.time()
@@ -499,8 +451,6 @@ class ShortLinkRepository(CachedRepository):
 
     @invalidates_cache
     def mark_due(self, user_id: int, provider: str | None = None) -> None:
-        """`user_id`'s syncs (of `provider`, else all) due now, claims
-        dropped."""
         sync = LinkSyncRow
         with session_scope() as s:
             s.execute(
@@ -520,8 +470,6 @@ class ShortLinkRepository(CachedRepository):
         usage: dict[str, Any] | None,
         error: str | None,
     ) -> None:
-        """A sync's outcome: synced now, claim dropped; a failed one keeps
-        the previous quota."""
         values: dict[str, Any] = {
             "synced_at": time.time(),
             "claimed_at": None,

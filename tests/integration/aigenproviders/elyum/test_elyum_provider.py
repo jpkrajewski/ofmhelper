@@ -1,9 +1,3 @@
-"""Elyum behind the shared interface, on its fake at the wire (elyum/fake.py
-answers like elyum.ai/open/docs: real HTTP statuses, one error envelope):
-upload to a `file_...` id, a generation's body with Elyum's `inputs`, the
-Idempotency-Key, every documented error code onto the shared errors, and
-Wan 3.0 reference-to-video as /clone sends it."""
-
 from pathlib import Path
 
 import pytest
@@ -69,7 +63,6 @@ def test_a_clone_runs_end_to_end_and_saves_its_video(provider, image, video):
     [(sent, key)] = fake_elyum().created
     assert key == "elyum-job-1"
     assert sent["model"] == "alibaba/wan-3.0/reference-to-video"
-    # Elyum cites inputs in lower case, numbered per kind in the order sent.
     assert sent["prompt"] == "Replace the subject in @video1 with subject from @image1"
     assert sent["inputs"] == [
         {"role": "reference", "file": "file_000001"},
@@ -81,8 +74,6 @@ def test_a_clone_runs_end_to_end_and_saves_its_video(provider, image, video):
 
 
 def test_a_clone_run_is_valid_for_wan_3_on_elyum():
-    """No "adaptive" on Elyum: the shape is left to the model (it follows
-    the inputs), never a 400 for a value it does not take."""
     target = clone.CLONE_TARGETS["elyum"]
     values = clone._clone_values(
         target,
@@ -117,7 +108,6 @@ def test_the_same_file_is_uploaded_once_per_account(provider, image):
 
 
 def test_a_resent_create_returns_the_generation_already_made(provider):
-    """The Idempotency-Key: a lost answer sent again is never paid twice."""
     first = provider.submit(get_spec(WAN), {"prompt": "p"}, "job:1")
     again = provider.submit(get_spec(WAN), {"prompt": "p"}, "job:1")
 
@@ -127,7 +117,7 @@ def test_a_resent_create_returns_the_generation_already_made(provider):
 
 def test_an_mkv_goes_up_as_its_mp4_copy(provider, tmp_path):
     clip = tmp_path / "clip.mkv"
-    clip.write_bytes(fake_media.mp4())  # H.264: remuxed, nothing encoded
+    clip.write_bytes(fake_media.mp4())
 
     provider.upload(clip)
 

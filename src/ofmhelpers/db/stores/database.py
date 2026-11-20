@@ -1,5 +1,3 @@
-"""The database's own numbers (/home's Server section)."""
-
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import DatabaseRepository

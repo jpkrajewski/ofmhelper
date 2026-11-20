@@ -1,11 +1,3 @@
-"""A whole generation through `runner.generate` with each provider's HTTP
-faked at the wire (kie.ai: `responses`; Higgsfield: an httpx transport
-under its SDK), bodies from tests/fixtures/providers: success after three
-pending polls, 4xx, 5xx, timeout, rate limit, a failed generation, a rerun
-after a poll timeout, an answer that cannot be read, a failed result
-download -- what the user is told, what is retried, and that a request is
-never submitted (paid for) twice unless it was rate-limited."""
-
 import json
 from collections.abc import Iterator
 
@@ -49,8 +41,6 @@ def _fast_polls(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def slept(monkeypatch) -> list[float]:
-    """Every retry wait of a submit or a download, recorded instead of
-    slept; the default waits (whatever the suite sets) apply."""
     for name in (
         "OFM_AIGEN_RATE_LIMIT_WAITS_S",
         "OFM_AIGEN_RATE_LIMIT_MAX_WAIT_S",
@@ -62,13 +52,8 @@ def slept(monkeypatch) -> list[float]:
     return waits
 
 
-# --- kie.ai --------------------------------------------------------------------
-
-
 @pytest.fixture
 def kie() -> Iterator[responses.RequestsMock]:
-    """Answers in the order registered (a URL registered twice answers
-    twice)."""
     with responses.RequestsMock(registry=registries.OrderedRegistry) as rsps:
         yield rsps
 
@@ -107,8 +92,6 @@ def test_kie_three_pending_polls_then_done_saves_the_result_and_pays_once(kie):
     assert path.read_bytes() == PNG
     assert _calls(kie, "createTask") == 1
     assert _calls(kie, "recordInfo") == 4
-    # Kept until the job is saved (stores.jobs.run_job forgets it): a tail
-    # cut off by a restart re-downloads instead of paying again.
     assert tasks.recall("job-1") is not None
 
 
@@ -127,7 +110,6 @@ def test_kie_wrong_key_says_so(kie):
     kie.post(_jobs("createTask"), json=_body("kie/denied"))
     with pytest.raises(ProviderAuthError) as caught:
         generate(KieProvider("bad"), KIE_SPEC, {"prompt": "x"}, "job-1")
-    # What the job shows; kie.ai's own text rides along as a note, for logs.
     assert str(caught.value) == "kie.ai: wrong API key"
 
 
@@ -147,8 +129,6 @@ def test_kie_wrong_key_says_so(kie):
 def test_kie_create_failing_is_unavailable_and_never_resent(
     kie, slept, answer, message
 ):
-    """A createTask may have reached kie.ai before failing: sending it again
-    could pay twice, so it is sent once and the job fails as retryable."""
     kie.post(_jobs("createTask"), **answer)
 
     with pytest.raises(ProviderUnavailableError, match=message) as caught:
@@ -161,8 +141,6 @@ def test_kie_create_failing_is_unavailable_and_never_resent(
 
 
 def test_kie_create_waits_longer_than_a_status_read(kie):
-    """createTask answers once kie.ai has the references: Wan 3.0 went past
-    30 s on prod 2026-11-05 and the job failed 'Timed out'."""
     kie.post(_jobs("createTask"), json=_body("kie/create_ok"))
     _record(kie, "record_success")
     kie.get("https://tempfile.aiquickdraw.com/results/task_seedream_0001.png", body=PNG)
@@ -175,8 +153,6 @@ def test_kie_create_waits_longer_than_a_status_read(kie):
 
 
 def test_kie_rate_limited_create_is_sent_again_and_pays_once(kie, slept):
-    """docs.kie.ai: a 429 'will not enter the queue' -- nothing was created,
-    so the same createTask goes again after a wait (10 s, +0-25%)."""
     kie.post(_jobs("createTask"), json=_body("kie/rate_limited"))
     kie.post(_jobs("createTask"), json=_body("kie/create_ok"))
     _record(kie, "record_success")
@@ -194,9 +170,6 @@ def test_kie_rate_limited_create_is_sent_again_and_pays_once(kie, slept):
 
 
 def test_kie_rate_limit_that_persists_fails_after_the_last_wait(kie, slept):
-    """Three waits (10/30/60 s, each +0-25%: at most 125 s, far inside RQ's
-    2700 s), four sends, then the run fails 'Rate limited' with nothing
-    remembered -- nothing was created."""
     for _ in range(4):
         kie.post(_jobs("createTask"), json=_body("kie/rate_limited"))
 
@@ -229,12 +202,8 @@ def test_kie_rate_limit_that_persists_fails_after_the_last_wait(kie, slept):
     ids=["not-json", "no-code", "unreadable-result"],
 )
 def test_kie_unreadable_status_keeps_polling_and_stays_remembered(monkeypatch, answer):
-    """The request is accepted (paid): an answer the adapter cannot read is
-    asked again until the poll gives up, and the job ends resumable
-    (ProviderTimeoutError, still remembered) -- never a ValueError that
-    makes run_job forget a paid request."""
     monkeypatch.setenv("OFM_AIGEN_POLL_TIMEOUT_S", "1")
-    with responses.RequestsMock() as rsps:  # each URL answers every call
+    with responses.RequestsMock() as rsps:
         rsps.post(_jobs("createTask"), json=_body("kie/create_ok"))
         rsps.get(_jobs("recordInfo"), **answer)
         with pytest.raises(ProviderTimeoutError, match="still generating"):
@@ -248,8 +217,6 @@ def test_kie_unreadable_status_keeps_polling_and_stays_remembered(monkeypatch, a
 
 
 def test_kie_result_download_failing_once_is_tried_again(kie, slept):
-    """The result is paid for and its URL lives for hours: a CDN 5xx (or a
-    reset) costs a short wait, not the file."""
     result = "https://tempfile.aiquickdraw.com/results/task_seedream_0001.png"
     kie.post(_jobs("createTask"), json=_body("kie/create_ok"))
     _record(kie, "record_success")
@@ -265,8 +232,6 @@ def test_kie_result_download_failing_once_is_tried_again(kie, slept):
 
 
 def test_kie_result_download_failing_every_time_stays_resumable(kie, slept):
-    """Three tries (waits 5 s, 15 s), then the download error is raised with
-    the request still remembered: a re-run downloads again, never pays."""
     result = "https://tempfile.aiquickdraw.com/results/task_seedream_0001.png"
     kie.post(_jobs("createTask"), json=_body("kie/create_ok"))
     _record(kie, "record_success")
@@ -326,13 +291,7 @@ def test_kie_rerun_after_a_poll_timeout_resumes_and_never_pays_again(kie, monkey
     assert _calls(kie, "createTask") == 1
 
 
-# --- Higgsfield ------------------------------------------------------------------
-
-
 class HiggsfieldWire:
-    """The SDK's HTTP: answers (method, path) from queued replies, in order;
-    a reply may be an exception to raise. Records every request."""
-
     def __init__(self) -> None:
         self.replies: dict[tuple[str, str], list] = {}
         self.calls: list[httpx.Request] = []
@@ -389,7 +348,7 @@ def test_higgsfield_three_pending_polls_then_done_saves_the_result_and_pays_once
 
     assert path.read_bytes() == PNG
     assert hf.count("POST", SUBMIT) == 1
-    assert tasks.recall("job-1") is not None  # until its job is saved
+    assert tasks.recall("job-1") is not None
 
 
 @pytest.mark.parametrize(

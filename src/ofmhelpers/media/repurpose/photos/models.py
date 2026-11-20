@@ -1,9 +1,3 @@
-"""A photo preset (`<name>.json` here, or any path to a `.json`; a new target
-is a new file, no code) and one shot's own values. Ranges are
-`repurpose.values` spans: [lo, hi], drawn per picture. A preset is checked
-whole when it is loaded: a value that would fail a job is refused there,
-with the field's name."""
-
 import datetime
 from fractions import Fraction
 from functools import lru_cache
@@ -16,13 +10,10 @@ from ofmhelpers.media.repurpose.devices import load_device
 from ofmhelpers.media.repurpose.values import Span
 
 _HERE = Path(__file__).parent
-# Half of each side cut off: nothing of the picture would be left.
 _MOST_CROP = 0.5
 
 
 class _Strict(BaseModel):
-    """Frozen, and an unknown key (a typo) is an error, not ignored."""
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
@@ -34,19 +25,13 @@ def _ordered(span: Span, low: float) -> Span:
 
 
 class Lens(_Strict):
-    """What the camera reports for a photo, and the photo's size. `model`
-    names the lens as the device's recorder profile does; the 35 mm figure
-    is a photo's (the video profile's is wider: stabilisation crops)."""
-
     label: str = ""
     make: str
     model: str
     focal_length_mm: float = Field(gt=0)
     focal_length_35mm: int = Field(gt=0)
     f_number: float = Field(gt=0)
-    # The photo's short side in px (the sensor's 16:9 crop).
     short_side: int = Field(ge=64)
-    # Exposure times a shot picks from ("1/60"), and its ISO range.
     exposures: list[str] = Field(min_length=1)
     iso: tuple[int, int]
     quality: int = Field(ge=1, le=100)
@@ -72,11 +57,6 @@ class Lens(_Strict):
 
 
 class Stills(_Strict):
-    """How the video is looked at: `candidates` stills per picture wanted,
-    each a real frame drawn inside its slice of the video (`slice`: the share
-    of the slice it may come from; another seed, other frames), hashed at
-    `hash_side` px; the set's shots `gap_s` seconds apart in the EXIF."""
-
     candidates: int = Field(ge=1, le=10)
     slice: Span
     hash_side: int = Field(ge=64)
@@ -97,13 +77,6 @@ class Stills(_Strict):
 
 
 class Retouch(_Strict):
-    """How a still is made another picture: cut off each side (a share
-    `side` of the try's crop, its own per side), back to its size; tone
-    (brightness, contrast, colour) moved by `tone`; `grain` = the noise's
-    standard deviation in 8-bit levels. `crops`: the most cut off a side,
-    one per try, until PDQ finds none of the video's stills nor the
-    pictures already made in it."""
-
     crops: list[float] = Field(min_length=1)
     side: Span
     tone: Span
@@ -128,8 +101,6 @@ class Retouch(_Strict):
 
 class PhotoPreset(_Strict):
     label: str = ""
-    # The phone (`repurpose/devices/<name>.json`, one with a recorder): its
-    # profile's make / model / iOS, its time zone and place.
     device: str
     pictures: int = Field(ge=1, le=50)
     lens: Lens
@@ -150,7 +121,6 @@ def photo_preset_names() -> list[str]:
 
 @lru_cache
 def load_photo_preset(name_or_path: str) -> PhotoPreset:
-    """A photo preset by name (`photos/<name>.json`) or a JSON file path."""
     path = Path(name_or_path)
     if path.suffix != ".json":
         path = _HERE / f"{name_or_path}.json"
@@ -162,8 +132,6 @@ def load_photo_preset(name_or_path: str) -> PhotoPreset:
 
 
 class Shot(BaseModel):
-    """One photo's own values: when, where, and its exposure."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     taken: datetime.datetime
@@ -173,11 +141,6 @@ class Shot(BaseModel):
 
 
 class Photo(BaseModel, frozen=True):
-    """One photo written: where, from which moment of the video, the crop
-    it took and how far (PDQ bits) it is from the nearest still or picture
-    before it (at or under `distinct.same_picture_bits()` = it never got
-    there)."""
-
     path: Path
     at: float
     crop: float

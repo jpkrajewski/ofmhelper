@@ -1,12 +1,3 @@
-"""Elyum's wire format (elyum.ai public API, `https://api.elyum.ai/v1`), as
-Pydantic models, and its errors as the shared error types.
-
-Elyum answers with real HTTP statuses and one error envelope
-`{"error": {"code", "message", "param", "fix", "retryable", "retry_after",
-"request_id"}}` (elyum.ai/open/docs#error-codes, 2026-11-02). Unknown
-fields are ignored, so a field Elyum adds never breaks a parse.
-"""
-
 from typing import NoReturn
 
 from pydantic import Field
@@ -23,16 +14,10 @@ from ofmhelpers.integrations.ai_providers.http import Lenient
 
 PROVIDER = "Elyum"
 
-# 401 auth (missing/invalid key, a Studio MCP token), 403 scope (a key
-# without generate + spend).
 _AUTH = frozenset({"auth", "scope"})
-# Nothing more can be spent on this key: no balance (402), the key's own
-# 24 h cap, the member's or client's monthly budget (429, nothing held).
 _NO_MONEY = frozenset(
     {"insufficient_balance", "key_cap", "member_budget", "client_budget"}
 )
-# Refused before anything was created or held: the same submit may go again
-# (it carries an Idempotency-Key, so a duplicate is replayed, never paid).
 _TRY_AGAIN = frozenset(
     {
         "concurrency",
@@ -50,7 +35,6 @@ _HTTP_SERVER_ERRORS = range(500, 600)
 PENDING = frozenset({"queued", "running"})
 SUCCEEDED = "succeeded"
 FAILED = frozenset({"failed", "canceled", "cancelled"})
-# A finished generation's own error codes; `content_refused` = moderation.
 _REFUSED = "content_refused"
 
 
@@ -68,7 +52,6 @@ class ElyumErrorBody(Lenient):
 
 
 def raise_for(status: int, text: str) -> NoReturn:
-    """An HTTP error answer (`text`: its body) as the shared error."""
     try:
         error = ElyumErrorBody.model_validate_json(text).error or ElyumError()
     except ValueError:  # silent: not JSON: the text is the message
@@ -80,7 +63,6 @@ def raise_for(status: int, text: str) -> NoReturn:
     if error.code in _AUTH or status in _HTTP_AUTH:
         raise ProviderAuthError(PROVIDER, message)
     if error.code in _NO_MONEY or status == _HTTP_PAYMENT_REQUIRED:
-        # Worded so the card reads "No credits" for a cap or budget too.
         no_money = f"{PROVIDER}: insufficient balance. {message}"
         raise ProviderNoCreditsError(no_money, provider=PROVIDER)
     if error.code in _TRY_AGAIN or status == _HTTP_TOO_MANY:
@@ -92,8 +74,6 @@ def raise_for(status: int, text: str) -> NoReturn:
 
 
 class ElyumFile(Lenient):
-    """`POST /v1/files` (201): the id a generation's input names."""
-
     id: str
     type: str | None = None
     bytes: int | None = None
@@ -117,8 +97,6 @@ class ElyumGenError(Lenient):
 
 
 class ElyumGeneration(Lenient):
-    """`POST /v1/generations` and `GET /v1/generations/{id}`."""
-
     id: str
     status: str
     outputs: list[ElyumOutput] = Field(default_factory=list)
@@ -131,8 +109,6 @@ class ElyumGeneration(Lenient):
 
     @property
     def failure(self) -> str:
-        """Why it ended without a result, worded so the card's reason reads
-        it ("content_refused" -> Flagged content)."""
         if self.error is None:
             return f"{PROVIDER}: generation {self.status}"
         reason = self.error.message or self.error.code or self.status

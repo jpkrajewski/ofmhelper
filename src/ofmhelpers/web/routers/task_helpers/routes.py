@@ -1,10 +1,3 @@
-"""The five GET endpoints every background-job tool exposes, registered once.
-
-A tool router is then its own page and `/run`, plus one `add_job_routes` call:
-the status page, its polling payload, the result download and the result's
-preview and poster all live here, under the router's own prefix.
-"""
-
 from collections.abc import Callable
 from typing import Annotated
 
@@ -28,8 +21,6 @@ from ofmhelpers.web.templates_config import render
 
 
 def _pending_text(pending_message: Callable[[Job], str], job: Job) -> str:
-    """The running job's wording; a plain one when its stored params are not
-    what the wording reads (a job of an older release)."""
     try:
         return pending_message(job)
     except KeyError:  # silent: a job of an older release: plain wording
@@ -44,9 +35,6 @@ def add_job_routes(
     back_label: str,
     show_inputs: bool = False,
 ) -> None:
-    """`pending_message` words the status page of a still-running job (it may
-    read the job's params). `show_inputs` adds the job's own settings and
-    reference files to it -- the generation tools, whose params are those."""
     files_prefix = f"{router.prefix}/files"
 
     @router.get("/jobs/{job_id}")

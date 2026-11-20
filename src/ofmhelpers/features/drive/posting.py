@@ -1,18 +1,3 @@
-"""
-ofmhelpers/web/posting.py
-
-The team's daily posting window (2026-10-22): `settings.gdrive`
-`posting_time_utc` (19:45), from `posting_window_before_h` (1 h) before to
-`posting_window_after_h` (5 h) after -- 18:45 to 00:45 UTC, every day. All
-in UTC: no daylight saving change, server zone or browser zone moves it.
-
-/drive's "Uploaded to Drive today" does not follow this window: it counts
-by the calendar day of `OFM_GDRIVE_TIMEZONE` (features/drive/folders.py
-`_today_start`). While the window is open every page shows
-"Start posting content" (base.html; static/js/posting.js flips it at the
-window's edges on a page left open).
-"""
-
 import datetime
 
 from pydantic import BaseModel
@@ -23,16 +8,12 @@ _DAY = datetime.timedelta(days=1)
 
 
 class PostingWindow(BaseModel):
-    """Today's window (the one open now, else the next), as Unix seconds."""
-
     start: float
     end: float
     open: bool
 
 
 def posting_day_start(at: datetime.datetime) -> datetime.datetime:
-    """When the posting day `at` is in began: the latest window start at or
-    before `at` (an aware datetime), in UTC."""
     s = settings.gdrive
     posting = datetime.datetime.combine(
         at.astimezone(datetime.UTC).date(), s.posting_time_utc, datetime.UTC
@@ -46,7 +27,6 @@ def posting_day_start(at: datetime.datetime) -> datetime.datetime:
 
 
 def window(at: datetime.datetime | None = None) -> PostingWindow:
-    """The window open at `at` (default now), else the next one."""
     at = at or datetime.datetime.now(datetime.UTC)
     s = settings.gdrive
     length = datetime.timedelta(

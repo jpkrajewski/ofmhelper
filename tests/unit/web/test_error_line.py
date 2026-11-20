@@ -1,6 +1,3 @@
-"""What a failed card shows (`schemas.errors.error_line`): who refused, the
-reason and what they said, on the card itself."""
-
 import pytest
 
 from ofmhelpers.schemas.errors import ErrorText, error_line, error_reason, error_text
@@ -33,7 +30,6 @@ from ofmhelpers.schemas.errors import ErrorText, error_line, error_reason, error
         ),
         ("kie.ai: wrong API key", "kie.ai: Wrong API key"),
         ("Higgsfield: wrong API key", "Higgsfield: Wrong API key"),
-        # Ours: the reason is already its first words.
         (
             "Too long: 42 s, the model takes 15 s",
             "Too long: 42 s, the model takes 15 s",
@@ -44,7 +40,6 @@ from ofmhelpers.schemas.errors import ErrorText, error_line, error_reason, error
             "kie.ai is still generating (task t-401)",
             "kie.ai is still generating (task t-401)",
         ),
-        # Already says it failed: nothing put in front; line breaks flattened.
         ("the export  failed\nbadly", "the export failed badly"),
         ("No space left on device", "Failed, No space left on device"),
         (None, "Failed"),
@@ -81,7 +76,6 @@ def test_a_long_answer_is_cut_and_the_reason_stays():
             ),
             False,
         ),
-        # Said only the reason again: nothing under the head.
         ("kie.ai: wrong API key", "kie.ai: Wrong API key", "", True),
         (
             "APIYI: insufficient balance (insufficient_user_quota, HTTP 403)",
@@ -89,7 +83,6 @@ def test_a_long_answer_is_cut_and_the_reason_stays():
             "insufficient balance (insufficient_user_quota, HTTP 403)",
             True,
         ),
-        # Ours: the reason is its first words, the rest goes under it.
         (
             "Too long: 42 s, the model takes 15 s",
             "Too long",

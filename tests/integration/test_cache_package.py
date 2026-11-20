@@ -1,13 +1,3 @@
-"""The `ofmhelpers.cache` package is where Redis lives, and it is the *only*
-place it lives.
-
-The invariant is worth a test rather than a comment: a second `Redis.from_url`
-somewhere else would silently bind to a different pool -- and, in the test
-suite, to whatever URL was set at that module's import time rather than the
-fixture's. That is exactly the class of bug the single lazy accessor exists to
-prevent, and it fails quietly.
-"""
-
 import importlib
 
 import pytest
@@ -28,8 +18,6 @@ def test_only_one_module_constructs_a_redis_connection():
 
 
 def test_the_old_module_locations_are_gone():
-    """web/queue.py, web/ratelimit.py and web/db/cache.py all moved. Leaving a
-    shim behind would let a new caller re-fork the connection."""
     for name in (
         "ofmhelpers.web.queue",
         "ofmhelpers.web.ratelimit",
@@ -56,7 +44,6 @@ def test_text_helpers_roundtrip():
 
 
 def test_text_helpers_report_a_miss_when_the_broker_is_down(monkeypatch):
-    """Optimisation caches must never turn a broker outage into a failure."""
 
     def boom():
         msg = "down"
@@ -65,13 +52,11 @@ def test_text_helpers_report_a_miss_when_the_broker_is_down(monkeypatch):
     monkeypatch.setattr("ofmhelpers.cache.redis.get_redis", boom)
 
     assert get_text("test:cache:k") is None
-    set_text("test:cache:k", "v", 60)  # must not raise
-    delete_text("test:cache:k")  # must not raise
+    set_text("test:cache:k", "v", 60)
+    delete_text("test:cache:k")
 
 
 def test_a_job_can_carry_its_own_time_limit(monkeypatch):
-    """A long /clone video runs past the queue's default limit; its job is
-    queued with its own (`job_timeout`), others with the default."""
     import ofmhelpers.cache.queue as queue_module
 
     monkeypatch.setenv("OFM_RQ_ASYNC", "true")

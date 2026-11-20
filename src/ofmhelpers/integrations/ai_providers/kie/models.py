@@ -1,10 +1,3 @@
-"""kie.ai's wire format, as Pydantic models.
-
-kie.ai answers HTTP 200 with its own `code` in the body; `KieEnvelope.raise_for_code`
-turns that code into the shared error types, so nothing downstream reads it.
-Unknown fields are ignored, so kie.ai adding one never breaks a parse.
-"""
-
 import json
 from typing import NoReturn
 
@@ -23,16 +16,10 @@ from ofmhelpers.integrations.ai_providers.http import Lenient
 _OK = 200
 _AUTH_CODES = frozenset({401, 403})
 _NO_CREDITS = 402
-# docs.kie.ai: "Rejected requests will not enter the queue" -- nothing was
-# created, so the runner may send the same createTask again.
 _RATE_LIMITED = 429
-# How errors name the provider (its `Provider.label`).
 PROVIDER = "kie.ai"
-# 455 is kie.ai's "under maintenance": retryable, but not resent on submit
-# (a short backoff rarely outlasts a maintenance window).
 _RETRYABLE_CODES = frozenset({408, 455, 500, 502, 503, 504})
 
-# kie.ai's documented states: waiting -> queuing -> generating -> success/fail.
 SUCCESS = "success"
 FAIL = "fail"
 
@@ -47,8 +34,6 @@ class KieEnvelope(Lenient):
 
 
 def raise_for(code: int, message: str, retry_after_s: float | None = None) -> NoReturn:
-    """kie.ai's code (in the body, or the HTTP status) as the shared error.
-    `retry_after_s`: an HTTP answer's Retry-After, for a 429."""
     text = f"{PROVIDER}: {message or 'error'} (code {code})"
     if code in _AUTH_CODES:
         raise ProviderAuthError(PROVIDER, text)

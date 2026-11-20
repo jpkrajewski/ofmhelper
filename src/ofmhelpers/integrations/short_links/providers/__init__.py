@@ -1,13 +1,9 @@
-"""Every link provider /links can use. Adding one = its file beside this
-one, its class in `_PROVIDER_TYPES` and its `providers.json` entry."""
-
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
 from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
 from ofmhelpers.integrations.short_links.providers.self_host import SelfProvider
 from ofmhelpers.utils.registry import Registry
 
-# Display order of the provider pickers.
 _PROVIDER_TYPES: tuple[type[LinkProvider], ...] = (
     SelfProvider,
     OopsieProvider,
@@ -16,14 +12,12 @@ _PROVIDER_TYPES: tuple[type[LinkProvider], ...] = (
 
 
 def link_providers() -> Registry[type[LinkProvider]]:
-    """Every registered provider by its stored key."""
     return Registry[type[LinkProvider]](
         entries={cls.key: cls for cls in _PROVIDER_TYPES}
     )
 
 
 def get_link_provider(key: str) -> type[LinkProvider]:
-    """Raises KeyError for a provider not (or no longer) registered."""
     return link_providers()[key]
 
 

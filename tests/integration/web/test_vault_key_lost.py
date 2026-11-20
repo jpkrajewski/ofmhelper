@@ -1,7 +1,3 @@
-"""A changed or lost `OFM_VAULT_KEY` costs the secrets, never the app: every page
-still opens, for a user who has every kind of secret saved. Only what reads a
-secret on purpose says so (tests/integration/web/test_devices.py)."""
-
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
@@ -46,7 +42,6 @@ COOKIES = b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t21474836
 
 @pytest.fixture
 def client() -> TestClient:
-    """A user with a Google token, an API key, cookies and an archived login."""
     c = TestClient(app, raise_server_exceptions=False)
     user = sign_in_admin(c, USER)
     users._repository().signed_in(user.id, "", "a-google-refresh-token")
@@ -68,7 +63,6 @@ def client() -> TestClient:
         LoginFields(service="gmail", username="kept@b.c", password="secret"),
         user.id,
     )
-    # Nothing left in the cache: the next read is under the changed key.
     users.set_active(user.id, active=True)
     return c
 
@@ -94,7 +88,7 @@ def test_what_cannot_be_read_counts_as_not_saved(client):
     user = users.by_email(USER)
     assert user is not None
 
-    assert user.drive_connected is True  # the row says so without the key
+    assert user.drive_connected is True
     assert users.refresh_token(user.id) == ""
     assert users.api_keys(user.id).keys == []
     assert cookies.for_user(user.id) is None

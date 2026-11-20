@@ -1,11 +1,3 @@
-/**
- * A form marked `data-submit-on-change` (ui.date_range) is sent as soon as
- * one of its fields changes: a filter with no Apply button. A field left
- * empty is not sent, so the address stays `?date_from=...`, with no
- * `&date_to=`. Its calendar icons (`.date-pick-btn`) open the browser's
- * calendar of the date box next to them: nobody types a date (owner
- * 2026-11-12).
- */
 (() => {
     const FORM = "form[data-submit-on-change]";
 

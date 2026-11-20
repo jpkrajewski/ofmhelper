@@ -1,8 +1,3 @@
-"""The parts of Instagram's logged-out web GraphQL this app reads, and what
-/reels makes of them. Instagram only speaks JSON dicts; they are validated at
-that boundary (`ProfilePage.model_validate(r.json())`, ...) and nothing past
-it sees a raw dict."""
-
 import re
 from typing import Annotated
 
@@ -38,12 +33,10 @@ __all__ = [
     "ReelStat",
 ]
 
-# A DASH manifest's length, e.g. mediaPresentationDuration="PT1M4.5S".
 _DASH_DURATION = re.compile(
     r'mediaPresentationDuration="PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?"'
 )
 
-# Instagram media ids: milliseconds since this epoch, shifted left 23 bits.
 _ID_EPOCH_S = 1314220021.721
 _ID_TIME_SHIFT = 23
 
@@ -75,9 +68,6 @@ class _ImageVersions(_Base):
         return self.candidates[0].url if self.candidates else ""
 
 
-# --- PolarisProfilePageContentQuery -----------------------------------------
-
-
 class _ProfileUser(_Base):
     pk: str
     username: str
@@ -103,28 +93,19 @@ class ProfilePage(_Base):
     data: _ProfileData = _ProfileData()
 
 
-# --- PolarisProfileReelsTabContentQuery_connection --------------------------
-
-
 class ReelSummary(_Base):
-    """A reel as the profile's reels tab lists it: no length, no video yet."""
-
     pk: str
     code: str
     play_count: int | None = None
     image_versions2: _ImageVersions = _ImageVersions()
-    # null on some accounts' reels.
     clips_tab_pinned_user_ids: list[str] | None = None
 
     @property
     def posted_at(self) -> float:
-        """Unix time it was posted: a media id's top bits are milliseconds
-        since Instagram's id epoch (matches `taken_at` to within seconds)."""
         return (int(self.pk) >> _ID_TIME_SHIFT) / 1000 + _ID_EPOCH_S
 
     @property
     def pinned(self) -> bool:
-        """Pinned reels head the tab whatever their age."""
         return bool(self.clips_tab_pinned_user_ids)
 
 
@@ -169,25 +150,14 @@ class ClipsPage(_Base):
         return info.end_cursor if info.has_next_page else None
 
 
-# --- the uploaded login -------------------------------------------------------
-
-
 class LoginTokens(BaseModel):
-    """What a GraphQL query sent as the uploaded login carries, read off a
-    page the login loaded: its viewer id (`av`), request token
-    (`fb_dtsg`), `lsd`, and that page (the Referer)."""
-
     actor_id: str
     fb_dtsg: str
     lsd: str
     referer: str
 
 
-# --- PolarisLoggedOutDesktopWWWPostRootContentQuery -------------------------
-
-
 class _MediaInfo(_Base):
-    # null on a photo.
     video_versions: list[_Image] | None = None
     video_dash_manifest: str | None = None
     taken_at: int = 0
@@ -207,9 +177,6 @@ class MediaPage(_Base):
     @property
     def info(self) -> _MediaInfo | None:
         return self.data.media.info if self.data.media else None
-
-
-# --- PolarisProfilePostsTabContentQuery_connection --------------------------
 
 
 class _TimelineNode(_MediaInfo):
@@ -237,24 +204,14 @@ class _GraphQLError(_Base):
 
 
 class GraphQLErrors(_Base):
-    """The `errors` any GraphQL answer may carry -- with HTTP 200, beside or
-    instead of its data."""
-
     errors: list[_GraphQLError] = []
 
     @property
     def rate_limited(self) -> bool:
-        """'Rate limit exceeded' (2026-10-23, the posts query): without this
-        it read as a page with nothing on it."""
         return any("rate limit" in e.message.lower() for e in self.errors)
 
 
 class TimelinePage(_Base):
-    """One page of a profile's posts grid: photos and videos, newest first
-    after the pinned ones, each video with its mp4 and DASH manifest. No view
-    counts (the reels tab has those). Hidden-from-visitors accounts answer
-    without `feed` (an error instead)."""
-
     data: _TimelineData | None = None
 
     @property
@@ -271,9 +228,6 @@ class TimelinePage(_Base):
         return info.end_cursor if info.has_next_page else None
 
 
-# --- GET /api/v1/media/{pk}/info/ (logged in) -------------------------------
-
-
 class _InfoItem(_Base):
     video_versions: list[_Image] = []
     video_duration: float | None = None
@@ -285,22 +239,16 @@ class MediaInfo(_Base):
 
 
 class ReelMedia(BaseModel):
-    """A reel's playable side: its mp4 and length."""
-
     video_url: MediaUrl
     duration_s: float
     taken_at: int
 
     @classmethod
     def from_page(cls, page: MediaPage) -> ReelMedia | None:
-        """None when the reel has no video or no readable length -- gated
-        for logged-out visitors (some accounts' reels all are), or removed."""
         return cls.from_dash(page.info) if page.info else None
 
     @classmethod
     def from_dash(cls, info: _MediaInfo) -> ReelMedia | None:
-        """A logged-out media node (reel query or timeline): length from its
-        DASH manifest. None for a photo, or a video without a manifest."""
         if not info.video_versions:
             return None
         match = _DASH_DURATION.search(info.video_dash_manifest or "")
@@ -326,17 +274,11 @@ class ReelMedia(BaseModel):
 
 
 class ReelDownload(BaseModel):
-    """One reel "Clone selected" fetches: its code (the saved file's name)
-    and its mp4 on Instagram's CDN."""
-
     code: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     video_url: CdnUrl
 
 
 class TimelinePost(BaseModel):
-    """One post of the posts grid: `media` is its mp4 + length, None for a
-    photo."""
-
     code: str
     media: ReelMedia | None
     posted_at: float

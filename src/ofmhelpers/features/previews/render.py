@@ -1,30 +1,3 @@
-"""Small stand-ins for big media files, for pages that only need to show them.
-
-A /clone result is a 4K export at ~28 Mbit/s (30-40 MB for 10 s) and a
-/generate image a 6.5 MB PNG: a slow connection never got far enough into a
-gallery of them to show anything (prod, 2026-10-21). Galleries show these
-instead -- Download still serves the original:
-
-- a result video: a 720p, bitrate-capped, faststart mp4 (`write_video_preview`)
-  behind its first frame (`write_video_thumb`);
-- a result image: a webp of at most `image_preview_px` (`write_image_thumb`).
-
-Made for each job as it finishes (`warm_previews`, queued by `run_job` on the
-previews queue), for older jobs by the startup backfill
-(`features/previews/backfill.py`), and on request by the routes if neither got there
-first. Every file is written via a temp file and renamed, so a killed or
-timed-out ffmpeg never leaves a truncated file that later requests take for a
-finished one.
-
-A preview that could not be made leaves a marker (`{job}_{index}.failed`:
-the source's size and mtime, how many tries failed). After `_FAILS_TO_BLOCK`
-failures of that same file it is not tried again for `_RETRY_FAILED_S`, its
-preview or its poster, by the backfill or a request, and the gallery shows the
-original. A 61 MB clip timed out (180 s) on every deploy's backfill, 10 times in
-4 days, each holding the only preview worker (prod 2026-11-04..08). One failure
-alone (a busy CPU) is tried again; a replaced source at once.
-"""
-
 import hashlib
 import subprocess
 import tempfile
@@ -44,27 +17,18 @@ logger = get_logger(__name__)
 
 
 def previews_dir() -> Path:
-    """Previews and posters of job results, keyed by job id + file index
-    (what /files/{job}/{index} serves). Read per call, like every setting:
-    a root fixed at import would outlive the test suite's own."""
     return Path(settings.infra.uploads_root) / ".previews"
 
 
-# What a preview can fail with: a missing or broken ffmpeg, an unreadable
-# source, a timeout (`utils.ffmpeg` raises RuntimeError for the last two).
 PREVIEW_ERRORS = (OSError, ValueError, RuntimeError, subprocess.SubprocessError)
-# A preview that failed this often is tried again only after this (a full
-# disk passes).
 _FAILS_TO_BLOCK = 2
 _RETRY_FAILED_S = 7 * 24 * 60 * 60
 
 
-class FailedBeforeError(RuntimeError):
-    """This very file's preview failed too often lately: not tried again yet."""
+class FailedBeforeError(RuntimeError): ...
 
 
 def write_atomic(dest: Path, write: Callable[[Path], None]) -> Path:
-    """`write` into a temp file next to `dest`, then rename it into place."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         dir=dest.parent, suffix=dest.suffix, delete=False
@@ -87,15 +51,6 @@ def write_image_thumb(source: Path, dest: Path, size: int) -> None:
 def write_video_thumb(
     source: Path, dest: Path, size: int, *, pre_filter: str = "", at_s: float = 0
 ) -> None:
-    """The frame at `at_s` (the first), scaled to fit a `size` box, as webp;
-    `pre_filter` (ending in a comma) runs first.
-
-    Extracted with ffmpeg rather than served as a <video preload="metadata">
-    tile: that made the browser range-request every clip in a grid just to
-    paint a poster frame. A cached frame is a few KB instead.
-
-    `force_original_aspect_ratio` keeps a 9:16 reel from being stretched.
-    """
 
     def write(tmp: Path) -> None:
         ffmpeg.run_bytes(
@@ -130,12 +85,6 @@ def write_video_preview(
     height: int | None = None,
     maxrate: str | None = None,
 ) -> None:
-    """At most `preview_height` lines (never upscaled), bitrate-capped H.264
-    with the index up front (`+faststart`), so playback starts after the
-    first few hundred KB instead of after the whole file. Two threads: the
-    preview worker shares the machine with the app and the generations.
-    `pre_filter` (ending in a comma) runs before the scale; `height` /
-    `maxrate` override the gallery's settings (a page judging quality)."""
     cfg = settings.web
     height = height or cfg.preview_height
     maxrate = maxrate or cfg.preview_maxrate
@@ -200,15 +149,11 @@ def _stamp(source: Path) -> str:
 
 
 class ResultPreview(BaseModel, frozen=True):
-    """One result file of a job (`source`, its `index` in the job's results)
-    and what a gallery shows of it."""
-
     source: Path
     job_id: str
     index: int
 
     def _failures(self) -> int:
-        """How many tries at this file (same size and mtime) failed lately."""
         marker = failed_path(self.job_id, self.index)
         try:
             if marker.stat().st_mtime <= time.time() - _RETRY_FAILED_S:
@@ -223,7 +168,6 @@ class ResultPreview(BaseModel, frozen=True):
             return 0
 
     def failed_before(self) -> bool:
-        """Whether this file failed to preview too often lately to try again."""
         return self._failures() >= _FAILS_TO_BLOCK
 
     def mark_failed(self) -> None:
@@ -238,9 +182,6 @@ class ResultPreview(BaseModel, frozen=True):
             )
 
     def make(self) -> Path:
-        """The result's preview, made unless it already exists. Raises one of
-        PREVIEW_ERRORS when it can't be made, at once when this file failed
-        lately (`failed_before`)."""
         source = self.source
         kind = classify_kind(source.name)
         dest = preview_path(self.job_id, self.index, kind)
@@ -261,7 +202,6 @@ class ResultPreview(BaseModel, frozen=True):
         return dest
 
     def poster(self) -> Path:
-        """A result video's first frame, made unless it already exists."""
         dest = poster_path(self.job_id, self.index)
         if not dest.is_file():
             write_video_thumb(self.source, dest, settings.web.poster_size)
@@ -269,10 +209,6 @@ class ResultPreview(BaseModel, frozen=True):
 
 
 def file_thumb(source: Path) -> Path:
-    """Any stored image or video as a small webp, for the admin file manager
-    (prod, 2026-10-22: a finished run with no card buttons could not even
-    be told apart there). Keyed by path, size and mtime: a replaced file
-    gets a new one. Raises one of PREVIEW_ERRORS when it can't be made."""
     st = source.stat()
     key = f"{source}:{st.st_size}:{st.st_mtime_ns}".encode()
     dest = previews_dir() / "files" / f"{hashlib.sha256(key).hexdigest()[:32]}.webp"
@@ -287,8 +223,6 @@ def file_thumb(source: Path) -> Path:
 
 
 def _media(sources: list[str | None]) -> list[tuple[int, Path, str]]:
-    """(index, path, kind) of every result that has a picture to show and
-    is still on disk."""
     found = []
     for index, raw in enumerate(sources):
         if raw is None:
@@ -301,8 +235,6 @@ def _media(sources: list[str | None]) -> list[tuple[int, Path, str]]:
 
 
 def is_warm(job_id: str, sources: list[str | None]) -> bool:
-    """Whether every preview (and video poster) of a job's results exists, a
-    file that failed too often lately counting as done (its poster too)."""
     return all(
         ResultPreview(source=path, job_id=job_id, index=index).failed_before()
         or (
@@ -314,10 +246,6 @@ def is_warm(job_id: str, sources: list[str | None]) -> bool:
 
 
 def warm_previews(job_id: str, sources: list[str | None]) -> None:
-    """Make every preview a job's results need (`Job.local_paths()`), so the
-    first viewer waits for none. One result that can't be previewed is
-    logged and skipped; the route serves its original instead. One that
-    failed too often lately is not tried again, preview or poster."""
     for index, path, kind in _media(sources):
         result = ResultPreview(source=path, job_id=job_id, index=index)
         if result.failed_before():

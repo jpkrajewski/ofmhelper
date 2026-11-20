@@ -1,7 +1,3 @@
-"""/clone-links review rows and cards as data: when a review counts as cut
-off, what a done card says without a review, when the page stops polling,
-and what the AI decision button and panel say."""
-
 import pytest
 
 from ofmhelpers.schemas import Job
@@ -59,7 +55,6 @@ def _card(*, path: str | None = "/v.mp4", review=None, status="done") -> CloneLi
 
 
 def test_a_review_waiting_in_the_queue_is_never_cut_off():
-    """Queued two hours ago and not claimed yet: still waiting."""
     assert not _review(started_at=None).cut_off(NOW, STALE_S)
 
 
@@ -74,8 +69,6 @@ def test_a_review_claimed_recently_or_finished_is_not_cut_off():
 
 
 def test_a_cut_off_review_keeps_its_card_polled():
-    """Recovery queues it again (or fails it for good): the page must see
-    that without a reload."""
     card = _card(review=_review(started_at=NOW - HOURS_2))
 
     assert card.review_settled is False
@@ -117,8 +110,6 @@ def test_the_decision_names_a_used_up_or_busy_ai_and_nothing_else():
 
 
 def test_the_panel_never_shows_a_raw_error():
-    """A check that kept its kind has a safe short error; an older row's
-    error may be the provider's raw text: a fixed line instead."""
     kept = _check(error="No AI model answered", error_kind="quota")
     raw = _check(error="429 RESOURCE_EXHAUSTED: You exceeded your quota")
 

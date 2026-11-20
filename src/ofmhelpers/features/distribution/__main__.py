@@ -1,15 +1,3 @@
-"""Pinterest distribution from the app container:
-
-- `python -m ofmhelpers.features.distribution report [--days 7] [--owner ID]`:
-  is it worth it. JSON lines: one per UTC day and model (pins over all
-  accounts, ig_pins = the "ig: <handle>" ones, failed, link_views = people
-  who opened the model's link from a pin, link_clicks = who went on to the
-  model's page), then one total per model (+ views_per_linked_pin), then
-  one per account (pins, failed, stopped). Reads only.
-- `... preset <file.json> --owner ID`: a model's preset saved as that
-  person's (the same key again replaces it). Format: CLAUDE.md "Presets".
-- `... presets --owner ID`: their presets' keys, titles, caption counts."""
-
 import argparse
 import json
 from pathlib import Path

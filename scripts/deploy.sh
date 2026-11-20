@@ -106,9 +106,10 @@ remote_script='
   echo "== swapping in the new containers =="
   # --remove-orphans: a service taken out of the compose file (clone-links-worker,
   # events-worker, 2026-11-11) would run on with the old code, next to the new.
-  # Redis waits until the workers are down: a changed REDIS_PASSWORD recreates
-  # it, and the old workers draining their jobs would lose it.
-  $compose up -d --wait --remove-orphans postgres pot-provider
+  # Postgres and Redis wait until the app and workers are down: a changed
+  # config (a new password in .env) recreates them, and the old app still
+  # serving lost its database for seconds (prod 2026-11-18, OFMHELPERS-9).
+  $compose up -d --remove-orphans pot-provider
   # Workers first, while the app still serves: each finishes the job it runs
   # (stop_grace_period, up to 120 s) and takes no new one; jobs queued
   # meanwhile wait in Redis for the new workers.
@@ -123,8 +124,8 @@ remote_script='
   # (scripts/postgres_password.sh): a new value in .env is a rotation. The app
   # is stopped, nothing logs in with the old one.
   echo "== passwords from .env =="
+  $compose up -d --wait postgres redis
   $compose exec -T postgres sh -s < scripts/postgres_password.sh
-  $compose up -d --wait redis
   # --force-recreate: a deploy that leaves the old containers running while
   # reporting success is the worst outcome. --no-deps so the database is not
   # bounced with them. Compose waits for `migrate` to exit 0 before starting

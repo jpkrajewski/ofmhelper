@@ -1,17 +1,3 @@
-"""Nano Banana over Google's Gemini API (docs.apiyi.com nano-banana dev guide,
-2026-11-06): `POST /v1beta/models/{model}:generateContent`, answered in the
-request (`sync.py`). Text-to-image and edit are one call: a text part plus
-one `inlineData` part per reference image (base64; at most 14, 7 MB each,
-under 100 MB a request). `generationConfig.imageConfig`: `aspectRatio`
-(left out = the last input image's shape) and `imageSize` (1K/2K/4K; "512"
-on Nano Banana 2; Lite only 1K).
-
-The answer's image is the LAST `inlineData` part (Pro returns drafts before
-it). No image = refused: `finishReason` IMAGE_SAFETY / SAFETY /
-PROHIBITED_CONTENT ..., `promptFeedback.blockReason`, or a text-only answer;
-read as "flagged by moderation".
-"""
-
 from typing import Any
 
 from pydantic import Field
@@ -25,7 +11,6 @@ from ofmhelpers.media.image_fit import ImageLimits
 lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-# Per image before base64 (docs: 7 MB), all of them under APIYI's 100 MB.
 _MAX_IMAGE_BYTES = 7 * 1000 * 1000
 _MAX_REQUEST_IMAGE_BYTES = 60 * 1000 * 1000
 _MAX_SIDE = 8000
@@ -74,7 +59,6 @@ class GeminiAnswer(Lenient):
         return found[-1] if found else None
 
     def refusal(self) -> str:
-        """Why no image came, worded so the card reads it."""
         if self.prompt_feedback and self.prompt_feedback.block_reason:
             return (
                 f"{PROVIDER}: flagged by moderation: input blocked "

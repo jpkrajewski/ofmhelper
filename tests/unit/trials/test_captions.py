@@ -1,8 +1,3 @@
-"""Trial captions: watching asks the video chain (with the small proxy),
-writing the caption asks the chat provider first -- Gemini's free tier is
-20 requests a day per model, Groq's 1,000 -- and the video chain only when
-it fails."""
-
 from pathlib import Path
 
 import pytest
@@ -29,8 +24,6 @@ class _Model:
 
 @pytest.fixture
 def models(monkeypatch):
-    """chat = groq (text only), video chain = two Gemini models; `answers`
-    per entry, every ask recorded as (entry, media file names)."""
     asked: list = []
     answers: dict = {}
     monkeypatch.setattr(captions.settings.llm, "default_chat", "groq", raising=False)
@@ -67,7 +60,6 @@ def test_the_video_chain_writes_it_when_the_chat_model_is_down(models):
 
 
 def test_one_ask_asks_for_all_the_choices(models, monkeypatch):
-    """Five asks would cost five of the day's requests."""
     _asked, answers = models
     answers["groq"] = Captions(captions=["one"])
     prompts = []
@@ -102,14 +94,12 @@ def test_the_choices_come_back_clean_fitting_and_none_twice():
     ).captions
 
     assert len(found) == CHOICES
-    assert found[0] == "QUOTED ONE"  # same words: kept once, in its first place
+    assert found[0] == "QUOTED ONE"
     assert found[1] == "x" * CAPTION_MAX
     assert found[2] == "two lines"
 
 
 def test_a_caption_with_a_crude_word_is_dropped():
-    """What prod copies carried (2026-11-17), next to innocent ones that only
-    contain a blocked word inside a longer one."""
     found = Captions(
         captions=[
             "my dick is out bro",
@@ -128,14 +118,12 @@ def test_a_caption_with_a_crude_word_is_dropped():
 
 
 def test_only_crude_captions_is_the_wrong_answer():
-    """The chain then asks the next model."""
     with pytest.raises(ValidationError):
         Captions(captions=["my dick is a trap", "boobs are real"])
 
 
 @pytest.mark.parametrize("empty", [[], ["", "   ", '""']])
 def test_no_caption_at_all_is_the_wrong_answer(empty):
-    """The chain then asks the next model."""
     with pytest.raises(ValidationError):
         Captions(captions=empty)
 

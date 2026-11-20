@@ -1,44 +1,31 @@
-"""
-Importable task functions for the RQ integration test. RQ runs a job by
-importing its function by module path, so these must live at real module level
-(not nested inside a test function) to be resolvable by the worker. Named
-without a `test_` prefix so pytest doesn't try to collect it as a test module.
-"""
-
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
 
 
 def make_result(name):
-    """Mimics a generator task fn: returns the one-file-per-entry result shape."""
     return [{"name": name, "path": None}]
 
 
 def always_fails():
-    """Mimics a task that raises (e.g. a bad API key)."""
     msg = "Wrong API Key"
     raise ValueError(msg)
 
 
 def fails_with(argument, secret):
-    """A task that raises after being given values that must stay private."""
     msg = "the job failed"
     raise RuntimeError(msg)
 
 
 def requeue_once(note):
-    """A long batch letting the line in (`runner.Requeued`)."""
     from ofmhelpers.features.jobs.runner import Requeued
 
     return Requeued()
 
 
 def note_down(name):
-    """Leaves its name in Redis, in the order the jobs ran."""
     get_redis().rpush("ran", name)
 
 
 def note_the_line():
-    """Leaves the media queue's line as it looks while this job runs."""
     get_redis().set(
         "line_seen", JobQueue(name=QueueName.MEDIA).line().model_dump_json()
     )

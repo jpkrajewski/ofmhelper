@@ -1,28 +1,3 @@
-"""
-When each shared reference file was last *used*, on the Redis connection the
-RQ queue already owns (ofmhelpers.cache) -- shared state, so the ordering holds
-across every uvicorn worker.
-
-This exists so the picker can show two genuinely different lists (routers/
-refs.py): the files you last picked, and the files you last uploaded. It used
-to be one list, because reuse `touch()`ed the file and mtime meant both at
-once -- which also meant a resolver quietly wrote to the asset store.
-
-Not a Postgres table: this is picker ordering, not a noun the app owns.
-Losing it (a flushed Redis, a fresh deploy) degrades the picker to
-"most recently uploaded", which is exactly what it did before.
-
-Kept per store (one key each): with per-user asset roots, one user's picks
-would otherwise push everyone else's out of the window the picker reads.
-An admin's list is their own picks, like anyone's. A VA works in their
-owner's part of the store (`features/assets/store.py`), so a VA's picks and
-the owner's are one list, the same for all of them (owner 2026-11-14).
-
-Redis failures are swallowed, like ratelimit.py's: a broker that can't record
-"you picked this file" is no reason to fail a generation that has every file
-it needs.
-"""
-
 import time
 from typing import Any
 lazy from pathlib import Path
@@ -41,38 +16,28 @@ _KEY_PREFIX = "refs:used:"
 
 
 def _key(user_id: int) -> str:
-    """The list of the store `user_id` works in: a VA's is their owner's."""
     user = get_user(user_id)
     owner = user.owner_id if user is not None and user.owner_id else user_id
     return f"{_KEY_PREFIX}{owner}"
 
 
 def record_use(user_id: int, path: Path) -> None:
-    """Remember that `user_id` just picked this file."""
     key = _key(user_id)
     try:
         redis = get_redis()
         redis.zadd(key, {str(path): time.time()})
-        # Bounded (`ref_usage_max_tracked`) so a long-lived deployment doesn't
-        # grow one key forever: the picker asks for a handful, anything past
-        # it is older than "recently used" means. By rank, 0 = oldest.
         redis.zremrangebyrank(key, 0, -(settings.web.ref_usage_max_tracked + 1))
     except RedisError:
         logger.warning("could not record use of %s", path, exc_info=True)
 
 
 class UsedRef(BaseModel, frozen=True):
-    """A reference file's path and when it was last used."""
-
     path: str
     used_at: float
 
 
 def recent(user_id: int, limit: int) -> list[UsedRef]:
-    """`user_id`'s `limit` most recently used paths, newest first, each with
-    the timestamp it was used at. Empty when Redis is unreachable."""
     try:
-        # withscores=True narrows the stubs' union to (member, score) pairs.
         rows: Any = get_redis().zrevrange(_key(user_id), 0, limit - 1, withscores=True)
     except RedisError:
         logger.warning("could not read recently-used refs", exc_info=True)

@@ -9,8 +9,6 @@
     <title>{% block title %}Ascend Global LLC — Content Ops{% endblock %}</title>
     {% include "_favicon.html" %}
     {% include "_styles.html" %}
-    <!-- Before every other script: it wraps fetch() so an expired session
-         redirects to /login instead of failing opaquely. -->
     <script src="{{ static_url('js/session.js') }}"></script>
     <script src="{{ static_url('js/nav.js') }}" defer></script>
     <script src="{{ static_url('js/confirm.js') }}" defer></script>
@@ -18,9 +16,8 @@
     <script src="{{ static_url('js/theme.js') }}" defer></script>
     <script src="{{ static_url('js/notify.js') }}" defer></script>
     <script src="{{ static_url('js/posting.js') }}" defer></script>
-    {# The Drive pop-ups ask /account/drive-space: only for who has an account page (not a VA). #}
     {% if can(request, "account") %}<script src="{{ static_url('js/drive-alert.js') }}" defer></script>{% endif %}
-    <script src="{{ static_url('js/chats-alert.js') }}" defer></script>
+    <script src="{{ static_url('js/notifications.js') }}" defer></script>
     <script src="{{ static_url('js/failed-runs.js') }}" defer></script>
     <script src="{{ static_url('js/time-zone.js') }}" defer></script>
     <script src="{{ static_url('js/upload-guard.js') }}" defer></script>
@@ -28,11 +25,8 @@
 <body data-session-max-age="{{ session_max_age(request) }}">
     <a class="skip-link" href="#main">Skip to content</a>
 
-    {# Who the page is for: the person signed in, or the one an admin views as. #}
     {% set viewer = viewer_of(request) %}
-    {# A manager is signed in as themselves, looking at their employer's pages. #}
     {% set signed_in_as = (viewer.by.email if viewer.managing else viewer.user.email) if viewer is not none else "" %}
-    {# schemas/nav.py NAV: a new page is one entry there. #}
     {% set pages = nav_of(viewer) %}
     {% set here = request.url.path %}
     {% set chosen_zone = time_zone(request.cookies.get("ofm_timezone")) %}
@@ -52,8 +46,6 @@
                     {% set more_pages = pages | selectattr("place", "equalto", "more") | list %}
                     {% set more = namespace(current=false) %}
                     {% for item in more_pages if item.is_current(here) %}{% set more.current = true %}{% endfor %}
-                    {# A few pages under "More" (a VA's Edit and Handmade) are plain
-                       links in the bar: no menu for two (owner 2026-11-15). #}
                     {% if more_pages | length <= 2 %}
                     {% for item in more_pages %}
                     <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
@@ -70,7 +62,6 @@
                         </details>
                     </li>
                     {% endif %}
-                    {# On a phone the bar has no room: the clock is in the menu. #}
                     {% if signed_in_as %}
                     <li class="clock-drawer">{{ ui.clock_now(chosen_zone) }}</li>
                     {% endif %}
@@ -79,19 +70,15 @@
 
             {% if signed_in_as %}{{ ui.clock_now(chosen_zone, hook="clock-bar") }}{% endif %}
 
-            {# Log out lives in the bar itself, not in the nav list: it is
-               not a destination, and on a phone it must not be hidden
-               behind the menu toggle. #}
             <form method="post" action="/logout" class="logout-form">
                 {% if signed_in_as and can(request, "account") %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% elif signed_in_as %}<span class="signed-in-as">{{ signed_in_as }}</span>{% endif %}
                 {{ ui.button("Log out", "ghost", type="submit") }}
             </form>
 
-            {% if can(request, "chatting") %}{{ ui.chats_menu() }}{% endif %}
+            {% if signed_in_as %}{{ ui.notifications_menu() }}{% endif %}
 
             {% if signed_in_as %}{{ ui.time_zone_menu(time_zones, chosen_zone) }}{% endif %}
 
-            {# Light / dark (static/js/theme.js): the icon shows the mode a click gives. #}
             {% call ui.icon_button("moon", "Switch light or dark", hook="theme-toggle") %}{{ ic.icon("moon") }}{{ ic.icon("sun") }}{% endcall %}
 
             <button type="button" class="nav-toggle" aria-expanded="false"
@@ -99,18 +86,6 @@
                 <span class="nav-toggle-bars" aria-hidden="true"></span>
             </button>
         </div>
-        {# Pop-ups just under the header (inside it: they follow it at any
-           height), top right, stacked. The daily posting window
-           (web/posting.py): while it is open (static/js/posting.js shows it,
-           also at the window's start on a page left open; dismissed, it stays
-           away for that day's window). A full Google Drive, or one whose
-           sign-in Google refused (web/drive_space.py, signed in only):
-           static/js/drive-alert.js asks for the space and shows the one that
-           applies; dismissed, it stays away for the day. Each chimes and
-           notifies the desktop once (static/js/notify.js). Models with a
-           chat nobody answered, and mass messages just finished
-           (features/chatting/alerts.py) are not pop-ups: the header's chats
-           menu (ui.chats_menu, static/js/chats-alert.js). #}
         <div class="page-alerts">
         {% set pw = posting_window() %}
         {% call ui.notice(hook="posting-banner", attrs={"data-start": pw.start|int, "data-end": pw.end|int, "hidden": true}) %}
@@ -132,7 +107,6 @@
             <form method="post" action="/viewing/delete">{{ ui.button("Back to my view", type="submit") }}</form>
         {% endcall %}
         {% endif %}
-        {# While images/videos still go up (static/js/upload-guard.js). #}
         {{ ui.notice("Images/videos are still uploading to server. Wait till they are uploaded.", "warn", hook="upload-wait", attrs={"hidden": true}) }}
         {% if can(request, "account") %}
         {% call ui.notice(kind="fail", hook="drive-reconnect-banner", attrs={"hidden": true}) %}
@@ -155,7 +129,6 @@
         </div>
     </footer>
 
-    {# A link clicked while images/videos still go up (static/js/upload-guard.js). #}
     <dialog class="accounts-dialog" id="upload-leave">
         <form method="dialog">
             <h2>Leave site?</h2>

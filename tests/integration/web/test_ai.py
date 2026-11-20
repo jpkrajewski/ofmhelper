@@ -1,8 +1,3 @@
-"""/generate and /ai: every provider's models through one form and one job
-type. The fake provider runs real jobs end to end for free; kie.ai and
-Higgsfield are exercised with their single calls stubbed, so every request
-goes through the same router, runner and result handling as a paid run."""
-
 import io
 import json
 import re
@@ -66,9 +61,6 @@ def _fake(client, files=None, **fields):
     return client.post("/ai/run", data=data, files=files)
 
 
-# --- the page -------------------------------------------------------------
-
-
 def test_page_offers_every_provider_and_every_model(client):
     html = client.get("/generate").text
 
@@ -112,9 +104,6 @@ def test_kling_and_nano_banana_default_prompts_ship_in_the_catalog(client):
     assert "Refer to first image and second image, replicate third image." in html
 
 
-# --- /ai/fields -----------------------------------------------------------
-
-
 def test_fields_render_the_schema_as_inputs(client):
     html = client.get("/ai/fields", params={"model": "kie:wan/3-0-video"}).text
 
@@ -148,8 +137,6 @@ def test_a_single_file_field_is_a_one_item_picker(client):
 
 
 def _unrendered(client, key: str) -> list[str]:
-    """What the form of model `key` lacks: nothing when every setting is an
-    input and every media field a picker of its kind."""
     spec = catalog()[key]
     response = client.get("/ai/fields", params={"model": key})
     if response.status_code != 200:
@@ -165,11 +152,6 @@ def _unrendered(client, key: str) -> list[str]:
 
 
 def test_every_model_renders_its_fields(client):
-    """Every catalog entry (all of kie.ai's image/video models) gets a form: each
-    setting an input, each media field a picker of its kind. One test for
-    all ~600 models, not one each: the pages only read, and a test each paid
-    the sign-in and the database wipe 595 times (64 s of its 73 s,
-    2026-11-13). A failure names every model and what its form lacks."""
     keys = catalog().names()
 
     missing = [lack for key in keys for lack in _unrendered(client, key)]
@@ -183,8 +165,6 @@ def test_fields_of_an_unknown_model_404(client):
 
 
 def test_fields_revalidate_to_an_empty_304(client):
-    """Recreate / model switches ask again and again: an unchanged model
-    costs a bodiless 304."""
     params = {"model": "kie:wan/3-0-video"}
     first = client.get("/ai/fields", params=params)
     etag = first.headers["etag"]
@@ -197,9 +177,6 @@ def test_fields_revalidate_to_an_empty_304(client):
         headers={"If-None-Match": etag},
     )
     assert other.status_code == 200
-
-
-# --- /ai/run with the fake provider (real jobs, no credits) ---------------
 
 
 def test_a_fake_image_lands_in_the_shared_out_dir_and_the_asset_store(client, tmp_path):
@@ -216,7 +193,7 @@ def test_a_fake_image_lands_in_the_shared_out_dir_and_the_asset_store(client, tm
 def test_batch_queues_one_job_per_image(client):
     ids = _fake(client, batch="3").json()["job_ids"]
     assert len(ids) == 3
-    assert len(set(ids)) == 3  # three distinct jobs
+    assert len(set(ids)) == 3
     assert all(get_job(i).params["prompt"] == "a cat" for i in ids)
 
 
@@ -275,9 +252,6 @@ def test_settings_are_typed_from_the_form(client):
     assert get_job(job_id).params["delay"] == 0
 
 
-# --- /ai/run validation ---------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("data", "detail"),
     [
@@ -325,12 +299,8 @@ def test_a_bad_request_is_a_400_and_queues_nothing(client, data, detail):
     assert detail in r.json()["detail"]
 
 
-# --- real providers, single calls stubbed ---------------------------------
-
-
 @pytest.fixture
 def kie(monkeypatch):
-    """kie.ai answering every call; `calls` records what was sent."""
     calls = {"submit": [], "upload": []}
 
     def submit(_self, spec, payload, idempotency_key):
@@ -475,9 +445,6 @@ def test_a_higgsfield_run_uses_its_own_field_names(client, monkeypatch):
     assert payload["image_url"].startswith("https://hf/"), "one file, sent as one URL"
 
 
-# --- job pages, gallery, legacy jobs -------------------------------------
-
-
 def test_job_page_shows_the_model_settings_and_reference_preview(client):
     files = {"reference_image_urls": ("myref.png", io.BytesIO(_png()), "image/png")}
     job_id = _fake(client, files=files, reference_image_urls_manifest=NEW).json()[
@@ -549,9 +516,6 @@ def test_status_json_surfaces_the_preview_only_while_running(tmp_path):
         job_id, "done", result=[{"name": "x.png", "path": str(tmp_path / "x.png")}]
     )
     assert job_status_payload(get_job(job_id), "/ai/files").preview is None
-
-
-# --- a provider added later ----------------------------------------------
 
 
 @pytest.fixture

@@ -1,20 +1,3 @@
-"""
-Covers the "don't re-upload the same reference file to kie.ai every single
-time" cache now that it lives in Redis (`ofmhelpers.cache`) instead of a
-per-process LRU: KieAIClient.upload_local_file reads/writes
-`kieai:upload:<sha256(api_key)[:16]>:<path>`.
-
-Real logs showed the same reference images/videos/audio getting re-uploaded
-to kie.ai's tempfile host on every single generation, even when the exact
-same local file (content-addressed in uploads/assets/) had already been
-uploaded moments earlier -- pure wasted bandwidth/time. This is the fix,
-and it's deliberately tested hard: a caching layer that silently serves a
-stale or cross-account URL is worse than no cache at all.
-
-Redis is flushed before every test by conftest's autouse `_clean_tables`, so
-no test can leak a cached URL into the next one.
-"""
-
 import threading
 import time
 from unittest import mock
@@ -50,8 +33,6 @@ def ref_file(tmp_path):
 
 
 def _key(client: KieAIClient, path) -> str:
-    """The client's own key (never re-derived here: a format change is the
-    client's to make, the tests follow)."""
     return client._upload_cache_key(str(path))
 
 
@@ -80,7 +61,6 @@ def test_first_upload_hits_network_and_populates_cache(client, ref_file):
 
 
 def test_cached_entry_carries_the_configured_ttl(client, ref_file):
-    """A dead entry must age out on its own -- nothing else expires it."""
     with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response()
         client.upload_local_file(str(ref_file))
@@ -90,11 +70,10 @@ def test_cached_entry_carries_the_configured_ttl(client, ref_file):
 
 
 def test_the_api_key_is_never_part_of_a_redis_key(client, ref_file):
-    """The cache key names a Redis key and the upload lock."""
     seen = []
 
     def post(*_args, **_kwargs):
-        seen.extend(get_redis().scan_iter("*"))  # the lock is held now
+        seen.extend(get_redis().scan_iter("*"))
         return _mock_post_response()
 
     with kie_http() as mreq:
@@ -123,8 +102,6 @@ def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
 
 
 def test_a_second_client_with_the_same_key_reuses_the_cached_upload(tmp_path, ref_file):
-    """The point of moving this to Redis: every KieAIClient instance, in this
-    process or in the worker, sees the same answer."""
     first_client = KieAIClient(api_key="k", out_dir=tmp_path / "a")
     second_client = KieAIClient(api_key="k", out_dir=tmp_path / "b")
 
@@ -153,7 +130,7 @@ def test_cache_hit_but_remote_gone_triggers_reupload(client, ref_file):
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/old")
         client.upload_local_file(str(ref_file))
 
-        mreq.head.return_value = _mock_head_response(404)  # expired on kie.ai's side
+        mreq.head.return_value = _mock_head_response(404)
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/new")
         second = client.upload_local_file(str(ref_file))
 
@@ -164,11 +141,6 @@ def test_cache_hit_but_remote_gone_triggers_reupload(client, ref_file):
 
 def test_remote_check_network_error_triggers_reupload(client, ref_file):
     with kie_http() as mreq:
-        # requests itself is mocked, so `except requests.RequestException`
-        # inside _remote_file_exists needs the REAL class here -- otherwise
-        # it's an auto-generated Mock attribute and Python can't match a
-        # raised exception against it (TypeError: catching classes that do
-        # not inherit from BaseException).
         mreq.RequestException = requests.RequestException
 
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/old")
@@ -187,9 +159,6 @@ def test_remote_check_network_error_triggers_reupload(client, ref_file):
 def test_an_unreachable_broker_degrades_to_re_uploading(
     client, ref_file, monkeypatch, caplog
 ):
-    """Pure optimisation: a dead Redis must cost an upload, not a failure --
-    the cache (cache.redis) and the lock (base, which imported get_redis by
-    name) both fail open. The lock's warning names a hash, never the key."""
     dead = Redis.from_url("unix:///nonexistent/redis.sock")
     monkeypatch.setattr("ofmhelpers.cache.redis.get_redis", lambda: dead)
     monkeypatch.setattr(
@@ -208,8 +177,6 @@ def test_an_unreachable_broker_degrades_to_re_uploading(
 
 
 def test_a_lock_lost_mid_upload_is_swallowed(client, ref_file, caplog):
-    """The upload outlived the lock (OFM_UPLOAD_LOCK_S) or Redis dropped it:
-    the release fails, the upload still counts (no LockNotOwnedError)."""
     lock_key = f"lock:{_key(client, ref_file)}"
 
     def post(*_args, **_kwargs):
@@ -226,8 +193,6 @@ def test_a_lock_lost_mid_upload_is_swallowed(client, ref_file, caplog):
 
 
 def test_a_lock_left_by_a_dead_worker_only_delays_the_upload(client, ref_file):
-    """A holder killed mid-upload leaves its lock until it expires; the next
-    run waits for that, then uploads -- it is not refused."""
     get_redis().set(f"lock:{_key(client, ref_file)}", "dead-worker", px=300)
     started = time.monotonic()
 
@@ -241,9 +206,6 @@ def test_a_lock_left_by_a_dead_worker_only_delays_the_upload(client, ref_file):
 
 
 def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
-    """kie.ai's tempfile host namespaces uploads per account; serving one
-    account's URL for another account's key would hand out a cross-account
-    reference."""
     client_a = KieAIClient(
         api_key="key-a",
         out_dir=tmp_path / "a",
@@ -341,9 +303,6 @@ def test_remote_file_exists_swallows_request_exceptions(client):
 
 
 def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
-    """Pieces of one run start together: the file goes up once, the others
-    wait and take the cached URL. The wait is a lock in Redis -- the worker
-    is a pool of processes, an in-process lock would not stop the others."""
 
     def new_client():
         return KieAIClient(

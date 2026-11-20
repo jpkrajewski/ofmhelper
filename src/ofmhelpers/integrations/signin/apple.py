@@ -1,19 +1,3 @@
-"""Sign in with Apple.
-
-Needs an Apple Developer account: a Services ID (`OFM_APPLE_SERVICES_ID`)
-with Sign in with Apple on, its return URL `<APP_BASE_URL>auth/apple/callback`,
-and a Sign in with Apple key (`OFM_APPLE_KEY_ID`, its .p8 as
-`OFM_APPLE_PRIVATE_KEY`, team `OFM_APPLE_TEAM_ID`). The client secret is a
-short-lived ES256 JWT signed with that key, made per exchange.
-
-Apple answers by POSTing to the callback (`response_mode=form_post`, needed
-for the email scope), and may hand out a private-relay email
-(...@privaterelay.appleid.com): once linked, the account is found by its
-Apple id whatever the email.
-https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens
-https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server
-"""
-
 import base64
 import json
 import time
@@ -36,8 +20,6 @@ from ofmhelpers.schemas.users import Identity
 ISSUER = "https://appleid.apple.com"
 AUTH_URL = f"{ISSUER}/auth/authorize"
 TOKEN_URL = f"{ISSUER}/auth/token"
-# Apple accepts a client secret valid up to 6 months; one exchange needs
-# minutes.
 _SECRET_TTL_S = 300
 _ES256_PART = 32
 
@@ -47,7 +29,6 @@ def _b64(data: bytes) -> str:
 
 
 def client_secret(now: float | None = None) -> str:
-    """The ES256 JWT Apple takes as the client secret."""
     s = settings.signin
     if not s.apple_configured or s.apple_private_key is None:
         msg = "Sign in with Apple is not set up"
@@ -96,7 +77,7 @@ class Apple:
         state: str,
         nonce: str,
         *,
-        connect: bool,  # noqa: ARG002 -- Apple grants nothing more to ask for
+        connect: bool,  # noqa: ARG002
     ) -> str:
         query = {
             "client_id": settings.signin.apple_services_id,

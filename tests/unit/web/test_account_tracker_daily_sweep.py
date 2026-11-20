@@ -1,8 +1,3 @@
-"""The account tracker's fixed scan times (`OFM_ACCOUNTS_SCAN_TIMES`, owner
-2026-11-06: 13:50 Warsaw, 10 min before the 14:00 Telegram report, and 18:00): a
-scan may be as old as the last scan time that came, so one missed (the app down)
-runs on the next pass."""
-
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -19,7 +14,6 @@ def _at(hour: int, minute: int, day: int = 6) -> datetime:
 
 @pytest.fixture
 def clock(monkeypatch):
-    """The tracker's clock, set by the test."""
     now: list[datetime] = []
 
     class _Now(datetime):

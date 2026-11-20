@@ -1,8 +1,3 @@
-"""An upload belongs to who made it: after an admin moves a VA to another
-employer, the new employer neither lists nor trashes the old employer's
-files in the old employer's own Google Drive (audit finding
-`drive-uploads:remove-authorized-by-job-reader-not-uploader`)."""
-
 from pathlib import Path
 
 import pytest
@@ -70,7 +65,6 @@ def _vas_run(tmp_path: Path) -> str:
 
 
 def _uploaded_then_moved(drive, tmp_path):
-    """X's upload of their VA's run, done; the VA now works for Y."""
     x, y = _client(X), _client(Y)
     login = _account_folder(x)
     sign_in(TestClient(app), VA, Role.VA)
@@ -84,7 +78,6 @@ def _uploaded_then_moved(drive, tmp_path):
 
 
 def _in_x_folder(drive) -> list[str]:
-    """The files in X's account folder (not the POSTED folder)."""
     root = users.by_email(X).drive_root_id
     (folder,) = drive.named("x.ig - Anna", root)
     return [n for n in drive.names_in(folder) if n != "POSTED"]
@@ -98,7 +91,7 @@ def test_the_new_employer_cannot_remove_the_old_employers_upload(drive, tmp_path
 
     assert r.status_code == 400
     assert r.json()["detail"] == "No such upload"
-    assert len(_in_x_folder(drive)) == 1  # X's file is still in X's folder
+    assert len(_in_x_folder(drive)) == 1
 
 
 def test_the_new_employer_lists_none_of_the_old_employers_uploads(drive, tmp_path):

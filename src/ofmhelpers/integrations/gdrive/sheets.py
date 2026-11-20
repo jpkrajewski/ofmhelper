@@ -1,10 +1,3 @@
-"""A Google Sheet as Drive exports it (xlsx), read into `DriveSheet`.
-
-xlsx, not CSV: a date cell arrives as a real date whatever format the sheet
-shows it in (CSV carries the displayed text, `12/11/2026`, which reads two
-ways), and every tab comes along (CSV: the first only). Checked live
-2026-11-12."""
-
 import io
 from datetime import date, datetime
 from typing import Any
@@ -29,14 +22,11 @@ def _value(cell: Cell) -> date | str | None:
     text = str(value).strip()
     target = cell.hyperlink.target if cell.hyperlink else None
     if target and not text.startswith(_LINK):
-        # A label over a link ("reel 3"): the address is what was meant.
         return target.strip()
     return text or None
 
 
 def _rows(cells: list[list[date | str | None]]) -> list[list[date | str | None]]:
-    """Without the empty rows a tab's formatting leaves after the last filled
-    one."""
     last = max((i for i, row in enumerate(cells) if any(row)), default=-1)
     return cells[: last + 1]
 

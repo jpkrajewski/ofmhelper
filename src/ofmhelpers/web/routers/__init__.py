@@ -1,42 +1,3 @@
-"""
-Every HTTP route in the app, grouped by what it is *for*:
-
-- `generation/` -- AI generation: `ai.py` runs every model of every provider
-  (integrations/ai_providers/), `index.py` is its /generate page, `clone.py` is /clone,
-  and `legacy.py` keeps the job pages of the per-model tools it replaced.
-- `downloads/`  -- pulling media in from elsewhere: videos, images, the
-  metadata cleaner, their picker page, and the viral-reel finder.
-- `tracking/`   -- social accounts' numbers over time (/accounts, every
-  platform of `ofmhelpers.integrations.socials`) and their short links' clicks (/links,
-  every provider of `ofmhelpers.integrations.short_links`).
-- `inventory/`  -- what each person owns and signs in with (/phones: their
-  physical phones and logins; /drive: those Instagram accounts' folders in
-  the owner's own Google Drive).
-- `image_tools/` -- local image edits with no external service (character
-  sheet, admin only).
-- `video_tools/` -- local video edits with no external service (uniqify, repurpose, edit).
-- `admin/`      -- admin-only surfaces: who may sign in (/users), landing-page
-  applications, file manager, action log.
-
-Eleven modules sit at this level because they belong to no single feature:
-`auth` (signing in and out: Google, Apple, password), `account` (your own
-sign-ins, Drive connection and API keys), `cookies` (your own cookies.txt),
-`vas` (what your VAs did and spent, per day),
-`chatting` (the agency's chat platforms and models, admins), `webhooks`
-(outside services calling in, signed), `ai_files` (reference files an AI
-provider without uploads fetches, one random token each),
-`jobs` (hiding your own job's card from its gallery, any tool),
-`apply` (the public landing-page application form's
-POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
-reference-file browser every generation form uses), and `task_helpers` (the
-upload/job/serve plumbing those routers are built out of).
-
-`ROUTERS` below is the registration list -- `web/main.py` loops over it, so
-**adding a page means one import and one entry here** (plus its `NavItem` in
-`schemas/nav.py`; a background-job tool also gets its `Tool` in
-`registry.py`), and main.py is never touched.
-"""
-
 from ofmhelpers.web.routers import (
     account,
     ai_files,
@@ -48,6 +9,7 @@ from ofmhelpers.web.routers import (
     home,
     jobs,
     legal,
+    notifications,
     refs,
     vas,
     webhooks,
@@ -69,9 +31,6 @@ from ofmhelpers.web.routers.inventory import drive, handmade, phones
 from ofmhelpers.web.routers.tracking import accounts, links, self_links
 from ofmhelpers.web.routers.video_tools import edit, repurpose, trials, uniqify
 
-# Order is presentational only -- FastAPI matches on path and no two routers
-# share a prefix -- so it follows the package grouping above and this list
-# reads like the directory listing.
 ROUTERS = [
     home.router,
     auth.router,
@@ -79,20 +38,19 @@ ROUTERS = [
     cookies.router,
     vas.router,
     chatting.router,
+    notifications.router,
     webhooks.router,
     ai_files.router,
     jobs.router,
     apply.router,
     legal.router,
     refs.router,
-    # generation/
     generation_index.router,
     ai.router,
     clone.router,
     clone_long.router,
     clone_links.router,
     *(router for _label, router in LEGACY_TOOLS.values()),
-    # downloads/
     downloads_index.router,
     download_media.router,
     download_videos.router,
@@ -100,25 +58,20 @@ ROUTERS = [
     clean_image.router,
     reels.router,
     viral.router,
-    # tracking/
     accounts.router,
     links.router,
     self_links.router,
-    # inventory/
     phones.router,
     drive.router,
     handmade.router,
-    # image_tools/
     character_sheet.router,
     pictures.router,
     threads.router,
-    # video_tools/
     uniqify.router,
     edit.router,
     repurpose.router,
     trials.router,
     distribution.router,
-    # admin/
     admin_users.router,
     admin_applications.router,
     admin_styleguide.router,

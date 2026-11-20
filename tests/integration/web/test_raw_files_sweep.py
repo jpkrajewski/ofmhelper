@@ -1,8 +1,3 @@
-"""The raw-file sweep (features/jobs/raw_files.py). Prod 2026-11-08: the disk was
-at 93%, and 7 GB of it were provider downloads kept after their export. A
-download older than 14 days goes unless a job (any status) or a remembered
-provider task names it. Exports, results and the `.jsonl` logs stay."""
-
 import os
 import time
 from pathlib import Path
@@ -51,7 +46,7 @@ def test_old_raw_downloads_nobody_names_go_and_the_rest_stays(out):
             job_id=failed, provider="apiyi", model="m", task_id="task-d", api_key="k"
         )
     )
-    create_job("clone", {"source": str(image)})  # named by params only
+    create_job("clone", {"source": str(image)})
     (out / "apiyi").mkdir()
     in_folder = _file(out / "apiyi", "old.mp4")
 

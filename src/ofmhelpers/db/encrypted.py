@@ -1,16 +1,3 @@
-"""
-`EncryptedText`: a Text column stored Fernet-encrypted, read back as the
-plaintext. The /phones logins (passwords, backup codes) use it, so a database
-dump -- a backup, `tests/fixtures/prod_snapshot.sql` -- holds no usable
-login without `OFM_VAULT_KEY` (settings.vault).
-
-Fernet is authenticated: a value encrypted with another key fails loudly
-(`VaultError`) instead of decrypting to garbage, and nothing ever reads back
-as a silent empty string. An empty value is stored as "" (not encrypted):
-it reveals only that there is no password, and lets a list say which logins
-have one without decrypting any.
-"""
-
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
@@ -24,15 +11,11 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 
-class VaultError(RuntimeError):
-    """The vault key is missing, malformed, or not the one a value was
-    encrypted with."""
+class VaultError(RuntimeError): ...
 
 
 @lru_cache(maxsize=4)
 def _fernet(keys: tuple[str, ...]) -> MultiFernet:
-    """Per key set, so a test (or a rotation) that changes the env gets its
-    own; the first key encrypts."""
     try:
         return MultiFernet([Fernet(k) for k in keys])
     except ValueError as exc:

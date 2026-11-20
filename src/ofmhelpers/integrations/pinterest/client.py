@@ -1,21 +1,3 @@
-"""pinterest.com's own web calls, as its "Create Pin" page makes them
-(recorded in a logged-in Chrome 2026-11-18), with one account's cookies.
-Through `integrations.outbound`: OFM_FAKE_EXTERNALS answers from `fake.py`.
-
-Every call is `/resource/ApiResource/{get|create}/` wrapping a `/v3/...`
-path: `source_url` + `data={"options": {"url", "data"}, "context": {}}`
-(a query for get, a form for create), with `x-csrftoken` = the `csrftoken`
-cookie and `x-pinterest-pws-handler` (without it: 403 "Invalid Resource
-Request"). A pin is made of uploads:
-1. `/v3/media/uploads/register/batch/` -> a signed slot on Pinterest's S3
-   (`image-story-pin`, or `video-story-pin` with the clip's length),
-2. the file POSTed there as a form (the slot's fields, then `file`),
-3. `/v3/media/uploads/` polled until `succeeded`: its `signature`,
-4. `/v3/storypins/` with the signature(s): a video needs a cover picture's
-   too.
-Cookies or a session that is no longer logged in answer 401/403:
-`PinterestLoggedOutError`, the account must upload new cookies."""
-
 import json
 import mimetypes
 import random
@@ -58,32 +40,23 @@ DOMAIN = "pinterest.com"
 
 
 class PinterestError(AppError):
-    """Pinterest refused or failed; never quotes a cookie. `permanent`:
-    trying the same again cannot help."""
-
     def __init__(self, message: str, *, permanent: bool = False) -> None:
         super().__init__(message)
         self.permanent = permanent
 
 
 class PinterestRateLimitedError(PinterestError):
-    """Pinterest said: too many, wait (`retry_after` seconds when it says)."""
-
     def __init__(self, retry_after: float | None) -> None:
         super().__init__("Pinterest rate limited this account: waiting")
         self.retry_after = retry_after
 
 
 class PinterestMediaError(PinterestError):
-    """Pinterest could not process this file: the same file again cannot help."""
-
     def __init__(self, message: str) -> None:
         super().__init__(message, permanent=True)
 
 
 class PinterestLoggedOutError(PinterestError):
-    """The cookies no longer sign the account in."""
-
     def __init__(self) -> None:
         super().__init__(
             "Pinterest logged this account out: upload its cookies again",
@@ -92,21 +65,15 @@ class PinterestLoggedOutError(PinterestError):
 
 
 def _is_pinterest(domain: str) -> bool:
-    # security audit 2026-11-18: dot boundary, "evilpinterest.com" is not ours.
     host = domain.lower().lstrip(".")
     return host == DOMAIN or host.endswith(f".{DOMAIN}")
 
 
 def only_pinterest(cookies: str) -> str:
-    """The pinterest.com cookies of a cookies.txt (a whole browser's export
-    holds every site's), as a cookies.txt again: all that is kept. Raises
-    `CookieFileError`."""
     return _as_txt(c for c in load_jar(cookies) if _is_pinterest(c.domain))
 
 
 def session_expires_at(cookies: str) -> float | None:
-    """When the Pinterest login cookie of a cookies.txt expires (epoch s);
-    None: none, or a session cookie. Raises `CookieFileError`."""
     found = [
         c.expires for c in load_jar(cookies) if c.name == LOGIN_COOKIE and c.expires
     ]
@@ -117,7 +84,6 @@ def _as_txt(cookies: Iterable[Cookie]) -> str:
     keep = MozillaCookieJar()
     for cookie in cookies:
         keep.set_cookie(cookie)
-    # A folder only this process user can read; gone with the block.
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "cookies.txt"
         keep.save(str(path), ignore_discard=True, ignore_expires=True)
@@ -125,7 +91,6 @@ def _as_txt(cookies: Iterable[Cookie]) -> str:
 
 
 def _sent_to(cookie: Cookie, host: str) -> bool:
-    """Whether a browser sends `cookie` to `host`."""
     domain = cookie.domain.lower()
     if domain.startswith("."):
         return host == domain[1:] or host.endswith(domain)
@@ -133,10 +98,6 @@ def _sent_to(cookie: Cookie, host: str) -> bool:
 
 
 def _host(jar: list[Cookie], default: str) -> str:
-    """The pinterest.com host the account is used on: a locale's
-    (pl.pinterest.com: Pinterest sends a Polish account there, its own page
-    calls go there) when the cookies hold a csrftoken for one, else
-    `default`."""
     hosts = [
         c.domain.lower()
         for c in jar
@@ -147,16 +108,12 @@ def _host(jar: list[Cookie], default: str) -> str:
 
 
 class PinterestClient:
-    """One account, signed in by its cookies.txt (Netscape format)."""
-
     def __init__(self, cookies: str) -> None:
         s = settings.pinterest
         jar = list(load_jar(cookies))
         host = _host(jar, urlsplit(s.base_url).hostname or "www.pinterest.com")
         self._base = f"https://{host}"
         self._session = outbound.mount(requests.Session())
-        # Only what the browser sends to `host`: an export holds the same
-        # name for several hosts (csrftoken of www. and pl.pinterest.com).
         mine = sorted(
             (c for c in jar if _sent_to(c, host)), key=lambda c: len(c.domain)
         )
@@ -177,8 +134,6 @@ class PinterestClient:
 
     @property
     def csrf(self) -> str:
-        """The csrftoken the browser would send to this host, as it is now
-        (Pinterest may renew it on an answer)."""
         found = sorted(
             (c for c in self._session.cookies if c.name == "csrftoken"),
             key=lambda c: len(c.domain),
@@ -188,15 +143,10 @@ class PinterestClient:
         )
 
     def cookies_txt(self) -> str:
-        """The cookies as they are now: what Pinterest renewed on its
-        answers (Set-Cookie) replaces what was loaded. Saved back after each
-        pin, so the stored session is always the newest one."""
         return _as_txt(iter(self._session.cookies))
 
     @property
     def signed_in(self) -> bool:
-        """Its cookies hold a Pinterest session at all (says nothing of
-        whether Pinterest still takes it: `me()` does)."""
         return any(c.name == LOGIN_COOKIE for c in self._session.cookies)
 
     def me(self) -> PinterestAccount:
@@ -211,8 +161,6 @@ class PinterestClient:
         return [PinterestBoard.model_validate(b) for b in data or []]
 
     def board(self, name: str) -> PinterestBoard:
-        """The account's board called `name` (any case), made when it has
-        none (a new account has no board at all)."""
         found = next(
             (b for b in self.boards() if b.name.casefold() == name.casefold()), None
         )
@@ -238,12 +186,8 @@ class PinterestClient:
         return made
 
     def upload(self, path: Path, *, video_ms: int | None = None) -> str:
-        """`path` on Pinterest (a picture, or a video `video_ms` long), its
-        upload id; `processed` waits until a pin can use it."""
         slot = self._register(video_ms)
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        # Exactly the signed fields: their policy pins each one, Content-Type
-        # included ("multipart/form-data"; the file's own type breaks it, 403).
         fields = slot.upload_parameters
         tries = settings.pinterest.upload_tries
         for attempt in range(1, tries + 1):
@@ -257,8 +201,6 @@ class PinterestClient:
                     )
                 break
             except requests.RequestException as exc:
-                # The same signed key again is safe; a TLS drop to S3 was
-                # seen once in 14 uploads (dev 2026-11-18, SSLError).
                 msg = f"Pinterest upload failed: {type(exc).__name__}"
                 if attempt == tries:
                     raise PinterestError(msg) from exc
@@ -270,8 +212,6 @@ class PinterestClient:
         return slot.upload_id
 
     def processed(self, upload_id: str) -> str:
-        """The upload's signature once Pinterest processed it; waits up to
-        `upload_wait_s`."""
         s = settings.pinterest
         deadline = time.monotonic() + s.upload_wait_s
         while True:
@@ -289,7 +229,7 @@ class PinterestClient:
             time.sleep(s.upload_poll_s)
 
     def create_pin(self, draft: PinDraft) -> CreatedPin:
-        tracking_id = str(random.randrange(10**18, 10**19))  # noqa: S311 -- an id, not a secret
+        tracking_id = str(random.randrange(10**18, 10**19))  # noqa: S311
         body = PinCreate.of(draft, tracking_id).model_dump()
         data = self._create("/v3/storypins/", body)
         found = data.get("id") if isinstance(data, dict) else None
@@ -337,7 +277,6 @@ class PinterestClient:
         return self._api("create", path, data)
 
     def _api(self, action: str, path: str, data: dict[str, Any]) -> Any:
-        """`/resource/ApiResource/<action>/` wrapping the `/v3/...` `path`."""
         options = {"url": path, "data": data}
         return self._resource(f"ApiResource/{action}", options, path)
 
@@ -348,10 +287,6 @@ class PinterestClient:
         what: str,
         headers: dict[str, str] | None = None,
     ) -> Any:
-        """One `/resource/<resource>/` call (a `.../get` as a query, any
-        other as a form), its `data`. Raises `PinterestLoggedOutError`,
-        `PinterestRateLimitedError`, `PinterestError`; every refusal or odd
-        answer is logged with its status and a short piece of its body."""
         url = f"{self._base}/resource/{resource}/"
         body = {
             "source_url": SOURCE_URL,
@@ -384,17 +319,12 @@ def _snippet(answer: requests.Response) -> str:
 
 
 def _answer(answer: requests.Response, what: str) -> Any:
-    """A `/resource/` answer's `data`, or its refusal as our error."""
     status = answer.status_code
     if status == HTTPStatus.TOO_MANY_REQUESTS:
         wait = answer.headers.get("Retry-After", "")
         logger.warning("pinterest %s rate limited (Retry-After %r)", what, wait)
         raise PinterestRateLimitedError(float(wait) if wait.isdigit() else None)
     if status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-        # Either way the account cannot post; going on would only hammer
-        # Pinterest with it: it stops until new cookies. "Invalid Resource
-        # Request" is also what a request missing Pinterest's own headers
-        # gets (checked 2026-11-18): logged as an error to look at.
         text = _snippet(answer)
         if "Invalid Resource Request" in text:
             logger.error(

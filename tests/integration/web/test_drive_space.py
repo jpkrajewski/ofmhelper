@@ -1,10 +1,3 @@
-"""web/drive_space.py: a person's Google Drive space, asked of Google at most
-once per TTL whatever it answers (a read, a refused sign-in = `reconnect`, no
-answer = a shorter retry), never at all with `ask=False`; a new token (a
-Reconnect) asks again. A failed upload's reason on a card is one of a few
-fixed words by kind, never Drive's own text (review 2026-10-25 #13, #16,
-#33, #46)."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
@@ -34,15 +27,12 @@ _GB = 1_000_000_000
 
 @pytest.fixture
 def drive(fake_externals) -> FakeDrive:
-    """The fake Drive: 10 GB, 9.7 GB used (300 MB free: under the 500 MB
-    floor)."""
     fake = fake_drive()
     fake.set_storage(10 * _GB, used=int(9.7 * _GB))
     return fake
 
 
 def _connected(email: str = EMAIL, token: str | None = None) -> int:
-    """A person with Google Drive connected (`token`: their refresh token)."""
     user = make_user(email)
     users._repository().signed_in(user.id, "", token or f"fake-refresh:{email}")
     return user.id
@@ -116,7 +106,6 @@ def test_a_refused_sign_in_says_reconnect_until_a_new_token(drive):
     cached = drive_space(user_id, ask=False)
     assert cached is not None
     assert cached.reconnect is True
-    # Reconnect: Google hands out a new token, which is asked at once.
     _connected(token="fake-refresh:ann.again@example.com")
     fresh = drive_space(user_id)
     assert fresh is not None
@@ -157,9 +146,6 @@ def test_every_signed_in_page_carries_the_reconnect_pop_up_hidden(drive):
     )
     assert "Google Drive disconnected" in page
     assert 'drive-reconnect-link" href="/account"' in page
-
-
-# --- upload_error: what a card says, by kind ------------------------------
 
 
 def _video(tmp_path):

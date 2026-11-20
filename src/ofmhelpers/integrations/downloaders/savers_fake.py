@@ -1,23 +1,11 @@
-"""The saver sites faked at the wire (OFM_FAKE_EXTERNALS, tests):
-saveinta.com, snapreels.net and their shared dl.snapcdn.app file host,
-answered the way the real ones answer (verified 2026-10-29,
-downloaders/savers.py), so the real client runs unchanged. Nothing leaves
-the process.
-
-A reel answers one mp4, a photo post two jpgs, a link with
-"fake-carousel" twelve (the one-post limit's bound), "fake-fail" the way
-a removed post answers (status "fail"). saveinta's result comes as the
-same packed script the live site sends; snapreels' as plain HTML.
-"""
-
 import urllib.parse
 from urllib.parse import parse_qs, urlsplit
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
 
-_K_EXP = "1893456000"  # far future; the real ones live ~a day
-_K_EXPIRY_CHECK = "1893542400"  # the `if (epoch < ...)` guard in the payload
+_K_EXP = "1893456000"
+_K_EXPIRY_CHECK = "1893542400"
 _K_TOKEN = "ab" * 32
 
 _PAGE = (
@@ -29,9 +17,6 @@ _PAGE = (
     "</body></html>"
 )
 
-# The real saveinta prelude + eval wrapper, verbatim, so a captured fake
-# response decodes with the site's own tools too. The payload args mirror
-# the live ones: charset, charcode offset, base.
 _PRELUDE = (
     'var _0xc84e=["","split",'
     '"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/",'
@@ -51,7 +36,7 @@ _EVAL = (
     '("__PACKED__","45","__CHARSET__","__OFFSET__","__RADIX__"))'
 )
 
-_CHARSET = "DNOBcTIwJ"  # a live response's charset; any distinct chars work
+_CHARSET = "DNOBcTIwJ"
 _RADIX = 8
 _OFFSET = 22
 _DELIMITER = _CHARSET[_RADIX]
@@ -61,9 +46,6 @@ _CAROUSEL = "fake-carousel"
 
 
 def _pack(js: str) -> str:
-    """The saveinta packing, inverted: URI-encode, then each charcode +
-    offset as base-`_RADIX` digits over `_CHARSET`, blocks delimited by
-    `_CHARSET[_RADIX]` (`savers._unpack` decodes exactly this)."""
     out = []
     for ch in urllib.parse.quote(js, safe=""):
         value = ord(ch) + _OFFSET
@@ -76,8 +58,6 @@ def _pack(js: str) -> str:
 
 
 def _items(url: str) -> list[str]:
-    """The dl tokens the post answers with: one mp4 per reel, two jpgs per
-    photo post, twelve for the carousel marker."""
     segments = [s for s in urlsplit(url).path.split("/") if s]
     shortcode = segments[-1] if segments else "post"
     if _CAROUSEL in url:

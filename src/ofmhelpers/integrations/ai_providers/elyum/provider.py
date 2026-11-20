@@ -1,12 +1,3 @@
-"""Elyum (elyum.ai) behind the shared `Provider` interface: one endpoint for
-every model, `POST /v1/generations {model, prompt, inputs, ...settings}`.
-
-The catalog keeps the form's usual shape (`image_urls`, `video_urls` as
-media fields, the settings by Elyum's own names); `wire_body` turns the
-media fields into Elyum's `inputs` -- each `{"role", "file"}` (an upload's
-`file_...` id) or `{"role", "url"}` -- with the role from the field's
-`x-role` (default `reference`)."""
-
 import re
 from pathlib import Path
 from typing import Any
@@ -29,12 +20,9 @@ from ofmhelpers.integrations.ai_providers.elyum.models import (
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-# Our schema keyword: the input role a media field's files go in as.
 ROLE = "x-role"
 DEFAULT_ROLE = "reference"
 FILE_ID_PREFIX = "file_"
-# Elyum numbers inputs @image1, @video1, @audio1; our prompts (the /clone
-# default "... @Video1 ... @Image1") use the other providers' capitals.
 _CITE = re.compile(r"@(Image|Video|Audio)(\d+)")
 
 
@@ -43,7 +31,6 @@ class ElyumProvider(Provider):
     name = "elyum"
     label = PROVIDER
     rank = 30
-    # Idempotency-Key = our job key: a resend answers the generation made.
     idempotent_submit = True
 
     def __init__(self, api_key: str) -> None:
@@ -76,24 +63,17 @@ class ElyumProvider(Provider):
             return TaskState(state="pending")
         if generation.status in FAILED:
             return TaskState(state="failed", error=generation.failure)
-        # No verdict: failing here would forget a generation that may be paid
-        # for. Asked again until the deadline, then recovery takes over.
         msg = f"{PROVIDER}: generation {task_id} answered status {generation.status!r}"
         raise ProviderUnavailableError(msg)
 
 
 class Input(BaseModel):
-    """One of `inputs`: an upload's id (`file`) or a link (`url`), and its role."""
-
     role: str
     file: str | None = None
     url: str | None = None
 
 
 class Body(BaseModel):
-    """`POST /v1/generations`: `settings` go beside `model` by the names and
-    in the order given, `inputs` last and only when there are any."""
-
     model: str
     settings: dict[str, Any]
     inputs: list[Input]
@@ -113,9 +93,6 @@ def _input(role: str, value: str) -> Input:
 
 
 def wire_body(spec: ModelSpec, payload: Payload) -> Body:
-    """What Elyum is sent: the model id, every setting as given, and each
-    media field's files as `inputs` in field order (Elyum numbers them per
-    kind in the order sent)."""
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     media = {f.name for f in spec.media_fields}

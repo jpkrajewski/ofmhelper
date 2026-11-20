@@ -1,33 +1,3 @@
-"""The picture side of a repurposed copy.
-
-`VideoSettings` is the video part of a preset: every knob optional, a
-missing knob is off (values: `repurpose.values`). `VideoTransformer` draws
-the knobs once for one copy and builds the ffmpeg filter chain, always in
-this order:
-
-1. mirror, then the framing crops: centred zoom (moved down by `shift_y`),
-   zoom into a random corner, the directional stretch, a fixed `rotate`
-   (scaled up so the turned frame still covers, cropped back);
-2. the handheld look: tilt, perspective, shake, drift (`handheld.py`);
-3. colour: eq (saturation / contrast / brightness / gamma),
-   colortemperature, a luma tone curve, a shadow tint, CapCut's Adjust
-   colour sliders, sharpen, B&W;
-4. vignette (+ Adjust's), a 1-2 px chroma shift, the blurred border;
-5. grain (its own seed every copy), then exposure (+ Adjust's; exposure
-   outputs float RGB, which the noise filter would turn into colour static);
-6. speed, then the scale to the exact output size;
-7. after it: late sharpen, Adjust's sharpen / clarity / particles,
-   particles, the pattern overlay, the snapchat caption (`extras/snapchat`),
-   yuv420p.
-
-Knobs come from: legacy `utils.uniqify` (speed, eq, colortemperature,
-sharpen, zoom, stretch, mirror, B&W, grain), InstaLabs Spoofer (handheld),
-Duplyfi 1.5.1 (gamma, tone curve, tint, corner zoom, vignette, chroma shift,
-border, patterns, size, cuts), `utils.capcut` (shift_y, exposure, late
-sharpen, particles, trims in seconds) and CapCut's Adjust panel (`adjust`,
-in CapCut's slider units: `adjust.py`).
-"""
-
 import math
 import random
 from pathlib import Path
@@ -47,23 +17,17 @@ from ofmhelpers.media.repurpose.values import Value, chance, draw, draw_int, eve
 from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.repurpose.probe import Source
 
-# Kept after every cut, at least: the cuts never eat the clip.
 _MIN_KEPT_SHARE = 0.5
 _RIGHT_ANGLE = 1.5708
-# Grain below this strength stays out of the chain.
 _NOISE_MIN = 0.05
 
 
 class VideoSettings(BaseModel, frozen=True):
-    """The video part of a preset; see the module docstring for the order."""
-
-    # Timeline: seconds / shares of the clip cut off, playback speed.
     trim_head_s: Value | None = None
     trim_tail_s: Value | None = None
     cut_head: Value | None = None
     cut_tail: Value | None = None
     speed: Value | None = None
-    # Framing.
     mirror: float | None = None
     rotate: Value | None = None
     zoom: Value | None = None
@@ -74,7 +38,6 @@ class VideoSettings(BaseModel, frozen=True):
     perspective: Value | None = None
     shake: Value | None = None
     drift: Value | None = None
-    # Colour.
     saturation: Value | None = None
     contrast: Value | None = None
     brightness: Value | None = None
@@ -87,29 +50,20 @@ class VideoSettings(BaseModel, frozen=True):
     black_and_white: float | None = None
     vignette: Value | None = None
     chroma_px: Value | None = None
-    # Texture and the obvious looks.
     noise: Value | None = None
-    # ffmpeg's `noise` flags, joined by "+". Goes into the filtergraph, and a
-    # preset comes from the page: these letters only, or any filter could be added.
     noise_flags: Annotated[str, StringConstraints(pattern=r"^[aptu](\+[aptu])*$")] = "t"
     exposure: Value | None = None
     border: Value | None = None
     pattern: list[str] | str | None = None
     pattern_opacity: Value | None = None
-    # One of "border" / "pattern" / "none" per copy; unset: both as set.
     look: list[str] | None = None
-    # At the output size.
     size: Value | None = None
     sharpen_late: Value | None = None
     particles: Value | None = None
-    # A Snapchat caption bar (extras/snapchat) with this text, overlaid last;
-    # None = no caption.
     snapchat_caption: str | None = None
-    # CapCut's Adjust panel, in its slider units.
     adjust: AdjustSettings | None = None
 
     def merged(self, extra: VideoSettings | None) -> VideoSettings:
-        """These settings with `extra`'s set knobs on top."""
         if extra is None:
             return self
         return self.model_copy(update=extra.model_dump(exclude_unset=True))
@@ -122,8 +76,6 @@ class Timeline(BaseModel, frozen=True):
 
 
 class VideoDraws(BaseModel, frozen=True):
-    """One copy's drawn picture values (None: knob off)."""
-
     timeline: Timeline
     output_size: tuple[int, int]
     mirror: bool
@@ -145,7 +97,6 @@ class VideoDraws(BaseModel, frozen=True):
     sharpen: float | None
     black_and_white: bool
     vignette: float | None
-    # Blue-difference plane moved (x, y) px; red-difference the other way in x.
     chroma: tuple[int, int] | None
     noise: float | None
     noise_seed: int
@@ -161,7 +112,6 @@ class VideoDraws(BaseModel, frozen=True):
 
 
 def _cuts(s: VideoSettings, src: Source, rng: random.Random) -> tuple[float, float]:
-    """Seconds off the start and off the end; together at most half."""
     head = (draw(s.trim_head_s, rng) or 0.0) + (
         draw(s.cut_head, rng) or 0.0
     ) * src.duration
@@ -232,12 +182,10 @@ def _chroma(s: VideoSettings, rng: random.Random) -> tuple[int, int] | None:
 
 
 def _rotate(s: VideoSettings, rng: random.Random) -> float | None:
-    """The drawn rotation in degrees; None = knob off (0 turns nothing)."""
     return draw(s.rotate, rng)
 
 
 def _rotate_cover(rotate: float | None, aspect: float) -> float | None:
-    """The overscan a rotated frame needs to still cover the output."""
     if rotate is None or abs(rotate) < _WARP_EPS:
         return None
     a = math.radians(abs(rotate))
@@ -290,8 +238,6 @@ def _draw(
 
 
 class VideoTransformer:
-    """One copy's picture: drawn on creation, then `filters()`."""
-
     def __init__(
         self,
         settings: VideoSettings,
@@ -300,14 +246,11 @@ class VideoTransformer:
         rng: random.Random,
     ) -> None:
         self.settings = settings
-        # A pair in the draws: they are stored as they are (a trial's recipe).
         size = (output_size.width, output_size.height)
         self.draws = _draw(settings, source, size, rng)
 
     @classmethod
     def from_draws(cls, settings: VideoSettings, draws: VideoDraws) -> Self:
-        """A transformer for values already drawn (the lab's quality
-        reference: a copy's framing without its look)."""
         made = cls.__new__(cls)
         made.settings, made.draws = settings, draws
         return made
@@ -322,8 +265,6 @@ class VideoTransformer:
         return Size(width=width, height=height)
 
     def write_caption(self, work_dir: Path) -> Path | None:
-        """The snapchat caption PNG (`extras/snapchat`), if the settings name
-        one; `command.build` adds it as a second input and overlays it last."""
         if not self.settings.snapchat_caption:
             return None
         return render_snapchat(
@@ -335,15 +276,9 @@ class VideoTransformer:
     def filters(
         self, work_dir: Path, scaler: str = "bicubic", caption_input: int | None = None
     ) -> str:
-        """The whole -vf graph; the pattern image (if any) goes to `work_dir`.
-        `caption_input`: the ffmpeg input index of the caption PNG when
-        `command.build` added one; None drops the caption overlay."""
         d = self.draws
         w, h = d.output_size
         chain = [
-            # Start at 0: after an input seek the first frame can land at
-            # +30 ms, and the iphones recorder then starts the video after
-            # the whole audio (movie twice as long; 2026-10-26).
             "setpts=PTS-STARTPTS",
             *self._framing(),
             *self._rotation(),
@@ -385,8 +320,6 @@ class VideoTransformer:
         return chain
 
     def _rotation(self) -> list[str]:
-        """A fixed rotation: scaled up so the turned frame still covers the
-        output, turned, cropped back (same overscan idea as the handheld)."""
         d = self.draws
         if d.rotate is None or d.rotate_cover is None:
             return []
@@ -461,7 +394,6 @@ class VideoTransformer:
         if d.sharpen_late:
             chain.append(f"unsharp=5:5:{d.sharpen_late:.4f}")
         if d.adjust:
-            # Seeds off the copy's noise seed: no new draw, nothing else shifts.
             chain += d.adjust.output_filters(seed=(d.noise_seed + 1) % (1 << 31))
         if d.particles and d.particles >= _NOISE_MIN:
             seed = (d.noise_seed + 2) % (1 << 31)
@@ -471,7 +403,6 @@ class VideoTransformer:
         return chain
 
     def _overlay(self, work_dir: Path) -> str | None:
-        """The pattern laid over the output-size frame at a few percent."""
         d = self.draws
         if not d.pattern or not d.pattern_opacity or d.look not in ("pattern", "any"):
             return None
@@ -485,7 +416,6 @@ class VideoTransformer:
 
 
 def _tone_curve(mid: int, shoulder: int) -> str:
-    """Duplyfi's luma curve: the 64/128/192 points moved by code values."""
     q1 = min(110, max(32, 64 + shoulder))
     q2 = min(236, max(q1 + 6, 128 + mid))
     q3 = min(250, max(q2 + 6, 192 + shoulder))
@@ -496,8 +426,6 @@ def _tone_curve(mid: int, shoulder: int) -> str:
 
 
 def _border(share: float) -> str:
-    """The picture shrunk inside a blurred copy of itself (one graph segment;
-    commas inside expressions escaped)."""
     s = f"{share:.4f}"
     inset = f"2*trunc(min(iw\\,ih)*{s})"
     return (
@@ -509,9 +437,6 @@ def _border(share: float) -> str:
 
 
 def _graph_path(path: Path) -> str:
-    """A file path as a filtergraph value: plain characters only, so nothing
-    needs escaping but a Windows drive colon, which the filter parser reads
-    as an option separator (`C:` -> `C\\:`)."""
     text = path.as_posix()
     if not all(c.isalnum() or c in "/._-:" for c in text):
         msg = f"unsafe path for a filtergraph: {text!r}"

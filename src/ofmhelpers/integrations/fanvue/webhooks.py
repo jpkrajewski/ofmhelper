@@ -1,12 +1,3 @@
-"""Fanvue's webhooks: telling a real delivery from a forged one, and what one means
-in the app's terms.
-
-`X-Fanvue-Signature: t=<unix seconds>,v0=<hex>`: HMAC-SHA256 over `<t>.<raw body>`,
-keyed with the whole secret string (`whsec_` included). While a secret rotates the
-header carries a second bare MAC: `t=..,v0=<old>,<new>`. Before making a destination
-Fanvue checks the address with an unsigned `fanvue.webhook.verification`, which must
-get a 2xx, or the destination is not made."""
-
 import hashlib
 import hmac
 import json
@@ -55,8 +46,6 @@ _FROM_CREATOR = "creator"
 
 
 def channel_of(creator_uuid: str, fan_uuid: str) -> str:
-    """Fanvue has no chat id: a chat is a creator and a fan, and one fan can write
-    to two creators."""
     return f"{creator_uuid}:{fan_uuid}"
 
 
@@ -70,7 +59,6 @@ def is_probe(raw: bytes, headers: Mapping[str, str]) -> bool:
 
 
 def _signature_parts(header: str) -> tuple[str, list[str]]:
-    """(t, MACs). A bare field belongs to the key before it."""
     timestamp = ""
     macs: list[str] = []
     key = ""
@@ -117,7 +105,6 @@ def _message_read(event: MessageEvent, *, from_fan: bool) -> ChatRead:
 
 
 def _reaction_replies(event: ReactionEvent) -> list[ChatDelivery]:
-    """The model's emoji on a fan's message answers it; a fan's reaction says nothing."""
     if event.sender != _FROM_CREATOR:
         return []
     at = event.created_at.timestamp() if event.created_at else time.time()

@@ -1,16 +1,3 @@
-"""Every outside service the app depends on, reached for real: DNS + TLS
-for each host, and TikTok through yt-dlp. What each service answers is
-checked in its own contract test (test_*_contract.py), on its fake too.
-
-Run with `scripts/test.sh live` (Docker tests service), locally -- not on CI
-(Instagram rate-limits runner IPs). Each service is checked at two levels: its hosts
-resolve and complete a TLS handshake (catches DNS/network breakage, like a
-container that cannot resolve anything), and its API answers the way the
-app's own client expects (catches a changed or blocked API). Nothing is
-paid for and no secret is needed: the paid APIs are called with a key that
-must be rejected.
-"""
-
 import socket
 import ssl
 from urllib.parse import urlsplit
@@ -27,10 +14,8 @@ pytestmark = pytest.mark.live
 
 TLS_PORT = 443
 TIMEOUT_S = 15
-# A public TikTok video kept up for years (yt-dlp's own TikTok test case).
 TIKTOK_VIDEO = "https://www.tiktok.com/@scout2015/video/6718335390845095173"
 TIKTOK_HOST = "www.tiktok.com"
-# A public Instagram profile that will not disappear.
 INSTAGRAM_PROFILE = "instagram"
 BAD_KEY = "integration-test-invalid-key"
 
@@ -44,7 +29,6 @@ class Host(BaseModel):
 
 
 def _hosts() -> list[Host]:
-    """Every host the app talks to, read from its own config/constants."""
     urls = {
         "tiktok": [f"https://{TIKTOK_HOST}"],
         "instagram": [instagram_client.ROOT, f"https://{GLOBAL_CDN_HOST}"],

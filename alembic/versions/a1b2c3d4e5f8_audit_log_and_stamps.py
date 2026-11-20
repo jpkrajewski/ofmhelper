@@ -1,62 +1,3 @@
-"""audit_log + row stamps: who did what to the rows people edit.
-
-Owner 2026-11-15 (backlog: "who changed this and from what", "can an AI agent
-search user actions"): an append-only log of every change, and on each
-edited row when it was made and changed, and by whom.
-
-`audit_log`, append-only (a guard trigger refuses UPDATE, DELETE and
-TRUNCATE for every client, psql included, like `phone_revisions`):
-- `id` identity key, the order of the log.
-- `created_at` timestamptz, now() (the transaction's start).
-- `table_name`, `row_id` (its key values joined by ":"), `op` INSERT |
-  UPDATE | DELETE (CHECK).
-- `owner_id` whose row it is (its owner column; a phone link: its phone's or
-  its login's owner); `actor_id` who acted, `viewing_id` whom an admin was
-  viewing as (View as), both from the transaction's settings `ofm.*`
-  (`db/acting.py`, set by `db/session.py` on a transaction's first write);
-  no FKs: the log outlives any row and person.
-- `via` request | job | sweep | worker | migration | telegram (none set: a
-  client of its own, `sql:<application_name>`), `ref` what ("POST
-  /phones/3", "trials 1a2b3c4d"), `trace_id` the Logfire trace.
-- `txid` the transaction, `changes` jsonb: an UPDATE `{column: [old, new]}`
-  of the columns that changed (quiet columns left out: no row when only
-  they changed), an INSERT or DELETE the whole row; a secret column only
-  as "changed" / "set".
-- Indexes `(table_name, row_id, id)` a row's history, `(actor_id, id)` what
-  someone did, `(owner_id, id)` what happened to someone's data.
-
-Audited (trigger `<table>_audit`, `audit_row(quiet, secret, keys, owner)`):
-users, user_identities, user_api_keys, user_cookies, devices, logins,
-device_logins, tracked_accounts, creators, watched_profile_groups,
-short_links, picture_presets, self_link_domains, clone_examples; and jobs
-for `hidden_at` only (who hid a card), not their status churn or the cap.
-Every other table is in `db/audit.py` `EXCLUDED` with its reason.
-
-Stamps on the audited tables (`db/models.py` `Timestamps` + `Authored`):
-`created_at` / `updated_at` timestamptz default now(), `created_by` /
-`updated_by` FK users ON DELETE SET NULL. `stamp_row(quiet)` BEFORE INSERT
-OR UPDATE: on insert the actor into both `_by`; on update `updated_at` =
-now(), `updated_by` = the actor when a column that is not quiet changed,
-else the old stamps. The float epochs become timestamptz (`to_timestamp`,
-microseconds kept) and one name per fact: `added_at` / `linked_at` ->
-`created_at`, `user_cookies.uploaded_at` -> `updated_at`; a table without
-the other one gets it from the one it has. Rows from before have no `_by`.
-Still floats (not edited by people, read as numbers): `users.last_login_at`,
-`devices.retired_at`, `logins.archived_at`, `tracked_accounts` scan times.
-
-Phone history: `phone_revisions` snapshots are never rewritten (append-
-only). `phone_snapshot_current(snapshot)` reads one from before in today's
-shape (`added_at` / `linked_at` -> `created_at`, epochs -> timestamps);
-`db/repositories/phone_revisions.py` restores through it.
-
-Written by the triggers (nothing in the app inserts into `audit_log`); read
-by `db/repositories/audit_log.py` (the CLI `python -m
-ofmhelpers.features.audit`).
-
-Revision ID: a1b2c3d4e5f8
-Revises: f1a2b3c4d5e7
-"""
-
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -69,9 +10,6 @@ depends_on = None
 
 
 class _Table:
-    """One audited table: its renames, the float columns it converts, the
-    stamp it lacks (made from the one it has), and its trigger arguments."""
-
     def __init__(
         self,
         name: str,
@@ -202,8 +140,6 @@ _TABLES = (
     ),
 )
 
-# Writing these fires the phone history trigger: off while a column is
-# filled from another, so the move itself is no revision.
 _PHONE_TRIGGERS = {
     "devices": "devices_revision",
     "logins": "logins_revision",
@@ -340,7 +276,6 @@ END
 $$
 """
 
-# A phone row as stored before this revision, in today's shape.
 _PHONE_ROW = """
 CREATE FUNCTION phone_row_current(r jsonb) RETURNS jsonb
 LANGUAGE sql IMMUTABLE AS $$

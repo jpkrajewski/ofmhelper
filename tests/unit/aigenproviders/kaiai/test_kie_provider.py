@@ -1,7 +1,3 @@
-"""kie.ai behind the shared interface, its HTTP faked at the wire: what a
-request sends, how each answer maps to a state or an error, and the exact
-body each catalog model produces."""
-
 import json
 import logging
 
@@ -32,8 +28,6 @@ def _record(state, **extra):
 
 
 def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path, caplog):
-    """The paid request's audit line is a log event (stdout, Logfire), not a
-    file the app appends to for ever (tasks.jsonl until 2026-11-11)."""
     spec = get_spec("kie:wan/3-0-video")
     with (
         caplog.at_level(logging.INFO, logger=client_module.__name__),
@@ -65,7 +59,6 @@ def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path, capl
         (402, ProviderNoCreditsError),
         (422, ProviderInputError),
         (429, ProviderRateLimitError),
-        # Maintenance: retryable, but no rate limit -- a submit is not resent.
         (455, ProviderUnavailableError),
         (500, ProviderUnavailableError),
     ],
@@ -81,8 +74,6 @@ def test_kies_in_body_code_maps_to_an_error_type(provider, code, error):
 
 
 def test_no_credits_keeps_the_text_the_card_reads(provider):
-    """The card's 'No credits' reason reads '(code 402)'; callers decide by
-    the type (a batch stops asking)."""
     with kie_http() as http:
         http.request.return_value = response({"code": 402, "msg": "Credits low"})
         with pytest.raises(ProviderNoCreditsError, match=r"\(code 402\)") as raised:
@@ -113,7 +104,6 @@ def test_an_in_body_429_has_no_retry_after(provider):
 
 
 def test_the_upload_cache_key_never_carries_the_api_key(tmp_path):
-    """It names a Redis key and a lock, and is logged when the lock fails."""
     api_key = "sk-secret-kie-key-123"
     client = KieAIClient(
         api_key=api_key,
@@ -153,8 +143,6 @@ def test_an_http_error_maps_by_status(provider):
 
 
 def test_create_task_is_never_retried_by_the_transport():
-    """A createTask that reached kie.ai and timed out must not be sent again:
-    it would be paid twice."""
     retry = _session().get_adapter("https://api.kie.ai").max_retries
 
     assert "POST" not in retry.allowed_methods
@@ -214,8 +202,6 @@ def _not_json() -> object:
     ],
 )
 def test_an_unreadable_status_answer_is_transient(provider, answer):
-    """The request exists (maybe paid): an answer that cannot be read is
-    asked again, never a ValueError that fails the job unresumable."""
     with kie_http() as http:
         http.request.return_value = answer
         with pytest.raises(ProviderUnavailableError, match="unreadable") as raised:
@@ -231,8 +217,6 @@ def test_in_flight_states_are_pending(provider, state):
         assert provider.status("t1").state == "pending"
 
 
-# The body each migrated model sends with its form defaults: the per-model
-# quirks the old wrappers hard-coded now live in the catalog.
 @pytest.mark.parametrize(
     ("key", "values", "body"),
     [
@@ -294,13 +278,11 @@ def test_catalog_models_build_kies_body(key, values, body):
     ],
 )
 def test_catalog_rejects_what_kie_would(key, values):
-    """The rules the old wrappers raised on are schema rules now."""
-    with pytest.raises(ValueError):  # InvalidInputError
+    with pytest.raises(ValueError):
         get_spec(key).check(values)
 
 
 def _value(field):
-    """A valid value for one scalar setting, as the form would send it."""
     if field.default is not None:
         return field.default
     if field.enum:
@@ -314,8 +296,6 @@ def _value(field):
 
 
 def _minimal(spec):
-    """The required fields (and those of the first input variant, where the
-    schema has `anyOf`), each with a valid value: local paths for files."""
     variants = spec.input_schema.get("anyOf") or [{}]
     names = spec.required | set(variants[0].get("required") or [])
     media = {f.name: f for f in spec.media_fields}
@@ -331,9 +311,6 @@ def _minimal(spec):
 
 @pytest.mark.parametrize("spec", models_for("kie"), ids=lambda s: s.model_id)
 def test_every_kie_model_submits_its_catalog_body(provider, spec):
-    """Each model, from its required fields, passes its own schema and goes
-    to createTask as `{model, input}`: fixed values in, files uploaded, the
-    form's own field names never inside the input."""
     values = _minimal(spec)
     spec.check(values)
     body = spec.request(values, lambda p: f"https://up/{p.name}").model_dump()
@@ -374,8 +351,6 @@ def test_every_kie_model_submits_its_catalog_body(provider, spec):
     ],
 )
 def test_generated_models_build_kies_body(key, values, body):
-    """What the sync script decides: a `model` input is fixed, a bare
-    `image` field is a file, nsfw_checker is off, multi-line prompts pass."""
     spec = get_spec(key)
     spec.check(values)
 
@@ -383,10 +358,8 @@ def test_generated_models_build_kies_body(key, values, body):
 
 
 def test_input_variants_are_one_form_validated_per_variant():
-    """Kling 3.0 Omni Image to Video: first frame alone or first + last
-    frame -- one picker, each variant's limits still checked."""
     spec = get_spec("kie:kling-3.0-omni/image-to-video")
     spec.check({"prompt": "p", "image_urls": ["/a.png"]})
 
-    with pytest.raises(ValueError):  # InvalidInputError
+    with pytest.raises(ValueError):
         spec.check({"prompt": "p", "image_urls": [f"/{i}.png" for i in range(9)]})

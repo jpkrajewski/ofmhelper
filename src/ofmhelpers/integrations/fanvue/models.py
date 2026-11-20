@@ -1,6 +1,3 @@
-"""Fanvue API shapes, the fields this app reads (official spec:
-https://api.fanvue.com/docs/openapi-v1.json). Times are ISO 8601 on the wire."""
-
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,7 +32,6 @@ class FanvueChat(_Api):
 
 
 class ChatsPage(_Api):
-    # One by one in the client: a chat that cannot be read must not lose the page.
     data: list[dict]
     next_cursor: str | None = Field(default=None, alias="nextCursor")
 
@@ -59,15 +55,12 @@ class FanvueMessage(_Api):
 
 
 class DateFilter(_Api):
-    """Where the next, older page starts. Both null: no more."""
-
     sent_before: str | None = Field(default=None, alias="sentBefore")
     received_before: str | None = Field(default=None, alias="receivedBefore")
 
 
 class MessagesPage(_Api):
     data: list[FanvueMessage]
-    # Null on the last page (real replies, 2026-11-05: the spec shows an object).
     date_filter: DateFilter | None = Field(default=None, alias="dateFilter")
 
 
@@ -105,9 +98,6 @@ class WebhookEnvelope(_Api):
 
 
 class MessageEvent(_Api):
-    """`creator.message.received`, `.sent` and `.deleted`. A deleted one has no
-    `created_at`."""
-
     uuid: str
     created_at: datetime | None = None
     text: str | None = None
@@ -116,9 +106,6 @@ class MessageEvent(_Api):
 
 
 class ReactionEvent(_Api):
-    """`creator.message.reaction`. `sender` says who reacted, `message_uuid` to what;
-    the reaction has no id of its own."""
-
     sender: str
     message_uuid: str
     created_at: datetime | None = None
@@ -127,16 +114,10 @@ class ReactionEvent(_Api):
 
 
 class SubscriptionEvent(_Api):
-    """`creator.subscription.activated`: a new subscriber, or one coming back."""
-
     creator: EventParty
 
 
 class PaymentEvent(_Api):
-    """`creator.payment.succeeded`: a paid post, message, media, a tip, or a
-    subscription charge, renewals included. `gross` is what the fan paid, in cents.
-    `id` is the invoice number, the same if Fanvue repeats the event."""
-
     id: str
     source: str = ""
     billing_reason: str = ""
@@ -147,7 +128,5 @@ class PaymentEvent(_Api):
 
 
 class MassMessageEvent(_Api):
-    """`creator.message.mass_sent`: once per send, and the recipients are not said."""
-
     uuid: str
     creator: EventParty

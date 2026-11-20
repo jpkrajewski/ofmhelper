@@ -1,5 +1,3 @@
-"""features/vas/hours.py: a VA's worked time per day, the sum of sessions."""
-
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -49,7 +47,6 @@ def test_a_session_with_nothing_after_it_and_no_last_action_counts_nothing():
 
 
 def test_the_night_the_clocks_go_back_counts_real_hours():
-    """25 Oct 2026, Warsaw: 03:00 is 02:00 again, a day of 25 hours."""
     span = SessionSpan(
         user_id=7, start_at=_ts(25, 0, month=10), end_at=_ts(25, 4, month=10)
     )

@@ -1,12 +1,3 @@
-"""
-Slow connections never saw /clone results (4K exports, ~28 Mbit/s, 30-40 MB)
-or /generate images (6.5 MB PNGs) -- prod, 2026-10-21. Galleries now show
-previews: a 720p faststart mp4 behind a first-frame poster for a video, a
-small webp for an image. They are made when a job finishes (run_job queues
-them on the previews queue), for older jobs by a startup backfill, and on
-request as the last resort. Download still serves the original.
-"""
-
 import json
 import subprocess
 from pathlib import Path
@@ -39,7 +30,6 @@ def client():
 
 @pytest.fixture(autouse=True)
 def uploads_root(monkeypatch, tmp_path):
-    """Each test's previews in a folder of its own."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
 
 
@@ -106,12 +96,7 @@ def _done_job(*files: Path) -> str:
 
 @pytest.fixture
 def no_warming(monkeypatch):
-    """run_job queues nothing: what a job finished before previews looks
-    like."""
     monkeypatch.setattr(jobs_store, "_queue_previews", lambda job_id: None)
-
-
-# --- what a card offers ---------------------------------------------------
 
 
 def test_a_local_video_offers_a_preview_and_a_poster():
@@ -122,14 +107,10 @@ def test_a_local_video_offers_a_preview_and_a_poster():
 
     assert card.preview_url == f"{PREFIX}/files/j1/0/preview"
     assert card.poster_url == f"{PREFIX}/files/j1/0/poster"
-    assert card.download_url == f"{PREFIX}/files/j1/0?dl=1"  # still the original
+    assert card.download_url == f"{PREFIX}/files/j1/0?dl=1"
 
 
 def test_a_video_shows_its_original_until_its_preview_is_made():
-    """Prod 2026-11-07: `/preview` served the original until the preview worker
-    made the small copy, then the small copy; a player that held the original's
-    30 MB length asked for ranges past its 1 MB: 4,637 answers 416 in 48 h. Each
-    URL now has one file: the original's own until the preview exists."""
     before = asset_card("out.mp4", 0, f"{PREFIX}/files/j1", job_id="j1")
     previews.previews_dir().mkdir(parents=True, exist_ok=True)
     previews.preview_path("j1", 0, "video").write_bytes(b"small copy")
@@ -155,7 +136,6 @@ def test_a_remote_only_result_offers_neither():
 
 
 def test_a_local_copy_previews_even_when_kie_hosts_one(client, tmp_path):
-    """The gallery shows our small preview, not kie.ai's full PNG."""
     job_id = create_job("fake_ai", {"prompt": "p"})
     pic = _picture(tmp_path / "r.png", 64, 64)
     run_job(
@@ -177,12 +157,8 @@ def test_status_payload_carries_the_preview_urls(client, tmp_path):
 
     (item,) = client.get(f"{PREFIX}/jobs/{job_id}/status").json()["result"]
 
-    # Not decodable: no preview made, so the gallery plays the original.
     assert item["preview_url"] == f"{PREFIX}/files/{job_id}/0"
     assert item["poster_url"] == f"{PREFIX}/files/{job_id}/0/poster"
-
-
-# --- the routes -----------------------------------------------------------
 
 
 def test_an_image_preview_is_a_small_cached_webp(client, tmp_path, no_warming):
@@ -214,9 +190,6 @@ def test_a_preview_that_cannot_be_made_serves_the_original(client, tmp_path):
 def test_a_video_whose_preview_is_not_made_yet_plays_the_original_now(
     client, tmp_path, no_warming, monkeypatch
 ):
-    """2026-10-23: a 75 s 4K download's preview takes the worker about a
-    minute; the card was blank all that time while the route made a second
-    one. Now the original plays at once, uncached, and nothing is encoded."""
     clip = tmp_path / "long.mp4"
     clip.write_bytes(b"original video bytes")
     job_id = _done_job(clip)
@@ -229,8 +202,6 @@ def test_a_video_whose_preview_is_not_made_yet_plays_the_original_now(
 
     r = client.get(f"{PREFIX}/files/{job_id}/0/preview", follow_redirects=False)
 
-    # Sent on to the original's own URL, never its bytes here: once the small
-    # copy is made, this URL serves that (416s, prod 2026-11-07).
     assert r.status_code == 307
     assert r.headers["location"] == f"{PREFIX}/files/{job_id}/0"
     assert r.headers["cache-control"] == "no-store"
@@ -258,9 +229,6 @@ def test_originals_are_cached_for_good(client, tmp_path):
 
     for url in (f"{PREFIX}/files/{job_id}/0", f"{PREFIX}/files/{job_id}/0?dl=1"):
         assert "immutable" in client.get(url).headers["cache-control"]
-
-
-# --- made ahead of the first viewer ---------------------------------------
 
 
 def test_a_finished_job_queues_its_previews_on_the_previews_queue(
@@ -296,8 +264,6 @@ def test_a_failed_job_queues_nothing(monkeypatch):
 
 
 def test_warmed_previews_are_what_the_route_serves(client, tmp_path, monkeypatch):
-    """Tests enqueue inline, so the preview exists once the job is done;
-    the route then makes nothing."""
     pic = _picture(tmp_path / "r.png", 2000, 2000)
     job_id = _done_job(pic)
     assert previews.is_warm(job_id, [str(pic)])
@@ -313,10 +279,6 @@ def test_warmed_previews_are_what_the_route_serves(client, tmp_path, monkeypatch
 def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
     tmp_path, monkeypatch, no_warming
 ):
-    """Prod 2026-11-04..08: a 61 MB clip's preview timed out (180 s) on every
-    deploy's backfill, 10 times, each holding the only preview worker. Two
-    tries now (one could be a busy CPU), then the gallery plays the original;
-    a replaced file is tried again."""
     tries: list[Path] = []
 
     def times_out(source, _dest):
@@ -334,15 +296,15 @@ def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
     sources = [str(clip)]
 
     previews.warm_previews(job_id, sources)
-    assert not previews.is_warm(job_id, sources)  # one failure: tried again
+    assert not previews.is_warm(job_id, sources)
     previews.warm_previews(job_id, sources)
     previews.warm_previews(job_id, sources)
     with pytest.raises(previews.FailedBeforeError):
         previews.ResultPreview(source=clip, job_id=job_id, index=0).make()
 
     assert len(tries) == 2
-    assert previews.is_warm(job_id, sources)  # the backfill leaves it alone
-    assert previews.poster_path(job_id, 0).is_file()  # its card still has a face
+    assert previews.is_warm(job_id, sources)
+    assert previews.poster_path(job_id, 0).is_file()
 
     clip.write_bytes(b"a new export, longer")
     assert not previews.is_warm(job_id, sources)
@@ -353,8 +315,6 @@ def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
 def test_a_poster_that_cannot_be_made_stops_the_backfill_too(
     tmp_path, monkeypatch, no_warming
 ):
-    """A video whose first frame cannot be read was queued again by every
-    deploy's backfill for its poster."""
     monkeypatch.setattr(
         previews,
         "write_video_preview",
@@ -418,7 +378,6 @@ def test_backfill_queues_only_jobs_missing_previews(tmp_path, monkeypatch, no_wa
 
     assert preview_backfill.backfill() == 1
     assert queued == [old]
-    # Another process starting at the same time: the guard holds.
     assert preview_backfill.backfill() == 0
 
 
@@ -429,9 +388,6 @@ def test_backfill_makes_the_previews(tmp_path, no_warming):
     preview_backfill.backfill()
 
     assert previews.is_warm(job_id, [str(pic)])
-
-
-# --- polling and compression ----------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -475,16 +431,11 @@ def test_media_and_downloads_are_never_gzipped(client, tmp_path):
         assert r.content == pic.read_bytes()
 
 
-# --- real encoding --------------------------------------------------------
-
-
 @pytest.mark.heavy
 def test_video_preview_is_720p_smaller_faststart(client, tmp_path, no_warming):
     clip = _clip(tmp_path / "big.mp4", 1080, 1920)
     job_id = _done_job(clip)
-    previews.ResultPreview(
-        source=clip, job_id=job_id, index=0
-    ).make()  # what the preview worker does
+    previews.ResultPreview(source=clip, job_id=job_id, index=0).make()
 
     r = client.get(f"{PREFIX}/files/{job_id}/0/preview")
 
@@ -494,7 +445,6 @@ def test_video_preview_is_720p_smaller_faststart(client, tmp_path, no_warming):
     (cached,) = previews.previews_dir().glob("*.mp4")
     assert _probe_height(cached) == 720
     assert cached.stat().st_size < clip.stat().st_size / 3
-    # faststart: the index (moov) comes before the media data (mdat).
     assert b"moov" in cached.read_bytes()[:4096]
 
 
@@ -532,9 +482,6 @@ def test_a_finished_video_job_is_warmed_with_preview_and_poster(tmp_path):
 
 
 def test_backfill_never_deletes_a_job_whose_files_are_gone(tmp_path, no_warming):
-    """Dev on a prod snapshot (rows without files), or a volume not mounted
-    yet at startup: the pass skips such jobs. It once listed jobs through the
-    self-healing list, which deleted every one of them (dev, 2026-10-21)."""
     pic = _picture(tmp_path / "gone.png", 8, 8)
     job_id = _done_job(pic)
     pic.unlink()

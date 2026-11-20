@@ -1,13 +1,3 @@
-"""
-/clone-long: one subject image + one video of any length (features/clone_long).
-The page prices the pick live; `/run` measures the video itself, re-prices
-it, checks every piece against the model and only then queues the job --
-the stored price is the server's, never the browser's. Results are the
-shared gallery card, paged like /clone's (`/clone-long/gallery`,
-gallery-scroll.js); the status page and files come from `add_job_routes`
-(only the session's own jobs).
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -38,7 +28,6 @@ from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
 
-# What other modules read here (same objects as the feature's).
 __all__ = ["FILES_PREFIX", "LABEL", "TASK", "card", "router"]
 
 router = APIRouter(
@@ -71,7 +60,6 @@ def page(
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
     first = gallery.page(viewer)
-    # security audit 2026-11-18: the page pre-fills saved API keys.
     response = render(
         request,
         "clone_long.html",
@@ -87,8 +75,6 @@ def page(
 
 @router.get("/gallery")
 def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
-    """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
-    cards (hidden-cards.js's "Show hidden")."""
     found = gallery.page(viewer, query)
     return render(
         request,

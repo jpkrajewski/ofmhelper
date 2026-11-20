@@ -1,11 +1,3 @@
-"""Apify's Instagram reel scraper, as /viral reads it: on the fake, and on
-the real accounts (`APIFY_API_KEYS` in .env).
-
-No real Apify call runs in any gate (owner, 2026-11-12): a run of the scraper
-costs money (3 reels: under a cent) and the deploy gate was paying it on
-every ship. The whole real half is `paid` (`paid_backend`): only
-`scripts/test.sh paid`, and that only when /viral fails on prod."""
-
 import pytest
 
 from ofmhelpers.config import settings
@@ -14,7 +6,6 @@ from ofmhelpers.features.viral.media import has_audio
 from ofmhelpers.features.viral.service import _download, reel_input
 from ofmhelpers.integrations.apify import ApifyClient, RunStatus, richest
 
-# A public profile with reels on each side.
 _PROFILE = {"fake": "sheep_love33", "real": "natgeo"}
 _MISSING = "no-such-profile-ofmhelpers-0x1"
 _RUN_TIMEOUT_S = 300

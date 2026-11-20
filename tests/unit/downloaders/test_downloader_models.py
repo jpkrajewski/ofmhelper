@@ -1,6 +1,3 @@
-"""yt-dlp's two dict shapes as models: the options it is given and the info
-it returns."""
-
 from pathlib import Path
 
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
@@ -50,5 +47,5 @@ def test_options_merge_pot_provider_args_over_player_clients():
     opts = config.ydl_opts("/c/cookies.txt").model_dump(exclude_none=True)
 
     assert opts["extractor_args"] == {"youtube": {"player_client": ["ios"]}, **pot}
-    assert opts["cookiefile"] == "/c/cookies.txt"  # the file wins over a browser
+    assert opts["cookiefile"] == "/c/cookies.txt"
     assert "cookiesfrombrowser" not in opts

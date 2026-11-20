@@ -1,13 +1,3 @@
-"""
-ofmhelpers/web/stores/tracked_accounts.py
-
-The social accounts /accounts tracks (routers/tracking/accounts.py adds,
-assigns and removes them; features/accounts/tracker.py rescans them), each with
-its latest numbers, growth and history. Each belongs to a user: `owner`
-limits a call to theirs (None: everyone's, for the sweeper; a session
-always passes its own id, admins included).
-"""
-
 import time
 from functools import lru_cache
 
@@ -21,20 +11,16 @@ lazy from ofmhelpers.schemas.socials import AccountStats
 
 @lru_cache(maxsize=1)
 def _repository() -> TrackedAccountRepository:
-    """Built on first use rather than at import (constructing it binds a Redis
-    connection for its cache)."""
     return TrackedAccountRepository()
 
 
 def _account(row: TrackedAccount) -> TrackedAccount:
-    """`syncing`: its scan is queued or running (claimed, claim not expired)."""
     claimed = row.claimed_at
     since = time.time() - settings.accounts.claim_ttl_s
     return row.model_copy(update={"syncing": claimed is not None and claimed > since})
 
 
 def list_accounts(owner: int | None = None) -> list[TrackedAccount]:
-    """`owner`'s tracked accounts of a registered platform, newest first."""
     rows = _repository().list_all(settings.accounts.periods_days, owner)
     return [_account(row) for row in rows if row.platform in platform_names()]
 
@@ -49,8 +35,6 @@ def get_account(account_id: int, owner: int | None = None) -> TrackedAccount | N
 
 
 def get_history(account_id: int) -> AccountHistory:
-    """The last `history_days` of snapshots. The cutoff is rounded to the
-    hour, so the read stays cacheable."""
     since = time.time() - settings.accounts.history_days * 86400
     rows = _repository().history(account_id, since - since % 3600)
     return AccountHistory(snapshots=rows)
@@ -68,10 +52,6 @@ def track(
     user_id: int | None = None,
     revive: bool = True,
 ) -> bool:
-    """True when the account is new to `user_id` (None: the agency's,
-    `users.agency_id`) or tracked again (an untracked one comes back with
-    its history -- unless `revive` is False); one already tracked is only
-    assigned to `creator` (when given)."""
     owner = agency_id() if user_id is None else user_id
     return _repository().add(platform, handle, creator, owner, revive)
 
@@ -87,7 +67,6 @@ def set_notes(account_id: int, notes: str, owner: int | None = None) -> bool:
 
 
 def untrack(account_ids: list[int], owner: int | None = None) -> int:
-    """Stops tracking the accounts; nothing of theirs is deleted."""
     return _repository().untrack(account_ids, owner)
 
 
@@ -97,16 +76,12 @@ def mark_due(account_ids: list[int]) -> None:
 
 
 def make_due(owner: int) -> list[int]:
-    """All of `owner`'s accounts due now, but none whose scan is already
-    queued or running (see the repository)."""
     return _repository().make_due(owner, settings.accounts.claim_ttl_s)
 
 
 def claim_due(
     interval_s: float, claim_ttl_s: float, max_interval_s: float | None = None
 ) -> list[int]:
-    """The due accounts, claimed (see the repository); `max_interval_s`
-    None: no backoff for failing ones."""
     ceiling = interval_s if max_interval_s is None else max_interval_s
     return _repository().claim_due(interval_s, claim_ttl_s, ceiling)
 
@@ -114,7 +89,6 @@ def claim_due(
 def record_scan(
     account_id: int, stats: AccountStats | None, error: str | None = None
 ) -> None:
-    """A scan's result (`stats`) or lasting failure (`error`)."""
     retention = settings.accounts.post_retention_days
     if stats is None:
         _repository().record_scan(account_id, None, None, [], None, retention, error)

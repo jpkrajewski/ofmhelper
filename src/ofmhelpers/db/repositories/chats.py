@@ -1,10 +1,3 @@
-"""/chatting's history: each chat's read position (`chat_threads`), every fan
-message with when it was answered (`chat_fan_messages`), when the model wrote
-(`chat_model_messages`) and the webhook destinations feeding them
-(`chat_webhooks`). Nothing here is cached: messages
-arrive any second and the page wants what arrived, and a destination holds a
-decrypted secret, which must never reach Redis."""
-
 lazy from collections.abc import Callable
 
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -39,7 +32,6 @@ lazy from ofmhelpers.schemas.chatting import (
 
 class ChatRepository:
     def last_read(self, platform: str) -> list[ChatPosition]:
-        """Each chat's newest message id the sync has read in it."""
         with session_scope() as s:
             rows = s.execute(
                 select(ChatThreadRow.channel_id, ChatThreadRow.last_message_id).where(
@@ -49,17 +41,6 @@ class ChatRepository:
             return [ChatPosition.model_validate(dict(row)) for row in rows.mappings()]
 
     def record_events(self, platform: str, read: ChatRead) -> bool:
-        """A chat's messages. Whatever order they come in, in however many
-        calls, a fan message ends up answered by the first model message at or
-        after it. One chat is written one call at a time, so a fan message
-        and its reply landing together each see the other; other chats do
-        not wait. Safe to repeat: a webhook delivered twice, or the sync
-        reading what one delivered, changes nothing.
-
-        False, and nothing kept, when the chat is another model's: a chat is
-        one fan and one model, so a read naming someone else's chat (a
-        delivery signed with one model's secret naming another's channel:
-        security audit 2026-11-18) is not believed."""
         with session_scope() as s:
             s.execute(
                 select(
@@ -137,16 +118,12 @@ class ChatRepository:
         )
 
     def forget_model_messages(self, before: float) -> None:
-        """Only a late delivery needs these, so they are not kept for long."""
         with session_scope() as s:
             s.execute(
                 delete(ChatModelMessageRow).where(ChatModelMessageRow.sent_at < before)
             )
 
     def mark_read(self, platform: str, read: ChatRead) -> None:
-        """How far the sync has read this chat. Webhooks never move it, so the
-        sync still reads what they delivered and repairs one that came out of
-        order or never came."""
         with session_scope() as s:
             s.execute(
                 insert(ChatThreadRow)
@@ -163,7 +140,6 @@ class ChatRepository:
             )
 
     def forget_open(self, platform: str, channel_id: str) -> None:
-        """A fan who blocked or left cannot be answered: nothing there waits."""
         with session_scope() as s:
             s.execute(
                 delete(ChatFanMessageRow).where(
@@ -176,8 +152,6 @@ class ChatRepository:
     def forget_message(
         self, platform: str, message_id: str, model_username: str
     ) -> None:
-        """A message its sender deleted: nothing to answer, or to count as one.
-        Only in `model_username`'s chats: the deletion came signed for them."""
         with session_scope() as s:
             s.execute(
                 delete(ChatFanMessageRow).where(
@@ -188,7 +162,6 @@ class ChatRepository:
             )
 
     def models(self, platform: str) -> list[str]:
-        """Every model with a chat read on `platform`, by name."""
         with session_scope() as s:
             return list(
                 s.execute(
@@ -202,8 +175,6 @@ class ChatRepository:
     def fan_messages(
         self, platform: str, username: str, since: float
     ) -> list[FanMessage]:
-        """A model's fan messages sent or answered after `since`, and any still
-        waiting however old, newest first."""
         with session_scope() as s:
             rows = s.execute(
                 select(
@@ -227,9 +198,6 @@ class ChatRepository:
             return [FanMessage.model_validate(dict(row)) for row in rows.mappings()]
 
     def open_waits(self, before: float) -> list[OpenWait]:
-        """Every platform's chats whose fan has waited since before `before`, however
-        long ago. A chat's unanswered messages are one wait, from the first; the fan's
-        name as their messages carry it."""
         started_at = func.min(ChatFanMessageRow.sent_at).label("started_at")
         with session_scope() as s:
             rows = s.execute(
@@ -261,7 +229,6 @@ class ChatRepository:
         detail: str,
         at: float,
     ) -> None:
-        """Once per event, however often the platform repeats it."""
         with session_scope() as s:
             s.execute(
                 insert(ChatNotificationRow)
@@ -288,7 +255,6 @@ class ChatRepository:
         source: str,
         at: float,
     ) -> None:
-        """Every sale once, however often the platform repeats it."""
         with session_scope() as s:
             s.execute(
                 insert(ChatSaleRow)
@@ -305,7 +271,6 @@ class ChatRepository:
             )
 
     def sales_between(self, since: float, until: float) -> list[ModelTotal]:
-        """Each model's sales in [since, until): how many, and their gross."""
         with session_scope() as s:
             rows = s.execute(
                 select(
@@ -320,7 +285,6 @@ class ChatRepository:
             return [ModelTotal.model_validate(dict(row)) for row in rows.mappings()]
 
     def counts_between(self, kind: str, since: float, until: float) -> list[ModelTotal]:
-        """Each model's notifications of `kind` in [since, until)."""
         with session_scope() as s:
             rows = s.execute(
                 select(
@@ -342,7 +306,6 @@ class ChatRepository:
     def models_reaching_chats(
         self, platform: str, since: float, min_chats: int
     ) -> list[ModelReach]:
-        """Who wrote in at least `min_chats` chats since `since`, and from when."""
         reached = func.count(ChatModelMessageRow.channel_id.distinct())
         with session_scope() as s:
             rows = s.execute(
@@ -369,7 +332,6 @@ class ChatRepository:
     def recent_events(
         self, platform: str, username: str, kind: str, since: float
     ) -> list[str]:
-        """The ids of a model's notifications of this kind since `since`."""
         with session_scope() as s:
             return list(
                 s.execute(
@@ -383,7 +345,6 @@ class ChatRepository:
             )
 
     def notifications(self, since: float) -> list[StoredNotification]:
-        """Every platform's since `since`, newest first."""
         with session_scope() as s:
             rows = s.execute(
                 select(
@@ -394,6 +355,7 @@ class ChatRepository:
                     ChatNotificationRow.amount_cents,
                     ChatNotificationRow.currency,
                     ChatNotificationRow.detail,
+                    ChatNotificationRow.at,
                 )
                 .where(ChatNotificationRow.at >= since)
                 .order_by(ChatNotificationRow.at.desc())
@@ -403,7 +365,6 @@ class ChatRepository:
             ]
 
     def open_channels(self, platform: str) -> set[str]:
-        """Chats with a fan waiting, however briefly."""
         with session_scope() as s:
             return set(
                 s.execute(
@@ -417,7 +378,6 @@ class ChatRepository:
             )
 
     def accounts(self, platform: str, connected_from: str) -> list[ChatAccount]:
-        """Who connected on this server, no token read."""
         with session_scope() as s:
             rows = s.execute(
                 select(
@@ -467,11 +427,6 @@ class ChatRepository:
         valid_until: float,
         connected_from: str,
     ) -> str | None:
-        """A token good until `valid_until`, renewing if needed; None when someone
-        must connect again. A refresh token works once and reusing it kills the whole
-        authorisation, so the lock is held across the call, and the new pair is saved
-        in the same transaction: two callers cannot both spend the same one, and
-        another server's stays unspent."""
         with session_scope() as s:
             s.execute(
                 select(
@@ -499,7 +454,6 @@ class ChatRepository:
             return tokens.access_token
 
     def webhooks(self, platform: str) -> list[ChatWebhook]:
-        """Every destination on `platform`, secrets decrypted."""
         with session_scope() as s:
             rows = s.execute(
                 select(
@@ -513,7 +467,6 @@ class ChatRepository:
             return [ChatWebhook.model_validate(dict(row)) for row in rows.mappings()]
 
     def webhook_targets(self, platform: str) -> list[WebhookTarget]:
-        """Each destination's model and url, no secret read."""
         with session_scope() as s:
             rows = s.execute(
                 select(ChatWebhookRow.model_username, ChatWebhookRow.url).where(

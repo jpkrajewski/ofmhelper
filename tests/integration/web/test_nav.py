@@ -1,6 +1,3 @@
-"""The header, its More menu and the home cards render from one list,
-schemas.nav.NAV: a page is one entry, shown only to who may open it."""
-
 import re
 
 import pytest
@@ -25,7 +22,6 @@ def test_every_entry_has_an_icon_and_opens_a_page():
     sign_in_admin(client)
     for item in NAV:
         assert f'"{item.icon}":' in ICONS, item.icon
-        # A retired page's entry stays for the day it is back; it opens for nobody.
         opens = 403 if item.area in RETIRED else 200
         assert client.get(item.href).status_code == opens, item.href
 
@@ -96,7 +92,6 @@ def test_header_and_home_render_the_list_for_a_user():
         i.href for i in shown if i.place == NavPlace.BAR
     ] + [i.href for i in shown if i.place == NavPlace.MORE]
     assert "/users" not in header
-    # Home: one card per page; the footer repeats nothing.
     assert html.count('class="link-card"') == len(shown)
     footer = html[html.index('<footer class="site-footer">') :]
     assert "<a " not in footer

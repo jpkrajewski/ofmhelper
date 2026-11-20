@@ -2,30 +2,14 @@ import importlib
 import os
 from pathlib import Path
 
-# Before anything imports the app: the developer's .env holds the Logfire
-# write token, and the test process (the e2e harness included) must never
-# send. An env var outranks .env; blank is off (TelemetrySettings).
 os.environ["LOGFIRE_TOKEN"] = ""
-# The same for Sentry's DSN (SentrySettings) and the dev overlay's debug mode.
 os.environ["SENTRY_DSN"] = ""
 os.environ["OFM_DEBUG"] = "0"
-# OFM_ENV has no default (config/settings.py InfraSettings): the suite is
-# never production, whatever the shell that started it says.
 os.environ["OFM_ENV"] = "development"
-# The app keeps the session secret it was built with at `import
-# ofmhelpers.web.main`, so it is set here, before any test module is
-# collected: with it per file, one file that forgot it baked the .env secret
-# into the app and every other file's signed cookies stopped matching (200 =
-# the login page). The admin password likewise (2026-11-18).
 os.environ["SESSION_SECRET"] = "test-secret"
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-# Outside production nothing is sent unless this is set (EventsSettings
-# `sending`); the suite sends, to the fakes, with every sender.
 os.environ["OFM_EVENTS_SENDERS_OFF"] = ""
-# Likewise recovery starts cut-off local jobs over in production only
-# (WebSettings `restarting`); the suite tests the restarts.
 os.environ["OFM_RECOVERY_RESTARTS"] = "true"
-# And the background Drive work (GDriveSettings `sweeping`), on the fake Drive.
 os.environ["OFM_DRIVE_SWEEP"] = "true"
 
 import pytest
@@ -35,21 +19,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-# The module, not `ofmhelpers.config.settings` the accessor.
 settings_module = importlib.import_module("ofmhelpers.config.settings")
 
-# The durable stores (jobs, applications) are Postgres-backed now, so the
-# test suite needs a running Postgres. Bring one up first with:
-#     docker compose up -d postgres redis
-# Tests run against a SEPARATE database (ofmhelpers_test) so they never touch
-# dev/prod data, and every table is truncated between tests for isolation.
 _TESTS_ROOT = Path(__file__).parent
 
-# Under pytest-xdist every worker (gw0, gw1, ...) gets its own database and
-# Redis db, so per-test TRUNCATE/FLUSHDB never hits another worker's test.
 _XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
 _WORKER_INDEX = int(_XDIST_WORKER.removeprefix("gw") or 0)
-# Redis has dbs 0-15: dev uses 0, the suite 1 + worker index.
 _MAX_WORKERS = 15
 
 
@@ -76,15 +51,12 @@ TEST_DATABASE_URL = _per_worker_database(
         "postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test",
     )
 )
-# RQ integration tests use a real broker; db 1 keeps them off dev's db 0.
 TEST_REDIS_URL = _per_worker_redis(
     os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1")
 )
 
 
 def _ensure_test_database(url: str) -> None:
-    """CREATE DATABASE <test db> if it doesn't exist yet, by connecting to the
-    server's default `postgres` database with autocommit."""
     parsed = make_url(url)
     admin_url = parsed.set(database="postgres")
     engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
@@ -109,38 +81,18 @@ def _ensure_test_database(url: str) -> None:
 
 @pytest.fixture(scope="session")
 def test_database_url() -> str:
-    """The throwaway test database's URL; its server hosts any other
-    throwaway database a test needs."""
     return TEST_DATABASE_URL
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _test_environment(tmp_path_factory):
-    """The environment every test runs in: the app pointed at the throwaway
-    test database and Redis db (nothing connects yet -- unit tests never
-    do). Set on the real environment (not monkeypatch): session-scoped, and
-    it must be visible before any app code builds its lazy engine / redis
-    conn."""
     os.environ["OFM_DATABASE_URL"] = TEST_DATABASE_URL
     os.environ["OFM_REDIS_URL"] = TEST_REDIS_URL
-    # Run enqueued jobs inline (like the old BackgroundTasks) so TestClient
-    # tests see the result immediately. test_worker_integration flips this back
-    # to async to exercise the real worker.
     os.environ["OFM_RQ_ASYNC"] = "false"
-    # Every test shares one client host ("testclient"), so the per-IP write
-    # ceiling would eventually trip on unrelated tests. Off by default; the
-    # rate-limit tests turn it back on explicitly.
     os.environ["OFM_RATE_LIMIT_ENABLED"] = "false"
-    # The runner's waits before resending a rate-limited submit or a failed
-    # result download (review #11, #54): no real sleeps in tests; a test
-    # timing them patches `self_heal._sleep`.
     os.environ["OFM_AIGEN_DOWNLOAD_RETRY_WAITS_S"] = "[0, 0]"
     os.environ["OFM_AIGEN_RATE_LIMIT_WAITS_S"] = "[0, 0, 0]"
-    # A throwaway vault key: /phones logins encrypt with it (a test that
-    # needs another key, or none, monkeypatches OFM_VAULT_KEY).
     os.environ["OFM_VAULT_KEY"] = Fernet.generate_key().decode()
-    # Nothing the app writes (uploads, assets) or reads (an uploaded
-    # Instagram login) is the checkout's: an empty folder per run.
     run_dir = tmp_path_factory.mktemp("app-files")
     os.environ["OFM_UPLOADS_ROOT"] = str(run_dir / "uploads")
     os.environ["OFM_COOKIES_FILE"] = str(run_dir / "cookies" / "cookies.txt")
@@ -148,12 +100,8 @@ def _test_environment(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def _test_database(_test_environment):
-    """The throwaway test database, emptied and built by the Alembic
-    migrations -- the schema production runs, not `create_all` -- once per
-    session (only for the tests that use a database: not tests/unit)."""
     _ensure_test_database(TEST_DATABASE_URL)
 
-    # Import here, after the env var is set, so the engine binds to the test DB.
     from alembic.config import Config
 
     from alembic import command
@@ -167,15 +115,6 @@ def _test_database(_test_environment):
 
 @pytest.fixture(autouse=True)
 def _clean_tables(request):
-    """Empty every mapped table before each test so nothing leaks between
-    tests -- the DB equivalent of the old per-test temp JSON files
-    (`_wipe_sql`). The list comes from the ORM metadata, so it matches what
-    create_all built: a hardcoded list kept naming retired tables that a
-    fresh CI database never has. Also flushes the test Redis db: repository.py caches reads there, and
-    a cached list/get from a previous test would otherwise survive the
-    TRUNCATE above until its TTL expired. Unit tests have no database: their
-    URLs point at sockets that do not exist (pytest-socket cannot see
-    psycopg's connections, which libpq makes in C)."""
     if request.node.get_closest_marker("unit"):
         monkeypatch = request.getfixturevalue("monkeypatch")
         monkeypatch.setenv("OFM_DATABASE_URL", _NO_DATABASE)
@@ -192,12 +131,6 @@ def _clean_tables(request):
 
 @pytest.fixture(scope="session")
 def _wipe_sql(_test_database) -> str:
-    """One round trip that leaves every mapped table empty and every
-    sequence at its start, as `TRUNCATE ... RESTART IDENTITY CASCADE` did.
-    That TRUNCATE cost 18 ms a test (37 tables: a new file for each), this
-    0.9 ms (measured 2026-11-13; ~2650 tests wipe the database). Foreign keys
-    are not checked while it runs (`session_replication_role`): every table
-    goes, in any order."""
     from ofmhelpers.db.models import Base
     from ofmhelpers.db.session import get_engine
 
@@ -209,7 +142,6 @@ def _wipe_sql(_test_database) -> str:
             )
         )
         sequences = [row[0] for row in found]
-    # The names are the ORM's own tables: nothing a request sent.
     deletes = "".join(
         f'DELETE FROM "{table}"; '  # noqa: S608
         for table in Base.metadata.tables
@@ -227,7 +159,6 @@ _NO_DATABASE = (
 )
 _NO_REDIS = "unix:///nonexistent-unit-tests-have-no-redis.sock"
 
-# tests/<kind>/...: the folder is the kind; nobody marks one by hand.
 _KINDS = ("unit", "integration", "contract", "e2e")
 
 
@@ -240,52 +171,32 @@ def _kind(item: pytest.Item) -> str:
     return kind
 
 
-# Parked, not deleted (owner 2026-11-13): /clone-links, /reels and /repurpose are
-# retired (auth/access.py `RETIRED`) because nobody uses them; their
-# code stays. Their own tests are not collected in any preset, nor those of
-# what only they use: /clone-links' AI check (clone_ai_check) and its GOOD /
-# TRIAL REELS review folders, the feed's kept thumbnails. To bring a page
-# back: take its lines out, take it out of `RETIRED` and, for /clone-links, its
-# worker back in tests/e2e/conftest.py; /reels' browser tests are
-# `REELS_PARKED` in tests/e2e/test_app_flows.py.
 collect_ignore_glob = [
     "*/test_clone_links*.py",
     "*/clone_ai_check/test_*.py",
     "*/test_drive_review_folder.py",
     "*/test_reels*.py",
     "*/test_reel_thumbs.py",
-    # /repurpose the page only: its engine (media/repurpose) is /trials' too,
-    # so tests/unit/repurpose still runs.
     "*/test_repurpose_run.py",
-    # /pictures (retired the same day).
     "*/test_pictures*.py",
 ]
 
 
-# First: xdist's own hook reads `xdist_group` to keep the e2e tests on one
-# worker; run after it, the marker came too late and e2e tests spread over
-# workers, each starting an app on one shared Redis db (they took each
-# other's jobs).
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config, items):
     for item in items:
         kind = _kind(item)
         item.add_marker(kind)
         if kind == "unit":
-            # Pure logic: no database, no network at all (pytest-socket).
             item.add_marker(pytest.mark.disable_socket)
         if kind == "e2e":
-            # One xdist worker runs every e2e test: it starts the one app.
             item.add_marker(pytest.mark.xdist_group("e2e"))
         if item.get_closest_marker("live"):
-            # The only tests that may reach the internet.
             item.add_marker(pytest.mark.enable_socket)
 
 
 @pytest.fixture
 def fake_externals(monkeypatch, tmp_path):
-    """OFM_FAKE_EXTERNALS on, every fake fresh (state in `tmp_path`): the
-    app's outside services answered in-process, as under e2e."""
     from ofmhelpers.integrations import outbound
     from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
     from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
@@ -325,7 +236,6 @@ def fake_externals(monkeypatch, tmp_path):
         fake_apiyi,
         fake_telegram,
         fake_pinterest,
-        # Its clients' sessions are mounted on the fakes, or not, when made.
         _telegram,
         fake_media.mp4,
     )
@@ -338,10 +248,6 @@ def fake_externals(monkeypatch, tmp_path):
         cached.cache_clear()
 
 
-# Every settings group defined in config/settings.py, found by type: a
-# hand-kept list missed the /clone-links groups (review 2026-10-25), and a
-# developer's .env then changed test outcomes. Several groups' .env hold
-# real secrets (proxies, provider/Drive/sign-in/Gemini keys, Logfire token).
 _SETTINGS_CLASSES = tuple(
     cls
     for cls in vars(settings_module).values()
@@ -353,31 +259,12 @@ _SETTINGS_CLASSES = tuple(
 
 @pytest.fixture(autouse=True)
 def _no_real_dotenv_in_tests(monkeypatch):
-    """Every settings group in ofmhelpers/config/settings.py has
-    env_file=".env" for real app usage. Without this fixture, a test's
-    monkeypatch.delenv("SOME_VAR") wouldn't actually make that var look
-    unset -- pydantic-settings would still fall back to whatever real
-    secret sits in the repo-root .env file (loaded relative to cwd, which
-    is the repo root under `uv run pytest`), since env_file is a lower-
-    priority source than the process environment, not something delenv
-    can hide. That silently leaked real secrets into tests asserting
-    "unset" behavior (e.g. test_recovery.py, test_discord_client.py).
-    Blanking env_file for the whole test session makes monkeypatch fully
-    authoritative, matching how a bare os.getenv() behaved before this
-    module existed. config/settings.py's actual .env-loading behavior is
-    covered directly by test_config_settings.py using an explicit
-    _env_file=<temp file> override instead of the real one."""
     for cls in _SETTINGS_CLASSES:
         monkeypatch.setitem(cls.model_config, "env_file", None)
 
 
 @pytest.fixture(autouse=True)
 def _provider_files_in_tmp(monkeypatch, tmp_path):
-    """Provider output defaults to /app/... (the container's path).
-    Anything that builds a provider -- even with its calls stubbed --
-    creates that directory, which a Linux CI runner
-    refuses (`Permission denied: '/app'`); Windows quietly made C:\\app.
-    Every test gets its own instead. A test that sets one itself wins."""
     root = tmp_path / "provider-files"
     defaults = {"OFM_AIGEN_OUT_DIR": root / "out"}
     for name, path in defaults.items():
@@ -387,11 +274,6 @@ def _provider_files_in_tmp(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def _cheap_password_hashing(request, monkeypatch):
-    """Sign-in hashes at OWASP strength (scrypt n=2**17, ~128 MiB, ~0.4 s a
-    derivation) made 595 /ai field renders, each logging in, spend 256 s in
-    setup (2026-11-08; 52 s with n=2**4). Tests hash with n=2**4. A stored
-    hash carries its own parameters, so verifying is the same code path. A
-    test marked `real_password_hashing` keeps the production cost."""
     if request.node.get_closest_marker("real_password_hashing"):
         return
     from ofmhelpers.integrations.signin import passwords

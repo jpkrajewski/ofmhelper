@@ -1,14 +1,3 @@
-"""The Bot API faked at the wire (OFM_FAKE_EXTERNALS, tests).
-
-Answers `/bot<token>/<method>` the way Telegram does (core.telegram.org/bots/api,
-checked 2026-11-06): `TOKEN` is the one bot, any other token gets 401
-Unauthorized. `sent` records every sendMessage (chat id, text); `wrote` makes a
-chat show in getUpdates; `fail_next` answers the next calls with an error
-(`error`, `flood`, `moved` make Telegram's refusals); `deleted` what deleteMessage
-took back (a message it does not know: 400, like Telegram). A text over 4096 UTF-16
-units is refused like Telegram refuses it.
-"""
-
 import json
 import threading
 import time
@@ -25,7 +14,7 @@ from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
 
 HOST = "api.telegram.org"
-TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"  # noqa: S105 -- a fake's
+TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"  # noqa: S105
 BOT = {"id": 123456789, "is_bot": True, "username": "ofm_fake_bot", "first_name": "OFM"}
 
 
@@ -37,7 +26,6 @@ class SentMessage(BaseModel):
 class FakeTelegram:
     def __init__(self) -> None:
         self.sent: list[SentMessage] = []
-        # What deleteMessage took back, and what is still there to take.
         self.deleted: list[SentMessage] = []
         self._by_id: dict[tuple[str, int], SentMessage] = {}
         self.fail_next: list[FakeReply] = []
@@ -52,8 +40,6 @@ class FakeTelegram:
         text: str = "/start",
         sent_at: float | None = None,
     ) -> None:
-        """A chat sending the bot `text` (pressing Start sends /start): a private
-        chat, or a group for a negative id."""
         kind = "group" if chat_id < 0 else "private"
         with self._lock:
             self._last_id += 1
@@ -70,7 +56,6 @@ class FakeTelegram:
             )
 
     def odd_update(self) -> None:
-        """An update whose message lacks what every message has (its chat)."""
         with self._lock:
             self._last_id += 1
             self._updates.append(
@@ -78,8 +63,6 @@ class FakeTelegram:
             )
 
     def _updates_from(self, body: dict[str, Any]) -> FakeReply:
-        """getUpdates: an `offset` takes every update before it for good, as
-        Telegram does; nothing is waited for (`timeout`)."""
         offset = body.get("offset")
         with self._lock:
             if offset is not None:
@@ -148,13 +131,11 @@ def _ok(result: Any) -> FakeReply:
 
 
 def error(status: HTTPStatus, description: str) -> FakeReply:
-    """An answer Telegram refuses with."""
     reply = {"ok": False, "error_code": status.value, "description": description}
     return FakeReply.json_body(reply, status.value)
 
 
 def flood(retry_after: int) -> FakeReply:
-    """Telegram's flood control answer."""
     reply = {
         "ok": False,
         "error_code": HTTPStatus.TOO_MANY_REQUESTS.value,
@@ -165,7 +146,6 @@ def flood(retry_after: int) -> FakeReply:
 
 
 def moved(chat_id: int) -> FakeReply:
-    """A group that became a supergroup."""
     reply = {
         "ok": False,
         "error_code": HTTPStatus.BAD_REQUEST.value,

@@ -1,14 +1,3 @@
-{# A /clone-links card's AI check (`job`: schemas.CloneLinksCard), at the
-   card's foot right above Download: running -> where the video went, as
-   /clone's own Drive line (`.drive-states`) -> "AI decision: good /
-   glitch / not done", a full-width button whose eye shows the problems the
-   model saw and its one line (eye-off hides them again, clone-links.js); no
-   badge besides (user decision 2026-10-25). No retry button (user
-   decision 2026-10-25: the VA sorts in Drive; recovery retries on its own,
-   so a review cut off by a restart still shows as running). Every "Not in
-   Drive:" reason is a fixed one (`ReviewReason`, Drive's own from
-   `upload_error`). `data-settled`: nothing changes any more, clone-links.js
-   stops polling. #}
 {% import "components/ui.html" as ui %}
 {% set review = job.review %}
 {% set check = review.check if review else none %}

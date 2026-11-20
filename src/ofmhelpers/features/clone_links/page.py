@@ -1,6 +1,3 @@
-"""What the /clone-links page's form shows when it opens
-(`clone_links.html`)."""
-
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
@@ -18,8 +15,6 @@ from ofmhelpers.schemas import ProviderChoice
 
 
 class FormView(BaseModel):
-    """The form's part of the page; each field is a name the template reads."""
-
     providers: list[ProviderChoice]
     selected_provider: str
     default_prompt: str
@@ -51,7 +46,6 @@ def form_view(actor: str, user_id: int) -> FormView:
         default_export=settings.exports.default,
         default_mirror=settings.exports.mirror,
         drive_ready=bool(refresh_token(user_id)),
-        # What is cached only: the page never waits on Google.
         drive_space=drive_space(user_id, ask=False),
         reel_mb=settings.clone_links.reel_mb,
     )

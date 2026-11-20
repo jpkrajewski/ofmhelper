@@ -1,11 +1,3 @@
-"""Is the Pinterest operation worth it: per UTC day and model, pins made
-(of them `ig_pins`, the "ig: <handle>" kind with no link) and failed over
-all accounts, and the model's self link's views (people who opened it from
-a pin) and clicks (who went on to the model's page); then per model and
-per account over the whole window. Read from the posts table and the
-bridge's own click log (`self_link_clicks`), which keep everything for
-good. The CLI is `__main__.py`."""
-
 import datetime
 
 from pydantic import BaseModel, computed_field
@@ -36,7 +28,6 @@ class ModelTotal(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def views_per_linked_pin(self) -> float:
-        """Link views per pin that carried the link (an "ig:" pin has none)."""
         linked = self.pins - self.ig_pins
         return round(self.link_views / linked, 2) if linked else 0.0
 
@@ -56,8 +47,6 @@ class Report(BaseModel):
 
 
 def report(days: int, owner: int | None = None) -> Report:
-    """The last `days` UTC days (today included) of `owner`'s accounts and
-    models (None: everyone's)."""
     repo = store.repository()
     channels = repo.all_channels() if owner is None else repo.channels_of(owner)
     end = datetime.datetime.now(datetime.UTC).date()

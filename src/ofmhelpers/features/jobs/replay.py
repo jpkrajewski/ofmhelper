@@ -1,23 +1,3 @@
-"""A stored job run again against the fake providers, to see what it does:
-`OFM_FAKE_EXTERNALS=true python -m ofmhelpers.features.jobs.replay <job_id>`
-in the app container on dev (owner 2026-11-15: "can we replay any job with a
-fake provider, a fake client?"; CLAUDE.md: a prod failure is proven fixed by
-replaying THAT job on dev, prod data in dev first: `scripts/prod_to_dev.sh`).
-
-The job runs here, in this process, through `run_job` (its row says done
-or failed, its trace is in Logfire), never on a queue: a worker does not
-run with the fakes, so a queued replay could pay a real provider. Refused
-unless every outside service is faked and this is not production.
-
-What runs, from the row alone:
-- a local task recovery restarts (`registry.RESTARTS`): as it would restart;
-- a paid one (`registry.RESUMABLE`): its params, the fake key of its
-  provider, its person's store, as recovery re-runs it;
-- a /trials job: `trials.folder.replay_run` (its `args`, its person's token);
-- anything else: `NotReplayableError`, saying why (`NOT_REPLAYABLE`).
-Files a job read (uploads, sources) must be on this disk: `prod_to_dev.sh`
-copies the database only."""
-
 import argparse
 from typing import Any
 lazy from collections.abc import Callable
@@ -40,7 +20,6 @@ from ofmhelpers.log import configure_logging
 from ofmhelpers.telemetry import configure_telemetry
 lazy from ofmhelpers.schemas import Job
 
-# The key each fake provider takes (a paid job's own key stays where it is).
 FAKE_KEYS: frozendict[str, str] = frozendict(
     {
         "apiyi": apiyi_fake.FAKE_KEY,
@@ -51,7 +30,6 @@ FAKE_KEYS: frozendict[str, str] = frozendict(
         "fake": "",
     }
 )
-# Tasks that do not run again from their row, and why.
 NOT_REPLAYABLE: frozendict[str, str] = frozendict(
     {
         "viral_reels": "every run pays Apify for its scan",
@@ -68,13 +46,10 @@ NOT_REPLAYABLE: frozendict[str, str] = frozendict(
 )
 
 
-class NotReplayableError(ValueError):
-    """The job cannot run again here; the message says why."""
+class NotReplayableError(ValueError): ...
 
 
 class Replay(BaseModel):
-    """What a job runs with when it runs again."""
-
     run: SkipValidation[Callable[..., Any]]
     kwargs: dict[str, Any]
 
@@ -109,7 +84,6 @@ def _trials(job: Job) -> Replay:
 
 
 def replay_of(job: Job) -> Replay:
-    """How `job` runs again. Raises `NotReplayableError`."""
     if job.task in NOT_REPLAYABLE:
         raise NotReplayableError(NOT_REPLAYABLE[job.task])
     if job.task in legacy_tools().entries:
@@ -134,7 +108,6 @@ def _faked_only() -> None:
 
 
 def replay(job_id: str) -> Replayed:
-    """`job_id` run again here, against the fakes; its row tells how it went."""
     _faked_only()
     job = get_job(job_id)
     if job is None:

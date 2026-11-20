@@ -1,13 +1,3 @@
-"""The lab's search space: every knob it turns, how one strength (0 = off)
-becomes a preset value, and the cap that keeps a copy looking like its
-source ("nearly identical"). Random throws may go past a cap (`OVER_CAP`).
-
-Framing knobs (speed, zoom, tilt...) move the picture but do not damage it:
-the quality reference gets them too (`measure.reference`), so VMAF scores
-only what the look knobs do (colour, noise, overlays...) plus the encode.
-Mirror and black-and-white are left out: never "nearly identical".
-"""
-
 from enum import StrEnum
 from typing import Any
 
@@ -16,7 +6,6 @@ from pydantic import BaseModel
 from ofmhelpers.media.repurpose.presets import Preset
 from ofmhelpers.media.repurpose.transformations.patterns import Pattern
 
-# How far past its cap a random throw may push a knob.
 OVER_CAP = 1.5
 
 
@@ -26,22 +15,21 @@ class Part(StrEnum):
 
 
 class Role(StrEnum):
-    FRAMING = "framing"  # kept in the quality reference
-    LOOK = "look"  # scored by VMAF
+    FRAMING = "framing"
+    LOOK = "look"
 
 
 class Shape(StrEnum):
-    SYM = "sym"  # [-s, s]
-    AROUND_ONE = "around_one"  # [1-s, 1+s]
-    UP = "up"  # [1+s/2, 1+s]
-    POS = "pos"  # [s/2, s]
-    DOWN = "down"  # [1-s, 1-s/2]
-    NEG = "neg"  # [-s, -s/2]
-    AROUND = "around"  # [base-s, base+s]
+    SYM = "sym"
+    AROUND_ONE = "around_one"
+    UP = "up"
+    POS = "pos"
+    DOWN = "down"
+    NEG = "neg"
+    AROUND = "around"
 
 
 class Knob(BaseModel, frozen=True):
-    # Lab name; `field` is the VideoSettings / AudioSettings field it sets.
     name: str
     field: str
     part: Part
@@ -50,7 +38,6 @@ class Knob(BaseModel, frozen=True):
     cap: float
     base: float = 0.0
     integer: bool = False
-    # Fixed companions: lists merge (look / echo / loud), the rest overwrite.
     extra: dict[str, Any] = {}
 
     def value(self, strength: float) -> Any:
@@ -97,7 +84,6 @@ F, L = Role.FRAMING, Role.LOOK
 _PATTERNS = [p.value for p in Pattern]
 
 KNOBS: list[Knob] = [
-    # Framing: caps = the agreed "nearly identical" limits.
     _v("speed", F, Shape.AROUND_ONE, 0.06),
     _v("trim_head_s", F, Shape.POS, 0.5),
     _v("cut_head", F, Shape.POS, 0.07),
@@ -111,7 +97,6 @@ KNOBS: list[Knob] = [
     _v("shake", F, Shape.POS, 0.006),
     _v("drift", F, Shape.POS, 0.045),
     _v("size", F, Shape.DOWN, 0.05),
-    # Look: VMAF decides how far they may go.
     _v("saturation", L, Shape.AROUND_ONE, 0.15),
     _v("contrast", L, Shape.AROUND_ONE, 0.1),
     _v("brightness", L, Shape.SYM, 0.05),
@@ -136,7 +121,6 @@ KNOBS: list[Knob] = [
     ),
     _v("sharpen_late", L, Shape.POS, 0.4),
     _v("particles", L, Shape.POS, 12.0),
-    # Audio.
     _a("volume", Shape.AROUND_ONE, 0.06),
     _a("pitch", Shape.SYM, 0.5),
     _a("phaser_shift", Shape.POS, 10.0),
@@ -160,7 +144,6 @@ KNOBS: list[Knob] = [
     _a("limit", Shape.DOWN, 0.12),
 ]
 BY_NAME = {k.name: k for k in KNOBS}
-# Always on in an audio trial: the level loss of the effects added back.
 _AUDIO_BASE: dict[str, Any] = {"match_level": True}
 
 
@@ -175,7 +158,7 @@ def _settings(strengths: dict[str, float], part: Part) -> dict[str, Any]:
         if knob.part is not part or strength <= 0:
             continue
         value = knob.value(strength)
-        if knob.field == "loudness":  # one depth for every loud effect
+        if knob.field == "loudness":
             value = max(out.get("loudness", 0.0), round(strength, 3))
         out[knob.field] = value
         for key, extra in knob.extra.items():
@@ -187,7 +170,6 @@ def _settings(strengths: dict[str, float], part: Part) -> dict[str, Any]:
 
 
 def preset(strengths: dict[str, float], label: str = "") -> Preset:
-    """Knob strengths (lab names; 0 = off) as a preset."""
     return Preset.model_validate(
         {
             "label": label,

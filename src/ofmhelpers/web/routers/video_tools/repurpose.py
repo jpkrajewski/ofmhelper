@@ -1,11 +1,3 @@
-"""
-/repurpose: one video in, N repurposed copies out (`ofmhelpers.media.repurpose`),
-each scored against its source (`repurpose.checker`). Every knob is on the
-page; a ready-made preset fills them; the current knobs download as a preset
-JSON; a card's only button, Recreate, puts its video, preset and knobs
-back. Both roles; a user only ever sees their own runs.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
@@ -22,8 +14,6 @@ from ofmhelpers.features.repurpose.service import (
     PREFIX,
     TASK,
 )
-
-# Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.repurpose.service import run_repurpose as _run_repurpose
 from ofmhelpers.media.repurpose.presets import Preset
 from ofmhelpers.schemas import JobQueued
@@ -49,8 +39,6 @@ router = APIRouter(
 class RepurposeForm(FormModel):
     video: Files
     video_manifest: str = "[]"
-    # A string the feature parses: a knob it cannot take is a worded 400, which
-    # a validator here would turn into a 422 the page does not show.
     preset: str = "{}"
     preset_name: str = ""
     special: bool = False
@@ -60,7 +48,6 @@ class RepurposeForm(FormModel):
     @field_validator("copies")
     @classmethod
     def _at_most_max_copies(cls, copies: int) -> int:
-        """The limit is a setting, read when a form is checked."""
         return at_most(copies, settings.web.uniqify_max_copies)
 
 
@@ -71,8 +58,6 @@ def form(request: Request, actor: Actor) -> Response:
 
 @router.get("/cards/{job_id}")
 def cards(request: Request, job_id: str, actor: Actor) -> Response:
-    """A finished job's cards as the gallery draws them (repurpose.js swaps
-    them in for the ones generation.js built)."""
     return render(
         request, "_repurpose_cards.html", cards=service.cards_of(job_id, actor)
     )
@@ -80,7 +65,6 @@ def cards(request: Request, job_id: str, actor: Actor) -> Response:
 
 @router.post("/preset.json")
 def preset_json(preset: Preset) -> Response:
-    """The page's knobs (and device) as a preset file."""
     return Response(
         content=preset.model_dump_json(exclude_unset=True, indent=2),
         media_type="application/json",

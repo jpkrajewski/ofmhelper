@@ -1,13 +1,3 @@
-{# One /download-assets gallery card, one per file of a download
-   (`TaskCard.per_file`): the shared card, plus the links that failed, and --
-   when its file is a video -- a [Clone | Clone long | Edit] control that opens
-   that page with this video already picked (static/js/download.js posts the job
-   id and the card's file index; a card that finishes live has the same control
-   cloned in), also on a VA's card the owner sees (the video goes into the
-   owner's store). A card whose video the retention sweep removed shows its
-   poster and one Download, which fetches it again (download.js); its Clone
-   control is back once the video is. One that did not come back says why
-   under the poster (`removed_reason`: "Post deleted or profile banned"). #}
 {% extends "_gallery_card.html" %}
 {% import "components/ui.html" as ui %}
 {% import "_card_hide.html" as hide %}

@@ -1,9 +1,3 @@
-/*
- * /viral: the profile form posts to /viral/run and opens that search;
- * a search still running is polled until its job ends, then the page
- * reloads with its reels. A failed poll is tried again, a hidden tab
- * polls once it is shown (as generation.js does).
- */
 (() => {
     const POLL_MS = 3000;
 

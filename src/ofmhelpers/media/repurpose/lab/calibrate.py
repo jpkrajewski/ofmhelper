@@ -1,9 +1,3 @@
-"""Before a search: every ordered pair of different clips through the
-optional detectors (SSCD, TMK+PDQF), as a false-positive check of their
-thresholds on this run's own clips. Written to OUT/calibration.json and
-shown in the report; nothing is tuned from it automatically.
-"""
-
 import itertools
 from pathlib import Path
 

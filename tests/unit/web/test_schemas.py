@@ -1,6 +1,3 @@
-"""The web layer's typed shapes: stored results keep their exact old JSON
-shape, and the task registry covers every registered tool router."""
-
 from ofmhelpers.db.stores.jobs import _stored
 from ofmhelpers.schemas import ResultFile
 from ofmhelpers.web.routers import ROUTERS
@@ -12,7 +9,6 @@ def test_result_file_stores_only_the_fields_that_were_set():
         "name": "a.png",
         "path": "/x/a.png",
     }
-    # A remote-only kie.ai result keeps its explicit None path.
     remote = ResultFile(name="v.mp4", path=None, remote_url="https://r/v")
     assert _stored([remote])[0] == {
         "name": "v.mp4",

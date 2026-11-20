@@ -1,29 +1,13 @@
-/*
- * /clone live cost estimate.
- *
- * Every picked video is one Wan 3.0 run, and a run costs about the same
- * number of credits per second of its source video. The server hands every
- * clone provider's price in data-pricing (credits per video second by
- * resolution, dollars per credit, the longest reference it takes); the
- * estimate prices the provider currently picked, and hides for one it has
- * no price for. Lengths are read in the browser from each video's metadata
- * -- a local File or a reused server file alike -- and remembered, so
- * reordering or switching resolution or provider recalculates instantly. A
- * video over the provider's reference limit is flagged and left out, with
- * "Trim it!": /edit opens it (a new file is uploaded first, /edit/upload),
- * the form saved first so Clone it brings it back (clone-return.js).
- */
 (() => {
     const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-    // A per-second rate is fractions of a cent apart; cents would hide that.
+
     const rateUsd = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
         maximumFractionDigits: 3,
     });
     const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-    // Higgsfield's credits are worth 80x kie.ai's, so a run is a few of them:
-    // whole numbers would round a cheap run to 0.
+
     const fewDigits = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
     function creditsText(credits, unit) {
@@ -37,7 +21,6 @@
         return item.file ? fileLengths.get(item.file) : pathLengths.get(item.path);
     }
 
-    // Resolves to the length in seconds, or NaN when the browser can't read it.
     function readLength(item) {
         const known = cached(item);
         if (known !== undefined) return Promise.resolve(known);
@@ -80,8 +63,6 @@
         return li;
     }
 
-    // Opens /edit on this video: a stored one by its path, a new one after
-    // uploading it.
     function trimButton(item) {
         const btn = document.getElementById("trim-button").content.firstElementChild.cloneNode(true);
         btn.addEventListener("click", async () => {
@@ -101,7 +82,7 @@
             const r = await fetch("/edit/upload", { method: "POST", body: data }).catch(() => null);
             const body = r ? await r.json().catch(() => ({})) : {};
             if (r?.ok) {
-                // The video saved by its new stored path: the cut replaces it.
+
                 window.FilePicker.setItems(
                     "videos",
                     window.FilePicker.items(form.querySelector('.file-picker[data-field="videos"]')).map(
@@ -112,7 +93,7 @@
                 return;
             }
             btn.disabled = false;
-            // A refusal's own sentence; anything else one fixed one.
+
             btn.textContent = !r
                 ? "No connection: try again"
                 : r.status === 413

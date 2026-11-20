@@ -1,10 +1,3 @@
-"""Fetching, apart from parsing: an /accounts scan batch against the
-Instagram fake whose proxies fail on purpose (dead, rate-limited, banned,
-timing out) -- the next proxy is tried after a jittered pause, a dead one
-leaves the pool for the rest of the job, a scan gives up after its tries
-and says so, a batch stops when every try is rate-limited or the network
-itself is down."""
-
 import pytest
 
 from ofmhelpers.db.stores import tracked_accounts as store
@@ -38,7 +31,6 @@ def _track(*handles: str) -> list[int]:
 
 
 def _page_proxies(instagram, handle: str) -> list[str]:
-    """The proxy of every profile-page request for `handle`, in order."""
     return [proxy for _, path, proxy in instagram.calls if path == f"/{handle}/reels/"]
 
 
@@ -74,15 +66,12 @@ def test_a_scan_gives_up_after_its_tries_and_says_so(instagram, pauses):
 
     account_tracker.scan_accounts("instagram", [account])
 
-    # 1 + min(3 retries, 3 proxies - 1) tries, one per proxy.
     assert _page_proxies(instagram, "sheep_love33") == [P1, P2, P3]
     error = store.get_account(account).error
     assert error == "profile not found (3 tries) -- retried at the next rescan"
 
 
 def test_the_error_names_the_account_not_a_busy_proxy(instagram, pauses):
-    """A deleted account read "rate-limiting" after its "not found"s (dev
-    2026-11-07): the row says what the account is."""
     instagram.proxy_modes.update({P1: "banned", P2: "banned", P3: "rate_limited"})
     (account,) = _track("sheep_love33")
 
@@ -101,8 +90,6 @@ def test_a_batch_stops_when_every_try_is_rate_limited(instagram, pauses):
 
     assert len(_page_proxies(instagram, "sheep_love33")) == 3
     assert _page_proxies(instagram, "brookslockvip") == []
-    # Nobody got through: each row says so and is free for the next scan
-    # (a claim left standing would keep Sync greyed out for hours).
     for account in (first, second):
         scanned = store.get_account(account)
         assert scanned.error == account_tracker.UNREACHED

@@ -58,10 +58,6 @@
     {{ ui.stat("Posts published", num.count(account.posts_in(period.days), "The scan does not cover the period"), period.label) }}
 </div>
 
-{# The follower chart (schemas.FollowerChart): server-drawn SVG in a 0..100
-   box stretched to the plot, labels and dots as HTML at the same percents.
-   static/js/account-chart.js adds the crosshair tooltip from the data
-   table's rows (data-x/data-y); without it the table still has every value. #}
 <section class="accounts-card">
     <h2>Followers · {{ period.label|lower }}</h2>
     {% set when = "%b %d, %H:%M" %}
@@ -84,7 +80,6 @@
                 <small>{% if chart.daily %}{{ chart.span_days }} {{ "day" if chart.span_days == 1 else "days" }}{% else %}{{ chart.points|length }} syncs{% endif %}</small>
             </div>
         </div>
-        {# Positions are data: inline --x/--y custom properties. #}
         {# djlint:off H021 #}
         <div class="fchart-body">
             <div class="fchart-y" aria-hidden="true">

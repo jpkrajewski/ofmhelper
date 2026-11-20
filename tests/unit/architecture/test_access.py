@@ -1,13 +1,3 @@
-"""Who may open what, as checks on the app's own routes.
-
-Every route is either public on purpose (`settings.web.public_paths` /
-`public_prefixes`) or names an area of the access map (`auth/access.py`):
-`APIRouter(dependencies=[Access(Area.X)])`, read here off each route's
-dependency tree (`web/dependencies.py` `Allowed`). No baseline: a route with
-neither fails, so does an area or an action no route uses, and a menu entry
-whose page is another area's.
-"""
-
 import re
 
 from fastapi.dependencies.models import Dependant
@@ -23,9 +13,6 @@ PATH_PARAMETER = re.compile(r"\{[^}]*\}")
 
 
 def api_routes() -> list[RouteContext]:
-    """Every route of the app as it is served: under its router's prefix,
-    with its router's dependencies (FastAPI keeps an included router as one
-    entry of `app.routes`, so they are read through its own iterator)."""
     found = [
         route
         for route in iter_route_contexts(app.routes)
@@ -36,7 +23,6 @@ def api_routes() -> list[RouteContext]:
 
 
 def guards(dependant: Dependant) -> set[Area | Action]:
-    """What the route's `Access` / `Can` dependencies name, nested ones too."""
     found: set[Area | Action] = set()
     for dependency in dependant.dependencies:
         if isinstance(dependency.call, Allowed):
@@ -50,8 +36,6 @@ def areas(route: RouteContext) -> set[Area]:
 
 
 def is_public(route: RouteContext) -> bool:
-    """The route's path with a sample value in each parameter, asked of the
-    middleware's own allowlist."""
     return AuthMiddleware.is_public(PATH_PARAMETER.sub("x", route.path or ""))
 
 

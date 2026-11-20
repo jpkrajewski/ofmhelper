@@ -1,19 +1,11 @@
-"""What every provider fake (OFM_FAKE_EXTERNALS) shares: the answer a
-model would give when a test queued none, and reading a wire field that
-comes in either spelling."""
-
 from typing import Any
 
 
 def field(item: dict[str, Any], camel: str, snake: str) -> Any:
-    """`item`'s field by either spelling: Google's JSON parser takes both,
-    and the SDK writes some fields one way, some the other."""
     return item.get(camel, item.get(snake))
 
 
 def example(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> Any:
-    """The plainest value `schema` (JSON Schema, as Pydantic writes it)
-    allows."""
     if defs is None:
         defs = schema.get("$defs", {})
     if "$ref" in schema:

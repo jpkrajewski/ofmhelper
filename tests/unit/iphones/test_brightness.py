@@ -1,6 +1,3 @@
-"""SDR sources keep their brightness in the HLG output: SDR white lands on
-BT.2408's HDR reference white, 75% HLG signal (10-bit limited code 721)."""
-
 import random
 import re
 import subprocess
@@ -11,7 +8,7 @@ from ofmhelpers.media.capcut import SourceInfo
 from ofmhelpers.media.recorder import load_profile
 from ofmhelpers.media.recorder.recorder import _video_filter
 
-BT2408_WHITE_CODE = 721  # 64 + 0.75 * (940 - 64)
+BT2408_WHITE_CODE = 721
 
 
 @pytest.mark.heavy

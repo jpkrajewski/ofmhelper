@@ -1,6 +1,3 @@
-"""One profile's most played reels: Apify reads its newest reels with their
-play counts, the top ones are downloaded from Instagram's CDN."""
-
 from concurrent.futures import ThreadPoolExecutor
 lazy from pathlib import Path
 
@@ -29,32 +26,20 @@ from ofmhelpers.telemetry import in_this_trace
 
 logger = get_logger(__name__)
 
-# The actor's error code for a profile that does not exist; anything else
-# ("no_items") is a private, empty or age-restricted one.
 _NOT_FOUND = "not_found"
-# A profile Instagram shows only to a signed-in account (age-restricted):
-# the actor reads signed out (prod 2026-11-13, @bigboylazar: the item's
-# `error` was "Restricted profile", no description).
 _RESTRICTED = "restricted profile"
-# What the actor charges for: one event per run, one per reel it stores.
 _START_EVENT = "actor-start"
 _REEL_EVENT = "reel"
 
 
-class ViralError(AppError):
-    """A search that cannot give reels; the message is the card's text
-    (`schemas/errors.py` matches its start)."""
+class ViralError(AppError): ...
 
 
 def reel_input(username: str, scan: int) -> ReelScraperInput:
-    """The reel scraper's input: `username`'s newest `scan` reels (pinned
-    ones too: often the most played), every paid add-on off. Always with a
-    limit: without one the actor reads the whole profile."""
     return ReelScraperInput(username=[username], results_limit=scan)
 
 
 def most_played(reels: list[ApifyReel], top: int) -> list[ApifyReel]:
-    """The `top` most played reels that have a video, each once."""
     seen: set[str] = set()
     unique = []
     for reel in reels:
@@ -65,8 +50,6 @@ def most_played(reels: list[ApifyReel], top: int) -> list[ApifyReel]:
 
 
 def parse(username: str, items: list[DatasetItem]) -> list[ApifyReel]:
-    """The dataset's reels; a profile the actor could not read is a
-    `ViralError` naming why."""
     reels: list[ApifyReel] = []
     errors: list[ApifyItemError] = []
     for item in items:
@@ -106,8 +89,6 @@ def _fetch(url: str, dest: Path) -> None:
 
 
 def _download(reel: ApifyReel, folder: Path) -> Path:
-    """`reel` as `<code>.mp4` in `folder`, with its sound: a picture-only
-    file gets the separately served audio put back in."""
     dest = folder / f"{reel.code}.mp4"
     _fetch(str(reel.video_url), dest)
     if reel.audio_url and not has_audio(dest):
@@ -119,8 +100,6 @@ def _download(reel: ApifyReel, folder: Path) -> Path:
 
 
 def _save(reels: list[ApifyReel], folder: Path) -> list[SavedReel]:
-    """`reels` downloaded into `folder`, in their order; one that fails is
-    left out (logged), all failing is an error."""
 
     def one(reel: ApifyReel) -> SavedReel | None:
         try:
@@ -138,8 +117,6 @@ def _save(reels: list[ApifyReel], folder: Path) -> list[SavedReel]:
 
 
 def find_viral(username: str, folder: Path) -> ViralFind:
-    """`username`'s most played reels (of its newest `OFM_VIRAL_SCAN`),
-    saved in `folder`, most played first."""
     config = settings.viral
     client = richest(config.api_keys)
     run = client.run(
@@ -149,8 +126,6 @@ def find_viral(username: str, folder: Path) -> ViralFind:
         msg = f"Apify run {run.status}: {run.status_message or 'no reason given'}"
         raise ApifyError(msg)
     reels = parse(username, client.items(run))
-    # Apify's own counts are still catching up when the run ends: the reels
-    # it stored are what it charges for.
     cost = max(run.cost_usd, run.priced({_START_EVENT: 1, _REEL_EVENT: len(reels)}))
     top = most_played(reels, config.top)
     logger.info(

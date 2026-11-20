@@ -1,7 +1,3 @@
-"""Hardening from the security audit of 2026-11-18: small refusals in code
-that takes a client's text (a redirect target, an upload or path name, a
-download URL, a cookie domain) and the tool command lines built from it."""
-
 import io
 from pathlib import Path
 
@@ -19,9 +15,6 @@ from ofmhelpers.media import video_probe
 NUL = chr(0)
 
 
-# --- safe_next -----------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     "next_url",
     ["/\\evil.com", "/a\\b", "/\t/evil.com", "/\n/evil", "/a" + chr(1), "//evil.com"],
@@ -32,9 +25,6 @@ def test_safe_next_refuses_a_backslash_or_a_control_character(next_url):
 
 def test_safe_next_keeps_a_path_on_this_site():
     assert safe_next("/clone?x=1") == "/clone?x=1"
-
-
-# --- NUL in a name or a path ---------------------------------------------
 
 
 def test_a_nul_in_an_upload_name_is_a_refusal():
@@ -51,9 +41,6 @@ def test_a_nul_in_a_disk_path_is_a_refusal(tmp_path, monkeypatch):
     monkeypatch.setattr(disk, "_roots", lambda: {"uploads": tmp_path.resolve()})
     with pytest.raises(RefusedError):
         disk.safe_path("uploads", "a" + NUL + "b")
-
-
-# --- the file manager's upload never overwrites ---------------------------
 
 
 def _upload(name: str, body: bytes) -> UploadFile:
@@ -89,9 +76,6 @@ def test_a_disk_upload_writes_a_new_file(tmp_path, monkeypatch):
     assert (tmp_path / "a.txt").read_bytes() == b"hello"
 
 
-# --- save_asset leaves no temp file behind ---------------------------------
-
-
 def test_a_failed_save_asset_removes_its_temp_file(tmp_path, monkeypatch):
     def refuse(self, name):
         msg = "disk full"
@@ -123,15 +107,9 @@ def test_save_asset_keeps_the_stored_file(tmp_path):
     assert [p.name for p in tmp_path.iterdir()] == [stored.name]
 
 
-# --- gallery-dl: the URL is never an option -------------------------------
-
-
 def test_gallery_dl_gets_the_url_after_a_double_dash():
     cmd = ImageDownloadConfig().gallery_dl_cmd("--config=/etc/x", "cookies.txt")
     assert cmd[-2:] == ["--", "--config=/etc/x"]
-
-
-# --- ffprobe: -i, and a str is only an http(s) URL ------------------------
 
 
 @pytest.fixture
@@ -166,9 +144,6 @@ def test_ffprobe_refuses_a_str_that_is_not_an_http_url(probed, src):
     with pytest.raises(ValueError, match="http"):
         video_probe.frame_rate(src, 5)
     assert probed == []
-
-
-# --- Pinterest cookies: a dot boundary ------------------------------------
 
 
 def _txt(*domains: str) -> str:

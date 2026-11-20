@@ -1,10 +1,3 @@
-"""
-The action log's "view" link only renders when the task registry has an
-entry for that job's task. Old jobs of a removed tool (replicate, taken out
-with its router) stay in the jobs table, so they must get no link rather than
-one pointing at a route that no longer exists.
-"""
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -47,8 +40,6 @@ def test_dashboard_still_renders_with_a_leftover_replicate_job(admin_client):
 
 
 def test_another_users_row_is_metadata_only(admin_client):
-    """An audit trail: who ran which tool, when, how it ended -- never what
-    another person asked for (their prompt) or a link to their job."""
     from signin import make_user
 
     user = make_user("audited@example.com")

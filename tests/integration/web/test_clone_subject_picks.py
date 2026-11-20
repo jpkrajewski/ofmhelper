@@ -1,8 +1,3 @@
-"""/clone's subject tiles (features/clone/service.subject_picks): the first
-image of a person's /clone and /clone-links runs, last used and most used,
-one tile per picture (same content = one picture), only files still in
-their own part of the store."""
-
 import re
 from pathlib import Path
 
@@ -47,7 +42,7 @@ def test_last_used_newest_first_then_most_used_most_first():
     _run(me, a)
     _run(me, b)
     _run(me, a)
-    _run(me, c, b)  # c is this run's subject; b its second image
+    _run(me, c, b)
 
     picks = subject_picks(me, root)
 
@@ -99,7 +94,6 @@ def test_another_persons_runs_and_pictures_are_never_offered():
     me, other = make_user("me@example.com"), make_user("other@example.com")
     theirs = _picture(assets_root_for_user(other.id), "a", "theirs")
     _run(str(other.id), theirs)
-    # Even a run of mine naming their file (a forged path) offers nothing.
     _run(str(me.id), theirs)
 
     picks = subject_picks(str(me.id), assets_root_for_user(me.id))
@@ -116,7 +110,7 @@ def test_the_clone_page_shows_the_tiles():
 
     page = client.get("/clone").text
 
-    assert page.count('class="photo-tile subject-tile"') == 2  # last + most used
+    assert page.count('class="photo-tile subject-tile"') == 2
     assert f'data-path="{picture}"' in page
     assert "Last used" in page
     assert "Most used" in page
@@ -127,9 +121,6 @@ def test_a_person_with_no_runs_gets_no_tile_rows():
     sign_in(client)
 
     assert "subject-tile" not in client.get("/clone").text
-
-
-# --- a team: the owner and their VAs (owner 2026-11-14) -------------------------
 
 
 def _team(owner_email: str, *va_emails: str) -> list[User]:
@@ -145,8 +136,6 @@ def _tiles(html: str) -> list[str]:
 
 
 def test_a_va_gets_the_owners_and_the_other_vas_subjects_and_their_uses_count():
-    """ "va should get the same most used images on clone and lates litterlay
-    the same, and their coutn shousl be also included in the most used"."""
     owner, va, other_va = _team(
         "boss@example.com", "va1@example.com", "va2@example.com"
     )
@@ -163,7 +152,6 @@ def test_a_va_gets_the_owners_and_the_other_vas_subjects_and_their_uses_count():
     assert team == {str(owner.id), str(va.id), str(other_va.id)}
     assert viewer_for(owner, None).team == team
     assert picks.last_used == [str(c), str(b), str(a)]
-    # b: the VA's two runs put it first on everyone's row, the owner's too.
     assert picks.most_used == [str(b), str(c), str(a)]
 
 
@@ -179,7 +167,7 @@ def test_the_owner_and_the_va_see_the_same_tiles_on_the_page():
 
     seen_by_owner = _tiles(as_owner.get("/clone").text)
 
-    assert seen_by_owner == [str(b), str(a), str(b), str(a)]  # last, then most used
+    assert seen_by_owner == [str(b), str(a), str(b), str(a)]
     assert _tiles(as_va.get("/clone").text) == seen_by_owner
 
 

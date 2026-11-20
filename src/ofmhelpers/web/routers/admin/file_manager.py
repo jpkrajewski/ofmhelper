@@ -1,19 +1,3 @@
-"""
-ofmhelpers/web/routers/admin/file_manager.py
-
-Every user's files, by user then section, newest first, as big
-thumbnails: open, download, delete. Only files that exist: AI GEN, CLONE,
-DOWNLOADS = done runs' results still on disk; UPLOADS = the user's reference
-store (their reuse picker), with upload; OTHER = other tools' results + the
-raw disk browser (`/file-manager/disk`: uploads/, downloads/, kieai_out/,
-with upload). The last resort when a page lost track of a result (prod,
-2026-10-22: a finished run with no card buttons).
-Admin-only
--- a VA browsing to raw uploads/downloads and deleting things isn't part of
-their job, so the whole router is gated via `Access(Area.FILES)` instead of individual
-routes.
-"""
-
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -39,7 +23,6 @@ router = APIRouter(
     dependencies=[Access(Area.FILES)],
 )
 
-# The sections a user's runs are filed under, in tab order.
 _NAMED = {
     "aigen": Section(label="AI GEN", tasks=frozenset(GENERATE_TOOLS)),
     "clone": Section(
@@ -50,7 +33,6 @@ _NAMED = {
 LIBRARY = Library(
     sections={
         **_NAMED,
-        # Not runs: the user's part of the asset store.
         UPLOADS: Section(label="UPLOADS"),
         "other": Section(
             label="OTHER",
@@ -77,14 +59,11 @@ def _disk_file(path: str, root: str = DEFAULT_ROOT) -> Path:
     return disk.file(root, path)
 
 
-# A file of the user in the path's part of the asset store (`?path=`).
 Asset = Annotated[Path, Depends(_asset)]
-# A file under one of the disk browser's roots (`?root=&path=`).
 DiskFile = Annotated[Path, Depends(_disk_file)]
 
 
 def _thumb(file_path: Path) -> FileResponse:
-    """An image's or video's small webp, made once and kept."""
     return FileResponse(
         library.thumb(file_path), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
     )
@@ -103,7 +82,6 @@ def _back(user_id: int, section: str) -> RedirectResponse:
 def files_page(
     request: Request, user: int | None = None, section: str = "aigen", page: int = 0
 ) -> Response:
-    """Users, then one user's files of one section."""
     view = LIBRARY.view(user, section, page)
     return render(request, "file_manager.html", **dict(view))
 
@@ -127,15 +105,12 @@ def asset_delete(user_id: int, found: Asset) -> Response:
 
 @router.post("/assets/{user_id}/upload")
 def asset_upload(user_id: int, files: Annotated[list[UploadFile], File()]) -> Response:
-    """Into the user's reference store (their reuse picker), deduped by
-    content like any upload; media only."""
     library.add_assets(user_id, files)
     return _back(user_id, UPLOADS)
 
 
 @router.get("/runs/{job_id}/{index}")
 def run_file(job_id: str, index: int, download: bool = False) -> Response:
-    """A run's file: in the browser, or `download=1` as an attachment."""
     found = library.run_file(job_id, index)
     return _attachment(found, found.name) if download else media_response(found)
 
@@ -147,7 +122,6 @@ def run_thumb(job_id: str, index: int) -> Response:
 
 @router.post("/runs/{job_id}/{index}/delete")
 def run_delete(job_id: str, index: int) -> Response:
-    """The file off the disk; back to its section."""
     deleted = LIBRARY.delete_run_file(job_id, index)
     if deleted.user_id is None:
         return see_other("/file-manager")
@@ -156,8 +130,6 @@ def run_delete(job_id: str, index: int) -> Response:
 
 @router.post("/upload")
 def disk_upload(form: Annotated[DiskUploadForm, Form()]) -> Response:
-    """Into the disk folder on screen, under the file's own (safe) name; a
-    name already there is refused, never overwritten."""
     disk.upload(form.root, form.path, form.files)
     query = urlencode({"root": form.root, "path": form.path})
     return see_other(f"/file-manager/disk?{query}")
@@ -170,8 +142,6 @@ def browse(request: Request, root: str = DEFAULT_ROOT, path: str = "") -> Respon
 
 @router.get("/view")
 def view(found: DiskFile) -> Response:
-    """In the browser: media inline, anything else as a download (never
-    same-origin HTML, `media_response`)."""
     return media_response(found)
 
 
@@ -188,7 +158,6 @@ def download(found: DiskFile) -> Response:
 @router.post("/delete")
 def delete_one(path: FormText, root: FormText = DEFAULT_ROOT) -> Response:
     parent = disk.delete_one(root, path)
-    # security audit 2026-11-18: encoded like the other redirects.
     query = urlencode({"root": root, "path": parent})
     return see_other(f"/file-manager/disk?{query}")
 

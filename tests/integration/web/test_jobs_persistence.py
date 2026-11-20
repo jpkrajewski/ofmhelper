@@ -1,15 +1,3 @@
-"""
-Covers web/stores/jobs.py's Postgres persistence (create_job/log_event/run_job write
-through to the jobs table, and the record survives a restart because the DB is
-the store) and its self-healing prune: a "done" job whose result file(s) have
-been deleted (through the file manager, or by hand on the server) should drop
-out of list_jobs() instead of leaving a dead link in the /generate gallery or
-the Action log.
-
-conftest.py points the app at a throwaway test database and truncates the
-tables between tests, so these never touch dev/prod data.
-"""
-
 from pathlib import Path
 
 from signin import make_user
@@ -32,7 +20,6 @@ from ofmhelpers.schemas.persistence import JobPage
 
 
 def _someone(email: str = "someone@example.com") -> str:
-    """A real user's id as a job takes it: `jobs.user_id` is a foreign key."""
     return str(make_user(email).id)
 
 
@@ -87,10 +74,6 @@ def test_finish_time_is_stamped_on_done_and_failed_and_cleared_on_rerun():
 
 
 def test_jobs_survive_a_simulated_restart():
-    """The original bug this guards: JOBS used to be memory-only, so restarting
-    the process wiped it even though the generated files were untouched. Now
-    the database is the store -- a brand-new repository instance (what a fresh
-    process would use) reads the same row straight back."""
     job_id = create_job("kling3", {"prompt": "hi"}, actor=_someone())
     run_job(job_id, lambda: [{"name": "a.mp4", "path": "/tmp/a.mp4"}], {})
 
@@ -110,28 +93,24 @@ def test_list_jobs_drops_a_job_whose_flat_result_file_was_deleted(tmp_path):
 
     assert any(j.id == job_id for j in list_jobs())
 
-    out_file.unlink()  # e.g. deleted through the file manager
+    out_file.unlink()
 
     assert not any(j.id == job_id for j in list_jobs())
     assert get_job(job_id) is None
 
 
 def test_list_jobs_keeps_a_job_still_running_even_with_no_result_yet():
-    job_id = create_job("seedance", {})  # still "running", result is None
+    job_id = create_job("seedance", {})
 
     assert any(j.id == job_id for j in list_jobs())
 
 
 def test_list_jobs_partially_prunes_a_grouped_result(tmp_path):
-    """download_images/download_videos store results grouped by source URL,
-    each carrying its own output_paths list -- only the file(s) that are
-    actually gone should be dropped, not the whole entry, and a failed
-    entry (no file to begin with) must survive untouched."""
     kept_file = tmp_path / "kept.mp4"
     kept_file.write_bytes(b"video")
     gone_file = tmp_path / "gone.mp4"
     gone_file.write_bytes(b"video")
-    gone_file.unlink()  # never existed by the time we check
+    gone_file.unlink()
 
     job_id = create_job("download_videos", {"urls": ["a", "b", "c"]})
     run_job(
@@ -146,7 +125,7 @@ def test_list_jobs_partially_prunes_a_grouped_result(tmp_path):
 
     job = next(j for j in list_jobs() if j.id == job_id)
     urls = {r["url"] for r in job.result}
-    assert urls == {"a", "c"}  # "b" had nothing left to show, "c" was a failure
+    assert urls == {"a", "c"}
 
 
 def test_log_event_is_never_pruned_it_has_no_result():
@@ -156,11 +135,6 @@ def test_log_event_is_never_pruned_it_has_no_result():
 
 
 def test_list_jobs_ignores_a_non_list_result():
-    """todo_drive_upload's result is a plain Drive file ID string, not a
-    list of file dicts like the generator/downloader jobs. Pruning used to
-    assume every "done" job's result was a list[dict] and blew up iterating
-    over the string's characters (AttributeError: 'str' object has no
-    attribute 'get') -- such jobs should just be left alone."""
     job_id = create_job("todo_drive_upload", {"todo_id": "abc"})
     run_job(job_id, lambda: "1AbCdEfGhIjKlMnOp", {})
 
@@ -169,14 +143,11 @@ def test_list_jobs_ignores_a_non_list_result():
 
 
 def test_list_jobs_page_filters_slices_and_reports_the_total():
-    """What the galleries render: one page of the tasks they show, plus how
-    many there are so they can tell whether another page exists."""
     ids = [create_job("fake_ai", {"i": i}) for i in range(5)]
-    create_job("download_videos", {})  # a task this gallery doesn't show
+    create_job("download_videos", {})
 
     page = list_jobs_page({"fake_ai"}, 0, 2)
     assert page.total == 5
-    # newest first
     assert [j.id for j in page.jobs] == [ids[4], ids[3]]
 
     page = list_jobs_page({"fake_ai"}, 4, 2)
@@ -187,10 +158,6 @@ def test_list_jobs_page_filters_slices_and_reports_the_total():
 
 
 def test_the_heal_keeps_a_tasks_own_result_fields(tmp_path):
-    """A result entry with fields beyond `ResultFile`'s (a /clone-links
-    Check's `url`/`seconds`) keeps them through a heal -- dropping a missing
-    sibling included. Re-dumping entries through `ResultFile` stripped them
-    and wrote that back: Generate on such a Check then failed (2026-10-25)."""
     kept = tmp_path / "kept.mp4"
     kept.write_bytes(b"mp4")
     entry = {"name": kept.name, "path": str(kept), "url": "https://x/1", "seconds": 6.3}
@@ -208,9 +175,6 @@ def test_the_heal_keeps_a_tasks_own_result_fields(tmp_path):
 
 
 def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch):
-    """The self-heal stats every result file it is handed. Doing that for the
-    whole history to render one page is what made every scroll tick cost more
-    than the page it returned."""
     for i in range(4):
         out = tmp_path / f"a{i}.png"
         out.write_bytes(b"png")
@@ -236,8 +200,6 @@ def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch
 
 
 def test_list_jobs_page_filters_and_pages_in_sql():
-    """A gallery page is one SQL page: only the asked tasks/actor, newest
-    first, with the total before slicing."""
     from ofmhelpers.db.stores.jobs import create_job, list_jobs_page
 
     someone, admin = _someone(), _someone("boss@example.com")
@@ -248,8 +210,6 @@ def test_list_jobs_page_filters_and_pages_in_sql():
     first = list_jobs_page({"wan3", "kling3"}, 0, 2, actor=someone)
     rest = list_jobs_page({"wan3"}, 2, 2, actor=someone).jobs
     assert first.total == 3
-    # Pages don't overlap and cover exactly the VA's wan3 jobs, newest first
-    # (compared on created_at: create_job can tie on a coarse clock).
     pages = first.jobs + rest
     assert sorted(j.id for j in pages) == sorted(va)
     stamps = [j.created_at for j in pages]
@@ -257,14 +217,9 @@ def test_list_jobs_page_filters_and_pages_in_sql():
     assert list_jobs_page({"wan3"}, 0, 10, actor=None).total == 4
 
 
-# --- the history cap (review #3) ---------------------------------------------
-
-
 def test_the_history_cap_drops_the_oldest_finished_jobs_never_a_running_one(
     monkeypatch,
 ):
-    """A queued /clone-links run behind a big backlog is the oldest row: the
-    cap once deleted it, and the run still paid with nobody to see it."""
     monkeypatch.setenv("OFM_JOBS_MAX_ENTRIES", "2")
     someone = _someone()
     queued = create_job("clone_links", {"link": "https://x/1"})
@@ -275,8 +230,6 @@ def test_the_history_cap_drops_the_oldest_finished_jobs_never_a_running_one(
 
 
 def test_a_job_whose_row_is_gone_is_never_run():
-    """Nothing is downloaded or paid for a run nobody can see or review;
-    its remembered provider request goes with it."""
     job_id = create_job("clone_links", {"link": "https://x/1"})
     tasks.remember(
         tasks.ProviderTask(
@@ -293,14 +246,11 @@ def test_a_job_whose_row_is_gone_is_never_run():
     assert tasks.recall(job_id) is None
 
 
-# --- merge_params / redone_links ----------------------------------------------
-
-
 def test_merge_params_adds_values_and_keeps_the_other_keys():
     job_id = create_job(
         "clone_links", {"link": "https://x/1", "batch": "ab12cd34", "seconds": 6}
     )
-    assert get_job(job_id).params["link"] == "https://x/1"  # a cached read
+    assert get_job(job_id).params["link"] == "https://x/1"
 
     merge_params(job_id, {"source": "/a/v.mp4", "seconds": 7.5, "parts": [1, 2]})
 
@@ -319,8 +269,6 @@ def test_merge_params_on_a_missing_job_does_nothing():
 
 
 def test_redone_links_are_the_links_queued_again_later_running_or_done():
-    """What a stale failed card's Recreate leaves out: the same actor's
-    later runs of the same task and link that did not fail."""
     me, other = _someone(), _someone("other@example.com")
     early = create_job("clone_links", {"link": "https://x/early"}, actor=me)
     stale = create_job("clone_links", {"link": "https://x/running"}, actor=me)

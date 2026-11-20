@@ -1,8 +1,3 @@
-"""`check_clone`: a whole video as one contact sheet to the video model,
-answered GOOD or GLITCHY with its reasoning -- and everything that can go
-wrong with the video or the model kept as the check's `error` (a few fixed
-words), `error_kind` and `error_detail` (the raw text), never raised."""
-
 import logging
 import time
 from pathlib import Path
@@ -37,7 +32,6 @@ QUOTA = (429, "RESOURCE_EXHAUSTED", "Quota exceeded")
 
 @pytest.fixture
 def video(fake_externals, monkeypatch, tmp_path) -> Path:
-    """A 2 s reel, Gemini on its fake, no retries."""
     monkeypatch.setenv("GEMINI_API_KEY", FAKE_KEY)
     monkeypatch.setenv("OFM_LLM_RETRIES", "0")
     path = tmp_path / "reel.mp4"
@@ -46,9 +40,6 @@ def video(fake_externals, monkeypatch, tmp_path) -> Path:
 
 
 class _Clock:
-    """check.py's clock, moved forward by a test (`ahead`); the llm layer
-    keeps the real one."""
-
     def __init__(self) -> None:
         self.ahead = 0.0
 
@@ -82,7 +73,7 @@ def test_a_clean_reel_is_good_with_everything_kept_to_debug_it(video):
     [request] = fake_gemini().requests
     parts = request["contents"][0]["parts"]
     assert parts[0]["text"] == found.prompt_text
-    assert parts[1]["inlineData"]["mime_type"] == "image/jpeg"  # the sheet
+    assert parts[1]["inlineData"]["mime_type"] == "image/jpeg"
 
 
 def test_a_glitchy_answer_carries_its_glitches(video):
@@ -97,8 +88,6 @@ def test_a_glitchy_answer_carries_its_glitches(video):
 
 
 def test_minor_glitches_the_model_is_sure_of_go_to_trial_reels(video):
-    """Every glitch minor but 90% sure it should not be posted: the
-    model's own number wins, the reel goes where a person looks first."""
     fake_gemini().answer_next(
         {
             "reasoning": "Small hand and shirt problems add up.",
@@ -133,8 +122,6 @@ def test_a_mirrored_reel_tells_the_model_its_text_reads_backwards(video):
 
 
 def test_the_tokens_the_answer_used_are_kept(video, monkeypatch):
-    """What the provider says an answer used ends on the check, and the
-    check's deadline reaches the provider."""
     deadlines = []
 
     class Counted:
@@ -169,17 +156,17 @@ def test_the_tokens_the_answer_used_are_kept(video, monkeypatch):
 
 
 def test_a_model_failure_is_the_checks_error_not_an_exception(video, monkeypatch):
-    monkeypatch.setenv("LLM_FALLBACK_VIDEO", "")  # one model, nobody to ask next
+    monkeypatch.setenv("LLM_FALLBACK_VIDEO", "")
     fake_gemini().fail_next(*QUOTA)
 
     found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER  # short, safe on a page
+    assert found.error == NO_ANSWER
     assert found.error_kind == "quota"
-    assert "Quota exceeded" in found.error_detail  # Google's words: row only
+    assert "Quota exceeded" in found.error_detail
     assert (found.provider, found.model) == ("Gemini", "gemini-3.6-flash")
-    assert found.stills_at  # the sheet was made: the model failed
+    assert found.stills_at
     assert folder_for(found) == settings.clone_links.trial_folder
 
 
@@ -193,8 +180,6 @@ def test_a_model_out_of_quota_hands_the_check_to_the_next_gemini(video):
 
 
 def test_a_key_out_of_quota_hands_the_same_model_to_the_next_key(video, monkeypatch):
-    """Several projects' keys (user ask 2026-10-25): every key is tried on
-    the best model before a weaker model is."""
     monkeypatch.setenv("GEMINI_API_KEY", f"{FAKE_KEY},{FAKE_KEY_2}")
     fake_gemini().fail_next(*QUOTA)
 
@@ -208,8 +193,6 @@ def test_a_key_out_of_quota_hands_the_same_model_to_the_next_key(video, monkeypa
 def test_an_overloaded_model_goes_to_the_next_model_not_the_next_key(
     video, monkeypatch
 ):
-    """A 503 is the model's own overload: every key would wait on it, so
-    the next model answers instead of the same model on another key."""
     monkeypatch.setenv("GEMINI_API_KEY", f"{FAKE_KEY},{FAKE_KEY_2}")
     fake_gemini().fail_next(503, "UNAVAILABLE", "This model is overloaded")
 
@@ -233,10 +216,6 @@ def test_a_rejected_key_hands_over_to_the_next_key(video, monkeypatch):
 def test_every_gemini_out_of_quota_is_an_error_and_groq_never_judges(
     video, monkeypatch, caplog
 ):
-    """Groq's qwen said GOOD to every dev reel, the tube-top one too
-    (2026-10-25): with Gemini gone the check fails (TRIAL REELS), it is
-    never handed to Groq. Every model's own error is kept, and the whole
-    chain out of quota is logged as an error (the check is off)."""
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
     for _ in range(4):
         fake_gemini().fail_next(*QUOTA)
@@ -265,8 +244,6 @@ def test_every_gemini_out_of_quota_is_an_error_and_groq_never_judges(
 
 
 def test_an_image_only_provider_in_the_chain_is_skipped(video, monkeypatch):
-    """LLM_FALLBACK_VIDEO=groq with a Groq key: Groq would get the sheet
-    shrunk and say GOOD -- it is never asked, the reel goes to TRIAL."""
     monkeypatch.setenv("LLM_FALLBACK_VIDEO", "groq")
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
     fake_gemini().fail_next(*QUOTA)
@@ -295,8 +272,6 @@ def test_a_chain_of_image_only_providers_is_a_setup_error(video, monkeypatch):
 
 
 def test_no_key_is_a_setup_error_logged_as_one(video, monkeypatch, caplog):
-    """A model id Google does not know or no key at all: logged at error
-    level on every hop, so Logfire's error view shows it."""
     monkeypatch.delenv("GEMINI_API_KEY")
     monkeypatch.setenv("LLM_FALLBACK_VIDEO", "gemini:gemini-3.8-flash")
 
@@ -333,12 +308,10 @@ def test_a_wrong_shape_answer_is_a_short_error_with_the_text_kept(video, monkeyp
     assert (found.error, found.error_kind) == ("The AI gave a broken answer", "failed")
     assert "LLMOutputError" in found.error_detail
     assert '"glitches": "none"' in found.error_detail
-    assert fake_gemini().models == ["gemini-3.6-flash"]  # the answer: no hand-over
+    assert fake_gemini().models == ["gemini-3.6-flash"]
 
 
 def test_no_model_is_asked_once_the_deadline_passed(video, monkeypatch):
-    """The first model fails slowly, past the whole check's deadline: the
-    next is never asked, the reel goes to TRIAL with the time it took."""
     clock = _Clock()
     monkeypatch.setattr(check_module, "time", clock)
     fake = fake_gemini()
@@ -379,7 +352,7 @@ def test_an_unreadable_video_is_the_checks_error(fake_externals, tmp_path):
 
     assert found.verdict is None
     assert (found.error, found.error_kind) == ("Could not read the video", "failed")
-    assert found.error_detail  # ffprobe's own words, never on a page
+    assert found.error_detail
     assert fake_gemini().requests == []
 
 
@@ -388,5 +361,5 @@ def test_the_sheet_tiles_every_still_in_time_order(video, tmp_path):
 
     with Image.open(sheet) as image:
         width, height = image.size
-    assert width == 2 * 360  # 2 x 2 stills, each 360 px wide
-    assert height > width  # a 9:16 reel's stills
+    assert width == 2 * 360
+    assert height > width

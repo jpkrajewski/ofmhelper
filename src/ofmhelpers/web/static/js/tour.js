@@ -1,21 +1,7 @@
-/*
- * A page's guided tour (ui.tour): the page dims, the first control is lit
- * and the tip next to it says what to do there; Next lights the following
- * one, the last step's button says Done. Skip or Escape ends it. The lit
- * control stays usable: the shade lets clicks through.
- *
- * "How to" (`.tour-open`) starts it for anyone. For a VA (`data-auto`) it
- * starts by itself the first time the page is opened after every sign-in:
- * `data-login` is when this session signed in, kept per page in this
- * browser once shown, so a new sign-in shows it again and a reload does
- * not. Without storage (a private window) it starts on every opening.
- */
 (() => {
     const GAP = 12;
     const EDGE = 6;
-    // While it is open the light follows its control: a page may fill it in
-    // later, resize it, or put a new element in its place (/generate swaps
-    // a model's fields when the model changes).
+
     const FOLLOW_MS = 250;
 
     function shownFor(key) {
@@ -30,7 +16,7 @@
         try {
             window.localStorage.setItem(key, login);
         } catch {
-            // private window: shown again next time
+
         }
     }
 
@@ -51,18 +37,12 @@
         let at = -1;
         let following = 0;
 
-        // Only the controls that are on the page and shown: a button a
-        // person does not have is not a step of theirs. A step keeps its
-        // selector, not the element: the control is looked up each time.
         function found() {
             return [...tip.querySelectorAll("li[data-target]")]
                 .map((item) => ({ selector: item.dataset.target, text: item.textContent }))
                 .filter((step) => shown(step.selector));
         }
 
-        // Where the tip goes: under the control, else above it, else to its
-        // right (a tall one, like a whole form section), else over its lower
-        // end. Always inside the window.
         function beside(box) {
             const wide = tip.offsetWidth;
             const tall = tip.offsetHeight;
@@ -102,7 +82,7 @@
         function show(index) {
             const target = shown(steps[index].selector);
             if (!target) {
-                // Gone since the tour started: on to the next one.
+
                 if (index < steps.length - 1) show(index + 1);
                 else end();
                 return;
@@ -113,7 +93,7 @@
             next.textContent = at === steps.length - 1 ? "Done" : "Next";
             shade.hidden = false;
             tip.hidden = false;
-            // A control taller than the window shows from its top.
+
             const tall = target.getBoundingClientRect().height > window.innerHeight * 0.7;
             target.scrollIntoView({ block: tall ? "start" : "center" });
             place();

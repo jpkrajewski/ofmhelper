@@ -1,11 +1,3 @@
-"""
-`python -m ofmhelpers.features.vas.seed`: a VA's made-up month for
-development (owner 2026-11-14: fake runs "accorting toi real prices" to see
-how /vas and the galleries look). Rows only, priced by the app's own prices,
-copied from the team's real finished jobs; `clear` takes back exactly what
-`seed` wrote; production refuses both.
-"""
-
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -34,7 +26,6 @@ pytestmark = pytest.mark.filterwarnings("ignore")
 
 OWNER = "owner@example.com"
 WARSAW = ZoneInfo("Europe/Warsaw")
-# A Sunday, late: every made-up day is whole.
 NOW = datetime(2026, 11, 15, 23, 30, tzinfo=WARSAW)
 
 
@@ -52,7 +43,6 @@ def _va() -> User:
 
 
 def _real(task: str, user: User, folder: Path, params: dict, usd: str | None = None):
-    """A real finished job of `user` with one result file."""
     file = folder / f"{task}-{user.id}.mp4"
     file.write_bytes(b"\x00\x00\x00\x18ftypmp42 fake")
     job_id = create_job(task, params, actor=str(user.id))
@@ -123,8 +113,6 @@ def test_a_made_up_month_is_the_vas_rows_priced_by_the_apps_own_prices(uploads):
     assert (found.days, found.downloads) == (len(made_up.DAYS_BACK), 0)
     assert min(found.clones, found.failed_clones, found.generations) > 0
     assert all(row.created_at <= NOW.timestamp() for row in rows)
-    # Every clone: its provider's /clone price for its length, kie.ai's as
-    # reported, the others as the app's estimate. No row without a price.
     prices = clone_pricing().entries
     clones = [r for r in rows if r.task == "clone" and r.status == "done"]
     assert {r.params["provider"] for r in clones} == set(prices)
@@ -137,8 +125,6 @@ def test_a_made_up_month_is_the_vas_rows_priced_by_the_apps_own_prices(uploads):
         assert row.cost_usd == expected, row.params["provider"]
         assert row.cost_estimated is (row.params["provider"] != "kie")
         assert row.result, "a card needs its video"
-    # /generate: a model with a known price each, the Higgsfield video by
-    # the /clone table (an estimate), the others as a price per run.
     generated = [r for r in rows if r.task == "ai"]
     by_model = {r.params["model"]: r for r in generated}
     assert set(by_model) == {model.model for model in made_up.GENERATED}
@@ -166,7 +152,6 @@ def test_the_owner_sees_the_made_up_days_and_money_on_the_page(uploads):
         owner.id, {owner.id, va.id}, everyone=False, zone="Europe/Warsaw", now=NOW
     )
 
-    # Nov 15 back to Nov 3: the days of this month among the made-up ones.
     assert [day.day.day for day in view.days] == [15, 14, 13, 12, 10, 9, 6, 3]
     today, yesterday = view.days[0], view.days[1]
     assert today.logged_in.startswith("09:")
@@ -175,7 +160,6 @@ def test_the_owner_sees_the_made_up_days_and_money_on_the_page(uploads):
     assert all(day.reels >= 4 and day.spent.startswith("$") for day in view.days)
     month = next(c.amount for c in view.totals if c.period == Period.MONTH)
     assert (month.priced, month.unpriced) == (True, 0)
-    # Their cards are in the owner's /clone gallery, named as the VA's.
     assert "Done by VA: " in client.get("/clone").text
     assert client.get("/vas").status_code == 200
 

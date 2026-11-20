@@ -1,10 +1,3 @@
-/*
- * /clone "SOP": a fixed handful of examples (features/clone/examples.py).
- * The toolbar's SOP button opens the dialog, filled from GET /clone/examples
- * each time; "Use this prompt" puts that example's prompt in the form (an
- * `input` event, so the add-on chips of clone-picks.js follow). Nothing here
- * adds or changes an example: they are set on the server.
- */
 (() => {
     const ENDPOINT = "/clone/examples";
 
@@ -49,7 +42,7 @@
             const example = e.target.closest(".sop-example");
             if (example && e.target.closest(".sop-use")) usePrompt(dialog, example);
         });
-        // A video left playing must not go on behind the closed dialog.
+
         dialog.addEventListener("close", () => list.replaceChildren());
         document.querySelector(".sop-open")?.addEventListener("click", () => {
             dialog.showModal();

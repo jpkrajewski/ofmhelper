@@ -1,20 +1,3 @@
-"""SSCD -- Meta AI's Self-Supervised Copy Detection
-(github.com/facebookresearch/sscd-copy-detection; first on the DISC2021
-benchmark): a neural descriptor per frame (512 numbers, unit length); two
-frames are copies when their cosine similarity is at least the threshold.
-Like the hashes: the copy's frames are matched to the source's, then fit to
-one time line (`sequence.best_line`).
-
-Optional: needs torch and the TorchScript model in `OFM_SSCD_MODEL` (e.g.
-`sscd_disc_mixup.torchscript.pt`); `available()` says whether it runs here.
-Not in the app image (torch is ~1 GB); the lab pod installs it.
-
-Frames go in as sampled, in colour (no grey / equalize: the model was
-trained to see through edits), the copy's also mirrored. A source's
-descriptors are kept per process (`_source`): the lab checks hundreds of
-copies of the same few sources.
-"""
-
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -28,7 +11,6 @@ from ofmhelpers.config import settings
 from ofmhelpers.media.repurpose.checker import frames
 from ofmhelpers.media.repurpose.checker.sequence import SequenceMatch, best_line
 
-# The model's evaluation size (short side) and ImageNet normalization.
 _SIZE = 288
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -38,7 +20,6 @@ _BATCH = 16
 class DescriptorScore(BaseModel, frozen=True):
     kind: str = "sscd"
     threshold: float
-    # Per copy frame: cosine to the closest source frame (mirror included).
     nearest: list[float]
     median: float
     matched_share: float
@@ -46,7 +27,6 @@ class DescriptorScore(BaseModel, frozen=True):
 
 
 def threshold() -> float:
-    """Cosine at or above which two frames are the same picture."""
     return settings.repurpose.sscd_threshold
 
 
@@ -81,7 +61,6 @@ def _batch(images: list[Image.Image]) -> np.ndarray:
 
 
 def descriptors(images: list[Image.Image]) -> np.ndarray:
-    """(frames, 512), unit length."""
     model = _model()
     out = []
     with torch.no_grad():
@@ -96,7 +75,7 @@ def descriptors(images: list[Image.Image]) -> np.ndarray:
 def _source(
     path: str, mtime: float, fps: float, timeout_s: int
 ) -> tuple[np.ndarray, np.ndarray]:
-    del mtime  # part of the key: an edited file is sampled again
+    del mtime
     sampled = frames.sample(Path(path), fps, timeout_s)
     return descriptors(sampled.images), np.array(sampled.times)
 

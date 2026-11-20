@@ -1,6 +1,3 @@
-"""When the provider select warns that APIYI can be slow (apiyi/hours.py):
-China's evening, 11:00-17:00 UTC by default, with the hours it is fastest."""
-
 from datetime import UTC, datetime
 
 import pytest
@@ -14,7 +11,6 @@ def _at(hour: int, minute: int = 0) -> datetime:
     return datetime(2026, 11, 12, hour, minute, tzinfo=UTC)
 
 
-# Prod 2026-11-12: both failed clones were sent at 15:18 UTC.
 @pytest.mark.parametrize("now", [_at(11), _at(15, 18), _at(16, 59)])
 def test_inside_the_slow_hours_it_names_the_fastest_hours(now):
     assert slow_notice(now) == SLOW

@@ -1,7 +1,3 @@
-"""The password tries: /login and the app owner's consent page. Failures count
-against the per-client brake in `cache/rate_limit.py`, which keys on
-the request: the only reason these take one."""
-
 from urllib.parse import urlencode
 
 lazy from fastapi import Request
@@ -26,7 +22,6 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 _TOO_MANY = "Too many failed attempts. Try again later."
-# The account the login form signs into when no email is typed.
 PASSWORD_ADMIN = users.PASSWORD_ADMIN
 
 
@@ -36,10 +31,7 @@ def login(request: Request, email: str, password: str, next_url: str) -> Outcome
         return Outcome(next_url=next_url, error=_TOO_MANY, status_code=429)
     user = credentials.password_sign_in(email, password)
     if user is None:
-        # Every failure is logged and counted: the only signal that someone is
-        # guessing, and the only brake on how fast they can.
         record_failed_login(request)
-        # The email tried (never the password): which account to look at.
         logger.warning(
             "failed login attempt for %r from %s",
             email.strip()[:320],
@@ -53,10 +45,6 @@ def login(request: Request, email: str, password: str, next_url: str) -> Outcome
 
 
 def change_password(user_id: int, current: str, password: str, confirm: str) -> None:
-    """/account/password: `credentials.change_password`, its wrong current
-    passwords counted and braked per person like /login's (security audit
-    2026-11-18: a stolen session could otherwise guess the password).
-    Raises `credentials.PasswordRejectedError`."""
     if user_login_blocked(user_id):
         logger.warning("password change rate limit hit for user %s", user_id)
         raise credentials.PasswordRejectedError(_TOO_MANY)
@@ -70,8 +58,6 @@ def change_password(user_id: int, current: str, password: str, confirm: str) -> 
 
 
 def va_login(request: Request, employer: str, password: str, next_url: str) -> Outcome:
-    """ "Login as Virtual Assistant": the employer's email and the password
-    the employer's VA was given on /users. Counted and braked like /login."""
     if login_blocked(request):
         logger.warning("login rate limit hit from %s", client_id(request))
         return Outcome(next_url=next_url, error=_TOO_MANY, status_code=429)
@@ -93,8 +79,6 @@ def va_login(request: Request, employer: str, password: str, next_url: str) -> O
 
 
 def owner_consent(request: Request, state: str, password: str) -> Outcome:
-    """The right admin password goes on to the callback with a code for this
-    one sign-in; a wrong one is counted like a failed /login."""
     if login_blocked(request):
         logger.warning("login rate limit hit from %s", client_id(request))
         return Outcome(error=_TOO_MANY, status_code=429)

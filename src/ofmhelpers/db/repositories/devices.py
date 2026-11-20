@@ -1,7 +1,3 @@
-"""Phones (/phones), their logins, and which phone has which. Each phone
-and login belongs to a user (`user_id`); every method taking `owner` acts
-only on that user's rows (None: everyone's, for system work)."""
-
 import time
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
@@ -39,17 +35,11 @@ _LOGIN_FIELDS = (*_IDENTITY, "notes")
 _SECRETS = ("password", "backup_codes")
 
 
-class DuplicateError(ValueError):
-    """A phone label or a login that already exists (or is already on the
-    phone)."""
+class DuplicateError(ValueError): ...
 
 
 @contextmanager
 def _writing(fields: dict) -> Iterator[None]:
-    """A broken unique constraint as a `DuplicateError` the page can show;
-    a vault failure while encrypting (SQLAlchemy wraps what a column type
-    raises) as the `VaultError` itself. Anything else is not ours to
-    explain."""
     try:
         yield
     except IntegrityError as exc:
@@ -80,8 +70,6 @@ def _device(row: DeviceRow, logins: list[DeviceLogin]) -> Device:
 
 
 def _login_columns() -> tuple:
-    """A login as a list shows it: no secret is read, only whether there is
-    one ("" is stored unencrypted, see db/encrypted.py)."""
     password = LoginRow.__table__.c.password
     codes = LoginRow.__table__.c.backup_codes
     return (
@@ -99,9 +87,6 @@ def _login_columns() -> tuple:
 def _devices(
     s: Session, logins: dict[int, DeviceLogin], owner: int | None
 ) -> list[Device]:
-    """`owner`'s phones (everyone's for None) by label, each with its logins
-    in the order they were linked; a login lists every phone it is on
-    (`on`). A login is only ever on its owner's phones."""
     devices = list(
         s.execute(
             select(DeviceRow)
@@ -124,7 +109,6 @@ def _devices(
         on.setdefault(login_id, []).append(labels[device_id])
     per_device: dict[int, list[DeviceLogin]] = {}
     for device_id, login_id in links:
-        # Its own copy per phone: the store sorts and links each one's.
         per_device.setdefault(device_id, []).append(
             logins[login_id].model_copy(update={"on": list(on[login_id])})
         )
@@ -132,8 +116,6 @@ def _devices(
 
 
 def _touch(s: Session, device_ids: list[int]) -> None:
-    """The phones changed with their logins (`updated_at` set on purpose:
-    the stamp trigger takes it as a change)."""
     if device_ids:
         s.execute(
             update(DeviceRow)
@@ -151,11 +133,7 @@ def _phones_of(s: Session, login_id: int) -> list[int]:
 
 
 def _drop_orphans(s: Session, owner_id: int) -> None:
-    """Deletes every login of `owner_id` no phone links any more (security
-    audit 2026-11-18: never another owner's)."""
     linked = exists().where(DeviceLoginRow.login_id == LoginRow.id)
-    # An archived login is kept even with no phone left: its password is
-    # what archiving keeps.
     s.execute(
         delete(LoginRow).where(
             ~linked, LoginRow.archived_at.is_(None), LoginRow.user_id == owner_id
@@ -164,15 +142,9 @@ def _drop_orphans(s: Session, owner_id: int) -> None:
 
 
 class DeviceRepository(CachedRepository):
-    """No read is `@cached`: the export and `secrets` return decrypted
-    passwords, which must never sit in Redis, and the list is one cheap
-    query per table. Nothing is cached, so writes bump nothing."""
-
     cache_namespace = "device"
 
     def list_all(self, owner: int | None = None) -> list[Device]:
-        """`owner`'s phones (retired too) with their logins -- no secret
-        read or decrypted, only `has_password` / `has_codes`."""
         with session_scope() as s:
             rows = s.execute(
                 select(*_login_columns()).where(
@@ -182,9 +154,6 @@ class DeviceRepository(CachedRepository):
             return _devices(s, {r["id"]: DeviceLogin(**r) for r in rows}, owner)
 
     def get(self, device_id: int, owner: int | None = None) -> Device | None:
-        """One phone by id with its logins in the order they were linked
-        (no secret); None when it does not exist (or is not `owner`'s).
-        A login's `on` (its other phones) is not read here."""
         with session_scope() as s:
             row = s.get(DeviceRow, device_id)
             if row is None or (owner is not None and row.user_id != owner):
@@ -201,7 +170,6 @@ class DeviceRepository(CachedRepository):
             return _device(row, [DeviceLogin(**r) for r in logins])
 
     def export(self, owner: int | None = None) -> list[Device]:
-        """`list_all` with every password and backup code decrypted."""
         with session_scope() as s:
             logins = {
                 r.id: DeviceLogin(
@@ -266,8 +234,6 @@ class DeviceRepository(CachedRepository):
             return updated.scalar_one_or_none() is not None
 
     def delete_device(self, device_id: int, owner: int | None = None) -> bool:
-        """The phone and every login only it had; a login another phone
-        also has stays there."""
         with session_scope() as s:
             row = s.get(DeviceRow, device_id)
             if row is None or (owner is not None and row.user_id != owner):
@@ -281,12 +247,6 @@ class DeviceRepository(CachedRepository):
     def add_login(
         self, device_id: int, fields: dict, owner: int | None = None
     ) -> AddedLogin | None:
-        """The login and whether it was already saved: an account the phone's
-        owner already saved (same service, provider, username) is linked to
-        this phone too, never stored twice; a password or codes typed for it
-        must match the saved ones (or fill them when it has none). Another
-        owner's login of the same account is never touched. None when the
-        phone does not exist (or is not `owner`'s)."""
         with _writing(fields), session_scope() as s:
             device = s.get(DeviceRow, device_id)
             if device is None or (owner is not None and device.user_id != owner):
@@ -325,8 +285,6 @@ class DeviceRepository(CachedRepository):
             return AddedLogin(id=row.id, existed=existed)
 
     def archive_logins(self, login_ids: list[int], owner: int | None = None) -> int:
-        """Hides the logins from every phone, password kept (see
-        `LoginRow.archived_at`); how many."""
         if not login_ids:
             return 0
         now = time.time()
@@ -349,8 +307,6 @@ class DeviceRepository(CachedRepository):
     def restore_login(
         self, login_id: int, owner: int | None = None
     ) -> ArchivedLogin | None:
-        """Back on its phones; the login (service, username), or None when
-        it is not an archived one of `owner`'s."""
         with session_scope() as s:
             row = s.get(LoginRow, login_id)
             if (
@@ -366,8 +322,6 @@ class DeviceRepository(CachedRepository):
             )
 
     def archived(self, owner: int | None = None) -> list[ArchivedLogin]:
-        """`owner`'s archived logins, newest first, with the phones they
-        come back on."""
         with session_scope() as s:
             rows = s.execute(
                 select(LoginRow)
@@ -389,7 +343,6 @@ class DeviceRepository(CachedRepository):
                         id=row.id,
                         service=row.service,
                         username=row.username,
-                        # Never None here: the query keeps archived ones only.
                         archived_at=row.archived_at or 0,
                         on=list(labels),
                     )
@@ -399,8 +352,6 @@ class DeviceRepository(CachedRepository):
     def update_login(
         self, login_id: int, fields: dict, owner: int | None = None
     ) -> bool:
-        """Changes the account on every phone it is on; False when it does
-        not exist (or is not `owner`'s)."""
         with _writing(fields), session_scope() as s:
             row = s.get(LoginRow, login_id)
             if row is None or (owner is not None and row.user_id != owner):
@@ -414,9 +365,6 @@ class DeviceRepository(CachedRepository):
     def unlink_login(
         self, device_id: int, login_id: int, owner: int | None = None
     ) -> bool:
-        """Removes the login from the phone; deleted for good when no other
-        phone has it. False when it was not on the phone (or the phone is
-        not `owner`'s)."""
         with session_scope() as s:
             device = s.get(DeviceRow, device_id)
             if device is None or (owner is not None and device.user_id != owner):

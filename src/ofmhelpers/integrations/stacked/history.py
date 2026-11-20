@@ -1,17 +1,3 @@
-"""A creator's new messages, chat by chat: the sync behind /chatting's history,
-which catches what webhooks missed and is all there is without them.
-
-The chat list carries each chat's last message, so only a chat whose last message
-changed since the last read is opened. That is one call per changed chat: a mass
-message changes most chats at once, so that one round takes minutes (one call at
-a time stays well under the rate limit). The whole list is read every round: a fan
-who is still waiting, however long ago they wrote, may have blocked or left.
-
-A model's emoji reaction on a fan's message answers it. It changes no last message,
-the list does not show it and no webhook announces it, so a chat with a fan waiting
-has its newest message read every round too.
-"""
-
 lazy from collections.abc import Collection, Iterator, Mapping
 lazy from datetime import datetime
 
@@ -34,9 +20,6 @@ def _new_messages(
     seen: str | None,
     oldest: datetime,
 ) -> list[Message]:
-    """The chat's messages after `seen`, newest first. History stops at `oldest`,
-    but a fan's messages nobody has answered yet are read however old: they are
-    still waiting."""
     seen_id = int(seen) if seen else 0
     found: list[Message] = []
     before: int | None = None
@@ -56,8 +39,6 @@ def _new_messages(
 
 
 def chat_event(message: Message, creator_user_id: str) -> ChatEvent | None:
-    """None for what nobody said: the provider's own events, removed messages.
-    Webhooks leave `type` empty, so a message with no text may name nothing."""
     if message.is_removed or not message.user_id:
         return None
     kind = message.custom_type or message.type or "attachment"
@@ -65,15 +46,11 @@ def chat_event(message: Message, creator_user_id: str) -> ChatEvent | None:
         message_id=str(message.message_id),
         from_fan=message.user_id != creator_user_id,
         at=message.created_at.timestamp(),
-        # Postgres refuses a NUL in text, which would stop the chat being saved.
         text=(message.text or f"[{kind.lower()}]").replace("\x00", ""),
     )
 
 
 def _reaction_reply(messages: list[Message], creator_user_id: str) -> ChatEvent | None:
-    """The model's reaction on the fan's newest message (`messages`: newest first), as
-    the reply it is, at the moment it was put. One on an older message says nothing
-    about what the fan wrote since."""
     newest = next(
         (m for m in messages if m.user_id and m.user_id != creator_user_id), None
     )
@@ -100,12 +77,6 @@ def new_reads(
     oldest: datetime,
     open_channels: Collection[str],
 ) -> Iterator[ChatRead]:
-    """Each chat with something new since `seen` ({channel: message id}), as it
-    is read, so a round cut short keeps what it got. A chat whose fan cannot be
-    answered comes with `cannot_answer` and is not opened. A chat that cannot be
-    read is skipped and read next round, so one bad chat does not stop the ones
-    behind it; several in a row mean Stacked is down, and end the round.
-    `open_channels`: chats with a fan waiting, whose newest message is read anyway."""
     failed = 0
     for chat in client.chats(creator_user_id):
         last = chat.last_message

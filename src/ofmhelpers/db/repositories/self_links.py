@@ -1,14 +1,3 @@
-"""Self-hosted bridge pages (provider "self"): the custom domains we serve
-them on and every hit on them. The links themselves are `short_links` rows
-with provider "self" (ShortLinkRepository); this module owns only the two
-tables that are ours alone -- `self_link_domains` and `self_link_clicks`.
-
-Clicks are kept one row per hit (not one per day like `short_link_daily_stats`)
-so any time frame, country, device or referrer reads back exactly. The domain
-list is cached (the public bridge checks the host on every hit) and bumped on
-every domain write; the click reads are uncached and never bump the cache, so
-recording a hit does not invalidate the host list."""
-
 import time
 from datetime import UTC, date, datetime
 from typing import Any
@@ -40,7 +29,6 @@ from ofmhelpers.schemas.self_links import (
 VIEW = "view"
 CLICK = "click"
 
-# A hit counts as a view and, when it is a continue-through, a click too.
 _VIEWS = func.count().filter(SelfLinkClickRow.kind == VIEW)
 _CLICKS = func.count().filter(SelfLinkClickRow.kind == CLICK)
 
@@ -52,12 +40,8 @@ def _epoch(day: date) -> float:
 class SelfLinkRepository(CachedRepository):
     cache_namespace = "self_link"
 
-    # --- domains ----------------------------------------------------------
-
     @cached
     def active_hosts(self, owner: int | None = None) -> list[str]:
-        """Hostnames the bridge serves for `owner` (their own plus the shared
-        ones); `owner` None: every active host, for the bridge's own check."""
         dom = SelfLinkDomainRow
         where = [dom.status == "active"]
         if owner is not None:
@@ -67,8 +51,6 @@ class SelfLinkRepository(CachedRepository):
 
     @cached
     def list_domains(self, owner: int | None = None) -> list[SelfDomain]:
-        """Every domain `owner` manages (their own plus the shared ones),
-        newest first."""
         dom = SelfLinkDomainRow
         where = [(dom.owner_id == owner) | (dom.owner_id.is_(None))] if owner else []
         with session_scope() as s:
@@ -98,7 +80,6 @@ class SelfLinkRepository(CachedRepository):
             try:
                 s.flush()
             except IntegrityError as exc:
-                # Someone's already: said without saying whose.
                 msg = "This domain can't be added"
                 raise DuplicateError(msg) from exc
             return row.id
@@ -117,8 +98,6 @@ class SelfLinkRepository(CachedRepository):
 
     @invalidates_cache
     def remove_domain(self, domain_id: int, owner: int | None = None) -> None:
-        """Deletes the domain; its owner's self links on that host go
-        inactive in the same transaction (rows stay)."""
         dom = SelfLinkDomainRow
         with session_scope() as s:
             gone = s.execute(
@@ -141,16 +120,11 @@ class SelfLinkRepository(CachedRepository):
                 delete(dom).where(dom.id == domain_id, *mine(dom.owner_id, owner))
             )
 
-    # --- clicks -----------------------------------------------------------
-
     def record_click(self, click: dict[str, Any]) -> None:
-        """One hit on a bridge page (`kind` view or click)."""
         with session_scope() as s:
             s.execute(insert(SelfLinkClickRow).values(ts=time.time(), **click))
 
     def daily(self, link_ids: list[int], start: date, end: date) -> list[SelfLinkDays]:
-        """Per link, each UTC day in [start, end] that had any hit: views
-        (landings) and clicks (continue-throughs)."""
         if not link_ids:
             return []
         click = SelfLinkClickRow
@@ -174,7 +148,6 @@ class SelfLinkRepository(CachedRepository):
         return list(found.values())
 
     def hourly(self, link_ids: list[int], day: date) -> list[SelfLinkHours]:
-        """Per link, each UTC hour of `day` that had any hit."""
         if not link_ids:
             return []
         click = SelfLinkClickRow
@@ -200,10 +173,7 @@ class SelfLinkRepository(CachedRepository):
             ).hours.append(HourStat(hour=when, views=int(views), clicks=int(clicks)))
         return list(found.values())
 
-    # --- stats for the Self links page ------------------------------------
-
     def totals(self, link_ids: list[int], start: date, end: date) -> SelfTotals:
-        """Views, clicks and unique visitors (distinct IP) over [start, end]."""
         if not link_ids:
             return SelfTotals()
         click = SelfLinkClickRow
@@ -224,8 +194,6 @@ class SelfLinkRepository(CachedRepository):
     def series(
         self, link_ids: list[int], start: date, end: date, *, by_hour: bool
     ) -> list[SelfSeriesPoint]:
-        """Views and clicks per bucket (UTC hour when `by_hour`, else UTC day)
-        summed across the links, oldest first."""
         if not link_ids:
             return []
         click = SelfLinkClickRow
@@ -250,9 +218,6 @@ class SelfLinkRepository(CachedRepository):
     def breakdown(
         self, link_ids: list[int], start: date, end: date, column: str, limit: int = 8
     ) -> list[SelfBreakdownRow]:
-        """The top `column` values by clicks (continue-throughs) over the
-        range: [{value, clicks}], most first. `column` is one of country,
-        region, city, platform, device, referrer."""
         if not link_ids:
             return []
         click = SelfLinkClickRow
@@ -278,8 +243,6 @@ class SelfLinkRepository(CachedRepository):
     def per_link(
         self, link_ids: list[int], start: date, end: date
     ) -> list[SelfLinkCount]:
-        """Views and clicks per link over the range (links without a hit are
-        left out)."""
         if not link_ids:
             return []
         click = SelfLinkClickRow

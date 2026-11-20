@@ -1,6 +1,3 @@
-"""gdrive/sheets.py + the fake's sheets: a Google Sheet read into
-`DriveSheet` (Drive's xlsx export), and found by name in a folder."""
-
 import io
 from datetime import date, datetime
 from unittest.mock import MagicMock
@@ -28,7 +25,7 @@ def test_a_date_cell_is_a_date_whatever_format_the_sheet_shows():
     book = Workbook()
     tab = book.worksheets[0]
     tab.title = "Sheet1"
-    tab["A1"] = datetime(2026, 11, 12)  # noqa: DTZ001 -- xlsx has no time zones
+    tab["A1"] = datetime(2026, 11, 12)  # noqa: DTZ001
     tab["A1"].number_format = "dd/MM/yyyy"
     tab["B1"] = date(2026, 11, 13)
     tab["B1"].number_format = "yyyy-mm-dd"
@@ -59,7 +56,6 @@ def test_rows_end_at_the_last_filled_one_and_every_tab_comes():
     first = book.worksheets[0]
     first["A1"] = "top"
     first["A3"] = "last"
-    # Formatting far below the data: what makes Drive's used range 46 rows.
     first["A40"].number_format = "dd/MM/yyyy"
     second = book.create_sheet("Other")
     second["B2"] = "x"
@@ -70,9 +66,6 @@ def test_rows_end_at_the_last_filled_one_and_every_tab_comes():
     assert one.rows == [["top"], [None], ["last"]]
     assert (two.name, two.rows) == ("Other", [[None, None], [None, "x"]])
     assert (empty.name, empty.rows) == ("Empty", [])
-
-
-# --- the fake Drive ---------------------------------------------------------------
 
 
 @pytest.fixture
@@ -132,7 +125,6 @@ def test_read_live_mode_still_reads_sheets(drive):
 
 
 def _drive_answering(content: bytes) -> Drive:
-    """A real `Drive` whose export call answers `content`: no network."""
     drive = Drive.__new__(Drive)
     drive._retries = 0
     drive._files = MagicMock()

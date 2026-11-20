@@ -1,9 +1,3 @@
-"""/cookies: each user uploads, sees, replaces and removes only their own
-cookies.txt (encrypted in Postgres); their downloads and their accounts'
-scans log in with it, nobody else's; a watched profile's one shared scan
-uses the earliest-added watcher's who has any. No value ever reaches a
-page, a log line or Redis."""
-
 import logging
 import re
 import time
@@ -70,10 +64,8 @@ def test_upload_shows_what_it_covers_never_a_value(ann):
     html = r.text
     assert "Cookies saved." in html
     assert 'data-cookies="saved"' in html
-    # Every social site of services.json, logged in or not, cookie names
-    # only; no other domain is listed.
     assert "<strong>Instagram</strong> · logged in, expires 2030-01-01" in html
-    assert "<strong>TikTok</strong> · not logged in" in html  # sid_tt, no sessionid
+    assert "<strong>TikTok</strong> · not logged in" in html
     assert "<strong>Threads</strong> · no cookies" in html
     assert "<strong>X</strong> · no cookies" in html
     assert ">sessionid<" in html
@@ -129,8 +121,6 @@ def test_a_file_that_is_not_cookies_txt_is_refused_and_keeps_the_old(
 
 
 def _all_sites_export(secret: str, size: int) -> bytes:
-    """A browser's "all cookies" export: the Instagram login among
-    thousands of other sites' cookies."""
     filler = "".join(
         f".site{i}.example\tTRUE\t/\tFALSE\t1893456000\tid\t{'x' * 60}\n"
         for i in range(size // 100)
@@ -139,7 +129,6 @@ def _all_sites_export(secret: str, size: int) -> bytes:
 
 
 def test_an_all_sites_browser_export_is_taken(ann):
-    """2026-10-23: a real 1.4 MB export was refused at the old 1 MB limit."""
     payload = _all_sites_export(ANN_SECRET, 1_400_000)
     assert len(payload) > 1_048_576
 
@@ -181,7 +170,6 @@ def test_stored_encrypted_and_never_in_redis_or_logs(ann, caplog):
 
 @pytest.fixture
 def fetched(monkeypatch) -> dict[str, str | None]:
-    """handle -> the cookies its scan logged in with."""
     seen: dict[str, str | None] = {}
 
     def fetch(_self, handle, proxy, cookies=None):
@@ -201,8 +189,6 @@ def _id(handle: str, owner: int) -> int:
 
 
 def test_a_scan_reads_logged_out_first(ann, bob, fetched):
-    """Cookies are flaky and can get a login banned: a scan that works
-    logged out never uses them."""
     _upload(ann[0], _jar(ANN_SECRET))
     track("instagram", "anns_account", user_id=ann[1])
     fetched.clear()
@@ -216,8 +202,6 @@ REFUSED = "Instagram changed its query"
 
 
 def test_the_last_resort_logs_in_as_the_accounts_owner_only(ann, bob, monkeypatch):
-    """Logged out fails: the login source reads each account as its own
-    owner; one whose owner has no cookies keeps the logged-out failure."""
     tries: list[tuple[str, str | None]] = []
 
     def fetch(_self, handle, proxy, cookies=None):
@@ -266,7 +250,6 @@ def test_an_upload_resyncs_only_the_uploaders_limited_accounts(ann, bob, fetched
     assert list(fetched) == ["anns"]
     assert not get_account(_id("anns", ann[1])).metrics.limited
     assert get_account(_id("bobs", bob[1])).metrics.limited
-    # Bob's banner still asks him for his own login; Ann's is gone.
     assert "without an Instagram login" in bob[0].get("/accounts").text
     assert "without an Instagram login" not in ann[0].get("/accounts").text
 
@@ -282,7 +265,7 @@ def test_a_watched_profiles_shared_scan_uses_the_earliest_watcher_with_cookies(
         raise reel_watch.InstagramError(msg)
 
     monkeypatch.setattr(reel_watch, "scan_profile", scan)
-    watch("shared", user_id=bob[1])  # Bob first, no cookies yet
+    watch("shared", user_id=bob[1])
     watch("shared", user_id=ann[1])
     watch("anns_only", user_id=ann[1])
 
@@ -294,7 +277,6 @@ def test_a_watched_profiles_shared_scan_uses_the_earliest_watcher_with_cookies(
     _upload(bob[0], _jar(BOB_SECRET))
     reel_watch.scan_watched("shared")
     assert BOB_SECRET in (used[-1] or "")
-    # A profile only Ann watches never gets Bob's login.
     assert ANN_SECRET in (cookies.for_watched("anns_only") or "")
     assert cookies.for_watched("nobody_watches") is None
 
@@ -328,7 +310,6 @@ def test_cookies_of_other_sites_are_only_counted(ann):
 
 
 def test_two_users_tracking_one_handle_never_share_a_login_read(ann, bob, monkeypatch):
-    """Answers are per tracked account: Ann's login reads only Ann's row."""
 
     def fetch(_self, handle, proxy, cookies=None):
         if cookies is None:
@@ -355,7 +336,6 @@ def test_two_users_tracking_one_handle_never_share_a_login_read(ann, bob, monkey
 
 
 def test_a_user_with_cookies_is_not_asked_for_them(ann, fetched):
-    """Logins are the last resort now: uploading again would change nothing."""
     _upload(ann[0], _jar(ANN_SECRET))
     track("instagram", "anns", user_id=ann[1])
     record_scan(

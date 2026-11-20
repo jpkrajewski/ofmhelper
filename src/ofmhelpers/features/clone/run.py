@@ -1,8 +1,3 @@
-"""One /clone run on the worker: the video through Wan 3.0 (`run_ai`), then
-its export. Also what recovery re-runs a cut-off clone with, and what a
-/clone-links and a long-clone run are made of. `run_ai` and `exported_file`
-are looked up here when called: this module is their one seam."""
-
 from pathlib import Path
 from typing import Any
 
@@ -34,10 +29,6 @@ def run_clone(
     capcut: bool = False,
     **page_keys: Any,
 ) -> list[ResultFile]:
-    """One clone run. `page_keys` (`model`; older jobs also `clone_batch`,
-    `clone_index`) are stored on the job for the page only, but for
-    `EXPORT_FAILURES` (earlier runs whose export failed). `capcut` is the
-    choice of jobs from before `export` (re-run by recovery)."""
     target = clone_targets()[provider]
     values = clone_values(
         target,

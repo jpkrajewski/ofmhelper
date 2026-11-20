@@ -1,7 +1,3 @@
-"""A stored job run again on the fakes (owner 2026-11-15: "can we replay any
-job with a fake provider, fake client?"): from its row alone, here, never on
-a queue, and never against a real service."""
-
 from pathlib import Path
 
 import pytest
@@ -51,7 +47,6 @@ def test_a_download_runs_again_from_its_row(tmp_path, monkeypatch):
     job = get_job(job_id)
     assert job is not None
     assert job.status == "done"
-    # The same result: its file is still here, so it is not fetched twice.
     assert downloads.fetched == [LINK]
 
 
@@ -96,8 +91,6 @@ def test_what_cannot_run_again_says_why(task, params, why):
 
 
 def test_never_against_real_services(monkeypatch):
-    """A worker never runs with the fakes: a replay is refused unless this
-    process fakes every outside service (production refuses fakes itself)."""
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "false")
     job_id = _job("download_media", urls=[LINK])
 
@@ -106,7 +99,7 @@ def test_never_against_real_services(monkeypatch):
 
     job = get_job(job_id)
     assert job is not None
-    assert job.status == "running"  # nothing ran
+    assert job.status == "running"
 
 
 def test_every_tool_is_replayable_or_says_why_not():

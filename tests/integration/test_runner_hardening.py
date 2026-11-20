@@ -1,6 +1,3 @@
-"""Security audit 2026-11-18: a job's stored error is redacted, a job of a
-deactivated account is not run, and /account shows no tail of a short key."""
-
 from signin import make_user
 
 from ofmhelpers.db.stores import users

@@ -1,10 +1,3 @@
-"""Each VA's own folder in their owner's Drive (features/drive/va_folders.py,
-owner 2026-11-15: "automatic folder for VA created when there is a new VA,
-and show in /drive just their name ... cutting VAs from direct google drive
-access"): made when the VA is added or moved, named after them, kept by id,
-made again when gone; /drive lists it under VAs, not among the folders no
-phone owns; an owner without Google Drive gets nothing and no error."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in_admin, sign_in_agency
@@ -24,7 +17,6 @@ ROOT = "agency-root-folder"
 
 @pytest.fixture
 def drive(fake_externals) -> FakeDrive:
-    """The agency's Google Drive connected, its "DEV - ALL ACCOUNTS" there."""
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
     fake.seed_folder("DEV - ALL ACCOUNTS", MY_DRIVE, item_id=ROOT, owner=AGENCY)
@@ -34,7 +26,6 @@ def drive(fake_externals) -> FakeDrive:
 
 
 def _add_va(name: str, owner_id: int, email: str = "va@example.com") -> int:
-    """A VA added on /users by an admin, as the page does."""
     admin = TestClient(app)
     sign_in_admin(admin)
     r = admin.post(
@@ -67,7 +58,7 @@ def test_a_new_va_gets_a_folder_named_after_them_in_the_owners_root(drive):
 
 def test_the_sweep_makes_a_missing_folder_once_then_leaves_drive_alone(drive):
     va = make_user("va@example.com", Role.VA)
-    users.set_owner(va.id, users.agency_id())  # before VA folders existed
+    users.set_owner(va.id, users.agency_id())
 
     first = drive_folders.sync()
     drive.clear_calls()

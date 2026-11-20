@@ -1,7 +1,3 @@
-"""What only Fanvue does: logins that expire and rotate, the app-wide signing secret,
-subscribers and sales, mass messages that name nobody. What every platform does is in
-test_chat_platforms.py."""
-
 import logging
 import re
 import time
@@ -12,13 +8,13 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from chat_platforms import FanvueDriver
 from fastapi.testclient import TestClient
+from notifications_socket import agency_notifications
 from signin import sign_in_admin
 from sqlalchemy import text
 
 from ofmhelpers.cache import delete_text, get_text
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import chats
-from ofmhelpers.features.chatting.alerts import chat_alerts
 from ofmhelpers.features.chatting.fanvue_connect import connect_url, finish
 from ofmhelpers.features.chatting.fanvue_tokens import FanvueTokens
 from ofmhelpers.features.chatting.sync import run_when_due, sync
@@ -84,8 +80,6 @@ def _payment(invoice, gross, source="post", reason="one_time", currency="USD"):
             "billing_reason": reason,
             "gross": gross,
             "currency": currency,
-            # Within the pop-ups' 24 h whenever the suite runs (a fixed date
-            # failed every run from a day after it).
             "paid_at": _an_hour_ago(),
             "creator": {"uuid": fanvue_fake.CREATOR},
         },
@@ -93,15 +87,12 @@ def _payment(invoice, gross, source="post", reason="one_time", currency="USD"):
 
 
 def _popups():
-    return [f"{p.text}: @{p.username}" for p in chat_alerts().popups]
+    return [f"{p.text}: {p.title}" for p in agency_notifications()]
 
 
 def _expire_the_token():
     with session_scope() as s:
         s.execute(text("update chat_accounts set expires_at = 0"))
-
-
-# --- subscribers and sales --------------------------------------------------
 
 
 def test_every_subscriber_is_their_own_popup(client, side):
@@ -186,17 +177,12 @@ def test_the_events_tab_extras_are_answered_and_do_nothing(client, side, kind):
 def test_a_delivery_not_understood_is_named_by_type_and_fields_never_values(
     client, side, caplog, body, said
 ):
-    """Prod 2026-11-05..08: `fanvue delivery not understood: 2 fields`, 19 times,
-    and nothing more to tell which event it was."""
     with caplog.at_level(logging.WARNING):
         assert _post(client, side, body).status_code == HTTPStatus.OK
 
     assert said in caplog.text
     assert "my secret words" not in caplog.text
     assert _popups() == []
-
-
-# --- the app-wide secret ----------------------------------------------------
 
 
 def test_fanvues_address_check_is_answered_unsigned(client, side):
@@ -236,9 +222,6 @@ def test_a_new_secret_reaches_the_rows_at_the_next_round(side, monkeypatch):
     cover_models(side.source, side.source.models().found)
 
     assert {w.secret for w in chats.webhooks(PLATFORM)} == {"whsec_rotated"}
-
-
-# --- the login --------------------------------------------------------------
 
 
 def test_an_expired_token_is_renewed_and_the_new_pair_kept(side):
@@ -291,10 +274,9 @@ def test_a_dead_login_stops_quietly_and_says_so_on_every_page(side, caplog):
 
     assert "The refresh chain is broken" in caplog.text
     assert chats.accounts(PLATFORM)[0].needs_reconnect is True
-    [popup] = chat_alerts().popups
+    [popup] = agency_notifications()
     assert (popup.kind, popup.text) == ("warn", "Connect Fanvue again")
     assert popup.url == "/chatting/fanvue"
-    # A dead login is not asked again: that could only make things worse.
     refreshes = side.fake.refreshes
     with pytest.raises(FanvueAuthError):
         FanvueTokens().access_token(AGENCY)
@@ -302,7 +284,6 @@ def test_a_dead_login_stops_quietly_and_says_so_on_every_page(side, caplog):
 
 
 def test_another_servers_login_is_never_spent(side, monkeypatch):
-    """Dev runs on a copy of production's database, with the same vault key."""
     _expire_the_token()
     monkeypatch.setenv("APP_BASE_URL", "http://another-server.invalid/")
 
@@ -328,9 +309,6 @@ def test_a_read_failing_is_an_outage(side):
     side.fake.fail_next.extend([down] * 4)
 
     assert side.source.models().failed is True
-
-
-# --- connecting -------------------------------------------------------------
 
 
 def test_connecting_keeps_the_login_for_this_server(monkeypatch):
@@ -376,9 +354,6 @@ def test_the_callback_page_says_how_it_went(client, monkeypatch):
     assert re.search(r"note=failed$", refused.headers["location"])
 
 
-# --- reading ----------------------------------------------------------------
-
-
 def test_every_read_of_messages_asks_not_to_mark_them_read(side):
     side.fan_writes("ann", time.time() - LATE)
     side.fan_writes("bob", time.time() - LATE)
@@ -391,7 +366,6 @@ def test_every_read_of_messages_asks_not_to_mark_them_read(side):
 
 
 def test_many_chats_answered_at_once_are_not_a_mass_message_here(side, monkeypatch):
-    """Fanvue says when it sends one."""
     monkeypatch.setenv("OFM_CHATTING_MASS_MIN_CHATS", "2")
     now = time.time()
     side.model_replies("ann", now - 60)

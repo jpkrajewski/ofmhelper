@@ -1,6 +1,3 @@
-"""The asset store (`features/assets/store.py`) as routes use it: whose part
-of it a request reads, and its refusals as 400s."""
-
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
@@ -59,15 +56,10 @@ __all__ = [
 
 
 def assets_root_for(request: Request) -> Path:
-    """The part of the asset store this session writes into and reads from
-    (`assets_root_for_user`). Request-side only: a worker job is handed the
-    resolved path as a kwarg."""
     return assets_root_for_user(AuthMiddleware.user(request).id)
 
 
 def refused_as_400[**P, T](fn: Callable[P, T]) -> Callable[P, T]:
-    """`fn` with the store's refusal (`AssetRefusedError`) as an
-    HTTPException(400) carrying its message."""
 
     @wraps(fn)
     def call(*args: P.args, **kwargs: P.kwargs) -> T:

@@ -1,21 +1,3 @@
-/*
- * /trials and /trials/{login}.
- *
- * /trials: the search box (#tr-search) filters the phone cards; a card's
- * Generate trials starts the job (fetch) and opens its folder.
- *
- * /trials/{login} runs without page reloads:
- *   a button (a caption, Apply caption, Regenerate, Upload, Generate trials)
- *       -> its card or button changes at once, the form is sent with fetch
- *       (the server answers JSON at once; the work is a job), then polling
- *       starts
- *   Upload -> first asks (#tr-replace): it replaces what is in TRIALS
- *   Select -> kept at once (POST .../select); "Upload N to Drive" counts it
- *   polling (#tr-grid[data-live], every 3 s while anything runs) -> the
- *       status line, and the cards whose data-stamp moved are fetched
- *       (GET data-cards?key=...) and swapped in one by one; a card being
- *       typed in or played waits for the next round
- */
 (() => {
     const search = document.getElementById("tr-search");
     if (search) {
@@ -65,8 +47,6 @@
         setLabel(upload, n ? `Upload ${n} to Drive` : "Upload to Drive");
     }
 
-    // The card as it will be once the job runs. Its stamp is dropped, so
-    // the next poll swaps in the server's card whatever happened.
     function showBusy(card, text) {
         card.dataset.stamp = "";
         for (const b of card.querySelectorAll("button, input[type=checkbox]")) b.disabled = true;
@@ -92,13 +72,12 @@
         return r.json();
     }
 
-    // Every form on the page goes by fetch; what it changes shows at once.
     document.addEventListener("submit", async (e) => {
         const form = e.target;
-        // Not the header's Sign out.
+
         if (!form.getAttribute("action")?.startsWith("/trials/")) return;
         e.preventDefault();
-        // Read first: a control disabled below would not be sent.
+
         const body = new FormData(form);
         const card = form.closest(".tr-reel");
         if (card) {
@@ -145,8 +124,6 @@
         }).catch(() => {});
     });
 
-    // A card the user is in (typing a caption, a video playing) is left
-    // alone this round.
     function inUse(card) {
         if (card.contains(document.activeElement) && document.activeElement.matches("textarea")) return true;
         const video = card.querySelector("video");
@@ -167,8 +144,6 @@
         return holder;
     }
 
-    // The cards in page order (a copy made again moves to the top); a card
-    // in use stays where it is: moving a playing video pauses it.
     function order(wanted) {
         let at = grid.firstElementChild;
         for (const key of wanted) {
@@ -190,7 +165,7 @@
             drive.hidden = false;
         }
         const wanted = live.cards.map((c) => c.key);
-        // Gone (a pending card now made, a reel dropped): out.
+
         for (const card of grid.querySelectorAll(".tr-reel")) {
             if (!wanted.includes(card.dataset.key)) card.remove();
         }

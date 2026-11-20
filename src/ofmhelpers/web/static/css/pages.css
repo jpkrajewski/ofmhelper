@@ -1,16 +1,3 @@
-/* =====================================================================
-   Ascend Global LLC — Content Ops design system, file 4 of 4:
-   tokens.css -> base.css -> components.css -> pages.css, loaded in that
-   order by templates/_styles.html. What only one page has; a page that needs more than its widget here is missing a component.
-
-   Mobile-first: unprefixed rules are the phone layout, `min-width` media
-   queries add the wider ones. Class names used by static/js/*.js are
-   contract -- rename nothing without updating the JS.
-   ===================================================================== */
-
-/* ---------------------------------------------------------------------
-   14. Two-column tool pages (/generate, /download-assets)
-   --------------------------------------------------------------------- */
 .generate-layout {
     display: grid;
     grid-template-columns: 1fr;
@@ -18,8 +5,7 @@
     align-items: start;
 }
 .generate-form-col, .generate-gallery-col { min-width: 0; }
-/* Every tool page's form column is one card (card role): Gen AI, Clone,
-   Download, Viral, Uniqify, Character Sheet all wear the same wrapper. */
+
 .generate-form-col {
     padding: var(--pad-card);
     border: 1px solid var(--border);
@@ -32,9 +18,7 @@
         grid-template-columns: minmax(380px, 460px) 1fr;
         gap: var(--s-7);
     }
-    /* Deliberately NOT sticky/overflow-y: a scroll container inside the
-       page meant two scrollbars and a form that scrolled independently of
-       the gallery. The column just grows with the page. */
+
     .generate-form-col {
         padding-right: var(--s-7);
         border-right: 1px solid var(--border);
@@ -42,7 +26,6 @@
 }
 .generate-form-col button[type="submit"] { width: 100%; }
 
-/* Job "Inputs" section (prompt/settings/reference files a job ran with). */
 .job-inputs { margin-bottom: var(--s-6); }
 .inputs-table { max-width: 680px; margin-top: 0; }
 .inputs-table th { width: 1%; white-space: nowrap; text-transform: capitalize; letter-spacing: 0; }
@@ -72,15 +55,10 @@ details {
 summary { cursor: pointer; font-weight: 600; }
 summary:hover { color: var(--accent-soft); }
 
-/* Select + switch pairs on a grid: every select gets the widest one's
-   width, so the switches line up in one column. */
 .clone-output-row { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: var(--s-3) var(--s-5); }
 .clone-output-row select { min-width: 120px; }
 .clone-output-row .check-field { margin: 0; font-weight: 500; color: var(--text-muted); }
 
-/* Live cost estimate above a paid submit (/clone, static/js/clone-cost.js):
-   one line per run, the total as the panel's anchor. Figures use tabular
-   numerals so the prices line up as they recalculate. */
 .cost-panel {
     margin-bottom: var(--s-4);
     border: 1px solid var(--border);
@@ -151,9 +129,7 @@ summary:hover { color: var(--accent-soft); }
     color: var(--text-faint);
     font-size: var(--step--1);
 }
-/* ---------------------------------------------------------------------
-   15. Shared page bits (cookies form, action log, applications, file manager)
-   --------------------------------------------------------------------- */
+
 .todo-added { color: var(--text-muted); font-size: var(--step--1); white-space: nowrap; }
 .model-toolbar {
     display: flex;
@@ -168,9 +144,6 @@ summary:hover { color: var(--accent-soft); }
 .model-actions form { display: flex; margin: 0; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
-/* ---------------------------------------------------------------------
-   17. Login / standalone card screens
-   --------------------------------------------------------------------- */
 .login-screen {
     display: flex;
     align-items: center;
@@ -232,8 +205,6 @@ summary:hover { color: var(--accent-soft); }
 .login-help { margin-top: var(--s-4); color: var(--text-faint); font-size: var(--step--1); }
 .login-card form .btn-block { margin-top: var(--s-4); }
 
-/* Self links page: the Insights dashboard (self_links.html). Breakdown bars
-   reuse .accounts-bar; the activity line is a 0..100 SVG scaled to the plot. */
 .self-head {
     display: flex;
     justify-content: space-between;
@@ -381,9 +352,6 @@ summary:hover { color: var(--accent-soft); }
 .self-domain-actions { display: flex; gap: var(--s-2); justify-content: flex-end; }
 .self-inline { display: inline; }
 
-/* Session-expiry overlay -- static/js/session.js drops this in just before
-   redirecting to /login, so being signed out reads as a deliberate step
-   rather than an unexplained page jump. */
 .session-expired-overlay {
     position: fixed;
     inset: 0;
@@ -409,13 +377,6 @@ summary:hover { color: var(--accent-soft); }
 .session-expired-title { margin-bottom: var(--s-2); font-size: var(--step-1); font-weight: 600; }
 .session-expired-card p { margin: 0; color: var(--text-muted); font-size: var(--step--1); line-height: 1.5; }
 
-/* /reels (templates/reels.html, _reel_card.html, _reels_watch_item.html):
-   the watch list in the form column, and one flat feed of every profile's
-   reels -- each a card picked by clicking anywhere on it (aria-pressed, set
-   by static/js/reels.js) that plays on hover. */
-/* Feed filters: one panel, a label column and a chip column, so the three
-   rows line up and share one rhythm. On a phone the label sits above its
-   chips. */
 .reels-filters {
     display: grid;
     grid-template-columns: 1fr;
@@ -434,19 +395,14 @@ summary:hover { color: var(--accent-soft); }
 }
 @media (min-width: 720px) {
     .reels-filters { grid-template-columns: max-content 1fr; }
-    /* One chip tall, so a label sits level with its first row of chips. */
+
     .reels-filter-label { line-height: 32px; }
 }
 
-/* Selection bar: pinned to the bottom of the reels column while you scroll
-   and pick, so Download / Clone always sit next to what was picked. */
-/* What is picked and what to do with it: the feed's actions, top right
-   above it, like every page's actions. */
 .reels-selection { display: flex; align-items: center; justify-content: flex-end; gap: var(--gap-inline); margin-bottom: var(--gap-grid); }
 .reels-selection-count { color: var(--text-muted); font-size: var(--step--1); }
 .reels-selection button { min-width: var(--control-w-action); }
-/* Group picker: the dropdown and its "+ New group" / "Create" button on one
-   line; the new-name row sits right under it. */
+
 .reels-group-pick { display: flex; gap: var(--s-2); align-items: stretch; }
 .reels-group-pick > select,
 .reels-group-pick > input { flex: 1 1 auto; min-width: 0; }
@@ -454,13 +410,6 @@ summary:hover { color: var(--accent-soft); }
 .reels-group-pick + .reels-group-pick { margin-top: var(--s-2); }
 .reels-group-pick[hidden] { display: none; }
 
-/* The watch list: its own panel, a search box on top, rows that scroll.
-   Every row is the same card with the same three lines (name line, stats,
-   group dropdown), so nothing wraps differently from row to row. Every
-   card carries a 2px border; a leader only recolours it, so outlined rows
-   never grow, shift or overlap their neighbours. */
-/* View tiers (instagram.models.VIEW_TIERS): one ink getting stronger,
-   light grey -> black, so the feed reads as ranked, not as a rainbow. */
 .reels-filters, .reels-watch-list, .reel-card {
     --tier-common: var(--text-faint);
     --tier-uncommon: var(--text-muted);
@@ -478,8 +427,7 @@ summary:hover { color: var(--accent-soft); }
     list-style: none;
 }
 .reels-watch-list:empty { display: none; }
-/* One watched profile = a list row, like a phone's login row: a line
-   between rows, no box of its own. */
+
 .reels-watch-item {
     display: grid;
     gap: var(--s-1);
@@ -505,8 +453,6 @@ summary:hover { color: var(--accent-soft); }
 .reels-watch-views { color: var(--text); font-weight: 600; }
 .reels-row-group { flex: none; width: 9rem; height: var(--control-h-sm); font-size: var(--step--1); }
 
-/* Compact: three reels a row on a phone, four from a laptop up (five made
-   the captions too small to read). */
 .reels-feed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (min-width: 900px) { .reels-feed { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .reel-card {
@@ -521,17 +467,14 @@ summary:hover { color: var(--accent-soft); }
     user-select: none;
 }
 .reel-card:hover { border-color: var(--tier); box-shadow: var(--shadow); }
-/* The border is the view tier (instagram.models.VIEW_TIERS), coloured like
-   game loot; a pick is shown by a white ring + tick on top of it, so the
-   tier stays readable on a picked card. */
-/* Low tiers keep the plain border; rare and up wear the accent ramp. */
+
 .reel-card[data-tier="rare"] { --tier: var(--tier-rare); }
 .reel-card[data-tier="epic"] { --tier: var(--tier-epic); }
 .reel-card[data-tier="legendary"] { --tier: var(--tier-legendary); box-shadow: var(--shadow); }
 .reel-views { font-weight: 600; color: var(--text); }
 .reel-card[data-tier="epic"] .reel-views,
 .reel-card[data-tier="legendary"] .reel-views { color: var(--accent); }
-/* The ratio pill: neutral, filled with the accent from epic up. */
+
 .reel-ratio {
     padding: var(--pad-pill);
     border-radius: var(--radius-pill);
@@ -542,8 +485,7 @@ summary:hover { color: var(--accent-soft); }
 .reel-card[data-tier="epic"] .reel-ratio,
 .reel-card[data-tier="legendary"] .reel-ratio { background: var(--accent); color: var(--accent-ink); }
 .reel-sub { color: var(--text-muted); }
-/* A reel Instagram shows to logged-in viewers only, with no working login
-   to resolve it: listed for its views, but not pickable. */
+
 .reel-locked { cursor: default; }
 .reel-locked .reel-thumb { opacity: 0.55; }
 .reel-lock {
@@ -576,7 +518,7 @@ summary:hover { color: var(--accent-soft); }
     color: var(--accent-ink);
     font-weight: 600;
 }
-/* Thumbnail first; the <video> reels.js creates on hover lies on top of it. */
+
 .reel-media {
     position: relative;
     aspect-ratio: 9 / 16;
@@ -594,8 +536,7 @@ summary:hover { color: var(--accent-soft); }
     pointer-events: none;
 }
 .reels-feed .gallery-sentinel { grid-column: 1 / -1; }
-/* Feed filters: a row of group chips, the rank chips under it. Chips are
-   full-size click targets; a rank chip wears its tier colour. */
+
 .reels-filter { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .reels-filter a {
     display: inline-flex;
@@ -623,16 +564,10 @@ summary:hover { color: var(--accent-soft); }
 }
 .reel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; font-size: var(--step--2); line-height: 1.3; }
 
-/* ---------------------------------------------------------------------
-   18. Tracked accounts (/accounts, /accounts/{id}; static/js/accounts.js)
-   --------------------------------------------------------------------- */
-/* Hierarchy: page head + KPI cards, one filter row, one compact table.
-   Numbers right-aligned in tabular figures; green/red only for change. */
 .accounts-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); margin: 0 0 var(--gap-toolbar); }
 .accounts-filters input[type="search"] { width: 260px; max-width: 100%; }
 .accounts-filter-form { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin: 0; }
-/* Selection actions: a card of its own above the table, shown only while
-   rows are picked. */
+
 .accounts-actions {
     display: flex;
     flex-wrap: wrap;
@@ -676,7 +611,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-avatar-lg { width: 64px; height: 64px; }
 .accounts-sub { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
 .accounts-sub a { color: inherit; }
-/* The phones signed in to the account (/phones logins): drawing + owner. */
+
 .accounts-phone {
     display: inline-flex;
     align-items: center;
@@ -699,8 +634,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
     font-weight: 600;
     white-space: nowrap;
 }
-/* Unreachable (private, failed sync): the whole row goes red; the reason
-   is its tooltip. */
+
 .accounts-table tr[hidden] { display: none; }
 .accounts-table tr[data-problem] td { background: var(--fail-wash); }
 .accounts-table tr[data-problem] td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
@@ -709,8 +643,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-go a { font-size: var(--step--1); font-weight: 600; text-decoration: none; }
 .growth { white-space: nowrap; }
 .growth small { color: var(--text-faint); font-weight: 400; }
-/* The line under a number ("since Nov 13", "vs previous 7d") may wrap:
-   the table has to fit the page. */
+
 .accounts-table td.num .accounts-sub,
 .accounts-table td.num .growth small { white-space: normal; }
 .accounts-table td.num .growth small { display: block; }
@@ -739,19 +672,16 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-dialog::backdrop { background: var(--scrim); }
 .accounts-dialog h2 { margin-top: 0; }
 .accounts-dialog-actions { display: flex; justify-content: flex-end; gap: var(--gap-inline); }
-/* Laptop widths: tighter cells so the nine columns fit (2026-11-18: a
-   1389px table in a 1167px card at 1280, its right columns cut off). */
+
 @media (min-width: 720px) and (max-width: 1535px) {
     .accounts-table th, .accounts-table td { padding: var(--pad-cell-dense); }
 }
-/* Wide enough that the table fits without scrolling, so its header can
-   stick to the viewport under the site header. Narrower, it scrolls inside
-   its own box instead of past the page's edge. */
+
 @media (min-width: 1240px) {
     .accounts-table-wrap, .accounts-table { overflow: visible; }
     .accounts-table thead th { position: sticky; top: var(--header-h); z-index: 2; }
 }
-/* Phone: one card per account instead of a sideways-scrolling table. */
+
 @media (max-width: 719px) {
     .accounts-table-wrap { border: 0; background: none; overflow: visible; }
     .accounts-table, .accounts-table tbody { display: block; background: none; border: 0; }
@@ -785,8 +715,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
     .accounts-table td[data-label="Phone"],
     .accounts-go { grid-column: 1 / -1; text-align: left; }
 }
-/* Analytics page: identity, four KPIs, trend, top posts, folded extras. */
-/* components/ui.html back_link: a quiet button, flush with the page edge. */
+
 .back-link { margin: 0 0 var(--gap-stack) calc(-1 * var(--s-3)); padding-inline: var(--s-3); }
 .accounts-identity { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4); margin-bottom: var(--s-5); }
 .accounts-identity-text { flex: 1 1 240px; min-width: 0; }
@@ -804,11 +733,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 }
 .accounts-card h2 { margin: 0 0 var(--s-3); font-size: var(--step-1); }
 .accounts-empty { margin: 0; padding: var(--s-5) 0; color: var(--text-muted); text-align: center; }
-/* ---- Follower chart (account_analytics.html, js/account-chart.js) ------
-   SVG in a 0..100 box stretched over .fchart-plot; dots, labels, crosshair
-   and tooltip are HTML placed with --x/--y percents of the same box, so
-   they stay round and crisp at any width. Line 2px, grid 1px hairlines,
-   gaps dashed in the muted ink. Class names are the script's contract. */
+
 .fchart { --fchart-line: var(--accent-strong); margin: 0; }
 .fchart-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2) var(--s-4); margin-bottom: var(--s-4); }
 .fchart-stat { display: grid; gap: 2px; min-width: 0; }
@@ -822,7 +747,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
     grid-template-columns: auto 1fr;
     grid-template-rows: clamp(160px, 38vw, 260px) auto;
     column-gap: var(--s-2);
-    /* Room for the end dot past the plot's right edge. */
+
     padding-right: var(--s-2);
 }
 .fchart-y, .fchart-x { position: relative; color: var(--text-faint); font-size: var(--step--2); font-variant-numeric: tabular-nums; }
@@ -830,8 +755,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .fchart-y span { position: absolute; top: var(--y); right: 0; transform: translateY(-50%); white-space: nowrap; }
 .fchart-x { grid-column: 2; height: 1.6em; margin-top: var(--s-1); }
 .fchart-x span { position: absolute; top: 0; left: var(--x); transform: translateX(-50%); white-space: nowrap; }
-/* Per-sync charts: the ends' labels tuck inside the plot. Daily charts
-   centre every date under its own point (room on the right below). */
+
 .fchart[data-step="sync"] .fchart-x span:first-child { transform: none; }
 .fchart[data-step="sync"] .fchart-x span:last-child { transform: translateX(-100%); }
 .fchart[data-step="day"] .fchart-body { padding-right: 1.5rem; }
@@ -889,16 +813,16 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .fchart-table table { width: 100%; margin-top: var(--s-2); font-variant-numeric: tabular-nums; }
 .fchart-table th, .fchart-table td { padding: var(--s-1) var(--s-2); }
 .fchart-table .num { text-align: right; }
-/* The middle date only where there is room for three. */
+
 .fchart[data-step="sync"] .fchart-x span:nth-child(2) { display: none; }
-/* A phone fits four dates: past that every other one, the last kept. */
+
 .fchart[data-step="day"] .fchart-x:has(> span:nth-child(5)) > span:nth-last-child(2n) { display: none; }
 @media (min-width: 720px) {
     .fchart-summary { grid-template-columns: repeat(3, max-content); column-gap: var(--s-6); }
     .fchart[data-step="sync"] .fchart-x span:nth-child(2),
     .fchart[data-step="day"] .fchart-x:has(> span:nth-child(5)) > span:nth-last-child(2n) { display: inline; }
 }
-/* ---- end follower chart ------------------------------------------------ */
+
 .accounts-posts { margin: 0; padding: 0; list-style: none; }
 .accounts-posts li {
     display: grid;
@@ -912,10 +836,10 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-rank { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .accounts-thumb { display: block; width: 48px; height: 64px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); }
 .accounts-thumb img { width: 100%; height: 100%; object-fit: cover; }
-/* /file-manager: an image's or video's thumbnail, opens the file. */
+
 .fm-thumb { display: block; width: 96px; height: 128px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); }
 .fm-thumb img { width: 100%; height: 100%; object-fit: cover; }
-/* /file-manager by user: a grid of big tiles, newest first. */
+
 .fm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--gap-grid); }
 .fm-tile { display: flex; flex-direction: column; gap: var(--gap-inline); padding: var(--pad-tile); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--paper); min-width: 0; }
 .fm-tile-media { display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--grey); }
@@ -925,7 +849,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .fm-tile-actions { display: flex; gap: var(--gap-inline); }
 .fm-tile-actions form { display: contents; }
 .accounts-post-main { min-width: 0; font-size: var(--step--1); }
-/* A <progress>: the post's views against the top post's. */
+
 .accounts-bar {
     display: block;
     width: 100%;
@@ -947,8 +871,6 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-fold[open] > summary::before { content: "\25BE  "; }
 .accounts-fold[open] > summary { margin-bottom: var(--s-3); }
 
-/* ---- Links (/links, static/js/links.js; the accounts list classes) ----
-   Same filter row, selection card, table and dialog as /accounts. */
 .links-address { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .links-address .accounts-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .links-picker { margin: 0; }
@@ -962,19 +884,11 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 }
 .links-accounts label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--step--1); }
 .links-accounts label[hidden] { display: none; }
-/* /accounts' Links column: each link of the account, its clicks and CTR. */
-/* "Oopsie · 3,643 clicks" stays one line, its CTR under it: the column
-   was squeezed into one word per line (2026-11-18). */
+
 .accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; white-space: nowrap; }
 .accounts-link + .accounts-link { margin-top: var(--s-2); }
 .accounts-link:hover span { text-decoration: underline; }
 .accounts-link small { display: block; color: var(--text-faint); }
-
-/* ---------------------------------------------------------------------
-   /phones: device-first cards. The product photo anchors each card; the
-   logins are flat rows inside it (no box per login), secrets masked, row
-   tools quiet until hovered or focused.
-   --------------------------------------------------------------------- */
 
 .ph-toolbar {
     display: flex;
@@ -996,18 +910,14 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .ph-search input { width: 100%; padding-left: calc(var(--s-3) * 2 + 16px); }
 .ph-filters { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin: 0; }
 .ph-filters select, .accounts-filters select { width: var(--control-w-filter); }
-/* Grid / list switch: one control-high group on the toolbar, the current
-   view filled. */
+
 .ph-layout { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); }
 .ph-layout .icon-btn { width: calc(var(--control-h) - 6px); height: calc(var(--control-h) - 6px); color: var(--text-muted); }
 .ph-layout .icon-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
 
-/* Small square icon buttons: row tools, menu trigger, layout switch. */
-/* An icon-only button (components/ui.html icon_button; aria-label says
-   what it does). */
 .icon-btn {
     display: inline-flex;
-    flex: none;  /* a fixed square: in a squeezed row it shrank to 11px (/links, phone) */
+    flex: none;
     align-items: center;
     justify-content: center;
     width: var(--control-h-sm);
@@ -1025,7 +935,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .icon-btn::-webkit-details-marker { display: none; }
 .icon-btn:hover, .icon-btn:focus-visible { background: var(--surface-2); color: var(--text); }
 .icon-btn.is-done, .btn.is-done { color: var(--ok); }
-/* "Copied" over a copy button for a moment after its click. */
+
 .icon-btn { position: relative; }
 .icon-btn.is-done::after {
     content: "Copied";
@@ -1065,8 +975,6 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .ph-card[hidden] { display: none; }
 .ph-grid[data-layout="list"] .ph-card { grid-template-columns: 88px minmax(0, 1fr); }
 
-/* The phone: its whole back, drawn from the catalog (phones/render.py),
-   on one canvas size for every model, so a mini looks smaller than a Max. */
 .ph-media, .ph-preview {
     aspect-ratio: 9 / 17;
     border-radius: var(--radius-card);
@@ -1086,7 +994,6 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .ph-specs { margin: 2px 0 0; color: var(--text-muted); font-size: var(--step--1); }
 .ph-meta { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: var(--s-2) 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }
 
-/* Logins: flat rows split by a hairline. */
 .ph-logins { margin: 0; padding: 0; list-style: none; }
 .ph-login {
     display: grid;
@@ -1119,8 +1026,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
     white-space: nowrap;
 }
 a.ph-login-user:hover { text-decoration: underline; }
-/* Row tools: fixed in the row's right column, always there (muted until
-   the row is hovered or focused); nothing moves when a row is revealed. */
+
 .ph-login-tools { display: flex; align-items: center; grid-column: 3; grid-row: 1; }
 .ph-login-tools .icon-btn { opacity: 0.55; }
 .ph-login:hover .ph-login-tools .icon-btn,
@@ -1164,7 +1070,6 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ph-archived-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .ph-retired .ph-card { opacity: 0.7; }
 
-/* Dialogs */
 .ph-dialog { width: min(600px, calc(100vw - 2 * var(--s-4))); max-height: calc(100vh - 2 * var(--s-4)); overflow-y: auto; }
 .ph-form-grid { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
 .ph-fields-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 var(--s-3); }
@@ -1189,32 +1094,23 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ph-swatch:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ph-hint { margin: 0 0 var(--s-3); color: var(--warn); font-size: var(--step--1); }
 
-/* Phone: one column, a smaller photo, filters scroll sideways in one line. */
 @media (max-width: 719px) {
     .ph-card { grid-template-columns: 84px minmax(0, 1fr); gap: var(--gap-stack); padding: var(--pad-tile); }
     .ph-search { max-width: none; flex-basis: 100%; }
     .ph-filters { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
     .ph-layout { display: none; }
     .ph-form-grid { grid-template-columns: 72px minmax(0, 1fr); }
-    /* No room beside the login name: the icons get their own line under
-       it, still fixed there. */
+
     .ph-login-tools { grid-column: 2 / -1; grid-row: 2; margin-left: -6px; }
 }
 
-/* ---------------------------------------------------------------------
-   /drive: a card per Instagram account with what waits in its Drive folder
-   (square preview tiles) and what was posted. Nothing waiting says so in
-   warn color, the thing to chase.
-   --------------------------------------------------------------------- */
-/* A /drive card is a /phones card (.ph-card): its body stacks the account
-   and its Drive folder where /phones lists logins. */
 .dr-card .ph-media { display: block; }
 .dr-body { display: flex; flex-direction: column; gap: var(--s-2); }
 .dr-account { margin: 0; font-weight: 600; font-size: var(--step--1); }
 .dr-note { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
 .dr-missing { color: var(--warn); }
 .dr-error { color: var(--fail); }
-/* Pinned to the card's bottom, so the uploaded lines of a row of cards align. */
+
 .dr-uploaded {
     display: flex;
     flex-wrap: wrap;
@@ -1249,8 +1145,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 .dr-file img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dr-file:hover, .dr-file:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* Over a preview only a video shows its play mark; without one the icon
-   and the name stand in. */
+
 .dr-file-icon { position: relative; display: inline-flex; }
 .dr-file:has(img) .dr-file-icon { display: none; }
 .dr-file[data-kind="video"]:has(img) .dr-file-icon {
@@ -1276,15 +1171,12 @@ a.ph-login-user:hover { text-decoration: underline; }
 .dr-others summary { cursor: pointer; }
 .dr-others ul { display: grid; gap: var(--s-1); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .dr-others a { display: inline-flex; align-items: center; gap: var(--s-2); }
-/* The VAs' own folders: one line each, their name. */
+
 .dr-vas { margin-top: var(--gap-section); }
 .dr-vas h2 { margin: 0 0 var(--s-3); font-size: var(--step-0); }
 .dr-vas ul { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); margin: 0; padding: 0; list-style: none; }
 .dr-vas a { display: inline-flex; align-items: center; gap: var(--s-2); }
 
-/* ---------------------------------------------------------------------
-   /users, /account
-   --------------------------------------------------------------------- */
 .signed-in-as {
     overflow: hidden;
     max-width: 22ch;
@@ -1296,22 +1188,18 @@ a.ph-login-user:hover { text-decoration: underline; }
 .logout-form { display: flex; align-items: center; gap: var(--s-3); }
 .logout-form button { padding-inline: var(--s-2); }
 @media (max-width: 720px) { .signed-in-as { display: none; } }
-/* The one-time password link: the whole URL in a read-only field + Copy. */
+
 .users-link { flex-direction: column; color: var(--text); }
 .users-link p { margin: 0; }
 .users-link-row { display: flex; gap: var(--gap-inline); }
 .users-link-row input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--step--1); }
-/* Add a user: one row of fields + the button, wrapping on a phone. */
+
 .users-card { margin-bottom: var(--s-5); }
 .users-add { display: flex; flex-wrap: wrap; gap: var(--gap-inline); align-items: flex-end; }
 .users-add .field { flex: 1 1 12rem; margin: 0; }
 .users-add .users-add-email { flex-grow: 2; }
 .users-add .users-add-role { flex: 0 1 9rem; }
-/* As tall as the inputs beside it: their padding, border and line-height. */
-/* The table: every row the same shape -- status badge in Access, the
-   row's buttons right-aligned in the last column. */
-/* Holds the sr-only "Actions" label, which would otherwise escape the
-   .table-wrap scroller and widen the page on a phone. */
+
 .users-actions-head { position: relative; }
 .users-who strong { margin-right: var(--s-1); }
 .users-who .pending, .users-note { display: block; font-size: var(--step--1); }
@@ -1320,7 +1208,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 .users-table tr[data-inactive] td:not(:last-child) { opacity: 0.55; }
 .users-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: var(--gap-inline); }
 .users-actions form { margin: 0; }
-/* A VA's row: the new password and its button, side by side. */
+
 .users-set-password { display: flex; gap: var(--gap-inline); }
 .users-set-password input { width: 11rem; min-height: var(--control-h-sm); }
 .users-actions button { min-height: 32px; padding: var(--s-1) var(--s-3); }
@@ -1335,14 +1223,13 @@ a.ph-login-user:hover { text-decoration: underline; }
 .account-key { gap: var(--s-3); }
 .account-key-row { display: flex; gap: var(--gap-inline); }
 .account-key-row input { flex: 1; min-width: 0; }
-/* Card forms: fields spaced by the grid gap, buttons their own width. */
+
 .account-form .field, .account-key .field { margin: 0; }
 .account-form > button, .account-key > button { justify-self: start; }
 .account-key > button[type="submit"]:not([name]) { justify-self: start; }
 
-/* "Connect Google Drive" notices (/drive, /clone): the text, then the action. */
 .drive-connect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
-/* /drive upload mode: the video on top, account cards are the targets. */
+
 .card.dr-pick, .card.ph-pick {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -1365,19 +1252,14 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 .dr-pick-text { display: grid; gap: var(--s-4); justify-items: start; min-width: 0; }
 .dr-pick-text h2 { margin: 0; font-size: var(--step-2); line-height: 1.2; }
-/* /phones pick mode (?assign=): the same, phone cards are the targets. */
+
 .dr-card.dr-pickable, .ph-card.ph-pickable { cursor: pointer; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
 .dr-card.dr-pickable:hover, .ph-card.ph-pickable:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .dr-card.dr-picked { opacity: 0.55; cursor: default; }
 .dr-card.dr-picked:hover { border-color: var(--border); box-shadow: none; }
 .dr-card.dr-picked .dr-account::after { content: " · Already there"; color: var(--text-faint); }
 .dr-followers { color: var(--text-muted); font-weight: 400; }
-/* Pop-ups just under the header, top right (base.html .page-alerts, inside
-   the sticky header so they sit under it at any height: it wraps to two
-   lines on narrower desktops and a fixed offset hid them, 2026-10-25),
-   stacked: "Start posting content" while the daily posting window is open
-   (web/posting.py), "Google Drive is full" (web/drive_space.py) in the
-   fail colours. */
+
 .page-alerts {
     position: absolute;
     top: calc(100% + var(--s-3));
@@ -1387,9 +1269,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     justify-items: end;
     gap: var(--s-3);
     max-width: calc(100vw - 2 * var(--s-4) + 2 * var(--s-3));
-    /* One pop-up per event can outgrow the screen: the stack scrolls. The padding is
-       room for their shadow, which scrolling would clip; the box itself takes no
-       clicks, so it never covers the page. */
+
     max-height: 80vh;
     overflow-y: auto;
     scrollbar-width: none;
@@ -1409,8 +1289,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     box-shadow: var(--shadow-lg);
     animation: posting-pop var(--dur-slow) var(--ease);
 }
-/* One look for every pop-up: a solid fill, ink text (Start posting's);
-   the Drive one in red. */
+
 .page-alerts > .notice {
     border-color: var(--accent);
     background: var(--accent);
@@ -1429,7 +1308,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     color: inherit;
     text-decoration: underline;
 }
-/* A phone: the full width, the buttons wrapping under the text. */
+
 @media (max-width: 600px) {
     .page-alerts { left: var(--s-4); justify-items: stretch; }
     .page-alerts > .notice { flex-wrap: wrap; }
@@ -1450,8 +1329,6 @@ a.ph-login-user:hover { text-decoration: underline; }
 .drive-states li { display: flex; align-items: center; gap: var(--gap-inline); }
 .drive-states .icon-btn { width: var(--control-h-sm); height: var(--control-h-sm); min-height: var(--control-h-sm); }
 
-/* /cookies: each social site of services.json, logged in or not, with its
-   cookies' names (never a value). */
 .cookies-file { margin: 0 0 var(--s-3); font-size: var(--step--1); }
 .cookies-sites { display: grid; gap: var(--s-2); margin: 0 0 var(--s-3); padding: 0; list-style: none; }
 .cookies-sites li { display: flex; align-items: flex-start; gap: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-soft); }
@@ -1459,11 +1336,8 @@ a.ph-login-user:hover { text-decoration: underline; }
 .cookies-site-names { overflow: hidden; color: var(--text-faint); font-size: var(--step--2); text-overflow: ellipsis; white-space: nowrap; }
 .cookies-sites li:not([data-logged-in]) .cookies-site-name { color: var(--text-muted); }
 
-/* /drive: opened from the last read while the live one loads */
 .dr-asof { margin: 0 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }
 
-/* /styleguide (templates/styleguide.html): only its own layout; every
-   element on it is the real component. */
 .styleguide { display: grid; gap: var(--gap-grid); }
 .sg-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); margin-bottom: var(--gap-stack); }
 .sg-swatches { display: flex; flex-wrap: wrap; gap: var(--gap-grid); }
@@ -1477,21 +1351,12 @@ a.ph-login-user:hover { text-decoration: underline; }
 .sg-red { background: var(--red); }
 .sg-results { grid-template-columns: repeat(auto-fill, minmax(220px, 260px)); }
 
-/* /clone-links: Generate's dialog is a grid of tiles, one per link -- the
-   reel's cover big enough to recognise, its length and price, Remove; one
-   that cannot run greyed with why in red -- and a card's review (the link,
-   verdict + where it went in Drive, "Why" folded). */
 .link-check-actions { margin-top: var(--s-2); }
-/* Generate's status line ("Queued N runs.") with its Stop at the end, a
-   little below the Generate button. */
+
 .clone-links-status { display: flex; align-items: baseline; gap: var(--gap-inline); }
 .clone-links-status > .generation-status { flex: 1; min-width: 0; }
 .clone-links-status > button { margin-top: var(--s-2); }
-/* As wide as up to six tiles (`--pick-cols`, set by clone-links.js from the
-   link count; min: room for the footer), the tiles' columns stretched to fill
-   the row exactly, room kept for the scrollbar. The list's padding is room
-   for a focused Remove's ring, taken back by its margin. Two a row on a
-   phone. */
+
 .pick-dialog {
     --pick-tile: 150px;
     width: min(
@@ -1523,7 +1388,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 .pick-tile[data-problem] .pick-cover { opacity: 0.45; }
 .pick-tile[data-problem] .pick-cover img { filter: grayscale(1); }
-/* Remove sits at the tile's foot, tiles of a row the same height. */
+
 .pick-tile > :last-child { margin-top: auto; }
 .pick-cover {
     display: flex;
@@ -1546,7 +1411,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 .pick-price { font-weight: 700; }
 .pick-why { color: var(--fail); font-size: var(--step--1); font-weight: 600; }
 .refused-note { margin: 0 0 var(--gap-stack); color: var(--text-muted); }
-/* The total, big, over what it is for; Cancel and Generate on its right. */
+
 .pick-footer {
     display: flex;
     flex-wrap: wrap;
@@ -1559,14 +1424,11 @@ a.ph-login-user:hover { text-decoration: underline; }
 .pick-total { display: grid; gap: var(--s-1); min-height: var(--control-h); align-content: center; }
 .pick-total strong { color: var(--text); font-size: var(--step-2); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .pick-total span { color: var(--text-muted); font-size: var(--step--1); }
-/* A /clone-links card's AI check: badge, /clone's Drive line, the "Why"
-   button and its panel -- at the card's foot right above Download, spaced
-   only by the card's own gap (it takes the actions' auto margin). */
+
 .ai-check { display: flex; flex-direction: column; align-items: flex-start; gap: var(--gap-inline); margin-top: auto; }
 .ai-check + .result-actions { margin-top: 0; }
 .ai-check p, .ai-check .drive-states { margin: 0; }
-/* The decision's text: an inset box (the card's own inset role, like its
-   media placeholder), easy to tell from the card around it. */
+
 .ai-check-why {
     align-self: stretch;
     padding: var(--pad-inset);
@@ -1579,11 +1441,6 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ai-check-why > * + * { margin-top: var(--gap-inline); }
 .ai-check-why ul { padding-left: var(--s-4); }
 
-/* ---------------------------------------------------------------------
-   /repurpose: preset / device / copies in one row, every knob group a
-   fold, its knobs on a grid; a range knob's min and max side by side.
-   A card's score sits above Recreate (it takes the actions' auto margin).
-   --------------------------------------------------------------------- */
 .rp-row { display: grid; grid-template-columns: 1fr 1fr 5rem; gap: var(--gap-inline); }
 .rp-row .field { margin: 0 0 var(--gap-stack); min-width: 0; }
 .rp-group > summary { margin: 0; }
@@ -1602,38 +1459,32 @@ a.ph-login-user:hover { text-decoration: underline; }
 .rp-method { display: flex; justify-content: space-between; gap: var(--gap-inline); }
 .rp-score + .source { margin-top: var(--gap-inline); }
 
-
-/* /trials: /drive's phone cards with Generate trials pinned to the card's
-   bottom; a folder's copies as 9:16 video cards, caption under each. */
 .tr-generate { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-top: auto; padding-top: var(--s-2); }
 .tr-status { flex: 1; min-width: 0; margin: 0; color: var(--text-muted); font-size: var(--step--1); }
 .tr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: var(--gap-grid); }
 .tr-reel { display: flex; flex-direction: column; gap: var(--gap-stack); }
 .tr-video { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-control); background: var(--ink); }
-/* Being made: the gallery cards' generating box, at the video's 9:16. */
+
 .tr-pending { aspect-ratio: 9 / 16; min-height: 0; }
-/* The AI's captions: a whole-width button each, wrapping; the one on the copy
-   takes the accent. */
+
 .tr-choices { display: flex; flex-direction: column; gap: var(--gap-inline); }
 .tr-choices form { display: contents; }
 .tr-choice { width: 100%; height: auto; min-height: var(--control-h); justify-content: flex-start; text-align: left; white-space: normal; font-weight: 400; line-height: 1.3; }
 .tr-choice[aria-pressed="true"]:disabled { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); font-weight: 600; }
 .tr-caption textarea { display: block; width: 100%; min-height: 4.5em; resize: vertical; font: inherit; font-size: var(--step-0); line-height: 1.4; }
-/* Wraps rather than overflows: buttons never shrink below their label. */
+
 .tr-reel-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
 .tr-reel-actions button { flex: 1 1 auto; }
 .tr-reel-actions form { display: contents; }
-/* /threads: a reel's pictures, five to a row at the photos' own 9:16. */
+
 .th-pictures { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--gap-inline); }
 .th-pictures img { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-sm); background: var(--ink); }
-/* A card's buttons, each the same width (a link and a form's button alike):
-   side by side where both fit, else one per row at the card's width (two in
-   a 260px card overflowed, owner 2026-11-17). */
+
 .th-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--gap-inline); }
 .th-actions form { display: contents; }
 .th-actions .btn { width: 100%; justify-content: center; }
 .th-name { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); font-size: var(--step--1); }
-/* Select: a whole-width toggle; the card takes the accent while selected. */
+
 .tr-pick {
     position: relative;
     display: flex;
@@ -1659,11 +1510,9 @@ a.ph-login-user:hover { text-decoration: underline; }
 .tr-reel > .badge { align-self: flex-start; }
 .tr-reel:has(.tr-pick input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
 
-/* ---- Viral (/viral, static/js/viral.js) ------------------------------ */
 #viral-form + .col-title { margin-top: var(--s-6); }
 .viral-searches { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
 
-/* ---- Pictures (/pictures, static/js/pictures.js) ---------------------- */
 .pictures-preset-row { display: flex; gap: var(--gap-inline); }
 .pictures-preset-row select { flex: 1; min-width: 0; }
 .pictures-preset { display: flex; flex-direction: column; gap: var(--gap-inline); margin-bottom: var(--gap-stack); }
@@ -1672,17 +1521,14 @@ a.ph-login-user:hover { text-decoration: underline; }
 .pictures-preset .source { white-space: pre-wrap; }
 .pictures-preset-actions { display: flex; gap: var(--gap-inline); }
 
-/* /chatting: times and names on one line, the message takes what is left. */
 .chatting-waits td:not(:last-child) { white-space: nowrap; }
 .chatting-waits td:last-child { min-width: 16rem; }
 .chatting-recent-title { margin-top: var(--gap-section); }
-/* Same columns as the platforms above, however few creators there are. */
+
 @media (min-width: 720px) {
     .chatting-recent-title + .card-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* /clone's Start dialog (clone-picks.js): the subject, the prompt and its
-   checks on the left; a divider; the videos, playable, on the right. */
 .clone-confirm { width: min(1100px, calc(100vw - 2 * var(--s-4))); }
 .clone-confirm-body {
     display: grid;
@@ -1744,13 +1590,8 @@ a.ph-login-user:hover { text-decoration: underline; }
     }
 }
 
-/* /edit (edit.js): the player with the crop box over it (outside shaded),
-   then the frame strip with the Start and End handles (two range inputs
-   over it; the strip takes the pointer: edit.js), the parts outside them
-   shaded, the marker at --at; then the bar, then Crop and Speed. */
 .edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-stack); }
-/* The stage is the picture as shown (turned: edit.js sets its size); the
-   player sits in its middle, its own box turned and mirrored into it. */
+
 .edit-stage {
     position: relative;
     width: var(--stage-w, 100%);
@@ -1781,8 +1622,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     cursor: move;
     touch-action: none;
 }
-/* The crop box's corners (edit.js): drag one to resize the box. Inside the
-   box: the stage clips anything past the picture. */
+
 .edit-crop-grip {
     position: absolute;
     width: 18px;
@@ -1806,8 +1646,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     cursor: pointer;
     touch-action: none;
 }
-/* The clips one after another, each showing its own stretch of its video's
-   strip (`--strip`, sized and moved by edit.js), a gap of paper between. */
+
 .edit-segs { position: absolute; inset: 0; }
 .edit-seg {
     position: absolute;
@@ -1824,8 +1663,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 .edit-seg:first-child { border-inline-start: 0; }
 .edit-timeline-bare .edit-shade { display: none; }
-/* Each clip's label over its frames: its name and length; dragged, the
-   clip moves. */
+
 .edit-track { position: relative; height: var(--control-h-sm); }
 .edit-label {
     position: absolute;
@@ -1907,8 +1745,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     appearance: none;
     pointer-events: none;
 }
-/* A focused input gets the form fill (components.css input:focus): over
-   the strip it would hide every frame. The thumb shows the focus instead. */
+
 .edit-handle:focus { border: 0; background: transparent; box-shadow: none; }
 .edit-handle::-webkit-slider-runnable-track { height: 100%; background: transparent; }
 .edit-handle::-moz-range-track { height: 100%; background: transparent; }
@@ -1928,7 +1765,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 .edit-handle:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-ring); }
 .edit-handle:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--accent-ring); }
-/* Play | the part's times and length, centred | Clone it, Download, Cut. */
+
 .edit-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--gap-inline); }
 .edit-bar-side { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
 .edit-at { color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -1936,7 +1773,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 .edit-bar-middle { display: flex; align-items: baseline; gap: var(--gap-inline); font-variant-numeric: tabular-nums; }
 .edit-times { color: var(--text-muted); }
 .edit-length-over { color: var(--fail); }
-/* Delete selection, Undo, Add video (and its picker when asked). */
+
 .edit-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
 .edit-add { max-width: 480px; }
 .edit-options { display: flex; flex-wrap: wrap; gap: 0 var(--gap-section); }
@@ -1945,14 +1782,12 @@ a.ph-login-user:hover { text-decoration: underline; }
 @media (max-width: 719px) {
     .edit-bar { grid-template-columns: 1fr; justify-items: center; }
     .edit-bar-end { justify-content: center; }
-    /* Narrower than six choices: the row scrolls sideways (only here: on a
-       wide screen a pressed button's 1 px showed a scroll bar). */
+
     .edit-options .btn-segmented { overflow: auto hidden; }
 }
-/* /clone's "Trim it!" in a cost line too long for the model. */
+
 .cost-line .trim-btn { min-height: var(--control-h-sm); }
 
-/* /home's Server section (admins; home-server.js). */
 .server { margin-top: var(--gap-section); }
 .server-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-inline); }
 .server-head .col-title { margin: 0; }
@@ -1960,11 +1795,6 @@ a.ph-login-user:hover { text-decoration: underline; }
 #server-body .stat-grid { margin-bottom: 0; }
 .server-title { margin: var(--s-3) 0 0; font-size: var(--step-0); }
 
-/* /clone SOP: the examples dialog -- per example one video (the original
-   on the left, its clone on the right) and the prompt that made it. Wide:
-   two examples side by side. Every video sits in a box of one shape, so an
-   example looks the same before and after it loads, whatever the videos'
-   own shape (a 16:9 pair next to 9:16 ones). */
 .sop-dialog { width: min(1280px, calc(100vw - 2 * var(--s-4))); }
 .sop-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: var(--gap-stack); max-height: 76vh; overflow-y: auto; margin-bottom: var(--gap-stack); }
 .sop-example { display: grid; align-content: start; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-control); }
@@ -1973,17 +1803,15 @@ a.ph-login-user:hover { text-decoration: underline; }
 .sop-example-sides { display: grid; grid-template-columns: 1fr 1fr; text-align: center; color: var(--text-muted); font-size: var(--step--1); }
 .sop-example-prompt { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: var(--step--1); }
 .sop-example-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
-/* /phones History: one line per change, newest first. */
+
 .ph-history { width: min(720px, calc(100vw - 2 * var(--s-4))); }
 .ph-revisions { list-style: none; display: grid; gap: var(--gap-inline); max-height: 60vh; overflow-y: auto; margin: 0 0 var(--gap-stack); padding: 0; }
 .ph-revision { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--step--1); }
 .ph-revision-what { flex: 1; min-width: 0; color: var(--text-muted); word-break: break-word; }
 .ph-revision-now { color: var(--text-muted); }
 
-/* /vas: the days table is its own section under the money tables. */
 .vas-days-title { margin-top: var(--gap-section); }
 
-/* /distribution: is it working, the numbers, the upload. */
 .ds-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--gap-grid); }
 .ds-add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
 .ds-add input[type="file"] { flex: 1 1 16rem; min-width: 0; }

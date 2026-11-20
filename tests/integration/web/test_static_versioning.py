@@ -1,6 +1,3 @@
-"""Static assets are linked with a content-hash version, so a deploy is never
-served the previous file from a browser cache (nginx caches /static a week)."""
-
 import os
 import re
 

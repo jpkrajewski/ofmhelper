@@ -1,12 +1,3 @@
-"""
-/handmade: a VA uploads the reels they made by hand; they stay on the server
-(features/handmade/service.py), one card each. The owner sees their VAs'
-reels (the VAs filter, "Done by VA", "Not uploaded to Drive") and sends one
-to an account folder with Upload to Drive (the card's menu -> /drive, the
-upload /clone uses); a VA uploads here and never sends to Drive. Cards and
-polling are the shared gallery's (generation.js), like /download-assets.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, File, Request, UploadFile
@@ -50,7 +41,6 @@ def page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
 
 @router.get("/gallery")
 def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
-    """The next page of cards, for gallery-scroll.js."""
     found = gallery.page(viewer, query)
     return render(
         request,

@@ -1,8 +1,3 @@
-"""An event from any producer to every sender that is on (features/events): `emit`
-and `@emits`, through the events queue and the aggregator, to Telegram (its fake
-at the wire). Inline first (the suite's synchronous queue), then on the real RQ
-queue with its retries."""
-
 import asyncio
 import json
 import logging
@@ -44,7 +39,6 @@ def _telegram(fake_externals, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def waits(monkeypatch) -> list[float]:
-    """Every wait a delivery makes, without waiting."""
     found: list[float] = []
     monkeypatch.setattr(dispatch_module, "_sleep", found.append)
     return found
@@ -107,8 +101,6 @@ def test_a_sender_switched_off_gets_nothing(monkeypatch):
 
 
 def test_outside_production_nothing_is_sent_unless_asked(monkeypatch):
-    """A dev copy of the prod database holds prod's linked chats, a copied
-    .env prod's bot token: unset, dev messages nobody (audit 2026-11-18)."""
     monkeypatch.delenv("OFM_EVENTS_SENDERS_OFF")
 
     emit(_clicks())
@@ -117,8 +109,6 @@ def test_outside_production_nothing_is_sent_unless_asked(monkeypatch):
 
 
 def test_production_sends_unless_told_and_dev_only_when_told(monkeypatch):
-    """Production with fakes would not be the fakes' any more: the rule
-    itself, `EventsSettings.sending(production)`."""
     monkeypatch.delenv("OFM_EVENTS_SENDERS_OFF")
     assert settings.events.sending(production=True)
     assert not settings.events.sending(production=False)
@@ -312,9 +302,6 @@ def test_each_send_is_a_span_with_its_outcome_and_without_its_target(capfire):
 
 
 class TestOnTheRealQueue:
-    """The events worker's path: emit -> events queue -> dispatch -> one
-    deliver job per chat, each with its own retries."""
-
     @pytest.fixture(autouse=True)
     def _async_broker(self, monkeypatch):
         monkeypatch.setenv("OFM_RQ_ASYNC", "true")
@@ -393,7 +380,6 @@ class TestOnTheRealQueue:
         assert fake_telegram().sent == []
 
     def test_rq_failure_lines_hold_no_target(self, caplog):
-        """The filter configure_logging puts on `rq.worker`, on RQ's real line."""
         hide = _HideJobArguments()
         logging.getLogger("rq.worker").addFilter(hide)
         fake_telegram().fail_next.append(
@@ -434,7 +420,7 @@ def test_without_replaces_nothing_is_deleted():
 def test_one_before_that_cannot_be_deleted_stays_and_the_new_one_still_goes(caplog):
     emit(_clicks(replaces="clicks.today"))
     fake_telegram().deleted.extend(fake_telegram().sent)
-    fake_telegram()._by_id.clear()  # deleted by hand in the chat
+    fake_telegram()._by_id.clear()
 
     emit(_clicks(title="4,000 clicks", replaces="clicks.today"))
 
@@ -443,8 +429,6 @@ def test_one_before_that_cannot_be_deleted_stays_and_the_new_one_still_goes(capl
 
 
 def test_an_older_one_arriving_late_never_replaces_the_newer():
-    """A requeued or retried list made before the one in the chat: it goes, the
-    newer stays."""
     made = time.time()
     emit(_clicks(title="newer", replaces="clicks.today", at=made))
     newer = list(fake_telegram().sent)

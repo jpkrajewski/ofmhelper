@@ -1,8 +1,3 @@
-"""/privacy and /terms: the legal pages of the public site, linked from the
-landing page's footer and from the Google OAuth consent screen (Branding).
-Public (`settings.web.public_paths`): Google's reviewers fetch them signed
-out, and a login wall there stalls the app's verification."""
-
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 

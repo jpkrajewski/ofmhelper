@@ -1,44 +1,13 @@
-/*
- * /clone-links page controller.
- *
- * Check links: the box's text (one link per line, each of a video site)
- * goes to /clone-links/check -- instant, nothing downloaded. Accepted: the
- * box gets each link once, cleaned. Refused: the #clone-links-refused
- * dialog names every bad line and why, the box stays as pasted.
- *
- * Generate: Google Drive connected (the form's data-drive-ready) or nothing
- * is asked; the same check, then the #clone-links-confirm dialog shows a
- * tile per link at once and fills each in place as /clone-links/previews
- * streams its line (cover, length, price, read by yt-dlp without
- * downloading, all in parallel on the server, cached in Redis per link;
- * closing the dialog stops the request). Once the stream ends the tiles are
- * sorted once (never while they fill: Remove would hit the tile that moved
- * under the pointer) and Generate takes the ready ones, a failed tile or
- * not. One too long or unreadable says why and is left out. Remove takes a
- * tile away; the total, the button and the Drive-room notice follow.
- * Confirm sends the form (XHR, for the subject's upload progress) with the
- * links left and the Generate's `batch` id, kept on the box until a 2xx or
- * new text: a resend after a lost answer gets the runs already queued back
- * instead of paying again. The cards come back rendered and go in place,
- * generation.js polls them; Stop (next to "Queued N runs.") stops the runs
- * not started yet. Each run downloads its own video on the worker.
- *
- * Reviews: a finished card's block (_clone_from_link.html) is polled until it
- * is settled -- checked, then in Drive or why not. Recreate puts the subject,
- * the settings and the card's link(s) back in the form.
- */
 (() => {
     const REVIEW_POLL_MS = 4000;
-    // Ids per /clone-links/reviews request (the server takes up to 200).
+
     const REVIEW_CHUNK = 100;
-    // A Remove this soon after the one re-sort was aimed at another tile.
+
     const RESORT_GUARD_MS = 400;
     const NOT_SURE_SENT = "Not sure it was sent — check the cards below before sending again";
     const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
     const credits = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
-    // The status line under Generate; any new message takes Stop away (only
-    // "Queued N runs." brings it back, showStop).
     function setStatus(statusEl, message, isError) {
         document.getElementById("clone-links-stop").hidden = true;
         statusEl.innerHTML = "";
@@ -55,14 +24,11 @@
             if (typeof data.detail === "string") return data.detail;
             if (data.detail && typeof data.detail.message === "string") return data.detail.message;
         } catch {
-            // not JSON
+
         }
         return `Request failed (${xhr.status}) — try again.`;
     }
 
-    // --- Check links -----------------------------------------------------------
-
-    // Check's 400: {message, lines} (one link per line) or a plain detail.
     async function refusalOf(response) {
         const body = await response.json().catch(() => ({}));
         if (body.detail && typeof body.detail.message === "string") return body.detail;
@@ -70,7 +36,6 @@
         return { message: `Check failed (${response.status}) — try again.`, lines: [] };
     }
 
-    // A refused line: the line itself in bold over why.
     function refusedLine(line) {
         const li = document.createElement("li");
         li.className = "cost-line cost-line-flagged";
@@ -91,15 +56,11 @@
         document.getElementById("clone-links-refused-title").textContent = refusal.message;
         list.replaceChildren(...(refusal.lines || []).map(refusedLine));
         list.hidden = list.children.length === 0;
-        // The bad lines were moved to the top of the box (badLinesFirst).
+
         document.getElementById("clone-links-refused-note").hidden = list.hidden;
         dialog.showModal();
     }
 
-    // A refused paste's bad lines (`numbers`, 1-based as the server counts
-    // them) moved to the top of the box, the rest below as pasted, the page
-    // and the box scrolled there. Returns how many characters the bad block
-    // is, to select it once the dialog closes.
     function badLinesFirst(box, numbers) {
         const lines = box.value.split(/\r\n|\r|\n/);
         const bad = new Set(numbers.map((n) => n - 1));
@@ -111,9 +72,6 @@
         return top.join("\n").length;
     }
 
-    // The box's links, cleaned and each once (the box shows them); null
-    // when refused (the dialog says why; bad lines moved to the top of the
-    // box, selected after OK) or the server could not be reached.
     async function readLinks(box) {
         if (!box.value.trim()) {
             showRefused({ message: "Paste the links first", lines: [] });
@@ -159,13 +117,6 @@
         });
     }
 
-    // --- Generate: the preview dialog --------------------------------------------
-
-    // Every link's preview from one /clone-links/previews request: the
-    // server reads them in parallel (cached ones at once) and answers one
-    // JSON line per link as each is done; `onPreview` gets each. A link
-    // with no answer (connection lost) gets an error preview; an aborted
-    // request (the dialog closed) gets nothing.
     async function streamPreviews(urls, provider, resolution, signal, onPreview) {
         const answered = new Set();
         const take = (preview) => {
@@ -205,8 +156,6 @@
         return node;
     }
 
-    // A tile before its preview: a spinner where the cover goes (the cover
-    // opens the reel), Remove (the page's own button, from #pick-remove).
     function pickTile(url) {
         const li = el("li", "pick-tile");
         li.dataset.loading = "";
@@ -246,29 +195,24 @@
         li.querySelector(".pick-meta").after(why);
     }
 
-    // The dialog's "Google Drive will be full" notice (rendered only when the
-    // Drive's free space is known): shown while `n` reels of about
-    // data-reel-mb each do not fit in data-free-mb.
     function showDriveRoom(n) {
         const notice = document.getElementById("clone-links-confirm-space");
         if (!notice) return;
         notice.hidden = !(n * Number(notice.dataset.reelMb) > Number(notice.dataset.freeMb));
     }
 
-    // Resolves to the links left on confirm (the ready ones), null on
-    // Cancel/Escape.
     function pick(urls, provider, resolution) {
         const dialog = document.getElementById("clone-links-confirm");
         const list = document.getElementById("clone-links-confirm-lines");
         const go = document.getElementById("clone-links-confirm-go");
-        // The dialog is as wide as its first row needs (pages.css .pick-dialog).
+
         dialog.style.setProperty("--pick-cols", String(Math.min(urls.length, 6)));
         const fresh = urls.map(pickTile);
         const byUrl = new Map(fresh.map((li) => [li.url, li]));
         list.replaceChildren(...fresh);
         const tiles = () => [...list.children];
         const ready = () => tiles().filter((li) => li.preview?.ready);
-        // The stream is over: every tile has its answer, the order is final.
+
         let ended = false;
         let sortedAt = Number.NEGATIVE_INFINITY;
 
@@ -291,9 +235,6 @@
             showDriveRoom(n);
         }
 
-        // Ones that can run first, most expensive first (same cents: longer
-        // first; user decision 2026-10-25); then still loading; then the
-        // ones that cannot run. True when a tile moved.
         function sort() {
             const rank = (li) => (!li.preview ? 1 : li.preview.ready ? 0 : 2);
             const dearer = (a, b) =>
@@ -345,8 +286,7 @@
         } catch {
             images = 0;
         }
-        // No key field to fill (a VA runs on the owner's saved key): the
-        // server picks it.
+
         const keyField = form.querySelector('[name="api_key"]');
         if (keyField && !keyField.disabled && !String(formData.get("api_key") || "").trim()) return "Enter the API key.";
         if (images < 1) return "Pick at least one subject image.";
@@ -376,15 +316,11 @@
         return card;
     }
 
-    // A Generate's id for /run (16 hex): the same one again returns the runs
-    // it already queued instead of queuing (and paying for) them twice.
     function newBatch() {
         const bytes = crypto.getRandomValues(new Uint8Array(8));
         return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
     }
 
-    // Stop, after "Queued N runs.": the server stops that run's whole
-    // Generate (runs already paid for finish).
     function showStop(jobId) {
         const stop = document.getElementById("clone-links-stop");
         stop.dataset.job = jobId;
@@ -418,12 +354,10 @@
         const empty = document.getElementById("clone-links-empty");
         let busy = false;
 
-        // New links, new Generate.
         box.addEventListener("input", () => {
             delete box.dataset.batch;
         });
 
-        // Leaving the page asks first while the send goes up (upload-guard.js).
         let guarded = () => {};
         const idle = () => {
             guarded();
@@ -431,9 +365,6 @@
             submitBtn.disabled = false;
         };
 
-        // The send may have reached the server (it may have queued, and paid
-        // for, the runs): the batch id stays for a resend; the cards it made
-        // show up through live-gallery.js.
         function unsure(pending) {
             pending.remove();
             empty.hidden = gallery.querySelector(".result-item") !== null;
@@ -441,8 +372,6 @@
             gallery.dispatchEvent(new CustomEvent("live-gallery:refresh"));
         }
 
-        // `sentText`: the box when the links went out; cleared on success
-        // only if it still holds them (links pasted meanwhile stay).
         function send(formData, runs, sentText) {
             const pending = buildUploadingCard(runs);
             empty.hidden = true;
@@ -461,7 +390,7 @@
                 }
                 if (xhr.status >= 500) return unsure(pending);
                 if (xhr.status < 200 || xhr.status >= 300) {
-                    // Refused before anything was queued.
+
                     pending.remove();
                     empty.hidden = gallery.querySelector(".result-item") !== null;
                     setStatus(statusEl, xhrError(xhr), true);
@@ -476,7 +405,7 @@
                 });
                 pending.replaceWith(...cards);
                 window.Generation.resumePendingCards();
-                // The links are spent; the subject usually stays.
+
                 if (box.value === sentText) box.value = "";
                 delete box.dataset.batch;
                 const n = data.job_ids.length;
@@ -517,8 +446,6 @@
         });
     }
 
-    // --- Recreate ------------------------------------------------------------------
-
     function fillForm(form, params, links) {
         window.FilePicker.setExisting("image", params.reference_images || []);
         const prompt = form.querySelector('[name="prompt"]');
@@ -541,16 +468,12 @@
         form.scrollIntoView({ behavior: "smooth" });
     }
 
-    // The links a card's Recreate brings back, as the server picks them (a
-    // failed run: every failed link of its Generate that is not still being
-    // finished or made again since; none can be). Its own link only when the
-    // server can't be asked.
     async function recreateLinks(jobId, link) {
         try {
             const r = await fetch(`/clone-links/recreate/${encodeURIComponent(jobId)}`);
             if (r.ok) return (await r.json()).links;
         } catch {
-            // offline: its own link
+
         }
         return link ? [link] : [];
     }
@@ -563,16 +486,12 @@
             const params = JSON.parse(card.dataset.params);
             const links = await recreateLinks(card.dataset.jobId, params.link);
             if (links.length) return fillForm(form, params, links);
-            // The form (and links already in the box) left as they are.
+
             setStatus(form.querySelector(".generation-status"), "Nothing to recreate.", false);
             form.scrollIntoView({ behavior: "smooth" });
         });
     }
 
-    // --- Reviews -------------------------------------------------------------------
-
-    // Opens or closes a decision's panel (the .ai-check-why after `btn`); the
-    // eye shows the text, eye-off hides it again.
     function setWhy(btn, open) {
         btn.nextElementSibling.hidden = !open;
         btn.setAttribute("aria-expanded", String(open));
@@ -580,8 +499,6 @@
         btn.querySelector("svg")?.replaceWith(icon.content.firstElementChild.cloneNode(true));
     }
 
-    // A block's fresh render in place; a decision panel the VA opened stays
-    // open (polls re-render the block every few seconds while it uploads).
     function replaceReview(state) {
         const old = document.querySelector(`.ai-check[data-job="${state.job_id}"]`);
         if (!old) return;
@@ -594,8 +511,6 @@
         if (wasOpen && btn?.nextElementSibling?.matches(".ai-check-why")) setWhy(btn, true);
     }
 
-    // One /clone-links/reviews request; a refused or lost one is logged and
-    // asked again on the next round.
     function pollChunk(ids) {
         const query = ids.map((id) => `job=${encodeURIComponent(id)}`).join("&");
         return fetch(`/clone-links/reviews?${query}`)
@@ -617,7 +532,6 @@
         Promise.all(chunks.map(pollChunk)).finally(next);
     }
 
-    // A card that finished while the page was open gets its review block.
     function decorateFinished(card) {
         if (!card.matches(".result-item") || !card.querySelector(".download-btn")) return;
         if (card.querySelector(".ai-check")) return;
@@ -626,7 +540,6 @@
         card.querySelector(".result-actions")?.before(block);
     }
 
-    // "AI decision: ..." (a full-width button) opens the problems the AI check saw.
     function initWhy(gallery) {
         gallery.addEventListener("click", (e) => {
             const btn = e.target.closest(".why-toggle");

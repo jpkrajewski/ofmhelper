@@ -1,15 +1,3 @@
-"""Contract tests: one behaviour, checked on the fake and on the real
-service. `backend` runs a test twice: "fake" (OFM_FAKE_EXTERNALS, in the
-default run, offline) and "real" (marked `live`: only `scripts/test.sh live`
-or `deploy`), so a fake that drifts from the service fails here first.
-`paid_backend` is the same for a test whose real half spends money at the
-service (an Apify run): that half is also marked `paid`, so it runs only by
-`scripts/test.sh paid`, never in the deploy gate.
-
-The real half reads the repo's `.env` (the suite otherwise never does):
-keys, proxies, the Drive sandbox folder.
-"""
-
 from collections.abc import Iterator
 
 import pytest
@@ -88,7 +76,6 @@ def _reset_fakes() -> None:
         fake_apiyi,
         fake_telegram,
         fake_pinterest,
-        # Its clients' sessions are mounted on the fakes, or not, when made.
         _telegram,
         fake_media.mp4,
     ):
@@ -96,7 +83,6 @@ def _reset_fakes() -> None:
 
 
 def use_real_env(monkeypatch) -> None:
-    """Keys, proxies and the Drive sandbox from the repo's .env."""
     for cls in _REAL_SETTINGS:
         monkeypatch.setitem(cls.model_config, "env_file", ".env")
     drive_client._credentials.cache_clear()
@@ -128,6 +114,4 @@ def backend(request, monkeypatch, tmp_path) -> Iterator[str]:
     params=[FAKE, pytest.param(REAL, marks=[pytest.mark.live, pytest.mark.paid])]
 )
 def paid_backend(request, monkeypatch, tmp_path) -> Iterator[str]:
-    """`backend` for a test whose real half costs money: only
-    `scripts/test.sh paid` runs that half."""
     yield from _switched(request.param, monkeypatch, tmp_path)

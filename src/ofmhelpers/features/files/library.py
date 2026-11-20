@@ -1,8 +1,3 @@
-"""The file manager's user view (`/file-manager`): every user's files, by
-user then section, newest first. Only files that exist: a section of runs =
-done runs' results still on disk; `uploads` = the user's part of the asset
-store (their reuse picker)."""
-
 from pathlib import Path
 from urllib.parse import urlencode
 lazy from collections.abc import Sequence
@@ -27,14 +22,11 @@ from ofmhelpers.schemas import FileTile, Job, UserFiles
 
 logger = get_logger(__name__)
 
-# The section that is not runs: the user's part of the asset store.
 UPLOADS = "uploads"
 TILES_PER_PAGE = 60
 
 
 class Section(BaseModel):
-    """A tab of a user's files: its label and the tasks filed under it."""
-
     model_config = ConfigDict(frozen=True)
 
     label: str
@@ -42,15 +34,11 @@ class Section(BaseModel):
 
 
 class Tiles(BaseModel):
-    """One page of a section, newest first; `more`: whether more follow."""
-
     tiles: list[FileTile] = []
     more: bool = False
 
 
 class UserView(Tiles):
-    """/file-manager: each field is a name `file_manager.html` reads."""
-
     users: list[UserFiles]
     picked: UserFiles | None
     sections: dict[str, str]
@@ -59,15 +47,11 @@ class UserView(Tiles):
 
 
 class Deleted(BaseModel):
-    """Whose section a deleted run's file was in (None: nobody's to show)."""
-
     user_id: int | None = None
     section: str = ""
 
 
 def _tile(name: str, label: str, mtime: float, url: str, query: str = "") -> FileTile:
-    """`url` serves the file (`?download=1` as an attachment), `url/thumb`
-    its thumbnail, `url/delete` deletes it; `query` is added to all three."""
     return FileTile(
         name=name,
         label=label,
@@ -81,7 +65,6 @@ def _tile(name: str, label: str, mtime: float, url: str, query: str = "") -> Fil
 
 
 def _uploads(user_id: int) -> list[StoredFile]:
-    """The user's stored files (`refs.stored_files`)."""
     root = assets_root_for_user(user_id)
     return stored_files(root, None) if root.is_dir() else []
 
@@ -102,10 +85,6 @@ def _upload_tiles(user_id: int, start: int) -> Tiles:
 
 
 class Library(BaseModel):
-    """The user view over the app's tools: `sections` in tab order (which
-    tasks each holds) and every task's `labels`, both from the routers'
-    registry."""
-
     model_config = ConfigDict(frozen=True)
 
     sections: dict[str, Section]
@@ -129,7 +108,6 @@ class Library(BaseModel):
         return found
 
     def _run_tiles(self, job: Job) -> list[FileTile]:
-        """A done run's files still on disk."""
         label = job.params.get("model") or self.labels[job.task]
         return [
             _tile(
@@ -159,7 +137,6 @@ class Library(BaseModel):
         )
 
     def view(self, user_id: int | None, section: str, page: int) -> UserView:
-        """Users, then one user's files of one section."""
         if section not in self.sections:
             msg = "Unknown section"
             raise RefusedError(msg)
@@ -178,8 +155,6 @@ class Library(BaseModel):
         )
 
     def delete_run_file(self, job_id: str, index: int) -> Deleted:
-        """The file off the disk; its card (and the run, when nothing is
-        left) goes at the next listing (`stores.jobs._heal`)."""
         found = run_file(job_id, index)
         found.unlink()
         logger.info("file manager: deleted %s of job %s", found.name, job_id)
@@ -190,7 +165,6 @@ class Library(BaseModel):
 
 
 def asset(user_id: int, path: str) -> Path:
-    """A file of `user_id`'s part of the asset store, never outside it."""
     found = Path(path)
     if not in_asset_root(assets_root_for_user(user_id), found) or not found.is_file():
         msg = "File not found"
@@ -199,15 +173,11 @@ def asset(user_id: int, path: str) -> Path:
 
 
 def delete_asset(found: Path, user_id: int) -> None:
-    """`found`: a file of `user_id`'s (`asset`)."""
     found.unlink()
     logger.info("file manager: deleted upload %s of user %s", found.name, user_id)
 
 
 def add_assets(user_id: int, files: Sequence[UploadFile]) -> None:
-    """Into the user's reference store (their reuse picker), deduped by
-    content like any upload; media only (`save_asset` refuses anything
-    else)."""
     root = assets_root_for_user(user_id)
     for upload in files:
         save_asset(upload, root)
@@ -225,7 +195,6 @@ def run_file(job_id: str, index: int) -> Path:
 
 
 def thumb(file_path: Path) -> Path:
-    """An image's or video's small webp, made once and kept."""
     if classify_kind(file_path.name) not in ("image", "video"):
         msg = "No thumbnail"
         raise NotFoundError(msg)

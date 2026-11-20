@@ -1,21 +1,3 @@
-"""Ready-made presets: one JSON file each (`<name>.json` here); a new preset
-is a new file, no code.
-
-- `low`, `medium`, `hard`, `extreme` — legacy uniqify's Strength ranges
-  (MINIMAL..EXTREME, its 2% boost included) + the handheld look; their
-  `video_special` / `audio_special` / `device_special` parts are Duplyfi's
-  transforms (the former Special switch), applied with `special=True`.
-- `capcut` — `utils.capcut`'s default CapCut edit + jitter, with the
-  `capcut` device.
-- `stealth_wild` — the knob lab's pick (2026-10-26, repurpose/CLAUDE.md
-  Lab): off-centre framing mix + vignette, pitch +-0.5 + flanger / phaser /
-  vibrato; `strip` device. Best "looks the same" preset measured, still
-  caught by SSCD.
-
-A preset's `video` / `audio` hold `transformations.VideoSettings` /
-`AudioSettings` knobs (values: `repurpose.values`).
-"""
-
 from functools import lru_cache
 from pathlib import Path
 
@@ -33,7 +15,6 @@ class Preset(BaseModel, frozen=True):
     audio: AudioSettings = AudioSettings()
     video_special: VideoSettings | None = None
     audio_special: AudioSettings | None = None
-    # The device a ready-made preset is meant for (None: keep the current).
     device: str | None = None
     device_special: str | None = None
 
@@ -44,7 +25,6 @@ def preset_names() -> list[str]:
 
 @lru_cache
 def load_preset(name_or_path: str) -> Preset:
-    """A preset by name (`presets/<name>.json`) or a JSON file path."""
     path = Path(name_or_path)
     if path.suffix != ".json":
         path = _HERE / f"{name_or_path}.json"

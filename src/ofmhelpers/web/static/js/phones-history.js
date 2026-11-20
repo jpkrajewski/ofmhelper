@@ -1,15 +1,6 @@
-/*
- * /phones "History": the person's phones after each change (the database
- * records every one: features/phones/revisions.py). The toolbar's History
- * button opens the list from GET /phones/revisions; Restore on a line asks
- * first, then POSTs /phones/revisions/{id}/restoration and reloads the
- * page. A restore is itself a line, so it is undone the same way.
- */
 (() => {
     const ENDPOINT = "/phones/revisions";
 
-    // The reader's zone (the header's globe, cookie ofm_timezone), else the
-    // browser's.
     function zone() {
         const found = document.cookie.match(/(?:^|;\s*)ofm_timezone=([^;]+)/);
         return found ? decodeURIComponent(found[1]) : undefined;

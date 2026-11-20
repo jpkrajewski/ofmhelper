@@ -1,17 +1,3 @@
-"""/home's Server section (admins): where the box stands right now.
-
-The host's CPU (busy over a short sample), load, RAM, swap and the disk the
-uploads live on (`host.py`); what each top-level uploads folder holds; the
-database and Redis sizes; every job queue with its workers and line; the
-jobs still running, oldest first. `problems` words what is worth a look
-(over `OFM_SERVER_WARN_PERCENT`, a line waiting past `OFM_SERVER_WAIT_WARN_S`,
-a queue with jobs and no worker, jobs running past `OFM_SERVER_RUN_WARN_S`).
-
-Read on request (the section fetches it after /home opens), nothing kept.
-A part that cannot be read (Redis or the database down) is left out, the
-rest still shows.
-"""
-
 import time
 from pathlib import Path
 
@@ -31,7 +17,6 @@ logger = get_logger(__name__)
 
 
 def duration(seconds: float) -> str:
-    """12 s, 5 min, 2.5 h, 3 d."""
     if seconds < 60:  # noqa: PLR2004
         return f"{seconds:.0f} s"
     if seconds < 3600:  # noqa: PLR2004
@@ -50,7 +35,6 @@ def _database() -> int | None:
 
 
 def _jobs() -> list[RunningJob]:
-    """Running jobs, oldest first; who = the person's email."""
     who = {str(u.id): u.email for u in list_users()}
     now = time.time()
     jobs = sorted(running_jobs(), key=lambda j: j.created_at)
@@ -65,7 +49,6 @@ def _jobs() -> list[RunningJob]:
 
 
 def problems(box: Host, queues: list[QueueLoad], jobs: list[RunningJob]) -> list[str]:
-    """What is worth a look, worded for the page."""
     cfg = settings.server
     found: list[str] = []
     if box.cpu_percent >= cfg.warn_percent:

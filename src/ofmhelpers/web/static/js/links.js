@@ -1,18 +1,3 @@
-/*
- * /links page controller.
- *
- * Server-rendered from the query string: a select in form[data-autosubmit]
- * (period, provider, model) submits it on change, blank fields left out of
- * the URL; the per-page select follows its option's link. The search box
- * filters the rendered rows instantly (their data-search text). Writes post
- * JSON:
- *   Generate links -> POST /links/generate, then reload (rows being made)
- *   Sync           -> POST /links/sync
- *   selected rows  -> Copy links (clipboard), POST /links/creator,
- *                     /links/adult, /links/delete
- * While a row is being made or deleted the list reloads every POLL_MS,
- * unless something on it is in use.
- */
 (() => {
 
     const POLL_MS = 5000;
@@ -39,7 +24,7 @@
         try {
             data = await response.json();
         } catch {
-            // not JSON: the status line below says enough
+
         }
         if (!response.ok) {
             const detail = data?.detail;
@@ -55,7 +40,6 @@
         await navigator.clipboard.writeText(text);
     }
 
-    // --- filters and period -------------------------------------------------
     document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
         form.addEventListener("submit", () => {
             form.querySelectorAll("input, select").forEach((field) => {
@@ -71,7 +55,6 @@
         perPage.addEventListener("change", () => { window.location.href = perPage.value; });
     }
 
-    // --- copy one ------------------------------------------------------------
     document.querySelectorAll(".links-copy").forEach((button) => {
         button.addEventListener("click", async () => {
             try {
@@ -83,7 +66,6 @@
         });
     });
 
-    // --- sync ----------------------------------------------------------------
     $("links-sync").addEventListener("click", async () => {
         try {
             const result = await postJson("/links/sync");
@@ -94,7 +76,6 @@
         }
     });
 
-    // --- generate dialog -----------------------------------------------------
     const dialog = $("links-generate");
     const form = $("links-generate-form");
     const genStatus = $("links-generate-status");
@@ -113,8 +94,6 @@
         if (form.domain.selectedOptions[0]?.disabled && first) first.selected = true;
     }
 
-    // How many accounts may be picked: the provider's free live slots (as
-    // the last sync saw them), at most one Generate's maximum.
     const picker = document.querySelector(".links-picker");
     function pickLimit() {
         const room = form.provider.selectedOptions[0]?.dataset.room;
@@ -124,7 +103,6 @@
     const shownRows = () => accountRows.filter((row) => !row.hidden);
     const boxOf = (row) => row.querySelector("input");
 
-    // At the limit, the unpicked boxes lock; under it, all are free again.
     function applyLimit() {
         const limit = pickLimit();
         $("links-gen-limit").textContent = String(limit);
@@ -136,7 +114,6 @@
         allBox.checked = picked > 0 && picked === Math.min(limit, shownRows().length);
     }
 
-    // The first `limit` shown accounts picked, the rest not.
     function pickFirst(on) {
         const limit = pickLimit();
         shownRows().forEach((row, i) => { boxOf(row).checked = on && i < limit; });
@@ -153,8 +130,6 @@
         pickFirst(true);
     }
 
-    // The target link: its prefix filled in, checked as it is typed (the
-    // server checks the same pattern).
     const destination = form.destination;
     const destinationProblem = $("links-gen-destination-problem");
     const target = () => form.target.selectedOptions[0];
@@ -189,7 +164,7 @@
 
     function prefillDestination() {
         const value = destination.value.trim();
-        // Only a blank field or another target's bare prefix is replaced.
+
         if (!value || prefixes.includes(value)) destination.value = target().dataset.prefix;
         checkDestination(false);
     }
@@ -257,7 +232,6 @@
         }
     });
 
-    // --- instant search ------------------------------------------------------
     const search = $("links-search");
     const noMatch = $("links-no-match");
     search.addEventListener("input", () => {
@@ -271,7 +245,6 @@
         if (noMatch) noMatch.hidden = shown > 0;
     });
 
-    // --- selection + bulk actions -------------------------------------------
     const bulk = $("links-bulk");
     const picks = () => [...document.querySelectorAll("tr:not([hidden]) .links-pick:checked")]
         .map((box) => box.closest("tr[data-id]"));
@@ -322,8 +295,6 @@
         });
     }
 
-    // --- rows being made or deleted -------------------------------------------
-    // ...and while a provider is syncing, so its numbers update by themselves.
     if (document.querySelector('tr[data-status="creating"], tr[data-status="deleting"], #links-syncing')) {
         window.setInterval(() => {
             const busy = dialog.open || picks().length

@@ -1,10 +1,3 @@
-"""
-/character-sheet: upload several shots of one character (typically 9:16),
-get them back as one lossless PNG, side by side in upload order. Admin only;
-its sheets land in the admin part of the asset store. The work:
-`features.character_sheet.service`.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, File, Request, UploadFile
@@ -18,8 +11,6 @@ from ofmhelpers.features.character_sheet.service import (
     PREFIX,
     TASK,
 )
-
-# Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.character_sheet.service import run_combine as _run_combine
 from ofmhelpers.schemas import JobQueued
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot

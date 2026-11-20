@@ -1,10 +1,3 @@
-"""
-Upload filenames are attacker-controlled: the multipart part's `filename` is
-whatever the client typed, so "../../cookies/cookies.txt" is a legal value
-and joining it onto an upload directory writes outside that directory. Every
-path built from an upload name goes through task_helpers.safe_filename.
-"""
-
 import pytest
 from fastapi import HTTPException
 

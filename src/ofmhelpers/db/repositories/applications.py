@@ -1,5 +1,3 @@
-"""Submissions of the public landing-page application form."""
-
 import time
 import uuid
 
@@ -44,7 +42,6 @@ class ApplicationRepository(CachedRepository):
 
     @cached
     def list_all(self) -> list[Application]:
-        """Newest first."""
         with session_scope() as s:
             rows = (
                 s.execute(

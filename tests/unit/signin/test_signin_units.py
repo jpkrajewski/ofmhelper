@@ -1,5 +1,3 @@
-"""Password hashing and Apple's client-secret JWT."""
-
 import base64
 import json
 
@@ -106,7 +104,6 @@ def test_id_token_claims_apples_string_true_and_the_nonce_check():
 
 
 def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
-    """A /login burst waits for a slot instead of allocating 128 MiB each."""
     import threading
     import time
     from concurrent.futures import ThreadPoolExecutor
@@ -140,8 +137,6 @@ def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
 
 
 def test_a_hash_made_with_other_parameters_still_verifies():
-    """Stored hashes carry their own n/r/p: changing the defaults (or the
-    concurrency cap) never locks anyone out."""
     import base64 as b64
     import hashlib
 

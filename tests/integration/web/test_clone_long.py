@@ -1,8 +1,3 @@
-"""/clone-long: one image + one long video through Wan 3.0 in pieces of at
-most 15 s, joined into one video of the source's shape. Real upload,
-ffprobe, ffmpeg, runner and recovery; only the provider's calls are faked
-(the suite's RQ runs jobs inline)."""
-
 import contextvars
 import json
 import os
@@ -108,8 +103,6 @@ def _size(path: Path) -> tuple[int, int]:
 
 
 def _provider(monkeypatch, provider_cls, generated: Path, sent: list, status=None):
-    """The provider's single calls answered locally; every result downloads
-    as `generated` (a real clip, so the pieces can be joined)."""
 
     def submit(_self, spec, payload, idempotency_key):
         sent.append({"key": idempotency_key, **payload})
@@ -151,13 +144,10 @@ def _post(client, video: Path | None, data=None, images=1):
     )
 
 
-# --- the page ----------------------------------------------------------------
-
-
 def test_the_page_offers_one_image_one_video_and_the_prices(client):
     html = client.get("/clone-long").text
 
-    assert 'href="/clone-long"' in html  # in the nav
+    assert 'href="/clone-long"' in html
     assert 'data-field="image" data-kind="image" data-max="1"' in html
     assert 'data-field="video" data-kind="video" data-max="1"' in html
     assert 'data-prefix="/clone-long"' in html
@@ -168,9 +158,6 @@ def test_the_page_offers_one_image_one_video_and_the_prices(client):
     )
     assert set(rates) == set(TARGETS)
     assert rates["kie"] == {"credits_per_s": {"720P": 32.78}, "usd_per_credit": 0.005}
-
-
-# --- a run end to end ----------------------------------------------------------
 
 
 @pytest.mark.slow
@@ -190,7 +177,6 @@ def test_a_16_9_video_is_generated_in_pieces_and_comes_out_16_9(
     assert r.status_code == 202, r.text
     job = get_job(r.json()["job_id"])
     assert job.status == "done", job.error
-    # 3 pieces (11 + 11 + 10 s), each its own request, same image and prompt.
     assert sorted(p["duration"] for p in sent) == [10, 11, 11]
     assert {p["key"] for p in sent} == {job.id, f"{job.id}:1", f"{job.id}:2"}
     for payload in sent:
@@ -203,15 +189,12 @@ def test_a_16_9_video_is_generated_in_pieces_and_comes_out_16_9(
         "piece_1.mp4",
         "piece_2.mp4",
     }
-    # One video, the three generations joined, the source's shape.
     [result] = job.result_files()
     assert result.name == f"clone_long_{job.id}.mp4"
     assert _size(Path(result.path)) == (1280, 720)
     assert service.VideoTools(20).length(Path(result.path)) == pytest.approx(6, abs=0.3)
     assert not (service.work_dir() / job.id).exists()
     assert tasks.recall(job.id) is None
-    # The pieces are no results of their own: neither in the AI output
-    # folder nor in the user's store -- only the joined video is.
     assert [p.name for p in (tmp_path / "out").rglob("*.mp4")] == [result.name]
     stored = {p.name.split("__", 1)[-1] for p in (tmp_path / "assets").rglob("*.mp4")}
     assert stored == {"long.mp4", result.name}
@@ -219,8 +202,6 @@ def test_a_16_9_video_is_generated_in_pieces_and_comes_out_16_9(
 
 @pytest.mark.slow
 def test_a_4_5_video_is_made_at_3_4_and_comes_out_4_5(client, tmp_path, monkeypatch):
-    """Wan 3.0 has no 4:5: every piece is asked at its nearest (3:4) and the
-    joined video is fitted back to the source's exact 4:5."""
     sent = []
     generated = _clip(tmp_path / "g.mp4", 2, size="768x1024")
     _provider(monkeypatch, KieProvider, generated, sent)
@@ -245,7 +226,7 @@ def test_the_price_is_the_servers_and_the_key_is_never_stored(
     r = _post(
         client,
         _clip(tmp_path / "long.mp4", 32),
-        {"credits": "1", "usd": "0.01", "pieces": "1"},  # whatever a page sends
+        {"credits": "1", "usd": "0.01", "pieces": "1"},
     )
 
     job = get_job(r.json()["job_id"])
@@ -255,9 +236,6 @@ def test_the_price_is_the_servers_and_the_key_is_never_stored(
     assert "secret-key-123" not in json.dumps(job.params)
     page = client.get("/clone-long").text
     assert "Wan 3.0 · 3 pieces · $5.24" in page
-
-
-# --- refused before anything is paid ------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -318,9 +296,6 @@ def test_another_user_never_sees_a_run(client, tmp_path, monkeypatch):
     other.close()
 
 
-# --- paid pieces are never paid twice ----------------------------------------
-
-
 def _params(tmp_path, seconds=32.0) -> LongCloneParams:
     face = tmp_path / "face.png"
     face.write_bytes(b"img")
@@ -337,8 +312,6 @@ def _params(tmp_path, seconds=32.0) -> LongCloneParams:
 
 @pytest.mark.slow
 def test_a_rerun_resumes_every_piece_and_pays_for_none_again(tmp_path, monkeypatch):
-    """The join dies (a deploy, a full disk); the re-run resumes the three
-    remembered requests: nothing is submitted again."""
     sent = []
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
     params = _params(tmp_path)
@@ -388,8 +361,6 @@ def test_a_refused_piece_fails_the_run_and_leaves_nothing_to_retry(
 def test_a_refused_piece_never_leaves_a_piece_remembered_20_times(
     tmp_path, monkeypatch
 ):
-    """The pieces run in parallel: whatever order they end in, a refusal
-    leaves nothing remembered (else recovery would pay for it again)."""
     for attempt in range(20):
 
         def status(_self, tid):
@@ -407,8 +378,6 @@ def test_a_refused_piece_never_leaves_a_piece_remembered_20_times(
 
 @pytest.mark.slow
 def test_a_refused_piece_starts_no_further_piece(tmp_path, monkeypatch):
-    """One at a time, the first refused: the other three are never sent
-    (each would be paid for a run that fails anyway)."""
     monkeypatch.setenv("OFM_CLONE_LONG_PARALLEL", "1")
 
     def status(_self, tid):
@@ -425,9 +394,6 @@ def test_a_refused_piece_starts_no_further_piece(tmp_path, monkeypatch):
     assert len(sent) == 1
     assert [t for t in tasks.remembered() if t.job_id == "stop01"] == []
     assert not (service.work_dir() / "stop01").exists()
-
-
-# --- chained pieces (OFM_CLONE_LONG_CHAIN) -------------------------------------
 
 
 @pytest.mark.parametrize("provider", list(TARGETS))
@@ -527,8 +493,6 @@ def test_a_chained_rerun_takes_the_saved_pieces_and_pays_for_none_again(
 
 
 def test_a_run_keeps_the_switches_it_was_queued_with(tmp_path, monkeypatch):
-    """Switched after the run was queued: the run (and a recovery re-run of
-    it) still makes every piece the way it started."""
     for name in ("CHAIN", "COLOUR_MATCH", "AUDIO"):
         monkeypatch.setenv(f"OFM_CLONE_LONG_{name}", "1")
     params = _params(tmp_path, 10)
@@ -574,8 +538,6 @@ def test_a_job_stored_before_the_switches_runs_with_all_three_off(tmp_path):
 def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
     client, tmp_path, monkeypatch
 ):
-    """Refused at the first upload: nothing was made, so nothing can resume
-    -- the cut pieces go with the run."""
     sent = []
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
 
@@ -597,14 +559,10 @@ def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
 def test_a_piece_that_fails_to_download_is_finished_by_recovery_unpaid(
     client, tmp_path, monkeypatch
 ):
-    """The provider made all three; one download fails every try. The run
-    fails with every request kept, and recovery finishes it: nothing sent
-    again, only the missing piece downloaded again."""
     sent = []
     generated = _clip(tmp_path / "g.mp4", 2)
     _provider(monkeypatch, KieProvider, generated, sent)
     downloads = []
-    # The runner's own tries (review #11) all fail on the first run.
     tries = 1 + len(settings.aigen.download_retry_waits_s)
 
     def download(_self, url, dest):
@@ -637,9 +595,6 @@ def test_a_piece_that_fails_to_download_is_finished_by_recovery_unpaid(
 def test_rqs_time_limit_starts_no_further_piece_and_keeps_the_paid_ones(
     tmp_path, monkeypatch
 ):
-    """RQ ends the job (its time limit) while the first of three pieces
-    generates: the run ends at once, the other two never start, the first
-    still finishes and is saved, its request kept for recovery."""
     monkeypatch.setenv("OFM_CLONE_LONG_PARALLEL", "1")
     sent = []
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
@@ -677,8 +632,6 @@ def test_rqs_time_limit_starts_no_further_piece_and_keeps_the_paid_ones(
 
 @pytest.mark.slow
 def test_every_piece_runs_in_the_jobs_context(tmp_path, monkeypatch):
-    """The pieces' threads carry the job's context: their spans and logs
-    are in the job's trace."""
     job = contextvars.ContextVar("job")
     seen = []
     sent = []
@@ -702,8 +655,6 @@ def test_every_piece_runs_in_the_jobs_context(tmp_path, monkeypatch):
 def test_a_big_videos_pieces_go_up_at_most_the_piece_size(
     client, tmp_path, monkeypatch
 ):
-    """A 4K phone video's pieces are cut at most 1080 on the short side
-    (here 18 on a 64x36 source): the uploads are that size."""
     monkeypatch.setenv("OFM_CLONE_LONG_PIECE_MAX_SIDE", "18")
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), [])
     pieces = []
@@ -725,8 +676,6 @@ def test_a_big_videos_pieces_go_up_at_most_the_piece_size(
 
 @pytest.mark.slow
 def test_a_stale_work_folder_is_dropped_by_the_next_run(tmp_path, monkeypatch):
-    """A cut-off run nobody resumed leaves its folder; the next run drops it
-    once its requests can no longer resume, never a recent one."""
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), [])
     stale = service.work_dir() / "gone01"
     stale.mkdir(parents=True)
@@ -754,15 +703,12 @@ def test_one_piece_says_piece_on_its_card(client, tmp_path, monkeypatch):
     assert "1 pieces" not in page
 
 
-# --- time limits and recovery ---------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("seconds", "expected"),
     [
-        (10, 2700 + 0 + 2 * 900),  # one piece, one round
-        (71, 2700 + 0 + 2 * 900),  # 5 pieces, one round of 5
-        (180, 2700 + 2 * 1800 + 4 * 900),  # 12 pieces, three rounds
+        (10, 2700 + 0 + 2 * 900),
+        (71, 2700 + 0 + 2 * 900),
+        (180, 2700 + 2 * 1800 + 4 * 900),
     ],
 )
 def test_the_time_limit_grows_with_the_rounds_of_pieces(
@@ -791,8 +737,6 @@ def test_the_time_limit_grows_with_the_rounds_of_pieces(
 
 
 def test_a_chained_runs_time_limit_has_a_provider_wait_per_piece(monkeypatch):
-    """Chained, the pieces go one at a time: 12 pieces are 12 rounds, not
-    the 3 rounds of 5 at once."""
     monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
     monkeypatch.setenv("OFM_AIGEN_VIDEO_POLL_TIMEOUT_S", "1800")
     monkeypatch.setenv("OFM_CLONE_LONG_PARALLEL", "5")
@@ -819,8 +763,6 @@ def test_a_chained_runs_time_limit_has_a_provider_wait_per_piece(monkeypatch):
 
 
 def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeypatch):
-    """A run killed mid-way (a deploy, RQ's limit) with every piece done
-    is re-run once, through clone-long, with its own limit."""
     params = _params(tmp_path).model_dump()
     from ofmhelpers.db.stores.jobs import create_job
 

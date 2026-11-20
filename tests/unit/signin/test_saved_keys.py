@@ -1,5 +1,3 @@
-"""A user's saved provider keys (`schemas.users.SavedKeys`)."""
-
 from ofmhelpers.schemas.users import SavedKey, SavedKeys
 
 

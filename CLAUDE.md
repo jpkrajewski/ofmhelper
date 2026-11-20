@@ -78,10 +78,11 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 ## Testing
 - ONLY via `scripts/test.sh [preset|pytest args]`: (none) = unit + integration; `e2e` = browser, its own app with fakes (page/template/JS/job-flow change); `push` = default + heavy ffmpeg (what CI runs); `all`; `live` = real TikTok/Instagram/kie.ai/Higgsfield/Drive sandbox, local only; `deploy` = the release gate.
 - `live` and `deploy` ONLY when I say commit, push or deploy. `paid` (real generations, cost money) ONLY when I explicitly ask: `scripts/test.sh paid`.
-- Never pipe test output through grep/head/tail. Read `reports/latest/report.json`; full output `reports/latest/output.log`.
+- Never pipe test output through grep/head/tail. Every run ends with its verdict, `reports/latest/summary.txt` (`scripts/test_summary.py` over report.json: exit code, counts, files that did not even import, each failure with its error, the 10 slowest, `RESULT GREEN` / `NOT GREEN`): read that, never a reader of your own. Full output `reports/latest/output.log`.
 - After every run report: pass/fail/skip counts, each failure with its error text, the 10 slowest tests.
 - Before any command >30s, say in one line what you run and why. Background loops log to `reports/loops/`.
-- Done = full default suite green after your last change, with counts. List anything not run.
+- **WHILE WORKING: SCOPED TESTS ONLY.** After a change run only the tests of what you touched: the changed modules' own test files and their direct callers' (`scripts/test.sh tests/path/test_x.py ...`), the touched page's e2e file if JS changed. Never the full default suite, `push`, `all` or e2e-everything during work (owner 2026-11-20: "JUST RUN SCOPED SUITE OF YOUR CHANGES").
+- **THE FULL SUITE IS THE SHIP GATE.** Default + e2e + heavy run once, in the `ship` skill, on the owner's word. Done (before ship) = the scoped tests green, with counts; say which ran and that the full suite waits for ship. List anything not run.
 - A test for every change. New behaviour: integration test first; e2e only if it needs browser JavaScript. New outside service: interface + fake + contract test (fake always, real under `live`).
 - Test real behaviour: boundaries, failure paths, duplicate requests, retries, concurrency, data integrity where they apply.
 - Tests create their own data; never the dev DB, the prod snapshot (except `-m snapshot`) or the production Drive folder. No conditional assertions.
@@ -109,6 +110,7 @@ Rules (`.claude/rules/*.md`) load by themselves when you open a matching file. G
 `tests/unit/architecture/` fails on a new break; its `baseline.json` lists the old ones and only shrinks. NEVER add a line to the baseline to make a test pass: fix the code.
 
 ## CODE RULES AGENTS KEEP BREAKING
+- **NO COMMENTS, NO DOCSTRINGS. EVER.** Python, JS, CSS, templates. Descriptive names of functions, parameters and classes say what the code does (owner 2026-11-20: "CODE COMMENTS ARE FORBIDDEN"). Only machine directives stay: `# noqa`, `# type: ignore`, `# fmt:`, `# pragma`, `{# djlint:off/on #}`, and `# silent: <reason>` (the architecture test reads it). Checked on the changed files by the `no-comments` pre-commit hook (`scripts/check_no_comments.py`; while working: `... python scripts/check_no_comments.py $(git diff --name-only)`), on the whole repo by `tests/unit/architecture/test_no_comments.py` in CI.
 - **RETURN A PYDANTIC OBJECT OR `None`. ALWAYS.** Many = a list of them. Never a dict, a tuple or loose values; only a single plain value (bool, int, str, Path) stays plain. No hand parsers.
 - **3+ FUNCTIONS WITH THE SAME PARAMETERS = ONE CLASS** holding the shared ones, the functions its methods (`features/trials/folder.py` `Trials`).
 - **FASTAPI TO THE MAX.** Touching a route or the app: load the `fastapi` skill FIRST, every time. Nobody should have to tell you "use Depends".

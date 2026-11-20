@@ -1,11 +1,3 @@
-"""What /users does behind its routes (web/routers/admin/users.py): the
-list, a user added with their one-time set-password link, a new link, a VA's
-owner, access, removal. A role is picked once, when the user is added, and
-never changed after (owner's rule 2026-11-12): what someone made, whose keys
-paid and who saw it all hang on it. A wrong pick: remove or deactivate, add
-again. Nobody can lock themselves out from here: `other` refuses
-the admin's own row."""
-
 from pydantic import BaseModel, ConfigDict, SkipValidation, ValidationError
 
 from ofmhelpers.cache import enqueue
@@ -27,9 +19,6 @@ NO_USER = "No such user"
 
 
 class Shown(BaseModel):
-    """What the page shows on top after a write: an error, or the
-    set-password link made for `link_for`."""
-
     error: str | None = None
     message: str | None = None
     link_for: User | None = None
@@ -38,14 +27,11 @@ class Shown(BaseModel):
 
 
 class PageView(BaseModel):
-    """/users: each field is a name `users.html` reads."""
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     users: list[User]
     me: int
     roles: list[Role]
-    # Who a VA can work for: every active user that is not a VA.
     owners: list[User]
     providers: SkipValidation[list[Provider]]
     env_admins: list[str]
@@ -79,7 +65,6 @@ def owners() -> list[User]:
 
 
 def _owner(owner_id: int | None) -> int | None:
-    """A VA's owner as picked on the page: nobody, or a user who may own."""
     if owner_id is None:
         return None
     if owner_id not in {u.id for u in owners()}:
@@ -96,7 +81,6 @@ def _user(user_id: int) -> User:
 
 
 def other(user_id: int, me_id: int) -> User:
-    """A user that is not the one signed in (no locking yourself out)."""
     if user_id == me_id:
         msg = "Not on your own account"
         raise RefusedError(msg)
@@ -104,14 +88,12 @@ def other(user_id: int, me_id: int) -> User:
 
 
 def _with_link(user: User, site: str) -> Shown:
-    """`site`: this request's base URL, used when `APP_BASE_URL` is not set."""
     base = settings.web.base_url or site
     link = f"{base.rstrip('/')}/password/{credentials.password_link(user.id)}"
     return Shown(link_for=user, link=link)
 
 
 def _va_signs_in(va: User) -> str:
-    """How a VA gets in, for the notice after one is added or re-keyed."""
     owner = users.get_user(va.owner_id) if va.owner_id is not None else None
     employer = owner.email if owner is not None else "their employer's email"
     return (
@@ -121,10 +103,6 @@ def _va_signs_in(va: User) -> str:
 
 
 def _make_va_folder(va: User) -> None:
-    """A VA added (or given their first employer): their folder in the
-    employer's Drive (`features/drive/va_folders.py`) is made now, on the
-    worker, not at the next sweep. Never raises: the VA is saved already; a
-    failure is logged and the sweep makes the folder."""
     if va.owner_id is None or not drive_folders.enabled():
         return
     owner = va.owner_id
@@ -144,10 +122,6 @@ def add(
     owner_id: int | None = None,
     password: str = "",
 ) -> Shown:
-    """A user with their one-time set-password link; a VA with an employer
-    (owner) and the password the admin typed: the VA signs in with "Login as
-    Virtual Assistant" (employer's email + that password), no link, nothing
-    for the VA to set up."""
     try:
         form = UserForm(email=email, role=role, name=name, owner_id=_owner(owner_id))
     except ValidationError:  # silent: shown on the page
@@ -172,7 +146,6 @@ def add(
 
 
 def set_va_password(user: User, password: str) -> Shown:
-    """A new password for a VA (a forgotten one, or one to take back)."""
     if user.role != Role.VA or user.owner_id is None:
         msg = "Only a VA with an employer has a password set here"
         raise RefusedError(msg)
@@ -184,8 +157,6 @@ def set_va_password(user: User, password: str) -> Shown:
 
 
 def new_link(user_id: int, site: str) -> Shown:
-    """A new set-password link (the old one stops working): a first
-    password, or a forgotten one. Not for a VA: an admin sets theirs."""
     user = _user(user_id)
     if user.role == Role.VA:
         msg = "A VA has no password link: set the password here on Users"
@@ -194,15 +165,6 @@ def new_link(user_id: int, site: str) -> Shown:
 
 
 def set_owner(user: User, owner_id: int | None) -> None:
-    """Whose VA or manager `user` is (their employer). A VA's owner sees
-    what the VA makes, the VA's runs go out on the owner's saved API keys,
-    and the VA signs in with the owner's email; a manager looks at the
-    employer's pages (any user's or admin's; the chats only an admin's:
-    `auth.access.opens`). Both always have one. A VA's is set once, when
-    they are added (owner 2026-11-18: "Once created it stays that way"):
-    their runs were made on that employer's keys and belong to them. A
-    wrong pick = deactivate the VA and add them again. A manager makes no
-    runs, so theirs stays changeable."""
     if not user.role.has_employer:
         msg = "Only a VA or a manager has an employer"
         raise RefusedError(msg)
@@ -226,9 +188,6 @@ def set_active(user: User, active: bool) -> None:
 
 
 def remove(user: User) -> Shown | None:
-    """Their sign-ins and keys go with them. Refused (a `Shown`) while they
-    own jobs (a sign-in in the action log is one: `jobs.user_id`), phones,
-    accounts or watched profiles: deactivating keeps those."""
     try:
         users.delete_user(user.id)
     except OwnsDataError:  # silent: shown on the page

@@ -1,19 +1,3 @@
-"""
-The /phones Excel export: everything a VA needs to sign in on a phone, in
-plaintext on purpose (decided 2026-10-20; the file is for the VAs).
-
-Two sheets:
-- **Phones** -- one row per phone: its details, then per service any
-  phone uses (in services.json order) the usernames and passwords, plus
-  backup codes for social services. Several logins of one service share a
-  cell, one per line; a custom service's login reads "Provider: username".
-- **Logins** -- one row per login per phone it is on, with that phone's
-  details: the sheet to filter and sort.
-
-Every cell is written as a string: openpyxl would otherwise store a value
-starting with "=" (a password can) as a formula Excel evaluates.
-"""
-
 from functools import lru_cache
 from io import BytesIO
 
@@ -77,7 +61,6 @@ def _row(sheet: WriteOnlyWorksheet, values: list[str], header: bool = False) -> 
 
 
 def _widths(sheet: WriteOnlyWorksheet, count: int, width: int = 22) -> None:
-    """Write-only sheets take column widths before the first row."""
     for index in range(1, count + 1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
@@ -136,7 +119,6 @@ def _logins_sheet(book: Workbook, devices: list[Device]) -> None:
 
 
 def build(devices: list[Device]) -> bytes:
-    """The .xlsx file of `devices`, in the order given."""
     book = Workbook(write_only=True)
     _phones_sheet(book, devices)
     _logins_sheet(book, devices)

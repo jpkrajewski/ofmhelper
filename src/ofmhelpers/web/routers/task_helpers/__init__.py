@@ -1,26 +1,3 @@
-"""
-Shared plumbing for every "upload files -> run in background -> download
-result" router (/ai, /clone, /clone-long, /download-media, /clean-images,
-/uniqify, /character-sheet and the old per-model tools' job pages).
-
-Each router should only need to define its own processing function and
-wire it through these helpers -- everything else lives here once, split by
-what it does:
-
-- `uploads.py`    the asset store as routes use it (the store itself:
-                  `features/assets/store.py`; its refusals become 400s here)
-- `manifests.py`  a picker's new + reused entries into paths
-                  (`features/assets/manifests.py`), refusals as 400s
-- `responses.py`  the status/polling payloads every tool renders (the
-                  result cards: `features/assets/cards.py`)
-- `serving.py`    handing a stored file back to the browser
-- `routes.py`     the status page / polling / download endpoints of a job
-- `features/assets/names.py` (re-exported)  what a downloaded result is saved as
-
-Import from this package, not the submodules: every tool router imports from
-here, and which submodule a helper lives in is not their business.
-"""
-
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.web.routers.task_helpers.manifests import (
     build_ordered_paths,

@@ -1,55 +1,3 @@
-"""
-ofmhelpers/web/drive_folders.py
-
-/drive: every Instagram login on an active phone gets "<handle> - <owner>"
--- uploaded into from the phone, read here -- with a POSTED folder inside
-(`settings.gdrive.posted_folder_name`) that people, never this code, move a
-video into once it is posted.
-
-Everything happens in the phone owner's OWN Google Drive, through their
-own Google account (`gdrive.connect_as`, the refresh token their Google
-sign-in left, `stores.users.refresh_token`): one way in for reading,
-making, renaming and uploading. Each owner has one root folder there,
-`root_name()` -- "ALL ACCOUNTS" in production, "DEV - ALL ACCOUNTS"
-anywhere else, so a dev copy never touches the live folders -- found by
-name (any case: a hand-made "all accounts" is adopted with everything in
-it) or made, and kept by id (`users.drive_root_id`). An owner who never
-connected Google Drive is listed in `SyncReport.not_connected` and their
-cards say so; nothing is made for them -- except the agency admin (the
-password account), who is read through the Drive bot (the service account,
-`settings.gdrive.service_account`) in the configured root
-(`OFM_GDRIVE_ROOT_FOLDER`, prod's "ALL ACCOUNTS", shared with the bot)
-until they sign in with Google: /drive keeps showing the agency's folders
-however the admin signed in. Only that folder is used then -- none is
-searched for or made in the bot's own Drive -- and outside production only
-when it is named `root_name()`. Uploads still need a Google sign-in (the bot
-has no storage).
-
-The sweep (`sync`: features/jobs/sweeps.py every `check_interval_s`, and the page's
-Sync button), under one Postgres advisory lock (`store.sync_lock`; a
-second sweep at the same time does nothing), per owner:
-
-1. makes what is missing: the database says which logins lack a folder, a
-   POSTED folder, or carry an old name, and Drive is called only for those.
-   Folders are found by name before one is made, then kept by id: a new
-   owner name renames the folder, a folder renamed by hand is renamed back.
-2. tallies (`_tally`): lists every account folder and its POSTED folder, in
-   parallel, records each file seen in POSTED for the first time (the
-   Sync summary's "newly posted"), and
-   heals what it finds broken -- an account folder gone, a POSTED folder
-   trashed, renamed or dragged elsewhere -- in the same pass.
-
-Nothing in Drive is ever moved or deleted; other folders inside an
-account folder (the old day folders) are ignored.
-
-`board(owner=..., live=False)` opens /drive at once from each folder's last
-read (saved by every read: sweep, Sync, live page); `/drive/live` then
-brings the fresh one: per owner, their root listed once, every account
-folder in it in one batched listing and their POSTED folders in another
-(`children_of`). Previews come through the folder owner's account too and
-are kept on disk (`thumbnail`).
-"""
-
 import datetime
 import time
 from collections import defaultdict
@@ -105,35 +53,22 @@ lazy from ofmhelpers.schemas.gdrive import AccountFolder
 
 logger = get_logger(__name__)
 
-# The job a person's Drive sync runs as when queued by hand (a login put on a
-# phone, a VA added): `features/phones/service.py`, `features/users/service.py`.
 SYNC_TASK = "drive_sync"
 
-# The root folder in each owner's Drive.
 _ROOT_NAME = "ALL ACCOUNTS"
 _DEV_PREFIX = "DEV - "
 
 
 def enabled() -> bool:
-    """Drive is read through each owner's Google sign-in: nothing to make or
-    sweep until Google sign-in is configured (or every outside service is
-    faked)."""
     return settings.signin.google_configured or settings.infra.fake_externals
 
 
 def root_name() -> str:
-    """ "ALL ACCOUNTS" in production; "DEV - ALL ACCOUNTS" anywhere else, so
-    dev and tests never adopt or write into the live folders, even in the
-    same Google account. In live-read mode dev reads the live "ALL ACCOUNTS"
-    (every write blocked, `gdrive.ReadOnlyDrive`)."""
     live = settings.infra.production or read_live_mode()
     return _ROOT_NAME if live else f"{_DEV_PREFIX}{_ROOT_NAME}"
 
 
 def _bot_root(user_id: int) -> str | None:
-    """The configured root the Drive bot reads for `user_id` instead of
-    their own Drive: only the agency admin's, only without a Google token,
-    only when the bot and the root are both configured."""
     s = settings.gdrive
     if not (s.service_account and s.root_folder_id):
         return None
@@ -147,9 +82,6 @@ def _bot_root(user_id: int) -> str | None:
 
 
 def person_drive(user_id: int, *, interactive: bool = False) -> DriveApi | None:
-    """The owner's own Drive; for the agency admin without Google, the Drive
-    bot in the configured root (`_bot_root`, kept as their root); None when
-    neither."""
     token = users.refresh_token(user_id)
     if token:
         return connect_as(token, interactive=interactive)
@@ -168,20 +100,12 @@ def _owner_label(user_id: int) -> str:
 
 
 def _is_root(folder: DriveFolder) -> bool:
-    """Whether a stored root may be used. Outside production only a folder
-    named `root_name()`: a dev copy of the prod database carries the live
-    "ALL ACCOUNTS" id, which dev must never write into -- except in live-read
-    mode, where it is read (never written, `gdrive.ReadOnlyDrive`)."""
     if settings.infra.production or read_live_mode():
         return True
     return folder.name.strip().casefold() == root_name().casefold()
 
 
 def usable_root(drive: DriveApi, user_id: int) -> str | None:
-    """The owner's stored root while it is still there and (outside
-    production) still named `root_name()`; else None. Only asks: nothing is
-    made or forgotten (the upload worker checks with it before writing).
-    Raises `DriveError`."""
     user = users.get_user(user_id)
     stored = user.drive_root_id if user else None
     if not stored:
@@ -203,14 +127,10 @@ def usable_root(drive: DriveApi, user_id: int) -> str | None:
 
 
 def find_root(drive: DriveApi, user_id: int) -> str | None:
-    """The owner's root folder for a reader: `usable_root`; else the oldest
-    folder in their My Drive whose name is `root_name()` in any case. Only
-    asks: nothing is made, stored or forgotten. Raises `DriveError`."""
     stored = usable_root(drive, user_id)
     if stored:
         return stored
     if _bot_root(user_id) is not None:
-        # `drive` is the Drive bot's: its own My Drive is not the agency's.
         return None
     wanted = root_name().casefold()
     named = [
@@ -218,20 +138,14 @@ def find_root(drive: DriveApi, user_id: int) -> str | None:
         for f in drive.children("root", folders_only=True)
         if f.name.strip().casefold() == wanted
     ]
-    # Drive lists newest first: the oldest is the one people have been using.
     return named[-1].id if named else None
 
 
 def ensure_root(drive: DriveApi, user_id: int) -> str:
-    """The owner's root folder: `usable_root`; else the oldest folder in
-    their My Drive whose name is `root_name()` in any case (one made by
-    hand is adopted with what is in it); else a new one. A stored folder of
-    another name is left as it is. Raises `DriveError`."""
     stored = usable_root(drive, user_id)
     if stored:
         return stored
     if _bot_root(user_id) is not None:
-        # The bot's own Drive is no place for the agency's folders.
         msg = (
             "The Drive bot cannot use OFM_GDRIVE_ROOT_FOLDER: share it with"
             f" {service_account_email()}"
@@ -244,7 +158,6 @@ def ensure_root(drive: DriveApi, user_id: int) -> str:
         for f in drive.children("root", folders_only=True)
         if f.name.strip().casefold() == wanted
     ]
-    # Drive lists newest first: the oldest is the one people have been using.
     found = named[-1].id if named else drive.create_folder("root", root_name()).id
     users.set_drive_root(user_id, found)
     logger.info(
@@ -254,22 +167,11 @@ def ensure_root(drive: DriveApi, user_id: int) -> str:
 
 
 class ReviewPlace(BaseModel, frozen=True, arbitrary_types_allowed=True):
-    """Where a reviewed video is written: the Drive it goes through and the
-    folder's id in it."""
-
-    # A Protocol: nothing for Pydantic to check it against.
     drive: SkipValidation[DriveApi]
     folder_id: str
 
 
 def review_target(refresh_token: str, user_id: int) -> ReviewPlace:
-    """The Drive a reviewed /clone-links video is written through, and the
-    root it is filed in: the owner's root (`ensure_root`). In live-read mode
-    -- dev reading the live folders, every write blocked -- dev's own
-    "DEV - ALL ACCOUNTS" in the owner's My Drive instead (found by name or
-    made, never stored as their root), through a Drive that can write only
-    inside it (`gdrive.ScopedDrive`): the live folders stay untouched.
-    Raises `DriveError`."""
     if not read_live_mode():
         drive = connect_as(refresh_token)
         return ReviewPlace(drive=drive, folder_id=ensure_root(drive, user_id))
@@ -280,7 +182,6 @@ def review_target(refresh_token: str, user_id: int) -> ReviewPlace:
         for f in raw.children("root", folders_only=True)
         if f.name.strip().casefold() == name.casefold()
     ]
-    # Drive lists newest first: the oldest is the one people have been using.
     root = named[-1].id if named else raw.create_folder("root", name).id
     return ReviewPlace(drive=ScopedDrive(raw, root), folder_id=root)
 
@@ -288,15 +189,6 @@ def review_target(refresh_token: str, user_id: int) -> ReviewPlace:
 def account_subfolder(
     place: ReviewPlace, account_folder_id: str, name: AccountFolder
 ) -> str:
-    """The id of folder `name` in an account's folder (found or made). Dev
-    reading the live folders (`read_live_mode`, `place`'s root its DEV
-    root): in a folder of the account's name in the DEV root instead, so dev
-    tests the whole loop and never writes a live one; found again every run,
-    as the scoped Drive may write only into folders it found or made itself.
-    Anywhere else always the account's own folder: decided by the mode, not
-    by where the folder sits (review 2026-11-18: a moved account folder or a
-    remade root sent the files into a copy of the account folder, silently).
-    Raises `DriveError`."""
     drive = place.drive
     if not read_live_mode():
         return drive.ensure_folder(account_folder_id, name).id
@@ -307,13 +199,6 @@ def account_subfolder(
 
 @contextmanager
 def _review_lock(user_id: int) -> Iterator[None]:
-    """One review of `user_id` at a time finds or makes their root and
-    review folders, across every worker process: ten reviews of a batch
-    finishing together each found nothing and made their own "ALL
-    ACCOUNTS" / "GOOD REELS" (review 2026-10-25). A Redis lock, as
-    `integrations/ai_providers.base.upload_lock`. Redis down, or the wait over
-    `OFM_GDRIVE_REVIEW_LOCK_S`: logged, and the review goes ahead unlocked
-    -- a duplicate folder at worst, never a review left hanging."""
     wait_s = settings.gdrive.review_lock_s
     lock = get_redis().lock(
         f"lock:drive-review:{user_id}", timeout=wait_s, blocking_timeout=wait_s
@@ -345,8 +230,6 @@ def _folder_key(user_id: int, root: str, name: str) -> str:
 
 
 def _remembered(drive: DriveApi, key: str, root: str, name: str) -> str | None:
-    """The folder id found last time, while it is still `name` in `root`
-    (one get); None when not remembered, gone, renamed or moved."""
     known = get_text(key)
     if not known:
         return None
@@ -363,13 +246,6 @@ def _remembered(drive: DriveApi, key: str, root: str, name: str) -> str | None:
 
 
 def _review_folder_id(drive: DriveApi, user_id: int, root: str, name: str) -> str:
-    """Folder `name` in `root`: the remembered one, else the oldest of that
-    name, else a new one. A new one is looked for again at once and the
-    oldest kept: Drive's name search can lag a fresh folder, and a review
-    that went ahead unlocked may have made one too. Its id is remembered
-    (`OFM_GDRIVE_REVIEW_FOLDER_TTL_S`) so later reviews never depend on that
-    search. In Redis, not a repository: a Drive lookup memo, no database
-    row behind it (like the Drive space, features/drive/space.py)."""
     key = _folder_key(user_id, root, name)
     known = _remembered(drive, key, root, name)
     if known:
@@ -383,11 +259,6 @@ def _review_folder_id(drive: DriveApi, user_id: int, root: str, name: str) -> st
 
 
 def review_folder(refresh_token: str, user_id: int, name: str) -> ReviewPlace:
-    """The Drive a reviewed /clone-links video is uploaded through and the
-    id of folder `name` (GOOD REELS / TRIAL REELS) in its root
-    (`review_target`), found or made -- one review of a person at a time
-    (`_review_lock`); the upload itself stays outside, in parallel. Raises
-    `DriveError`."""
     with _review_lock(user_id):
         root = review_target(refresh_token, user_id)
         return ReviewPlace(
@@ -408,23 +279,16 @@ def now() -> datetime.datetime:
 
 
 def _today_start(at: datetime.datetime) -> datetime.datetime:
-    """The start of today in the Drive timezone: what "Uploaded to Drive
-    today" counts from. By the local calendar day, not the posting window
-    -- the team works in the evening, so a window starting mid-evening
-    would count those files as yesterday's."""
     local = at.astimezone(ZoneInfo(settings.gdrive.timezone))
     return local.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _is_posted(name: str) -> bool:
-    """A folder name meaning POSTED: "Posted", "posted " made by hand too."""
     wanted = settings.gdrive.posted_folder_name.strip().casefold()
     return name.strip().casefold() == wanted
 
 
 def _missing(targets: list[DriveTarget], folders: StoredFolders) -> list[DriveTarget]:
-    """The logins with no folder, a folder under an old name, or no POSTED
-    folder."""
     return [
         t
         for t in targets
@@ -435,9 +299,6 @@ def _missing(targets: list[DriveTarget], folders: StoredFolders) -> list[DriveTa
 
 
 def _deleted_by_hand(target: DriveTarget) -> None:
-    """Its folder was deleted in Drive: the account goes everywhere
-    (features/accounts/removal.py), the folder is not made again. Imported here:
-    the removal reads phones and trashes through this module."""
     from ofmhelpers.features.accounts.removal import folder_deleted
 
     logger.warning(
@@ -448,9 +309,6 @@ def _deleted_by_hand(target: DriveTarget) -> None:
 
 
 def trash_folders(user_id: int, login_ids: list[int]) -> None:
-    """These logins' account folders into the owner's Drive trash
-    (restorable there), forgotten. A Drive failure is logged, never raised:
-    the folder then stays, listed on /drive under folders no login owns."""
     stored = store.account_folders()
     folders = [f for i in login_ids if (f := stored.get(i)) is not None]
     if not folders:
@@ -472,19 +330,13 @@ def trash_folders(user_id: int, login_ids: list[int]) -> None:
         store.forget_account_folder(folder.login_id)
 
 
-class _RemovedByHandError(Exception):
-    """The stored account folder was deleted in Drive (`_deleted_by_hand`)."""
+class _RemovedByHandError(Exception): ...
 
 
-class _LoginGoneError(Exception):
-    """The login was deleted while this sync worked on it (Remove login, a
-    replace on /accounts, a phone deleted): its row is gone, so is the job."""
+class _LoginGoneError(Exception): ...
 
 
 def _gone_meanwhile(target: DriveTarget) -> Never:
-    """The login went while its folder was being found or made. The folder
-    stays as it is in Drive (nothing in Drive is deleted, not even an empty
-    one just made): the account added again adopts it by name."""
     logger.info("drive: %s gone meanwhile, its folder left as it is", target.handle)
     raise _LoginGoneError
 
@@ -496,9 +348,6 @@ def _account_folder(
     stored: StoredFolder | None,
     report: SyncReport,
 ) -> tuple[str, bool]:
-    """(folder id, whether it is the one stored): the stored folder, renamed
-    when the name is old; else one of that name in the root; else a new
-    one."""
     if stored is not None:
         try:
             current = drive.folder(stored.folder_id)
@@ -527,8 +376,6 @@ def _account_folder(
 
 
 def _find_posted(drive: DriveApi, account_id: str) -> DriveFile | None:
-    """The oldest POSTED-named folder in the account folder (Drive lists
-    newest first)."""
     named = [
         f for f in drive.children(account_id, folders_only=True) if _is_posted(f.name)
     ]
@@ -542,9 +389,6 @@ def _posted_folder(
     stored_id: str | None,
     report: SyncReport,
 ) -> str:
-    """The account folder's POSTED folder: the stored one while it is still
-    inside (renamed back if renamed by hand); else a POSTED-named one in it;
-    else a new one."""
     name = settings.gdrive.posted_folder_name
     label = f"{target.folder_name}/{name}"
     if stored_id is not None:
@@ -597,8 +441,6 @@ def _files(items: list[DriveFile]) -> list[DriveFile]:
 
 
 def _posted_dirs(items: list[DriveFile], posted_id: str | None) -> list[DriveFile]:
-    """The POSTED folders among an account folder's items: the kept one
-    (under whatever name it has now) and any other POSTED-named one."""
     return [
         i
         for i in items
@@ -612,9 +454,6 @@ def _build_scan(
     posted_id: str | None,
     posted_items: DriveListing,
 ) -> AccountScan:
-    """An account folder from its listing and its POSTED folders' ones.
-    Other folders in it (the old day folders, hand-made ones) are neither
-    listed nor touched: VAs clear them out themselves."""
     posted_dirs = _posted_dirs(items, posted_id)
     return AccountScan(
         name=name,
@@ -626,8 +465,6 @@ def _build_scan(
 
 
 def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountScan:
-    """The account folder as it is now. Raises `FolderGoneError` when it is
-    gone (a trashed folder still lists, so it is asked first)."""
     current = drive.folder(account_id)
     items = drive.children(account_id)
     posted_items = DriveListing()
@@ -637,15 +474,11 @@ def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountSca
                 FolderItems(folder_id=d.id, items=drive.children(d.id))
             )
         except FolderGoneError:  # silent: only that POSTED folder went
-            # Only that POSTED folder went since the listing, not the
-            # account: never taken as the account deleted by hand.
             logger.info("drive: POSTED folder %s gone mid-scan", d.id)
     return _build_scan(current.name, items, posted_id, posted_items)
 
 
 def _kept_posted_ok(scan: AccountScan, stored: StoredFolder) -> bool:
-    """Whether the stored POSTED folder is inside the account folder under
-    its name. Not when it is gone, trashed, renamed or dragged out."""
     name = settings.gdrive.posted_folder_name
     return any(
         d.id == stored.posted_folder_id and d.name == name for d in scan.posted_folders
@@ -655,9 +488,6 @@ def _kept_posted_ok(scan: AccountScan, stored: StoredFolder) -> bool:
 def _tally_one(
     user_id: int, target: DriveTarget, stored: StoredFolder, seen_at: float
 ) -> SyncReport:
-    """Lists one account, heals it, records what is newly posted. Its own
-    report (merged by `_tally`): the accounts run in parallel threads, each
-    with its own Drive connection."""
     report = SyncReport()
     drive = person_drive(user_id)
     if drive is None:
@@ -678,7 +508,6 @@ def _tally_one(
         return report
     report.newly_posted = newly
     store.save_scans({target.login_id: scan}, seen_at)
-    # A video deleted (or dragged away) in Drive stops showing "In Drive".
     present = {f.id for f in (*scan.waiting, *scan.posted)}
     upload_store.gone_from(target.login_id, present, seen_at)
     return report
@@ -694,8 +523,6 @@ def _merge(into: SyncReport, part: SyncReport) -> None:
 
 
 def _tally(user_id: int, targets: list[DriveTarget], report: SyncReport) -> None:
-    """Every linked account of the owner, in parallel; one failing is
-    reported."""
     folders = store.account_folders()
     linked = [(t, f) for t in targets if (f := folders.get(t.login_id))]
     seen_at = time.time()
@@ -739,23 +566,15 @@ def _sync_owner(user_id: int, targets: list[DriveTarget], report: SyncReport) ->
 
 
 def sync(owner: int | None = None) -> SyncReport:
-    """Per phone owner (only `owner`: a person's Sync, admins included;
-    everyone for None: the sweep): their root, what is missing in it, then
-    tallies and heals every account. One owner or login failing is reported; the
-    others still go. The report names only the owners swept."""
     report = SyncReport()
     if read_live_mode():
-        # Live-read mode only reads the live folders (the page's /drive/live);
-        # the sweep makes and renames folders, so it never runs here.
         logger.info("drive: live-read mode, sweep skipped (no writes to live)")
         return report
     with store.sync_lock() as held:
         if not held:
             report.busy = True
             return report
-        # Read inside the lock: a sweep that just finished is seen.
         by_owner = _by_owner(store.targets(owner))
-        # An owner with VAs and no phone still gets their VAs' folders.
         for va_owner in va_folders.owners(owner):
             by_owner.setdefault(va_owner, [])
         for user_id, targets in by_owner.items():
@@ -775,8 +594,6 @@ def sync(owner: int | None = None) -> SyncReport:
 
 
 def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
-    """Fills the card from Drive and records what is newly posted; a folder
-    deleted by hand since removes the account everywhere."""
     if card.account_folder_id is None:
         return
     try:
@@ -801,10 +618,6 @@ def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
 
 
 def _root_folders(user_id: int, drive: DriveApi, root: str) -> list[DriveFile]:
-    """The root's folders. Raises `FolderGoneError` when the root itself is
-    gone, or (outside production) is not named `root_name()` (a trashed one
-    would still list, so it is asked too, at the same time: each Drive
-    round trip is a few hundred ms)."""
 
     def check() -> None:
         other = person_drive(user_id, interactive=True)
@@ -825,9 +638,6 @@ def _root_folders(user_id: int, drive: DriveApi, root: str) -> list[DriveFile]:
 def _list_batched(
     drive: DriveApi, cards: list[DriveCard], names: dict[str, str], seen_at: float
 ) -> None:
-    """Fills the cards whose folder the root listing just returned (live,
-    not trashed), all at once: one listing for every account folder, one
-    for every POSTED folder in them -- not three calls per account."""
     ids = [c.account_folder_id for c in cards if c.account_folder_id]
     inside = drive.children_of(ids)
     posted_ids = [
@@ -846,8 +656,6 @@ def _list_batched(
 
 
 def _list_each(user_id: int, cards: list[DriveCard], seen_at: float) -> None:
-    """One account at a time (in parallel): the folders the batch could not
-    take."""
     with ThreadPoolExecutor(max_workers=settings.gdrive.list_workers) as pool:
         listed = {
             pool.submit(in_this_trace(_list_account), user_id, card, seen_at): card
@@ -857,7 +665,6 @@ def _list_each(user_id: int, cards: list[DriveCard], seen_at: float) -> None:
             try:
                 future.result()
             except Exception:
-                # Never "Nothing waiting" for a folder never read.
                 logger.exception("drive: card of %s failed", card.target.handle)
                 card.error = "Could not read this folder from Drive"
 
@@ -871,25 +678,19 @@ def _list_root(
     known: set[str] | None,
     seen_at: float,
 ) -> dict[str, str] | None:
-    """{folder id: name} of the cards the batch filled; None when the root
-    is gone (or not `root_name()`), which is forgotten. Only that check
-    forgets the root; a batch failing (one account or POSTED folder deleted
-    since the root listing 404s the whole query) leaves every card to the
-    one-by-one listing. `known`: list the root's other folders."""
     try:
         listed = _root_folders(user_id, drive, root)
     except FolderGoneError:
         logger.warning(
             "drive: root of %s is gone, the sweep finds it", user_id, exc_info=True
         )
-        users.set_drive_root(user_id, None)  # the sweep finds or makes it
+        users.set_drive_root(user_id, None)
         return None
     except Exception:
         logger.exception("drive: root of %s not listed, listing one by one", user_id)
         return {}
     in_root = {f.id: f.name for f in listed}
     if known is not None:
-        # /clone-links' GOOD/TRIAL REELS are the app's own, not leftovers.
         ours = {name.casefold() for name in review_folders()}
         result.other_folders = sorted(
             (
@@ -921,9 +722,6 @@ def _list_owner(
     *,
     others: bool,
 ) -> None:
-    """One owner's cards, read live through their Drive: their root once,
-    the folders in it in one batch, the rest one by one. `others`: also
-    list the root's folders no login owns (the viewer's own root)."""
     not_connected = (
         f"{_owner_label(user_id)} has not connected Google Drive: their"
         " Account page, Connect Google Drive"
@@ -943,7 +741,6 @@ def _list_owner(
         else {}
     )
     if in_root is None:
-        # Its folders are no longer in a root of theirs: never read them.
         for card in cards:
             card.account_folder_id = card.posted_folder_id = None
         return
@@ -959,7 +756,6 @@ def _list_owner(
 
 
 def _saved_board(result: DriveBoard, folders: StoredFolders) -> None:
-    """Fills the cards from each folder's last read: no Drive call."""
     result.live = False
     reads: list[float] = []
     for card in result.cards:
@@ -981,10 +777,6 @@ def board(
     viewer: int | None = None,
     live: bool = True,
 ) -> DriveBoard:
-    """/drive for `owner`'s phones (everyone's for None: tests and tools, never a
-    session -- /drive passes the viewer's own id): a card
-    per login with what waits and what was posted; the `viewer`'s own root
-    link, and that root's folders no login owns."""
     at = at or now()
     me = users.get_user(viewer) if viewer is not None else None
     result = DriveBoard(
@@ -1034,7 +826,6 @@ def board(
 
 
 def _uploaded_since(card: DriveCard, start: datetime.datetime) -> list[str]:
-    """The card's files Drive got at or after `start`, waiting or posted."""
     return [
         f.id
         for f in (*card.scan.waiting, *card.scan.posted)
@@ -1043,8 +834,6 @@ def _uploaded_since(card: DriveCard, start: datetime.datetime) -> list[str]:
 
 
 def _count_uploaded(result: DriveBoard, at: datetime.datetime) -> None:
-    """Each card's files uploaded today, split by who put them there: ours
-    (`drive_uploads`: /clone's "Upload to Drive") or a person, by hand."""
     start = _today_start(at)
     today = {c.target.login_id: _uploaded_since(c, start) for c in result.cards}
     ours = set(upload_store.made_here([i for ids in today.values() for i in ids]))
@@ -1059,7 +848,6 @@ def _thumb_cache(file_id: str, px: int) -> Path:
 
 
 def _cached_thumb(file_id: str, px: int) -> DriveThumb | None:
-    """A preview fetched before, kept as `<id>_<px>.<subtype>`."""
     base = _thumb_cache(file_id, px)
     if not base.parent.is_dir():
         return None
@@ -1086,12 +874,6 @@ def _keep_thumb(file_id: str, px: int, content: bytes, media_type: str) -> None:
 def thumbnail(
     login_id: int, file_id: str, owner: int | None = None
 ) -> DriveThumb | None:
-    """The preview of a file in `login_id`'s account or POSTED folder, read
-    through the folder owner's Drive; None for anything else (another
-    folder, gone, no preview, a login `owner` may not see), so the proxy
-    never serves the rest of what the account can see. Whether it is in
-    the folder is asked every time (it may have been moved since); the
-    image itself is kept on disk once fetched."""
     target = next((t for t in store.targets(owner) if t.login_id == login_id), None)
     folder = store.account_folders().get(login_id) if target else None
     if target is None or folder is None:

@@ -1,7 +1,3 @@
-"""An item in a Drive folder, as Drive names its fields: what
-`integrations/gdrive` lists, the /drive page shows and a folder's last read
-stores."""
-
 import mimetypes
 from datetime import datetime
 from enum import StrEnum
@@ -12,11 +8,6 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
 class AccountFolder(StrEnum):
-    """The folders inside an account's Drive folder: POSTED is where people
-    move a posted video (its name is `settings.gdrive.posted_folder_name`,
-    this by default), TRIALS holds /trials' copies, THREADS /threads'
-    picture sets."""
-
     POSTED = "POSTED"
     TRIALS = "TRIALS"
     THREADS = "THREADS"
@@ -30,9 +21,6 @@ def folder_url(folder_id: str) -> str:
 
 
 class DriveFile(BaseModel):
-    """One item in a folder (`Drive.children`), fields named the way
-    Drive's `files` resource names them."""
-
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
@@ -42,7 +30,6 @@ class DriveFile(BaseModel):
     has_thumbnail: bool = Field(default=False, alias="hasThumbnail")
     created_time: datetime | None = Field(default=None, alias="createdTime")
     size: int | None = None
-    # Only `Drive.file` asks for these three.
     parents: list[str] = Field(default_factory=list)
     thumbnail_link: str = Field(default="", alias="thumbnailLink")
     owned_by_me: bool = Field(default=False, alias="ownedByMe")
@@ -53,15 +40,11 @@ class DriveFile(BaseModel):
 
     @property
     def kind(self) -> str:
-        """What the page draws: image, video, folder or file."""
         if self.is_folder:
             return "folder"
         major = self.mime_type.split("/", 1)[0]
         if major in ("image", "video"):
             return major
-        # Drive often reports a phone's upload as application/octet-stream;
-        # the name's own type then says whether it is a video or an image, so
-        # a reel still gets the play icon rather than the generic file one.
         guessed, _ = mimetypes.guess_type(self.name)
         major = guessed.split("/", 1)[0] if guessed else ""
         return major if major in ("image", "video") else "file"
