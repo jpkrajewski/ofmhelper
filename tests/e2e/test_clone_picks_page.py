@@ -1,5 +1,7 @@
+import itertools
 import re
 import subprocess
+import time
 lazy from pathlib import Path
 
 import pytest
@@ -112,6 +114,66 @@ def test_start_asks_first_and_a_tile_then_picks_that_one_subject(
     expect(_picker(va, "image").locator(".file-order-list li")).to_have_count(1)
     expect(tiles.first).to_have_attribute("aria-pressed", "true")
     assert va.js_errors == []
+
+
+def test_an_html_answer_to_start_shows_plain_words_and_leaves_no_stuck_card(
+    va: Session, subject_images: list[Path], source_videos: list[Path]
+):
+    va.goto("/clone")
+    va.page.select_option("#provider-select", "kie")
+    va.page.fill("#api-key", "e2e-wrong-key")
+    _picker(va, "image").locator(".file-add-input").set_input_files(
+        [str(subject_images[0])]
+    )
+    _picker(va, "videos").locator(".file-add-input").set_input_files(
+        [str(source_videos[0])]
+    )
+    va.page.route(
+        "**/clone/run",
+        lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><p>login</p>"
+        ),
+    )
+
+    va.page.click('#clone-form button[type="submit"]')
+    va.page.click("#clone-confirm-go")
+
+    expect(va.page.locator("#clone-form .generation-status")).to_have_text(
+        "Something went wrong. Try again."
+    )
+    expect(va.page.get_by_text(re.compile("Uploading"))).to_have_count(0)
+    expect(va.page.locator('#clone-form button[type="submit"]')).to_be_enabled()
+    assert va.js_errors == []
+
+
+def test_a_gallery_that_cannot_load_is_asked_again_slower_and_slower(va: Session):
+    asked: list[float] = []
+
+    def refuse(route) -> None:
+        asked.append(time.monotonic())
+        route.abort()
+
+    va.goto("/clone")
+    va.page.route("**/clone/gallery**", refuse)
+    va.page.evaluate(
+        """() => {
+            const gallery = document.getElementById('clone-gallery');
+            const sentinel = document.createElement('div');
+            sentinel.className = 'gallery-sentinel';
+            sentinel.dataset.nextOffset = '24';
+            gallery.append(sentinel);
+            gallery.dispatchEvent(new CustomEvent('gallery:replaced'));
+        }"""
+    )
+    deadline = time.monotonic() + 10
+    while len(asked) < 3 and time.monotonic() < deadline:
+        va.page.wait_for_timeout(200)
+
+    gaps = [later - earlier for earlier, later in itertools.pairwise(asked)]
+    assert len(asked) >= 3
+    assert gaps[0] > 0.8
+    assert gaps[1] > 1.5
+    assert gaps[1] > gaps[0] * 1.5
 
 
 def test_trim_it_cuts_the_long_video_and_clone_it_brings_the_form_back(

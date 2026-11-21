@@ -122,10 +122,14 @@
                 window.UploadGuard.post(form.action, formData, pending.setProgress, headers)
             ).then((xhr) => {
                 done();
+                let data = null;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch {
+                    data = null;
+                }
                 if (xhr.status === 401) {
-
-                    const login = JSON.parse(xhr.responseText || "{}").login_url;
-                    window.location.href = login || "/login";
+                    window.location.href = data?.login_url || "/login";
                     return;
                 }
                 if (xhr.status < 200 || xhr.status >= 300) {
@@ -135,7 +139,12 @@
                     setStatus(statusEl, errorMessage(xhr), true);
                     return;
                 }
-                const data = JSON.parse(xhr.responseText);
+                if (!Array.isArray(data?.job_ids) || typeof data.html !== "string") {
+                    pending.remove();
+                    showEmpty();
+                    setStatus(statusEl, "Something went wrong. Try again.", true);
+                    return;
+                }
                 window.Idempotency.holdUntilSettled(form, key, data.job_ids);
                 const holder = document.createElement("div");
                 holder.innerHTML = data.html;
