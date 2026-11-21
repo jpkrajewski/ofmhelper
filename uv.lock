@@ -510,14 +510,14 @@ wheels = [
 
 [[package]]
 name = "gallery-dl"
-version = "1.32.20"
+version = "1.32.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/ed/0499729ee864503256e3892843f990a5785160b05ad3510f62fd426648dc/gallery_dl-1.32.20.tar.gz", hash = "sha256:335792dc3af065dd70ec2908f28e46a5653ff66e35a447326be620e990d7c0f3", size = 769563, upload-time = "2026-11-14T11:12:11.718Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/37/a1/bffb3ccddd5d829ac1e444d0f8be640461e2031cf0f779efbf50c47629dc/gallery_dl-1.32.21.tar.gz", hash = "sha256:4a1f71cc9a95dae9098d63e79049fbdccfec44386ba9ca49c7248eb8b3b821c0", size = 772750, upload-time = "2026-11-21T09:56:30.771Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/f7/a80d1aa77cabd8a96aacd1c63c530774e15795fa92e9383757b3161af3d2/gallery_dl-1.32.20-py3-none-any.whl", hash = "sha256:e09729c8f24f788ac64a663268603377fbf51d4b97818d49e2150c5d78067709", size = 952644, upload-time = "2026-11-14T11:12:07.106Z" },
+    { url = "https://files.pythonhosted.org/packages/80/e3/889fb3ac6dabd28ff432763e0414ddb7d0d6a3b38df88d6e602e185548c8/gallery_dl-1.32.21-py3-none-any.whl", hash = "sha256:f3f3e62bf3863cae6e1635045748c50fc51d52c111ca64b068d618e9334e8811", size = 957131, upload-time = "2026-11-21T09:56:26.88Z" },
 ]
 
 [[package]]
@@ -1150,7 +1150,7 @@ requires-dist = [
     { name = "bgutil-ytdlp-pot-provider", specifier = "==2.0.2" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "fastapi", specifier = ">=0.143.3" },
-    { name = "gallery-dl", specifier = "==1.32.20" },
+    { name = "gallery-dl", specifier = "==1.32.21" },
     { name = "google-api-python-client", specifier = ">=2.201.0" },
     { name = "google-auth", specifier = ">=2.40.0" },
     { name = "google-genai", specifier = ">=2.29.0" },
@@ -1175,7 +1175,7 @@ requires-dist = [
     { name = "sentry-sdk", specifier = "==2.74.0" },
     { name = "sqlalchemy", specifier = ">=2.0.52,<2.1" },
     { name = "uvicorn", specifier = ">=0.54.0" },
-    { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.11.19.232656.dev0" },
+    { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.11.20.232656.dev0" },
     { name = "yt-dlp-ejs", specifier = "==0.8.0" },
 ]
 
@@ -2431,11 +2431,11 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.11.19.232656.dev0"
+version = "2026.11.20.232656.dev0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/54/a1/bb0750ae017ac8ba1a0183cf2fe7d556235f8b96ad7f6e088c320b0282a0/yt_dlp-2026.11.19.232656.dev0.tar.gz", hash = "sha256:ce0cf545877645afc6673d82d6aa8d1348598dc0718b743320688b544dcfe554", size = 3051851, upload-time = "2026-11-19T23:31:54.706Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/92/c2b2149a908cfe2e9336ca7d5f1fa8d961a9f0e3f9998bae1f53aab26036/yt_dlp-2026.11.20.232656.dev0.tar.gz", hash = "sha256:4e2d86ad0f897d0aae8a1345ec15a1a0fa985c9e34d15abe1df9e61bf99cfe65", size = 3052059, upload-time = "2026-11-20T23:31:37.411Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/e1/afdedc6b734a68eca00d88c7e2c9bb99a441f027ca6b9bcab17f2e5aee23/yt_dlp-2026.11.19.232656.dev0-py3-none-any.whl", hash = "sha256:20848e96a43184d837cd3902ceff655d0c5a74c799bece10cfb97f7bb5b728bf", size = 3187951, upload-time = "2026-11-19T23:31:52.475Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/89/d1088aa78a91f0d52d6e6b53c2096076fb00376334813b3e2f2ee5b2937f/yt_dlp-2026.11.20.232656.dev0-py3-none-any.whl", hash = "sha256:ad1af580899c63dba2090f80de3ec5963df875bf8c9de08d6b9b71adfffb9301", size = 3188092, upload-time = "2026-11-20T23:31:34.384Z" },
 ]
 
 [package.optional-dependencies]
