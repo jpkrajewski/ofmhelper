@@ -410,6 +410,18 @@ def test_a_names_only_service_lists_every_setting_its_tasks_read(name: str):
     assert read - set(_service_env(name)) == set()
 
 
+@pytest.mark.parametrize("name", ["edit-worker", "preview-worker", "migrate"])
+def test_a_service_without_the_env_file_gets_every_setting_with_no_default(
+    name: str,
+):
+    infra = type(settings.infra)
+    required = {
+        field for field, info in infra.model_fields.items() if info.is_required()
+    }
+    assert required
+    assert _env_names(infra, required) - set(_service_env(name)) == set()
+
+
 @pytest.mark.parametrize("name", ["edit-worker", "preview-worker"])
 def test_a_service_passes_in_only_names_settings_reads(name: str):
     passed = {key for key, value in _service_env(name).items() if value is None}
