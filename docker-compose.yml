@@ -456,6 +456,7 @@ services:
       disable: true
     environment:
       <<: [*app-environment]
+      OFM_ENV:
     # Read-only: alembic b1c2d3e4f5a7 moves the old shared cookies.txt into
     # the password admin's own cookies (user_cookies) and leaves the file.
     volumes:
