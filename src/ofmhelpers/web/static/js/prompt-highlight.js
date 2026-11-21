@@ -6,8 +6,13 @@
         return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+    function markAddons(html) {
+        const texts = new Set([...document.querySelectorAll(".addon-chip")].map((c) => escapeHtml(c.dataset.text)));
+        return [...texts].reduce((marked, t) => marked.replace(t, () => `<mark class="ref-mark">${t}</mark>`), html);
+    }
+
     function highlight(text) {
-        return escapeHtml(text).replace(TOKEN_RE, (match, _full, t1, t2) => {
+        return markAddons(escapeHtml(text)).replace(TOKEN_RE, (match, _full, t1, t2) => {
             const type = (t1 || t2).toLowerCase();
             return `<mark class="ref-mark ref-mark-${type}">${match}</mark>`;
         });
