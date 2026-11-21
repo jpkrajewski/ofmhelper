@@ -25,26 +25,21 @@ Other Claude sessions share this checkout.
 - `git fetch origin && git status -sb`: dev behind origin/dev means another
   session pushed. `git pull --ff-only` first; never rebase someone else's work.
 
-## 2. Gate
-`scripts/test.sh deploy` (all + heavy + live; free, no `paid`). Report what
-`reports/latest/summary.txt` says (`scripts/test_summary.py`: counts, files
-that did not import, each failure with its error, the 10 slowest). Green =
-`test.sh` exit 0 AND `RESULT GREEN`; anything else = stop. Never read
-report.json with a reader of your own: its per-test list leaves out files
-that failed to import (2026-11-20: "6285 passed" reported green over 5 errors).
-
-## 2b. Independent review by the cavecrew reviewer
-While the gate runs: the Agent tool with `subagent_type` `caveman:cavecrew-reviewer`,
-a read-only review of the diff that is about to ship (code and config; not
-uv.lock, not moved docs). Only if it fails or times out, Kimi as backup (the
-`kimi` skill; say why the reviewer failed). Owner 2026-11-20: cavecrew first,
-Kimi the fallback. A HIGH finding
-is fixed, or disproved with the quoted code, before the commit; anything fixed
-means step 2 again. Name every finding and what happened to it in the report.
-The review is also against the rules: give the reviewer the `.claude/rules/*.md` files
-whose `paths` match the changed files and have it name each broken rule (for a
-Zalando rule, its id). A `tests/unit/architecture/baseline.json` that grew is
-a HIGH finding.
+## 2. Review
+The Agent tool with `subagent_type` `caveman:cavecrew-reviewer`, a read-only
+review of the diff that is about to ship (code and config; not uv.lock, not
+moved docs). Only if it fails or times out, Kimi as backup (the `kimi` skill;
+say why the reviewer failed). Owner 2026-11-20: cavecrew first, Kimi the
+fallback.
+- The brief carries the `failure-modes` skill (`.claude/skills/failure-modes/SKILL.md`)
+  and the `.claude/rules/*.md` files whose `paths` match the changed files. The
+  reviewer names each broken failure mode and each broken rule (for a Zalando
+  rule, its id), and returns every finding in one pass.
+- One fix round for all findings, then one review of the fixes only. Every
+  finding that breaks the feature's contract is fixed, none deferred; a finding
+  is disproved only with the quoted code. A `tests/unit/architecture/baseline.json`
+  that grew is a HIGH finding.
+- Name every finding and what happened to it in the report.
 
 ## 3. Dependencies (every ship, before the commit)
 Renovate opens the bump PRs (into `dev`, label `deps`; `renovate.json`);
@@ -69,20 +64,44 @@ keeps the dependencies current.
     skips the two-week age rule), rebuild the test image
     (`$C --profile test build tests`).
   - an alert with no fix: name it in the report.
-- Anything merged or upgraded here: step 2 again before the commit.
+- Anything merged or upgraded here is part of the commit below; the gate runs
+  once on the committed tree.
 
-## 4. Commit and push dev
+## 4. Commit locally, then the gate once
 Conventional message (`feat:` / `fix:` / `test:` / `chore:`), one line saying
-what the owner gets, as earlier commits do (`git log --oneline -10`). Commit and
-push in separate calls: a pre-commit hook that reformats a file stops the commit
-(re-add that file, commit again), and `git push origin dev` runs the 3+ minute
-pre-push suite, so it goes with run_in_background (the git guard denies a
-foreground push); then compare `git ls-remote origin dev` with HEAD. A push touching `.github/workflows/` needs the gh token's
-`workflow` scope; if refused, the owner runs `! gh auth refresh -s workflow`.
+what the owner gets, as earlier commits do (`git log --oneline -10`). Commit
+alone, no push: a pre-commit hook that reformats a file stops the commit
+(re-add that file, commit again).
+
+The gate runs ONCE, on the committed tree: `scripts/test.sh deploy` (all +
+heavy + live; free, no `paid`). Report what `reports/latest/summary.txt` says
+(`scripts/test_summary.py`: counts, files that did not import, each failure
+with its error, the 10 slowest). Green = `test.sh` exit 0 AND `RESULT GREEN`;
+anything else = stop. Never read report.json with a reader of your own: its
+per-test list leaves out files that failed to import (2026-11-20: "6285
+passed" reported green over 5 errors).
+- A fix after a green gate: its scoped tests (plus the page's e2e if JS
+  changed), a new commit. Not the gate again: pre-push and CI rerun the suite,
+  and the `push` preset reuses a green gate of the same tree
+  (`reports/hooks/gate.green`).
+
+## 4b. Push dev
+`git push origin dev` runs the 3+ minute pre-push suite, so it goes with
+run_in_background (the git guard denies a foreground push) and its log goes to
+a file (`reports/loops/push.log`), not through a pipe; then compare
+`git ls-remote origin dev` with HEAD. A push touching `.github/workflows/`
+needs the gh token's `workflow` scope; if refused, the owner runs
+`! gh auth refresh -s workflow`.
 
 ## 5. CI on dev
 `gh run list --workflow CI --branch dev --limit 1`, then `gh run watch <id>
---exit-status`. Red: `gh run view <id> --log-failed`, fix, back to step 2.
+--exit-status`. Red: `gh run view <id> --log-failed`, fix, back to step 2
+(review of the fix, then its scoped tests). The `tests` guard lets
+`scripts/test.sh deploy` (or `all` / `push`) run again only when the tree in
+`reports/hooks/gate.green` differs from `git rev-parse HEAD^{tree}` (read with a
+5 s timeout). On the same tree it is denied; when git cannot be read it is
+denied with the reason. Only the owner's prompt `gate` (the bare word) reruns
+it on the same tree.
 
 ## 6. Promote = deploy
 Green CI opens or updates the "Promote dev to main" PR
@@ -141,7 +160,8 @@ lines — quote them.
   reaches Sentry at all: `find_monitors` (project `ofmhelpers`, environment
   `production`): the `sweeps` monitor's last check-in is after the deploy
   (the sweeps process checks in every 5 minutes, `ofmhelpers/monitoring/sentry.py`
-  `heartbeat`; wait one interval if needed). No fresh check-in = production
+  `heartbeat`). If it is not there yet, one background wait (`run_in_background`
+  loop, notified when done), never foreground sleeps. No fresh check-in = production
   sends nothing: report that, never "no issues". The MCP not signed in: say so.
 
 ## 9. Report

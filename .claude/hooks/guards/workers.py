@@ -1,6 +1,6 @@
 import re
 
-from guards.event import Guard, HookEvent, Markers, Verdict, block
+from guards.event import Guard, HookEvent, Markers, Verdict, block, context
 from guards.shell_writes import SCRIPTED_WRITE, changed_by_this_call
 
 NAME = "restart_workers"
@@ -30,7 +30,13 @@ def check(event: HookEvent) -> Verdict | None:
         if event.tool_name in SHELLS and RESTART.search(event.command):
             markers.set("workers-restarted")
         elif changed_worker_code(event):
+            note_due = markers.since("restart-noted") <= markers.since(
+                "workers-restarted"
+            )
             markers.set("worker-code")
+            if note_due:
+                markers.set("restart-noted")
+                return context(NAME, RESTART_FIRST)
         return None
     changed = markers.since("worker-code")
     if event.stop_hook_active or not changed:

@@ -5,7 +5,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-lazy from collections.abc import Iterator
+lazy from collections.abc import Iterable, Iterator
 
 from pydantic import BaseModel
 
@@ -24,6 +24,28 @@ TOP = 15
 BIGGEST = 3
 TEXT_MAX = 400
 WHAT_MAX = 140
+TEST_SH = re.compile(
+    r"(?:^|[;&|(\n])\s*(?:\w+=\S+\s+)*(?:(?:bash|sh)\s+)?(?:\S*/)?scripts/test\.sh(?:\s+([^\s|;&>]+))?"
+)
+BACKGROUND_ID = re.compile(r"running in background with ID: (\w+)")
+TASK_ID = re.compile(r"<task-id>(\w+)</task-id>")
+TEST_EXIT = re.compile(r"test\.sh: pytest exit (\d+) in (\d+)s")
+PRESETS = frozenset(
+    {
+        "e2e",
+        "all",
+        "push",
+        "live",
+        "deploy",
+        "paid",
+        "snapshot",
+        "durations",
+        "affected",
+    }
+)
+SUBAGENT_TOOLS = frozenset({"Agent", "Task"})
+REFUSED_PUSH = "failed to push"
+NO_RESULT = "no result seen"
 
 
 class Correction(BaseModel):
@@ -37,6 +59,13 @@ class Repeat(BaseModel):
     count: int
 
 
+class TestShRun(BaseModel):
+    session: str
+    preset: str
+    seconds: int
+    result: str
+
+
 class SessionCost(BaseModel):
     session: str
     started: str
@@ -45,6 +74,7 @@ class SessionCost(BaseModel):
     output_tokens: int
     fresh_input_tokens: int
     cache_read_tokens: int
+    peak_context_tokens: int = 0
     rereads: list[Repeat]
     biggest: list[Repeat]
 
@@ -55,6 +85,10 @@ class SessionLog(BaseModel):
     interrupted: int
     rejected: int
     errors: list[str]
+    test_runs: list[TestShRun] = []
+    reviews: list[Repeat] = []
+    task_stops: int = 0
+    refused_pushes: int = 0
 
 
 class Digest(BaseModel):
@@ -66,6 +100,10 @@ class Digest(BaseModel):
     failures: list[Repeat]
     blocks: list[Repeat]
     costs: list[SessionCost]
+    test_runs: list[TestShRun] = []
+    reviews: list[Repeat] = []
+    task_stops: int = 0
+    refused_pushes: int = 0
 
 
 def project_logs() -> Path:
@@ -130,6 +168,36 @@ def _target(tool_input: dict[str, Any]) -> str:
     return str(raw or "")[:WHAT_MAX].replace("\n", " ")
 
 
+def _test_preset(command: str) -> str | None:
+    found = TEST_SH.search(command)
+    if not found:
+        return None
+    word = found.group(1)
+    if word is None:
+        return "default"
+    return word if word in PRESETS else "files"
+
+
+def _review_label(name: str, tool_input: dict[str, Any]) -> str | None:
+    text = f"{tool_input.get('description', '')} {tool_input.get('subagent_type', '')}"
+    if name in SUBAGENT_TOOLS and "review" in text.lower():
+        return str(tool_input.get("description") or tool_input.get("subagent_type"))
+    command = str(tool_input.get("command", ""))
+    if name == "Bash" and "kimi" in command.lower() and "review" in command.lower():
+        return "kimi review run"
+    return None
+
+
+def _test_exit(text: str) -> tuple[int, int] | None:
+    found = TEST_EXIT.search(text)
+    return (int(found.group(1)), int(found.group(2))) if found else None
+
+
+def _notified_task(text: str) -> str:
+    found = TASK_ID.search(text)
+    return found.group(1) if found else ""
+
+
 def _is_owner_prompt(entry: dict[str, Any], text: str) -> bool:
     origin = entry.get("origin") or {}
     return (
@@ -150,6 +218,10 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
     errors: list[str] = []
     interrupted = rejected = 0
     stamps: list[str] = []
+    runs: list[TestShRun] = []
+    pending: dict[str, str] = {}
+    reviews = Counter[str]()
+    task_stops = refused_pushes = peak = 0
     for entry in _entries(path, since):
         stamps.append(entry["timestamp"])
         message = entry.get("message") or {}
@@ -164,12 +236,25 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
                     "cache_creation_input_tokens", 0
                 )
                 usage["cached"] += u.get("cache_read_input_tokens", 0)
+                peak = max(
+                    peak,
+                    u.get("input_tokens", 0)
+                    + u.get("cache_creation_input_tokens", 0)
+                    + u.get("cache_read_input_tokens", 0),
+                )
             for part in content if isinstance(content, list) else []:
                 if part.get("type") == "tool_use":
                     target = _target(part.get("input") or {})
                     tools[part["id"]] = (part["name"], target)
                     if part["name"] == "Read":
                         reads[target] += 1
+                    task_stops += part["name"] == "TaskStop"
+                    command = str((part.get("input") or {}).get("command", ""))
+                    preset = _test_preset(command) if part["name"] == "Bash" else None
+                    if preset:
+                        pending[part["id"]] = preset
+                    if label := _review_label(part["name"], part.get("input") or {}):
+                        reviews[label] += 1
             continue
         if entry.get("type") != "user":
             continue
@@ -177,6 +262,24 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
         if INTERRUPTED in text:
             interrupted += 1
         results = _tool_results(content)
+        answers = [
+            (p.get("tool_use_id", ""), _text(p.get("content"))) for p in results
+        ] or [(_notified_task(text), text)]
+        for run_key, seen_text in answers:
+            refused_pushes += REFUSED_PUSH in seen_text
+            if run_key in pending and (started := BACKGROUND_ID.search(seen_text)):
+                pending[started.group(1)] = pending.pop(run_key)
+            elif (finished := _test_exit(seen_text)) and run_key in pending:
+                code, seconds = finished
+                clean = code == 0 and "RESULT NOT GREEN" not in seen_text
+                runs.append(
+                    TestShRun(
+                        session=path.stem[:8],
+                        preset=pending.pop(run_key),
+                        seconds=seconds,
+                        result="green" if clean else f"exit {code}",
+                    )
+                )
         if owner and not results and _is_owner_prompt(entry, text):
             prompts.append(
                 Correction(
@@ -205,6 +308,7 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
             output_tokens=usage["output"],
             fresh_input_tokens=usage["fresh"],
             cache_read_tokens=usage["cached"],
+            peak_context_tokens=peak,
             rereads=[
                 Repeat(what=w, count=c)
                 for w, c in reads.most_common()
@@ -219,6 +323,14 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
         interrupted=interrupted,
         rejected=rejected,
         errors=errors,
+        test_runs=runs
+        + [
+            TestShRun(session=path.stem[:8], preset=p, seconds=0, result=NO_RESULT)
+            for p in pending.values()
+        ],
+        reviews=[Repeat(what=w, count=c) for w, c in reviews.most_common()],
+        task_stops=task_stops,
+        refused_pushes=refused_pushes,
     )
 
 
@@ -240,6 +352,10 @@ def _with_subagents(main: SessionLog, runs: list[SessionLog]) -> SessionLog:
             "cost": cost,
             "rejected": main.rejected + sum(r.rejected for r in runs),
             "errors": main.errors + [e for r in runs for e in r.errors],
+            "test_runs": main.test_runs + [t for r in runs for t in r.test_runs],
+            "reviews": _merged([*main.reviews, *(x for r in runs for x in r.reviews)]),
+            "task_stops": main.task_stops + sum(r.task_stops for r in runs),
+            "refused_pushes": main.refused_pushes + sum(r.refused_pushes for r in runs),
         }
     )
 
@@ -261,6 +377,13 @@ def sessions(logs: Path, since: datetime) -> list[SessionLog]:
         ]
         found.append(_with_subagents(main, runs))
     return found
+
+
+def _merged(repeats: Iterable[Repeat]) -> list[Repeat]:
+    total = Counter[str]()
+    for repeat in repeats:
+        total[repeat.what] += repeat.count
+    return [Repeat(what=w, count=c) for w, c in total.most_common()]
 
 
 def guard_blocks(audit: Path, since: datetime) -> list[Repeat]:
@@ -295,6 +418,10 @@ def digest(logs: Path, audit: Path, since: datetime) -> Digest:
         failures=[Repeat(what=w, count=c) for w, c in errors.most_common(TOP)],
         blocks=guard_blocks(audit, since),
         costs=sorted((s.cost for s in found), key=lambda c: c.started),
+        test_runs=[t for s in found for t in s.test_runs],
+        reviews=_merged(r for s in found for r in s.reviews),
+        task_stops=sum(s.task_stops for s in found),
+        refused_pushes=sum(s.refused_pushes for s in found),
     )
 
 
@@ -317,12 +444,23 @@ def render(d: Digest) -> str:
         "## Guard denies and blocks",
         *(f"- {r.count}x {r.what}" for r in d.blocks),
         "",
+        "## test.sh runs (preset, duration, result)",
+        *(f"- {t.session} {t.preset}: {t.seconds}s, {t.result}" for t in d.test_runs),
+        "",
+        "## Review rounds per feature (review agents and kimi review runs)",
+        *(f"- {r.count}x {r.what}" for r in d.reviews),
+        "",
+        "## Stopped tasks and refused pushes",
+        f"- TaskStop calls: {d.task_stops}",
+        f"- refused pushes (failed to push): {d.refused_pushes}",
+        "",
         "## Token cost per session",
-        "| session | started | min | subagents | output | fresh input | cache read | read 3x+ | biggest outputs (chars) |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| session | started | min | subagents | output | fresh input | cache read | peak context | read 3x+ | biggest outputs (chars) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
         *(
             f"| {c.session} | {c.started} | {c.minutes} | {c.subagents} | {c.output_tokens:,} "
             f"| {c.fresh_input_tokens:,} | {c.cache_read_tokens:,} "
+            f"| {c.peak_context_tokens:,} "
             f"| {'; '.join(f'{r.count}x {r.what}' for r in c.rereads) or '-'} "
             f"| {'; '.join(f'{r.count:,} {r.what}' for r in c.biggest) or '-'} |"
             for c in d.costs

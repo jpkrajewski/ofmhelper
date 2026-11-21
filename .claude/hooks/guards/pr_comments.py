@@ -2,15 +2,16 @@ import os
 import re
 import shlex
 import subprocess
-from pathlib import PurePosixPath
+from pathlib import Path
 
 from pydantic import BaseModel
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, deny
-from guards.shell import shell_statements
+from guards.shell import program_name, shell_statements
 
 NAME = "pr_comments"
 GH_TIMEOUT_S = 8
+GH_VALUE_FLAGS = frozenset({"--repo", "--hostname"})
 OPEN_COMMENTS = """
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
@@ -28,50 +29,29 @@ COUNT = (
     " more: ($pr.reviewThreads.pageInfo.hasNextPage"
     " or $pr.latestReviews.pageInfo.hasNextPage)}"
 )
-PR_URL = re.compile(r"github\.com/([^/\s]+)/([^/\s]+)/pull/(\d+)")
-REPO_FLAGS = frozenset({"-R", "--repo"})
-VALUE_FLAGS = REPO_FLAGS | {
-    "-b",
-    "--body",
-    "-F",
-    "--body-file",
-    "-t",
-    "--subject",
-    "-A",
-    "--author-email",
-    "--match-head-commit",
-    "--hostname",
-}
+CANONICAL = re.compile(r"(?:rtk\s+)?gh\s+pr\s+merge\s+(\d+)\s+--merge")
 HAS_COMMENTS = (
     "PR #{number} has {count} open review comment(s): an unresolved review thread or a "
     'change request (CodeQL alerts count). Owner 2026-11-20: "YOU CANT MERGE IF THERE ARE '
     'COMMENTS". Close each one first (ship skill, step 6): verify it against the code, then '
-    "fix it on dev and rerun the gate, or reply with the reason and the evidence, resolve "
+    "fix it on dev with its scoped tests (pre-push and CI rerun the suite), or reply with the "
+    "reason and the evidence, resolve "
     "the thread and dismiss the CodeQL alert. Merge once none is open."
 )
 TOO_MANY = (
     "PR #{number} has more than 100 review threads or reviews, more than one read "
     "covers, so it is not merged. Look by hand: gh pr view {number} --comments."
 )
-NO_NUMBER = (
-    "Name the PR: gh pr merge <number>. The review-comment check needs the number."
-)
-ONE_MERGE = (
-    "One gh pr merge per command, so each PR's review comments are read in time."
-)
-NO_GH_REPO = (
-    "Name the repo with -R owner/repo, not GH_REPO: the review-comment check reads -R."
+NOT_CANONICAL = (
+    "Use the canonical form: gh pr merge <n> --merge, alone in the command and run from the repo "
+    "root ({root}). Every other spelling (gh.exe or a path, -R, a URL, GH_REPO, a pipe, cd, "
+    "another command, extra flags, gh api) is refused: the review-comment check reads only "
+    "that form."
 )
 UNREADABLE = (
     "Could not read the review comments of PR #{number} ({error}), so it is not merged. "
     "Look by hand: gh pr view {number} --comments, and the PR's Files tab."
 )
-
-
-class Target(BaseModel, frozen=True):
-    number: str
-    owner: str = "{owner}"
-    repo: str = "{repo}"
 
 
 class Comments(BaseModel, frozen=True):
@@ -83,69 +63,54 @@ def gh() -> list[str]:
     return shlex.split(os.environ.get("CLAUDE_GUARDS_GH") or "gh")
 
 
-def _program(word: str) -> str:
-    return PurePosixPath(word.replace("\\", "/")).name.removesuffix(".exe")
+def takes_value(flag: str) -> bool:
+    short_cluster = not flag.startswith("--") and flag.endswith("r")
+    return flag in GH_VALUE_FLAGS or short_cluster
 
 
-def _flag(word: str) -> tuple[str, str | None]:
-    if word.startswith("--"):
-        flag, has_value, value = word.partition("=")
-        return flag, value if has_value else None
-    for index, letter in enumerate(word[1:], start=2):
-        if f"-{letter}" in VALUE_FLAGS:
-            return f"-{letter}", word[index:].removeprefix("=") or None
-    return word, None
+def positional(words: list[str]) -> list[str]:
+    found: list[str] = []
+    skip = False
+    for word in words:
+        if skip:
+            skip = False
+        elif word.startswith("-"):
+            skip = takes_value(word)
+        else:
+            found.append(word)
+    return found
 
 
-def _arguments(words: list[str]) -> tuple[list[str], str]:
-    arguments: list[str] = []
-    repo = ""
-    index = 0
-    while index < len(words):
-        word = words[index]
-        flag, value = _flag(word) if word.startswith("-") else ("", None)
-        if flag in VALUE_FLAGS:
-            if value is None:
-                value = words[index + 1] if index + 1 < len(words) else ""
-                index += 1
-            repo = value if flag in REPO_FLAGS else repo
-        elif not flag:
-            arguments.append(word)
-        index += 1
-    return arguments, repo
+def merges(words: list[str]) -> bool:
+    if not words or program_name(words[0]) != "gh":
+        return False
+    rest = [word.lower() for word in words[1:]]
+    if positional(rest)[:2] == ["pr", "merge"]:
+        return True
+    return "api" in rest and any(
+        word.rstrip("/").endswith("/merge") or "mergepullrequest" in word
+        for word in rest
+    )
 
 
-def merge_target(words: list[str]) -> Target | None:
-    if not words or _program(words[0].lower()) != "gh":
-        return None
-    arguments, repo = _arguments(words[1:])
-    if arguments[:2] != ["pr", "merge"]:
-        return None
-    picked = next(iter(arguments[2:]), "")
-    if found := PR_URL.search(picked):
-        return Target(number=found[3], owner=found[1], repo=found[2])
-    number = picked.rsplit("/", 1)[-1].lstrip("#")
-    owner, _, name = repo.rpartition("/")
-    owner = owner.rpartition("/")[2]
-    if owner and name:
-        return Target(number=number, owner=owner, repo=name)
-    return Target(number=number)
+def canonical_number(event: HookEvent) -> str:
+    found = CANONICAL.fullmatch(event.command.strip())
+    from_root = Path(event.cwd or ROOT).resolve() == ROOT.resolve()
+    return found[1] if found and from_root else ""
 
 
-def _field(name: str, value: str) -> list[str]:
-    return ["-F" if value.startswith("{") else "-f", f"{name}={value}"]
-
-
-def open_comments(target: Target) -> Comments:
+def open_comments(number: str) -> Comments:
     done = subprocess.run(
         [
             *gh(),
             "api",
             "graphql",
-            *_field("owner", target.owner),
-            *_field("repo", target.repo),
             "-F",
-            f"number={target.number}",
+            "owner={owner}",
+            "-F",
+            "repo={repo}",
+            "-F",
+            f"number={number}",
             "-f",
             f"query={OPEN_COMMENTS}",
             "--jq",
@@ -162,12 +127,9 @@ def open_comments(target: Target) -> Comments:
     return Comments.model_validate_json(done.stdout)
 
 
-def judge(target: Target) -> Verdict | None:
-    number = target.number
-    if not number.isdigit():
-        return deny(NAME, NO_NUMBER)
+def judge(number: str) -> Verdict | None:
     try:
-        comments = open_comments(target)
+        comments = open_comments(number)
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
         return deny(NAME, UNREADABLE.format(number=number, error=str(exc)[:200]))
     if comments.more:
@@ -178,19 +140,15 @@ def judge(target: Target) -> Verdict | None:
 
 
 def check(event: HookEvent) -> Verdict | None:
-    merges = [
-        target
+    attempts = any(
+        merges(words)
         for statement in shell_statements(event)
         for words in (statement.words, *statement.piped_to)
-        if (target := merge_target(words)) is not None
-    ]
-    if not merges:
+    )
+    if not attempts:
         return None
-    if len(merges) > 1:
-        return deny(NAME, ONE_MERGE)
-    if "GH_REPO" in event.command:
-        return deny(NAME, NO_GH_REPO)
-    return judge(merges[0])
+    number = canonical_number(event)
+    return judge(number) if number else deny(NAME, NOT_CANONICAL.format(root=ROOT))
 
 
 GUARD = Guard(

@@ -387,9 +387,8 @@
                 const data = parseJson(xhr.responseText);
                 const type = xhr.getResponseHeader("content-type") || "";
                 if (!type.includes("json") || data === null) {
-                    throw new Error(
-                        `Unexpected non-JSON response (${xhr.status}) -- try again.`
-                    );
+                    window.Idempotency.refused(form, key, xhr.status);
+                    throw new Error("Something went wrong. Try again.");
                 }
                 if (xhr.status < 200 || xhr.status >= 300) {
                     window.Idempotency.refused(form, key, xhr.status);

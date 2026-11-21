@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,11 @@ REVIEWER = {
     "subagent_type": "caveman:cavecrew-reviewer",
 }
 KIMI = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
+UI_RUN = f"{DEV_COMPOSE} --profile test run --rm tests uv run --frozen python scripts/ui_check.py /spoof"
+FRESH_PASS = "ui_check: PASS reports/ui-check/spoof-new/report.md"
+OLD_PASS = "ui_check: PASS reports/ui-check/spoof-old/report.md"
+FAILED = "ui_check: FAIL reports/ui-check/spoof-failed/report.md"
+FAILED_AS_PASS = "ui_check: PASS reports/ui-check/spoof-failed/report.md"
 
 
 class Answer(BaseModel):
@@ -110,7 +116,8 @@ def hooks(tmp_path: Path) -> Hooks:
         ("git -C . push origin dev", "never commit"),
         ("git reset --hard HEAD~1", "never commit"),
         ("gh pr merge 101 --merge", "never commit"),
-        ("git stash list", "Never git stash"),
+        ("git stash", "Never git stash"),
+        ("git stash pop", "Never git stash"),
         ("mypy src", "runs in Docker"),
         ("uv run --frozen ruff check src", "runs in Docker"),
         ("node --check src/x.js", "runs in Docker"),
@@ -148,6 +155,14 @@ def hooks(tmp_path: Path) -> Hooks:
         ("uvx --from mypy==1.0 mypy src", "runs in Docker"),
         ("uvx --python 3.13 mypy src", "runs in Docker"),
         ("uv tool run mypy src", "runs in Docker"),
+        ("git.exe commit -m x", "never commit"),
+        ("C:/tools/Git/bin/git.exe commit -m x", "never commit"),
+        ("/usr/bin/git push origin dev", "never commit"),
+        ("nice -n 10 git commit -m x", "never commit"),
+        ("setsid git commit -m x", "never commit"),
+        ("stdbuf -o L git commit -m x", "never commit"),
+        ("ionice -c 3 git commit -m x", "never commit"),
+        ("xargs -a files.txt -n 1 git commit -m x", "never commit"),
     ],
 )
 def test_a_command_breaking_a_rule_is_denied_with_its_rule(
@@ -183,6 +198,8 @@ def test_a_command_breaking_a_rule_is_denied_with_its_rule(
         "python - <<'EOF'\nimport pytest\np = 'scripts/pull_backup.sh'\nEOF",
         "cmd='git commit -m x && bash scripts/pull_backup.sh'; echo \"$cmd\"",
         "git -C /tmp/elsewhere commit -m scratch",
+        "git stash list",
+        "git stash show -p stash@{0}",
     ],
 )
 def test_an_ordinary_command_passes(hooks: Hooks, command: str) -> None:
@@ -207,12 +224,47 @@ def test_the_owners_ship_word_opens_git_and_the_full_suite_for_that_prompt_only(
     assert hooks.bash("scripts/test.sh deploy").decision == "allow"
     assert hooks.bash("git push origin dev", background=True).decision == "allow"
     assert "run_in_background" in hooks.bash("git push origin dev").reason
+    piped = hooks.bash("git push origin dev 2>&1 | tail -20", background=True)
+    assert piped.decision == "deny"
+    assert "push log to a file" in piped.reason
 
     hooks.prompt("<task-notification><status>completed</status></task-notification>")
     assert hooks.bash("git commit -m fix").decision == "allow"
 
     hooks.prompt("now fix the button")
     assert hooks.bash("git commit -m fix").decision == "deny"
+
+
+def test_the_push_log_path_is_the_one_the_ship_skill_names(hooks: Hooks) -> None:
+    hooks.prompt("push")
+    piped = hooks.bash("git push origin dev | tail -5", background=True)
+
+    named = re.search(r"> (\S+push\.log)", piped.reason)
+
+    assert named is not None
+    assert named[1] == "reports/loops/push.log"
+    ship = (REPO / ".claude" / "skills" / "ship" / "SKILL.md").read_text("utf-8")
+    assert named[1] in ship
+
+
+@pytest.mark.parametrize(
+    ("prompt", "opens"),
+    [
+        ("gate", True),
+        ("  Gate!\n", True),
+        ("GATE.", True),
+        ("rerun the gate", False),
+        ("the gate is red, fix the test", False),
+        ("gate it", False),
+    ],
+)
+def test_only_the_owners_bare_word_gate_opens_a_gate_rerun(
+    hooks: Hooks, prompt: str, opens: bool
+) -> None:
+    hooks.prompt(prompt)
+
+    marker = hooks.root / "reports" / "hooks" / "state" / "s1-main" / "owner-gate"
+    assert marker.is_file() is opens
 
 
 def test_a_subagent_never_inherits_the_owners_word(hooks: Hooks) -> None:
@@ -247,7 +299,7 @@ def github(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
         "import pathlib, sys, time\n"
         f"pathlib.Path({str(asked)!r}).write_text(chr(10).join(sys.argv[1:]))\n"
         f"text = pathlib.Path({str(answer)!r}).read_text()\n"
-        "time.sleep(60 if text == 'hang' else 0)\n"
+        "time.sleep(10 if text == 'hang' else 0)\n"
         "code, out = text.split(' ', 1)\n"
         "print(out)\n"
         "sys.exit(int(code))\n"
@@ -261,21 +313,9 @@ def github(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
     ("answer", "command", "reason"),
     [
         (ONE_OPEN, "gh pr merge 103 --merge", "YOU CANT MERGE IF THERE ARE COMMENTS"),
-        (THREE_OPEN, "gh pr merge https://github.com/o/r/pull/7", "PR #7 has 3"),
+        (THREE_OPEN, "gh pr merge 7 --merge", "PR #7 has 3"),
         ("1 HTTP 502", "gh pr merge 103 --merge", "Could not read"),
-        (NONE_OPEN, "gh pr merge --merge", "Name the PR"),
-        (NONE_OPEN, "gh pr merge my-branch", "Name the PR"),
-        (MORE_PAGES, "gh pr merge 103", "more than 100"),
-        (ONE_OPEN, "gh.exe pr merge 103", "PR #103 has 1"),
-        (ONE_OPEN, "/c/tools/gh.exe pr merge 103", "PR #103 has 1"),
-        (ONE_OPEN, "ls & gh pr merge 103", "PR #103 has 1"),
-        (ONE_OPEN, "gh pr merge --repo o/r 103", "PR #103 has 1"),
-        (ONE_OPEN, "gh pr merge -b 'pr merge 9' 103", "PR #103 has 1"),
-        (ONE_OPEN, "echo y | gh pr merge 103", "PR #103 has 1"),
-        (ONE_OPEN, "gh pr merge -dt 9 103", "PR #103 has 1"),
-        (ONE_OPEN, "gh pr merge -dF notes.md 103", "PR #103 has 1"),
-        (NONE_OPEN, "gh pr merge 1 && gh pr merge 2", "One gh pr merge per command"),
-        (NONE_OPEN, "GH_REPO=o/r gh pr merge 7", "not GH_REPO"),
+        (MORE_PAGES, "gh pr merge 103 --merge", "more than 100"),
     ],
 )
 def test_a_pr_with_open_review_comments_is_never_merged_even_on_the_ship_word(
@@ -295,27 +335,79 @@ def test_a_pr_without_open_review_comments_merges_on_the_ship_word(
     github.write_text(NONE_OPEN)
 
     assert hooks.bash("gh pr merge 103 --merge").decision == "allow"
+    asked = (hooks.root / "gh_asked").read_text().splitlines()
+    assert {"owner={owner}", "repo={repo}", "number=103"} <= set(asked)
+    assert hooks.bash("rtk gh pr merge 103 --merge").decision == "allow"
     assert hooks.bash("gh pr view 103 --comments").decision == "allow"
 
 
 @pytest.mark.parametrize(
     "command",
     [
-        "gh pr merge 7 -R other/repo",
-        "gh pr merge -Rother/repo 7",
-        "gh pr merge -dRother/repo 7",
-        "gh pr merge --repo=github.com/other/repo 7",
-        "gh pr merge https://github.com/other/repo/pull/7",
+        "gh pr merge 103",
+        "gh pr merge --merge",
+        "gh pr merge my-branch --merge",
+        "gh pr merge 103 --merge -d",
+        "gh pr merge 103 --squash",
+        "gh.exe pr merge 103 --merge",
+        "/c/tools/gh.exe pr merge 103 --merge",
+        "gh pr merge 7 --merge -R other/repo",
+        "gh -R other/repo pr merge 7 --merge",
+        "gh pr merge https://github.com/other/repo/pull/7 --merge",
+        "GH_REPO=other/repo gh pr merge 7 --merge",
+        "echo y | gh pr merge 103 --merge",
+        "ls & gh pr merge 103 --merge",
+        "cd .. && gh pr merge 103 --merge",
+        "gh pr merge 1 --merge && gh pr merge 2 --merge",
+        "bash -c 'gh pr merge 103 --merge'",
+        "gh api -X PUT repos/o/r/pulls/7/merge",
+        "echo 7 | xargs gh pr merge 7 --merge",
+        "nice -n 5 gh pr merge 7 --merge",
+        "'C:/tools/GitHub CLI/gh.exe' pr merge 7 --merge",
+        "gh pr -R other/repo merge 7 --merge",
     ],
 )
-def test_a_pr_of_another_repo_is_checked_in_that_repo(
+def test_only_the_canonical_merge_spelling_is_let_through(
+    hooks: Hooks, github: Path, command: str
+) -> None:
+    github.write_text(NONE_OPEN)
+
+    verdict = hooks.bash(command)
+
+    assert verdict.decision == "deny"
+    assert "canonical form" in verdict.reason
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr list --search merge",
+        "gh pr view 7 --json mergeable,mergedAt",
+        "gh pr list --state merged --search 'merge queue'",
+        "gh run list --workflow merge",
+    ],
+)
+def test_only_the_pr_merge_subcommand_pair_counts_as_a_merge(
     hooks: Hooks, github: Path, command: str
 ) -> None:
     github.write_text(ONE_OPEN)
 
-    assert hooks.bash(command).decision == "deny"
-    asked = (hooks.root / "gh_asked").read_text().splitlines()
-    assert {"owner=other", "repo=repo", "number=7"} <= set(asked)
+    assert hooks.bash(command).decision == "allow"
+
+
+def test_a_merge_run_outside_the_repo_root_is_refused(
+    hooks: Hooks, github: Path
+) -> None:
+    github.write_text(NONE_OPEN)
+    (hooks.root / "sub").mkdir()
+    merge = {"command": "gh pr merge 103 --merge"}
+
+    verdict = hooks.send(
+        "PreToolUse", tool_name="Bash", tool_input=merge, cwd=str(hooks.root / "sub")
+    )
+
+    assert verdict.decision == "deny"
+    assert "canonical form" in verdict.reason
 
 
 def test_a_github_that_does_not_answer_stops_the_merge_within_the_hook_budget(
@@ -384,30 +476,105 @@ def test_the_architecture_baseline_only_shrinks(hooks: Hooks) -> None:
 
 def test_an_edit_waits_for_the_skills_its_area_needs(hooks: Hooks) -> None:
     router = "src/ofmhelpers/web/routers/downloads/media.py"
+    (hooks.root / router).parent.mkdir(parents=True)
+    (hooks.root / router).write_text("a = 1\n")
+    researched(hooks)
+    write_note(hooks)
+    new_route = "def download():\n    pass"
 
-    denied = hooks.edit(router)
+    denied = hooks.edit(router, new=new_route)
     assert denied.decision == "deny"
-    assert "senior-python-rules, fastapi, rest-api" in denied.reason
+    assert "senior-python-rules, fastapi, rest-api, failure-modes" in denied.reason
 
-    for name in ("anthropic-skills:senior-python-rules", "fastapi", "rest-api"):
+    for name in (
+        "anthropic-skills:senior-python-rules",
+        "fastapi",
+        "rest-api",
+        "failure-modes",
+    ):
         hooks.skill(name)
-    assert hooks.edit(router).decision == "allow"
+    assert hooks.edit(router, new=new_route).decision == "allow"
 
 
 def test_architecture_is_needed_for_a_new_feature_file_not_an_existing_one(
     hooks: Hooks,
 ) -> None:
     hooks.skill("senior-python-rules")
+    hooks.skill("failure-modes")
 
     assert "architecture" in hooks.edit("src/ofmhelpers/features/new/service.py").reason
     assert hooks.edit("src/ofmhelpers/features/old/service.py").decision == "allow"
 
 
-def test_skills_loaded_by_one_agent_do_not_count_for_another(hooks: Hooks) -> None:
+def test_failure_modes_is_needed_for_new_code_in_a_route_page_job_or_integration(
+    hooks: Hooks,
+) -> None:
+    script = hooks.root / "src" / "ofmhelpers" / "web" / "static" / "js" / "spoof.js"
+    script.parent.mkdir(parents=True)
+    script.write_text("function load() {}\n")
     hooks.skill("senior-python-rules")
-    other = Hooks(hooks.root, session=hooks.session, agent="agent-2")
+    researched(hooks)
+    write_note(hooks)
+    service = "src/ofmhelpers/features/old/service.py"
+    spoof = "src/ofmhelpers/web/static/js/spoof.js"
+    new_code = ((service, "def run():\n    pass"), (spoof, "function save() {}"))
 
-    assert other.edit("tests/unit/test_x.py").decision == "deny"
+    assert hooks.edit(service, old="x = 1", new="x = 2").decision == "allow"
+    assert hooks.edit(spoof, old="load() {}", new="load() { return 1; }").decision == (
+        "allow"
+    )
+    for path, new in new_code:
+        denied = hooks.edit(path, new=new)
+        assert denied.decision == "deny"
+        assert "failure-modes" in denied.reason
+    assert "failure-modes" in hooks.edit("src/ofmhelpers/features/new/job.py").reason
+
+    hooks.skill("failure-modes")
+    for path, new in new_code:
+        assert hooks.edit(path, new=new).decision == "allow"
+    assert hooks.edit("README.md").decision == "allow"
+
+
+def test_a_changed_signature_is_not_new_code_but_a_new_name_is(hooks: Hooks) -> None:
+    hooks.prompt("fix the bug")
+    hooks.skill("senior-python-rules")
+    service = "src/ofmhelpers/features/old/service.py"
+    (hooks.root / service).write_text("def run(a):\n    return a\n")
+
+    for new in ("async def run(a: int) -> int:", "def run(a, b=1):"):
+        assert hooks.edit(service, old="def run(a):", new=new).decision == "allow"
+    js = hooks.root / "src" / "ofmhelpers" / "web" / "static" / "js" / "load.js"
+    js.parent.mkdir(parents=True)
+    js.write_text("function load() {}\n")
+    assert (
+        hooks.edit(
+            "src/ofmhelpers/web/static/js/load.js",
+            old="function load() {}",
+            new="export async function load(page) {}",
+        ).decision
+        == "allow"
+    )
+
+    added = hooks.edit(
+        service, old="def run(a):", new="def helper():\n    pass\n\n\ndef run(a):"
+    )
+    assert added.decision == "deny"
+    assert "adds new code" in added.reason
+    assert "failure-modes" in added.reason
+
+
+def test_a_subagent_uses_the_main_sessions_skills_but_not_another_agents(
+    hooks: Hooks,
+) -> None:
+    Hooks(hooks.root, session=hooks.session, agent="agent-2").skill(
+        "senior-python-rules"
+    )
+    third = Hooks(hooks.root, session=hooks.session, agent="agent-3")
+
+    assert third.edit("tests/unit/test_x.py").decision == "deny"
+
+    hooks.skill("senior-python-rules")
+    assert third.edit("tests/unit/test_x.py").decision == "allow"
 
 
 def test_a_comment_written_into_source_is_sent_back(hooks: Hooks) -> None:
@@ -442,6 +609,106 @@ def test_a_source_file_written_from_the_shell_gets_the_edit_checks(
     assert "CRLF written into src/ofmhelpers/shell_made.py" in answer.reason
     assert "src/ofmhelpers/shell_made.py:1" in answer.reason
     assert "senior-python-rules" in answer.reason
+
+
+def shell_wrote(hooks: Hooks, command: str) -> Answer:
+    return hooks.send(
+        "PostToolUse",
+        tool_name="Bash",
+        tool_input={"command": command},
+        duration_ms=300,
+    )
+
+
+def test_an_existing_python_file_rewritten_from_the_shell_is_sent_back(
+    hooks: Hooks,
+) -> None:
+    hooks.skill("senior-python-rules")
+    service = "src/ofmhelpers/features/old/service.py"
+    subprocess.run(["git", "-C", str(hooks.root), "add", service], check=True)
+
+    (hooks.root / service).write_text("x = 2\n")
+    rewrite = f"python - <<'EOF'\nfrom pathlib import Path\nPath('{service}').write_text('x = 2')\nEOF"
+    answer = shell_wrote(hooks, rewrite)
+    assert answer.decision == "block"
+    assert f"{service}: an existing .py was rewritten from the shell" in answer.reason
+    assert "Change an existing .py with Edit" in answer.reason
+
+    (hooks.root / service).write_text("x = 3\n")
+    assert (
+        "rewritten from the shell"
+        not in shell_wrote(hooks, f"sed -i s/2/3/ {service}").reason
+    )
+    (hooks.root / "src" / "ofmhelpers" / "fresh.py").write_text("y = 1\n")
+    assert (
+        "rewritten from the shell"
+        not in shell_wrote(
+            hooks, "cat > src/ofmhelpers/fresh.py <<'EOF'\ny = 1\nEOF"
+        ).reason
+    )
+
+
+def committed(hooks: Hooks, path: str) -> None:
+    git = ["git", "-C", str(hooks.root), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "add", path], check=True)
+    subprocess.run(
+        [*git, "-c", "commit.gpgsign=false", "commit", "-qm", "x"], check=True
+    )
+
+
+def test_a_name_added_from_the_shell_to_existing_code_needs_failure_modes(
+    hooks: Hooks,
+) -> None:
+    hooks.skill("senior-python-rules")
+    service = "src/ofmhelpers/features/old/service.py"
+    committed(hooks, service)
+    append = f"python -c \"open('{service}', 'a').write('def run(): pass')\""
+
+    (hooks.root / service).write_text("x = 1\ny = 2\n")
+    nothing_new = shell_wrote(hooks, append)
+    assert "rewritten from the shell" in nothing_new.reason
+    assert "failure-modes" not in nothing_new.reason
+
+    (hooks.root / service).write_text("x = 1\ndef run(): pass\n")
+    added = shell_wrote(hooks, append)
+    assert added.decision == "block"
+    assert "failure-modes" in added.reason
+
+    hooks.skill("failure-modes")
+    (hooks.root / service).write_text("x = 1\ndef run(): pass\n")
+    loaded = shell_wrote(hooks, append)
+    assert "rewritten from the shell" in loaded.reason
+    assert "failure-modes" not in loaded.reason
+
+
+def test_new_code_written_from_the_shell_is_sent_back_at_stop_until_researched(
+    hooks: Hooks,
+) -> None:
+    hooks.prompt("build the guard")
+    hooks.skill("senior-python-rules")
+    (hooks.root / "scripts" / "made_in_shell.py").write_text(
+        "def run():\n    return 1\n"
+    )
+    shell_wrote(
+        hooks, "cat > scripts/made_in_shell.py <<'EOF'\ndef run():\n    return 1\nEOF"
+    )
+
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "written from the shell (scripts/made_in_shell.py)" in stop.reason
+    assert "codegraph_explore for the pattern" in stop.reason
+    assert hooks.send("Stop").decision == "allow"
+
+    (hooks.root / "tests" / "unit").mkdir(parents=True)
+    (hooks.root / "tests" / "unit" / "test_made.py").write_text("x = 1\n")
+    shell_wrote(hooks, "cat > tests/unit/test_made.py <<'EOF'\nx = 1\nEOF")
+    assert hooks.send("Stop").decision == "allow"
+
+    researched(hooks)
+    write_note(hooks)
+    (hooks.root / "scripts" / "second.py").write_text("def go():\n    return 2\n")
+    shell_wrote(hooks, "cat > scripts/second.py <<'EOF'\ndef go():\n    return 2\nEOF")
+    assert hooks.send("Stop").decision == "allow"
 
 
 def test_a_read_only_shell_call_skips_the_write_checks(hooks: Hooks) -> None:
@@ -487,6 +754,20 @@ def test_stopping_after_source_edits_asks_once_for_an_independent_review(
     assert hooks.send("SubagentStop").decision == "allow"
 
 
+def test_only_the_cavecrew_reviewer_counts_as_the_review(hooks: Hooks) -> None:
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
+    look_alike = {"description": "Review the diff", "subagent_type": "general-purpose"}
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=look_alike)
+
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "caveman:cavecrew-reviewer" in stop.reason
+
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    assert hooks.send("Stop").decision == "allow"
+
+
 def test_source_edited_from_the_shell_also_needs_a_review(hooks: Hooks) -> None:
     hooks.skill("senior-python-rules")
     (hooks.root / "src" / "ofmhelpers" / "made_by_python.py").write_text("x = 1\n")
@@ -502,7 +783,10 @@ def test_source_edited_from_the_shell_also_needs_a_review(hooks: Hooks) -> None:
 
 
 def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -> None:
-    hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+    first = hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+    assert "restart worker media-worker" in first.context
+    again = hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+    assert again.context == ""
     hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
 
     stop = hooks.send("SubagentStop")
@@ -523,11 +807,38 @@ def test_a_doc_beside_worker_code_needs_no_worker_restart(hooks: Hooks) -> None:
     assert hooks.send("SubagentStop").decision == "allow"
 
 
+def ui_check_ran(hooks: Hooks, last_line: str, command: str = UI_RUN) -> None:
+    response = {
+        "stdout": f"ui_check: page load\nui_check: [pass] page load: ok\n{last_line}\n",
+        "stderr": "",
+        "interrupted": False,
+        "isImage": False,
+    }
+    hooks.send(
+        "PostToolUse",
+        tool_name="Bash",
+        tool_input={"command": command},
+        tool_response=response,
+        duration_ms=60_000,
+    )
+
+
+def ui_report(hooks: Hooks, folder: str, result: str = "PASS", age_s: int = 0) -> str:
+    report = hooks.root / "reports" / "ui-check" / folder / "report.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(
+        f"# UI check /spoof\n\n- Result: {result} (0 of 7 steps failed)\n"
+    )
+    if age_s:
+        written = time.time() - age_s
+        os.utime(report, (written, written))
+    return f"ui_check: {result} reports/ui-check/{folder}/report.md"
+
+
 def test_a_web_only_change_needs_no_worker_restart(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/web/templates/x.html", when="PostToolUse")
     hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
-    shot = {"command": "uv run python -c 'import ui_screens as u; u.shoot(p, s, out)'"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
+    ui_check_ran(hooks, ui_report(hooks, "spoof-new"))
 
     assert hooks.send("SubagentStop").decision == "allow"
 
@@ -544,6 +855,109 @@ def test_a_ui_change_is_looked_at_before_it_is_done(hooks: Hooks) -> None:
         "command": f"{DEV_COMPOSE} --profile test run --rm tests uv run --frozen python scripts/ui_screens.py r60"
     }
     hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_a_js_change_counts_as_looked_at_only_after_the_ui_check(hooks: Hooks) -> None:
+    script = "src/ofmhelpers/web/static/js/spoof.js"
+    first = hooks.edit(script, when="PostToolUse")
+    assert "ui-check skill" in first.context
+    assert hooks.edit(script, when="PostToolUse").context == ""
+    shot = {"command": "uv run python scripts/ui_screens.py r60"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "scripts/ui_check.py" in stop.reason
+
+    hooks.edit(script, when="PostToolUse")
+    hooks.send(
+        "PostToolUse",
+        tool_name="Bash",
+        tool_input={"command": "cat scripts/ui_check.py"},
+    )
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    assert hooks.send("Stop").decision == "block"
+
+    hooks.edit(script, when="PostToolUse")
+    ui_check_ran(hooks, ui_report(hooks, "spoof-new"))
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    assert hooks.send("Stop").decision == "allow"
+
+
+@pytest.mark.parametrize(
+    ("last_lines", "command"),
+    [
+        (FAILED, UI_RUN),
+        (
+            "ui_check: DOWN the dev app at http://ofmhelpers:8000 does not answer",
+            UI_RUN,
+        ),
+        ("", UI_RUN),
+        ("ui_check: PASS", UI_RUN),
+        (f"{FRESH_PASS}\n{FAILED}", UI_RUN),
+        (FRESH_PASS, "cat scripts/ui_check.py"),
+        (FRESH_PASS, "echo python ui_check passed"),
+        (FRESH_PASS, f"python -c \"print('{FRESH_PASS}')\""),
+        (FRESH_PASS, f"uv run python -c \"print('{FRESH_PASS}')\""),
+        (f"{FAILED}\n{OLD_PASS}", f'{UI_RUN}; echo "{OLD_PASS}"'),
+        (f"{FAILED}\n{FAILED_AS_PASS}", f'{UI_RUN}; echo "{FAILED_AS_PASS}"'),
+        ("ui_check: PASS reports/ui-check/../../outside/report.md", UI_RUN),
+    ],
+)
+def test_a_ui_check_counts_only_with_a_fresh_passing_report_of_a_real_run(
+    hooks: Hooks, last_lines: str, command: str
+) -> None:
+    ui_report(hooks, "spoof-new")
+    ui_report(hooks, "spoof-old", age_s=3600)
+    ui_report(hooks, "spoof-failed", result="FAIL")
+    (hooks.root / "outside").mkdir()
+    (hooks.root / "outside" / "report.md").write_text("- Result: PASS (0 of 7)\n")
+    script = "src/ofmhelpers/web/static/js/spoof.js"
+    hooks.edit(script, when="PostToolUse")
+    ui_check_ran(hooks, last_lines, command)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    stop = hooks.send("Stop")
+
+    assert stop.decision == "block"
+    assert "scripts/ui_check.py" in stop.reason
+
+
+@pytest.mark.parametrize(
+    "reported",
+    [
+        "reports/ui-check/spoof-new/report.md",
+        "/app/reports/ui-check/spoof-new/report.md",
+    ],
+)
+def test_a_real_ui_check_pass_counts_with_its_report(
+    hooks: Hooks, reported: str
+) -> None:
+    ui_report(hooks, "spoof-new")
+    script = "src/ofmhelpers/web/static/js/spoof.js"
+    hooks.edit(script, when="PostToolUse")
+    ui_check_ran(hooks, f"ui_check: PASS {reported}")
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_a_screenshot_counts_only_when_ui_screens_runs(hooks: Hooks) -> None:
+    css = "src/ofmhelpers/web/static/css/pages.css"
+    hooks.edit(css, when="PostToolUse")
+    mention = {"command": "grep -n shoot scripts/ui_screens.py"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=mention)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    assert "ui_screens" in hooks.send("Stop").reason
+
+    hooks.edit(css, when="PostToolUse")
+    one_page = {
+        "command": 'uv run python -c "from scripts.ui_screens import shoot, sign_in"'
+    }
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=one_page)
     hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     assert hooks.send("Stop").decision == "allow"
 
@@ -639,6 +1053,51 @@ def test_unreadable_input_is_allowed_and_logged(tmp_path: Path) -> None:
     assert "guard input failed" in done.stderr
 
 
+def test_an_unwritable_audit_log_still_denies_a_denied_command(hooks: Hooks) -> None:
+    (hooks.root / "reports" / "hooks" / "audit.jsonl").mkdir(parents=True)
+
+    answer = hooks.bash("git commit -m x")
+
+    assert answer.decision == "deny"
+    assert "never commit" in answer.reason
+    assert "guard audit failed, call judged unaudited" in answer.stderr
+    errors = (hooks.root / "reports" / "hooks" / "errors.log").read_text()
+    assert " audit\nTraceback" in errors
+
+
+def test_a_refusal_that_cannot_be_printed_still_refuses_by_exit_2(
+    hooks: Hooks,
+) -> None:
+    read_only = hooks.root / "stdout"
+    read_only.touch()
+    payload = {
+        "session_id": "s1",
+        "hook_event_name": "PreToolUse",
+        "cwd": str(hooks.root),
+        "tool_name": "Bash",
+        "tool_input": {"command": "git commit -m x"},
+    }
+
+    with read_only.open("rb") as stdout:
+        done = subprocess.run(
+            [sys.executable, str(DISPATCHER)],
+            input=json.dumps(payload).encode(),
+            stdout=stdout,
+            stderr=subprocess.PIPE,
+            env={
+                **os.environ,
+                "CLAUDE_GUARDS_ROOT": str(hooks.root),
+                "PYDANTIC_DISABLE_PLUGINS": "__all__",
+            },
+            check=False,
+        )
+
+    stderr = done.stderr.decode()
+    assert done.returncode == 2
+    assert "guard response failed, call refused by exit 2" in stderr
+    assert "never commit" in stderr
+
+
 def test_every_call_leaves_an_audit_line(hooks: Hooks) -> None:
     hooks.bash("git commit -m x")
 
@@ -710,3 +1169,459 @@ def test_a_doc_edit_under_src_needs_no_review(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/integrations/gdrive/CLAUDE.md", when="PostToolUse")
 
     assert hooks.send("Stop").decision == "allow"
+
+
+NEW_CSS = "src/ofmhelpers/web/static/css/new.css"
+NOTE = (
+    "# hooks\n"
+    "Pattern in repo: .claude/hooks/guards/review.py Markers\n"
+    "Web: https://code.claude.com/docs/en/hooks\n"
+    "Skills: senior-python-rules\n"
+    "Breaks when: service down or slow: timeout | backend 5xx/HTML/non-JSON: refused |\n"
+    "crash after a side effect: replayed | 50 clicks, two tabs: one key |\n"
+    "junk input: Pydantic | scale: read from the end | JS crash: no JS here\n"
+)
+
+
+def write_new(hooks: Hooks, relative: str = NEW_CSS) -> Answer:
+    write = {"file_path": str(hooks.root / relative), "content": "a {}\n"}
+    return hooks.send("PreToolUse", tool_name="Write", tool_input=write)
+
+
+def researched(hooks: Hooks) -> None:
+    for tool, tool_input in (
+        ("mcp__codegraph__codegraph_explore", {"query": "Markers review.py"}),
+        ("Grep", {"pattern": "idempotency", "path": ".claude/skills"}),
+    ):
+        hooks.send("PostToolUse", tool_name=tool, tool_input=tool_input)
+
+
+def write_note(hooks: Hooks, text: str = NOTE, age_s: float = -1.0) -> None:
+    note = hooks.root / "reports" / "research" / "hooks.md"
+    note.parent.mkdir(parents=True, exist_ok=True)
+    note.write_text(text)
+    at = time.time() - age_s
+    os.utime(note, (at, at))
+
+
+def test_new_code_waits_for_codegraph_the_skills_search_and_a_note(
+    hooks: Hooks,
+) -> None:
+    assert "Pattern in repo:" in hooks.prompt("build the guard").context
+
+    denied = write_new(hooks)
+    assert denied.decision == "deny"
+    for missing in ("codegraph_explore", "the skills search", "a note", "Breaks when:"):
+        assert missing in denied.reason
+
+    researched(hooks)
+    write_note(hooks)
+    assert write_new(hooks).decision == "allow"
+
+
+def test_a_note_must_name_every_failure_mode(hooks: Hooks) -> None:
+    hooks.prompt("build the guard")
+    researched(hooks)
+    write_note(
+        hooks, NOTE.replace("scale: read from the end | JS crash: no JS here", "ok")
+    )
+
+    denied = write_new(hooks)
+
+    assert denied.decision == "deny"
+    assert "naming scale" in denied.reason
+    assert "naming JS crash" in denied.reason
+
+
+def test_no_pattern_in_the_repo_needs_a_web_search_and_its_url(hooks: Hooks) -> None:
+    hooks.prompt("build the guard")
+    researched(hooks)
+    no_pattern = NOTE.replace(
+        "Pattern in repo: .claude/hooks/guards/review.py Markers",
+        "Pattern in repo: none",
+    )
+    write_note(hooks, no_pattern.replace("https://code.claude.com/docs/en/hooks", "-"))
+
+    denied = write_new(hooks)
+    assert "a web search" in denied.reason
+    assert "a URL in `Web:`" in denied.reason
+
+    hooks.send("PostToolUse", tool_name="WebSearch", tool_input={"query": "hooks"})
+    write_note(hooks, no_pattern)
+    assert write_new(hooks).decision == "allow"
+
+
+def test_a_note_from_before_the_task_does_not_count(hooks: Hooks) -> None:
+    write_note(hooks, age_s=60)
+    hooks.prompt("next task")
+    researched(hooks)
+
+    assert "a note" in write_new(hooks).reason
+
+
+def test_a_notification_does_not_restart_the_research(hooks: Hooks) -> None:
+    hooks.prompt("build the guard")
+    researched(hooks)
+    write_note(hooks)
+
+    hooks.prompt("<task-notification><status>completed</status></task-notification>")
+
+    assert write_new(hooks).decision == "allow"
+
+
+def missing(answer: Answer) -> str:
+    return answer.reason.split("Missing since this task started: ")[1].split(".\n")[0]
+
+
+def test_a_subagent_counts_the_main_sessions_lookups_and_its_own(
+    hooks: Hooks,
+) -> None:
+    hooks.prompt("build the guard")
+    subagent = Hooks(hooks.root, session=hooks.session, agent="agent-3")
+    started = subagent.send("SubagentStart", agent_type="general-purpose")
+    assert "Pattern in repo:" in started.context
+
+    assert missing(write_new(subagent)).startswith(
+        "codegraph_explore for the pattern; the skills search; a note"
+    )
+
+    researched(hooks)
+    assert missing(write_new(subagent)).startswith("a note")
+
+    write_note(hooks)
+    assert write_new(subagent).decision == "allow"
+
+    other = Hooks(hooks.root, session="s2")
+    other.prompt("build another guard")
+    helper = Hooks(hooks.root, session="s2", agent="agent-9")
+    helper.send("SubagentStart", agent_type="general-purpose")
+    researched(helper)
+    write_note(other)
+    assert write_new(helper).decision == "allow"
+
+
+@pytest.mark.parametrize(
+    ("tool", "tool_input"),
+    [
+        ("Grep", {"pattern": "idempotency", "path": ".claude/skills"}),
+        (
+            "Bash",
+            {"command": "git grep -n -i idempotency -- .claude/skills .claude/rules"},
+        ),
+        ("Skill", {"skill": "failure-modes"}),
+    ],
+)
+def test_the_skills_search_is_a_grep_a_git_grep_or_a_skill_load(
+    hooks: Hooks, tool: str, tool_input: dict[str, str]
+) -> None:
+    hooks.prompt("build the guard")
+    codegraph = {"query": "Markers review.py"}
+    hooks.send(
+        "PostToolUse",
+        tool_name="mcp__codegraph__codegraph_explore",
+        tool_input=codegraph,
+    )
+    write_note(hooks)
+    assert "the skills search" in missing(write_new(hooks))
+
+    hooks.send("PostToolUse", tool_name=tool, tool_input=tool_input)
+
+    assert write_new(hooks).decision == "allow"
+
+
+def test_reads_and_globs_wake_no_post_tool_guard_but_grep_skill_and_shell_do() -> None:
+    settings = json.loads((REPO / ".claude" / "settings.json").read_text())
+    matchers = [
+        set(entry["matcher"].split("|"))
+        for entry in settings["hooks"]["PostToolUse"]
+        if any("guard.py" in hook["command"] for hook in entry["hooks"])
+    ]
+
+    assert len(matchers) == 1
+    assert not {"Read", "Glob"} & matchers[0]
+    assert {
+        "Grep",
+        "Skill",
+        "Bash",
+        "PowerShell",
+        "TaskStop",
+        "WebSearch",
+        "WebFetch",
+        "mcp__codegraph__codegraph_explore",
+    } <= matchers[0]
+
+
+def test_tests_docs_reports_and_edits_inside_a_function_are_never_blocked(
+    hooks: Hooks,
+) -> None:
+    hooks.prompt("fix the bug")
+    hooks.skill("senior-python-rules")
+    hooks.skill("failure-modes")
+    service = "src/ofmhelpers/features/old/service.py"
+
+    assert hooks.edit(service, old="x = 1", new="x = 2").decision == "allow"
+    assert write_new(hooks, "tests/unit/test_new.py").decision == "allow"
+    assert write_new(hooks, "docs/new.md").decision == "allow"
+    assert write_new(hooks, "reports/research/x.md").decision == "allow"
+    added = hooks.edit(service, old="x = 1", new="x = 1\n\n\ndef run():\n    pass")
+    assert added.decision == "deny"
+    assert "adds new code" in added.reason
+
+
+def test_a_subagent_gets_the_owners_contract_but_a_reader_does_not(
+    hooks: Hooks,
+) -> None:
+    subagent = Hooks(hooks.root, session=hooks.session, agent="agent-4")
+
+    brief = subagent.send("SubagentStart", agent_type="general-purpose").context
+    assert "return it in your report" in brief
+    assert "main session runs the review and the worker restart" in brief
+    assert subagent.send("SubagentStart", agent_type="Explore").context == ""
+
+
+def transcript(hooks: Hooks, tokens: int) -> Path:
+    usage = {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1000,
+        "cache_read_input_tokens": tokens - 1002,
+    }
+    lines = [
+        {"type": "assistant", "message": {"usage": {"input_tokens": 9}}},
+        {"type": "assistant", "message": {"usage": usage}},
+        {"type": "user", "message": {"content": "x" * 200_000}},
+    ]
+    path = hooks.root / "transcript.jsonl"
+    text = "\n".join(json.dumps(line, separators=(",", ":")) for line in lines)
+    path.write_text(text + '\n{"type":"assistant","message":{"usa\n')
+    return path
+
+
+def test_a_big_context_is_told_once_per_200k_of_growth(hooks: Hooks) -> None:
+    def prompt(path: Path) -> str:
+        return hooks.send(
+            "UserPromptSubmit", prompt="next task", transcript_path=str(path)
+        ).context
+
+    assert "context is" not in prompt(transcript(hooks, 390_000))
+    assert "context is 450k tokens" in prompt(transcript(hooks, 450_000))
+    assert "context is" not in prompt(transcript(hooks, 600_000))
+    assert "context is 700k tokens" in prompt(transcript(hooks, 700_000))
+    assert "context is" not in prompt(hooks.root / "missing.jsonl")
+
+    (hooks.root / "reports" / "hooks" / "ship.open").write_text("x")
+    assert "context is" not in prompt(transcript(hooks, 950_000))
+
+
+def test_a_stopped_run_that_stranded_the_pre_commit_patch_says_apply_it(
+    hooks: Hooks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = hooks.root / "pre-commit-home"
+    home.mkdir()
+    monkeypatch.setenv("PRE_COMMIT_HOME", str(home))
+    tracked = hooks.root / "notes.txt"
+    tracked.write_text("one\n")
+    subprocess.run(["git", "-C", str(hooks.root), "add", "notes.txt"], check=True)
+    tracked.write_text("two\n")
+    patch = home / "patch1763700000-42"
+    patch.write_bytes(
+        subprocess.run(
+            ["git", "-C", str(hooks.root), "diff", "--binary"],
+            capture_output=True,
+            check=True,
+        ).stdout
+    )
+    tracked.write_text("one\n")
+    stop = {"task_id": "b7"}
+
+    stranded = hooks.send("PostToolUse", tool_name="TaskStop", tool_input=stop)
+    assert stranded.decision == "block"
+    assert f'git apply "{patch.as_posix()}"' in stranded.reason
+
+    tracked.write_text("two\n")
+    assert (
+        hooks.send("PostToolUse", tool_name="TaskStop", tool_input=stop).decision
+        == "allow"
+    )
+
+    tracked.write_text("one\n")
+    three_hours_ago = time.time() - 3 * 3600
+    os.utime(patch, (three_hours_ago, three_hours_ago))
+    assert (
+        hooks.send("PostToolUse", tool_name="TaskStop", tool_input=stop).decision
+        == "allow"
+    )
+
+
+def test_only_the_newest_pre_commit_patch_is_checked(
+    hooks: Hooks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = hooks.root / "pre-commit-home"
+    home.mkdir()
+    monkeypatch.setenv("PRE_COMMIT_HOME", str(home))
+    tracked = hooks.root / "notes.txt"
+    tracked.write_text("one\n")
+    subprocess.run(["git", "-C", str(hooks.root), "add", "notes.txt"], check=True)
+    tracked.write_text("two\n")
+    applies = home / "patch1763700000-1"
+    applies.write_bytes(
+        subprocess.run(
+            ["git", "-C", str(hooks.root), "diff", "--binary"],
+            capture_output=True,
+            check=True,
+        ).stdout
+    )
+    tracked.write_text("one\n")
+    broken = home / "patch1763700100-2"
+    broken.write_text("not a patch\n")
+    now = time.time()
+    os.utime(applies, (now - 120, now - 120))
+    os.utime(broken, (now - 60, now - 60))
+    stop = {"task_id": "b7"}
+
+    assert (
+        hooks.send("PostToolUse", tool_name="TaskStop", tool_input=stop).decision
+        == "allow"
+    )
+
+    os.utime(broken, (now - 300, now - 300))
+    stranded = hooks.send("PostToolUse", tool_name="TaskStop", tool_input=stop)
+    assert stranded.decision == "block"
+    assert applies.as_posix() in stranded.reason
+
+
+def test_a_crashing_git_guard_denies_the_command_instead_of_allowing_it(
+    hooks: Hooks,
+) -> None:
+    status = {"command": "git status"}
+
+    answer = hooks.send(
+        "PreToolUse", tool_name="Bash", tool_input=status, cwd="bad\x00dir"
+    )
+
+    assert answer.decision == "deny"
+    assert "guard git crashed: ValueError" in answer.reason
+    assert "fix it before this command" in answer.reason
+    assert "guard git failed, call denied" in answer.stderr
+
+
+def test_the_audit_log_rotates_past_20_mb_keeping_one_generation(
+    hooks: Hooks,
+) -> None:
+    state = hooks.root / "reports" / "hooks"
+    state.mkdir(parents=True)
+    audit = state / "audit.jsonl"
+    over = 20 * 1024 * 1024 + 1
+    with audit.open("wb") as log:
+        log.truncate(over)
+    (state / "audit.jsonl.1").write_text("the generation before\n")
+
+    hooks.bash("git status")
+
+    assert (state / "audit.jsonl.1").stat().st_size == over
+    lines = audit.read_text().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["target"] == "git status"
+
+
+def test_a_running_push_suite_blocks_edits_of_tracked_files_only(
+    hooks: Hooks,
+) -> None:
+    (hooks.root / ".gitignore").write_text("/reports/\n")
+    (hooks.root / "README.md").write_text("x\n")
+    (hooks.root / ".claude").mkdir()
+    (hooks.root / ".claude" / "settings.json").write_text("{}\n")
+    tracked = ["README.md", ".claude/settings.json"]
+    subprocess.run(["git", "-C", str(hooks.root), "add", *tracked], check=True)
+    (hooks.root / "reports").mkdir()
+    lock = hooks.root / "reports" / ".running"
+    lock.write_text("push\n123\n")
+
+    for path in tracked:
+        denied = hooks.edit(path)
+        assert denied.decision == "deny"
+        assert "pre-push suite is running" in denied.reason
+    assert hooks.edit("docs/new.md").decision == "allow"
+    assert hooks.edit("reports/research/x.md").decision == "allow"
+
+    lock.write_text("files\n123\n")
+    assert hooks.edit("README.md").decision == "allow"
+    assert "is running" in hooks.edit("src/ofmhelpers/x.py").reason
+
+
+def committed_tree(root: Path) -> str:
+    who = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com"}
+    env = {
+        **os.environ,
+        **who,
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+    }
+
+    def git(*args: str) -> str:
+        done = subprocess.run(
+            ["git", "-C", str(root), *args],
+            input="",
+            capture_output=True,
+            text=True,
+            env=env,
+            check=True,
+        )
+        return done.stdout.strip()
+
+    tree = git("mktree")
+    git("update-ref", "HEAD", git("commit-tree", tree, "-m", "x"))
+    return tree
+
+
+def test_a_green_gate_reruns_only_on_a_new_tree_or_the_owners_bare_word(
+    hooks: Hooks,
+) -> None:
+    state = hooks.root / "reports" / "hooks"
+    state.mkdir(parents=True)
+    ship_open = state / "ship.open"
+    ship_open.write_text("ed20257")
+    os.utime(ship_open, (time.time() - 60, time.time() - 60))
+    green = state / "gate.green"
+    other_tree = "0" * 40
+    green.write_text(f"{other_tree} {int(time.time())}")
+    os.utime(green, (time.time() - 120, time.time() - 120))
+    assert hooks.bash("scripts/test.sh deploy").decision == "allow"
+
+    os.utime(green, None)
+    unknown = hooks.bash("scripts/test.sh deploy")
+    assert unknown.decision == "deny"
+    assert "whether HEAD is still that tree is unknown" in unknown.reason
+
+    tree = committed_tree(hooks.root)
+    green.write_text(f"{tree} {int(time.time())}")
+    for preset in ("deploy", "all", "push"):
+        denied = hooks.bash(f"scripts/test.sh {preset}")
+        assert denied.decision == "deny"
+        assert "the gate is green at" in denied.reason
+        assert "on this exact tree" in denied.reason
+    assert hooks.bash("scripts/test.sh tests/unit/test_x.py").decision == "allow"
+
+    green.write_text(f"{other_tree} {int(time.time())}")
+    assert hooks.bash("scripts/test.sh deploy").decision == "allow"
+
+    green.write_text(f"{tree} {int(time.time())}")
+    hooks.prompt("rerun the gate")
+    assert hooks.bash("scripts/test.sh deploy").decision == "deny"
+    hooks.prompt("gate")
+    assert hooks.bash("scripts/test.sh deploy").decision == "allow"
+
+
+def test_an_existing_python_file_is_changed_with_edit_not_rewritten(
+    hooks: Hooks,
+) -> None:
+    def write(relative: str) -> Answer:
+        content = {"file_path": str(hooks.root / relative), "content": "x = 2\n"}
+        return hooks.send("PreToolUse", tool_name="Write", tool_input=content)
+
+    denied = write("src/ofmhelpers/features/old/service.py")
+    assert denied.decision == "deny"
+    assert "change it with Edit" in denied.reason
+    assert (
+        "change it with Edit" not in write("src/ofmhelpers/features/old/new.py").reason
+    )
+    assert write("notes.txt").decision == "allow"

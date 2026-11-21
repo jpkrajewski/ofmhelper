@@ -155,6 +155,54 @@ def test_a_click_after_a_refusal_sends_a_new_key(va: Session):
     assert keys[0] != keys[1]
 
 
+def test_an_html_answer_shows_plain_words_on_a_download_card(va: Session):
+    va.goto("/download-assets")
+    page = va.page
+    page.route(
+        "**/download-media/run",
+        lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<!doctype html><p>login</p>"
+        ),
+    )
+    page.locator("#dl-urls").fill("https://www.example.com/watch/html-answer")
+    page.locator('#download-assets-form [type="submit"]').click()
+
+    expect(page.locator(".generation-error")).to_have_text(
+        "Something went wrong. Try again."
+    )
+    card = page.locator("#results-panel .results > .result-item").first
+    expect(card).to_contain_text("Download")
+    expect(card).not_to_contain_text("/download-media")
+    assert va.js_errors == []
+
+
+def test_a_click_after_an_html_refusal_sends_a_new_key(va: Session):
+    va.goto("/download-assets")
+    page = va.page
+    keys: list[str | None] = []
+
+    def refuse(route) -> None:
+        keys.append(route.request.headers.get("idempotency-key"))
+        route.fulfill(
+            status=400, content_type="text/html", body="<!doctype html><p>no</p>"
+        )
+
+    page.route("**/download-media/run", refuse)
+    page.locator("#dl-urls").fill("https://www.example.com/watch/html-refusal")
+    run = page.locator('#download-assets-form [type="submit"]')
+    with page.expect_request("**/download-media/run"):
+        run.click()
+    expect(page.locator(".generation-error")).to_be_visible()
+    page.wait_for_timeout(3_100)
+    with page.expect_request("**/download-media/run"):
+        run.click()
+
+    assert len(keys) == 2
+    assert keys[0]
+    assert keys[1]
+    assert keys[0] != keys[1]
+
+
 def test_a_request_that_did_not_finish_is_not_asked_again(va: Session):
     va.goto("/download-assets")
     page = va.page

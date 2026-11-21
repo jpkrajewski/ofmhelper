@@ -11,7 +11,8 @@
 #   scripts/test.sh snapshot     migrations on a copy of the prod snapshot
 #   scripts/test.sh durations    a `push` run, then .test_durations from it
 #                                (CI's three test groups split by these times)
-#   scripts/test.sh <args...>    anything else goes straight to pytest
+#   scripts/test.sh affected     the tests of the files changed since HEAD (scripts/affected_tests.py)
+#   scripts/test.sh <args...>    anything else goes straight to pytest (parallel, like the presets)
 #
 # Every run writes:
 #   reports/<timestamp>/output.log   the full output (also shown live)
@@ -35,6 +36,20 @@ compose=(docker compose -f docker-compose.yml -f docker-compose.dev.yml --profil
 # 6 workers + ffmpeg + another project's tests: 24 min instead of 7, PC hanging).
 parallel=(-n auto --maxprocesses=4 --dist loadgroup)
 
+argument_count=$#
+preset="${1:-default}"
+tree_now() { git rev-parse 'HEAD^{tree}'; }
+gate_green=reports/hooks/gate.green
+clean_at_start="$(git status --porcelain)"
+
+if [[ "$preset" == push && $# -eq 1 && -z "$clean_at_start" && -f "$gate_green" ]]; then
+    read -r green_tree green_time < "$gate_green"
+    if [[ "$green_tree" == "$(tree_now)" ]]; then
+        echo "test.sh: push skipped, the deploy gate passed on this exact tree ($green_tree at $(date -d "@$green_time" '+%F %T' 2>/dev/null || echo "$green_time"))"
+        exit 0
+    fi
+fi
+
 case "${1:-}" in
     "") args=("${parallel[@]}") ;;
     e2e) shift; args=(-m e2e "$@") ;;
@@ -45,7 +60,24 @@ case "${1:-}" in
     paid) shift; args=(-m paid "$@") ;;
     snapshot) shift; args=(-m snapshot "$@") ;;
     durations) shift; args=(-m "not e2e and not live and not snapshot and not paid" "${parallel[@]}" "$@"); store_durations=1 ;;
-    *) args=("$@") ;;
+    affected)
+        shift
+        mapfile -t changed < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+        if ! selected=$("${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/affected_tests.py "${changed[@]}"); then
+            echo "test.sh: affected: the selector crashed, no test list" >&2
+            exit 1
+        fi
+        mapfile -t picked <<< "$selected"
+        [[ -n "$selected" ]] || picked=()
+        if [[ ${#picked[@]} -eq 0 ]]; then
+            echo "test.sh: affected: no test belongs to the changed files"
+            exit 0
+        fi
+        echo "test.sh: affected: ${#picked[@]} test files:"
+        printf '  %s\n' "${picked[@]}"
+        args=("${parallel[@]}" "${picked[@]}" "$@")
+        ;;
+    *) preset=files; args=("${parallel[@]}" "$@") ;;
 esac
 
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -53,7 +85,7 @@ run_dir="reports/$stamp"
 mkdir -p "$run_dir"
 
 lock=reports/.running
-echo "$$ $stamp ${1:-default}" > "$lock"
+printf '%s\n%s %s\n' "$preset" "$$" "$stamp" > "$lock"
 trap 'rm -f "$lock"' EXIT
 
 # The results volume starts empty but for the previous report's history
@@ -91,6 +123,13 @@ fi
 
 "${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/test_summary.py reports/latest/report.json     | tee reports/latest/summary.txt "$run_dir/summary.txt"
 [[ ${PIPESTATUS[0]} -eq 0 ]] || status=1
+
+if [[ "$preset" == deploy && "$argument_count" -eq 1 && "$status" -eq 0&& -z "$clean_at_start" && -z "$(git status --porcelain)" ]] \
+    && grep -q '^RESULT GREEN' reports/latest/summary.txt; then
+    mkdir -p "$(dirname "$gate_green")"
+    echo "$(tree_now) $(date +%s)" > "$gate_green"
+    echo "test.sh: gate green on tree $(tree_now) -> $gate_green"
+fi
 
 echo "test.sh: report -> reports/latest/report.json, open with scripts/report.sh"
 exit "$status"

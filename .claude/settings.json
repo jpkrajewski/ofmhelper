@@ -27,7 +27,7 @@
         ]
       },
       {
-        "matcher": "Bash|PowerShell|Edit|Write|MultiEdit|Skill|Agent|Task",
+        "matcher": "Bash|PowerShell|Edit|Write|MultiEdit|Skill|Agent|Task|mcp__codegraph__codegraph_explore|WebSearch|WebFetch|Grep|TaskStop",
         "hooks": [
           {
             "type": "command",
@@ -72,6 +72,17 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PYDANTIC_DISABLE_PLUGINS=__all__ uv run --project \"$CLAUDE_PROJECT_DIR\" --frozen --no-sync python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
       {
         "hooks": [
           {
