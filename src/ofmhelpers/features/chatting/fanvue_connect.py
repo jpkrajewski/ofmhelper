@@ -1,12 +1,15 @@
 import secrets
 
-from ofmhelpers.cache import delete_text, get_text, set_text
+from redis.exceptions import RedisError
+
+from ofmhelpers.cache import delete_text, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.chats import store as chats
 from ofmhelpers.db.chats.schema import ChatAccount, ChatPlatform
 from ofmhelpers.features.chatting.webhooks import sync_done_key
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.integrations.fanvue import FanvueClient, oauth
+from ofmhelpers.integrations.pkce import pkce_pair
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
@@ -27,19 +30,48 @@ def can_connect() -> bool:
     return bool(settings.fanvue.client_id and settings.fanvue.client_secret)
 
 
-def connect_url() -> str:
-    pkce = oauth.pkce_pair()
+def connect_url(user_id: int, session_id: str) -> str | None:
+    if not can_connect():
+        return None
+    pkce = pkce_pair()
     state = secrets.token_urlsafe(32)
-    set_text(_state_key(state), pkce.verifier, settings.fanvue.connect_ttl_s)
+    try:
+        get_redis().set(
+            _state_key(state),
+            f"{user_id}:{session_id}:{pkce.verifier}",
+            ex=settings.fanvue.connect_ttl_s,
+        )
+    except RedisError:
+        logger.warning("fanvue connect: state not kept", exc_info=True)
+        return None
     return oauth.authorize_url(_redirect_uri(), state, pkce.challenge)
 
 
-def finish(code: str, state: str) -> bool:
-    verifier = get_text(_state_key(state))
-    if verifier is None:
+def _take_state(state: str) -> str | None:
+    try:
+        raw = get_redis().getdel(_state_key(state))
+    except RedisError:
+        logger.warning("fanvue connect: state store unreachable", exc_info=True)
+        return None
+    return raw.decode() if isinstance(raw, bytes) else raw
+
+
+def finish(user_id: int, session_id: str, code: str, state: str) -> bool:
+    stored = _take_state(state)
+    if stored is None:
         logger.warning("fanvue connect: unknown or expired state")
         return False
-    delete_text(_state_key(state))
+    starter, _, rest = stored.partition(":")
+    started_in, _, verifier = rest.partition(":")
+    if starter != str(user_id) or not secrets.compare_digest(
+        started_in.encode(), session_id.encode()
+    ):
+        logger.warning(
+            "fanvue connect: state started by user %s used by %s or in another session",
+            starter,
+            user_id,
+        )
+        return False
     try:
         tokens = oauth.exchange(code, _redirect_uri(), verifier)
         me = FanvueClient(lambda: tokens.access_token).me()

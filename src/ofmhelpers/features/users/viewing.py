@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.db.jobs.store import log_event
 from ofmhelpers.db.users import store as users
-from ofmhelpers.db.users.schema import Role, SessionUser, User, Viewer
+from ofmhelpers.db.users.schema import Role, SessionUser, Standing, User, Viewer
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 
 
@@ -86,8 +86,17 @@ def viewable(user_id: int, me_id: int) -> User:
     return user
 
 
-def signed_in_user(user_id: int) -> User | None:
-    return users.get_user(user_id)
+class Seated(BaseModel):
+    user: User
+    standing: Standing
+
+
+def signed_in_user(user_id: int) -> Seated | None:
+    user = users.get_user(user_id)
+    standing = users.standing(user_id)
+    if user is None or standing is None:
+        return None
+    return Seated(user=user, standing=standing)
 
 
 def _admin(admin_id: int | None) -> str | None:

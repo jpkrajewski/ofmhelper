@@ -26,6 +26,7 @@ WIDTHS = (1440, 390)
 # Pages that stream media never reach network idle: wait for load, then
 # give the page's own scripts a moment to render.
 SETTLE_MS = 1500
+SERVER_ERROR = 500
 
 
 class Shot(BaseModel):
@@ -89,10 +90,15 @@ def first_link(page: Page, path: str) -> str | None:
     return link.get_attribute("href") if link.count() else None
 
 
-def shoot(page: Page, shot: Shot, revision: Path) -> None:
+def shoot(page: Page, shot: Shot, revision: Path) -> list[str]:
+    failed: list[str] = []
     for width in WIDTHS:
         page.set_viewport_size({"width": width, "height": 900})
-        page.goto(shot.path, wait_until="load")
+        response = page.goto(shot.path, wait_until="load")
+        status = response.status if response else 0
+        print(f"ui_screens: {shot.name}-{width}: HTTP {status}")
+        if status >= SERVER_ERROR or status == 0:
+            failed.append(f"{shot.name}-{width}: HTTP {status}")
         # Lazy images load only once scrolled near: walk down, then back.
         reloads_itself = False
         try:
@@ -118,6 +124,7 @@ def shoot(page: Page, shot: Shot, revision: Path) -> None:
                 f"ui_screens: {shot.name}-{width}: {len(broken)} broken images, e.g. {broken[0]}"
             )
         page.screenshot(path=revision / f"{shot.name}-{width}.png", full_page=True)
+    return failed
 
 
 def gallery() -> None:
@@ -156,11 +163,12 @@ def main() -> None:
     revision.mkdir(parents=True, exist_ok=True)
     base_url = os.environ.get("OFM_UI_BASE_URL", "http://ofmhelpers:8000")
     password = os.environ["OFM_UI_PASSWORD"]
+    failed: list[str] = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         public = browser.new_page(base_url=base_url)
         for shot in (s for s in PAGES if not s.signed_in):
-            shoot(public, shot, revision)
+            failed += shoot(public, shot, revision)
         page = browser.new_page(base_url=base_url)
         sign_in(page, password)
         shots = [s for s in PAGES if s.signed_in]
@@ -171,10 +179,13 @@ def main() -> None:
         if thread := first_link(page, "/threads"):
             shots.append(Shot(name="thread", path=thread))
         for shot in shots:
-            shoot(page, shot, revision)
+            failed += shoot(page, shot, revision)
         browser.close()
     gallery()
     print(f"ui_screens: {revision} ({len(list(revision.glob('*.png')))} shots)")
+    if failed:
+        msg = "ui_screens: server errors: " + "; ".join(failed)
+        raise SystemExit(msg)
 
 
 if __name__ == "__main__":

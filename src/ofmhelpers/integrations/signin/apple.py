@@ -78,6 +78,7 @@ class Apple:
         nonce: str,
         *,
         connect: bool,  # noqa: ARG002
+        challenge: str,  # noqa: ARG002
     ) -> str:
         query = {
             "client_id": settings.signin.apple_services_id,
@@ -90,7 +91,12 @@ class Apple:
         }
         return f"{AUTH_URL}?{urlencode(query)}"
 
-    def exchange(self, code: str, redirect_uri: str) -> TokenReply:
+    def exchange(
+        self,
+        code: str,
+        redirect_uri: str,
+        verifier: str,  # noqa: ARG002
+    ) -> TokenReply:
         return token_request(
             TOKEN_URL,
             {
@@ -104,7 +110,12 @@ class Apple:
         )
 
     def identity(self, reply: TokenReply, nonce: str) -> Identity:
-        found = checked(claims(reply.id_token), nonce)
+        found = checked(
+            claims(reply.id_token),
+            nonce,
+            issuers=(ISSUER,),
+            audience=settings.signin.apple_services_id,
+        )
         return Identity(
             provider=self.name,
             subject=found.sub,

@@ -45,9 +45,9 @@ def create_app() -> FastAPI:
 def _middleware() -> list[Middleware]:
     session = settings.session
     return [
+        Middleware(FrameGuardMiddleware),
         Middleware(BridgeMiddleware),
         Middleware(CanonicalHostMiddleware),
-        Middleware(FrameGuardMiddleware),
         Middleware(CompressionMiddleware),
         Middleware(
             SessionMiddleware,

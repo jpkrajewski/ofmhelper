@@ -100,7 +100,7 @@ def _default_limit() -> int:
 
 
 def _hides(viewer: Viewer) -> bool:
-    return allowed(viewer.user.role, Action.HIDE)
+    return allowed(viewer.access_role, Action.HIDE)
 
 
 class Gallery:

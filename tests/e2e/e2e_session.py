@@ -7,6 +7,8 @@ lazy from playwright.sync_api import Browser, Response, Route
 from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST, FakeKie
 from ofmhelpers.integrations.instagram.fake import cdn_reply
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
+from ofmhelpers.integrations.snapchat.fake import CDN as SNAPCHAT_CDN
+from ofmhelpers.integrations.x.fake import CDN as X_CDN
 
 DEV_ROOT = "DEV - ALL ACCOUNTS"
 
@@ -43,6 +45,9 @@ def log_in(
 
 
 _CDN = re.compile(rf"^https://{re.escape(GLOBAL_CDN_HOST)}/")
+_FAKE_IMAGES = re.compile(
+    rf"^(?:{re.escape(SNAPCHAT_CDN)}|{re.escape(X_CDN)})/.+\.jpg$"
+)
 _KIE_RESULTS = re.compile(rf"^https://{re.escape(RESULT_HOST)}/")
 
 
@@ -75,6 +80,7 @@ class Session:
         )
         self.context.tracing.start(screenshots=True, snapshots=True)
         self.context.route(_CDN, _serve_cdn)
+        self.context.route(_FAKE_IMAGES, _serve_cdn)
         self.context.route(_KIE_RESULTS, _serve_kie_result)
         self.page = self.context.new_page()
         self.js_errors: list[str] = []

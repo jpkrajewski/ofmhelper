@@ -102,9 +102,5 @@ def save_scans(scans: dict[int, AccountScan], at: float) -> None:
     )
 
 
-def logins_changed() -> None:
-    _repository().logins_changed()
-
-
 def sync_lock() -> AbstractContextManager[bool]:
     return _repository().sync_lock()

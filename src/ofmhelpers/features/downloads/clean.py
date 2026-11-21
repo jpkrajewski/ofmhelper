@@ -26,13 +26,13 @@ def upload_root() -> Path:
     return uploads_root() / "clean-images"
 
 
-def run_clean(job_dir: str, assets_root: str) -> list[ResultFile]:
-    directory = Path(job_dir)
-    clean_metadata(directory)
-    files = sorted(p for p in directory.iterdir() if p.info.is_file())
-    for p in files:
+def run_clean(
+    job_dir: str, assets_root: str, files: list[str] | None = None
+) -> list[ResultFile]:
+    outputs = clean_metadata(Path(job_dir), None if files is None else set(files))
+    for p in outputs:
         register_generated_asset(p, Path(assets_root))
-    return [ResultFile(name=p.name, path=str(p)) for p in files]
+    return [ResultFile(name=p.name, path=str(p)) for p in outputs]
 
 
 def start(files: list[UploadFile], actor: str, assets_root: Path) -> JobQueued:
@@ -49,6 +49,10 @@ def start(files: list[UploadFile], actor: str, assets_root: Path) -> JobQueued:
         run_job,
         job_id,
         run_clean,
-        {"job_dir": str(job_dir), "assets_root": str(assets_root)},
+        {
+            "job_dir": str(job_dir),
+            "assets_root": str(assets_root),
+            "files": saved_names,
+        },
     )
     return JobQueued(job_id=job_id)

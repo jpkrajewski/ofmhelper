@@ -722,6 +722,35 @@ class InstagramSettings(BaseSettings):
     )
 
 
+class ProfilePageSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    )
+    timeout_s: float = Field(default=20, gt=0)
+    proxies: str = ""
+    http_retries: int = Field(default=2, ge=0)
+    retry_backoff_s: float = Field(default=0.5, ge=0)
+
+    @property
+    def proxy_urls(self) -> list[str]:
+        return [
+            p if "://" in p else f"http://{p}"
+            for p in (part.strip() for part in self.proxies.split(","))
+            if p
+        ]
+
+
+class SnapchatSettings(ProfilePageSettings):
+    model_config = SettingsConfigDict(env_prefix="OFM_SNAPCHAT_")
+
+
+class XSettings(ProfilePageSettings):
+    model_config = SettingsConfigDict(env_prefix="OFM_X_")
+
+
 class AccountsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -801,6 +830,16 @@ class AccountsSettings(BaseSettings):
     )
     apify_run_timeout_s: int = Field(
         default=600, ge=60, validation_alias="OFM_ACCOUNTS_APIFY_RUN_TIMEOUT_S"
+    )
+    apify_x_actor: str = Field(
+        default="kaitoeasyapi~twitter-x-data-tweet-scraper-pay-per-result-cheapest",
+        validation_alias="OFM_ACCOUNTS_APIFY_X_ACTOR",
+    )
+    apify_x_usd_per_run: float = Field(
+        default=0.01, gt=0, validation_alias="OFM_ACCOUNTS_APIFY_X_USD_PER_RUN"
+    )
+    apify_x_max_items: int = Field(
+        default=40, ge=20, validation_alias="OFM_ACCOUNTS_APIFY_X_MAX_ITEMS"
     )
 
     batch_size: int = Field(
@@ -942,6 +981,18 @@ class LinksSettings(BaseSettings):
     sync_check_interval_s: int = Field(
         default=300, ge=10, validation_alias="OFM_LINKS_SYNC_CHECK_INTERVAL_S"
     )
+    background_sync: bool | None = Field(
+        default=None, validation_alias="OFM_LINKS_BACKGROUND_SYNC"
+    )
+
+    @field_validator("background_sync", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    def syncing_in_background(self, production: bool) -> bool:
+        return production if self.background_sync is None else self.background_sync
+
     claim_ttl_s: int = Field(
         default=60 * 60, ge=60, validation_alias="OFM_LINKS_CLAIM_TTL_S"
     )
@@ -971,6 +1022,13 @@ class LinksSettings(BaseSettings):
     bridge_rate_per_min: int = Field(
         default=240, ge=1, validation_alias="OFM_LINKS_BRIDGE_RATE_PER_MIN"
     )
+    tunnel_host_suffixes: str = Field(
+        default="", validation_alias="OFM_LINKS_TUNNEL_HOST_SUFFIXES"
+    )
+
+    def tunnel_suffixes(self) -> list[str]:
+        parts = (p.strip().lower() for p in self.tunnel_host_suffixes.split(","))
+        return [p if p.startswith(".") else f".{p}" for p in parts if p]
 
     @property
     def history_days(self) -> int:

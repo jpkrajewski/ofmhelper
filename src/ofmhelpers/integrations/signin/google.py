@@ -20,6 +20,7 @@ from ofmhelpers.integrations.signin.base import (
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = GOOGLE_TOKEN_URL
+ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 SIGN_IN_SCOPES = ("openid", "email", "profile")
 CONNECT_SCOPES = (*SIGN_IN_SCOPES, *DRIVE_SCOPES)
 
@@ -52,7 +53,13 @@ class Google:
         return settings.signin.google_configured
 
     def consent_url(
-        self, redirect_uri: str, state: str, nonce: str, *, connect: bool
+        self,
+        redirect_uri: str,
+        state: str,
+        nonce: str,
+        *,
+        connect: bool,
+        challenge: str,
     ) -> str:
         client_id = _client().client_id
         query = {
@@ -62,6 +69,8 @@ class Google:
             "scope": " ".join(CONNECT_SCOPES if connect else SIGN_IN_SCOPES),
             "state": state,
             "nonce": nonce,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
         }
         if connect:
             query |= {
@@ -73,22 +82,26 @@ class Google:
             query["prompt"] = "select_account"
         return f"{AUTH_URL}?{urlencode(query)}"
 
-    def exchange(self, code: str, redirect_uri: str) -> TokenReply:
+    def exchange(self, code: str, redirect_uri: str, verifier: str) -> TokenReply:
         oauth = _client()
-        return token_request(
-            TOKEN_URL,
-            {
-                "code": code,
-                "client_id": oauth.client_id,
-                "client_secret": oauth.client_secret,
-                "redirect_uri": redirect_uri,
-                "grant_type": "authorization_code",
-            },
-            self.label,
-        )
+        form = {
+            "code": code,
+            "client_id": oauth.client_id,
+            "client_secret": oauth.client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        if verifier:
+            form["code_verifier"] = verifier
+        return token_request(TOKEN_URL, form, self.label)
 
     def identity(self, reply: TokenReply, nonce: str) -> Identity:
-        found = checked(claims(reply.id_token), nonce)
+        found = checked(
+            claims(reply.id_token),
+            nonce,
+            issuers=ISSUERS,
+            audience=_client().client_id,
+        )
         return Identity(
             provider=self.name,
             subject=found.sub,

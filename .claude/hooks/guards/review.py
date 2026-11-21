@@ -9,7 +9,7 @@ AGENTS = {"Agent", "Task"}
 SHELLS = {"Bash", "PowerShell"}
 REVIEWER_AGENT = "caveman:cavecrew-reviewer"
 KIMI_RUN = re.compile(
-    r"kimi/ask\.py\s+review|kimi\.exe|(^|[;&|(]\s*)kimi\s+(-p|-r)\b", re.MULTILINE
+    r"kimi[/\\]ask\.py\s+review|kimi\.exe|(^|[;&|(]\s*)kimi\s+(-p|-r)\b", re.MULTILINE
 )
 REVIEWER_FIRST = (
     "Owner (2026-11-20): before calling a feature done, an independent reviewer checks it for failures, "

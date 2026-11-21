@@ -196,7 +196,7 @@ def _destination(
     upload: DriveUpload, owner_id: int, folder: Folder, drive: DriveApi, token: str
 ) -> ReviewPlace:
     job = get_job(upload.job_id, None)
-    if job is None or job.task != SPOOFED_TASK:
+    if job is None or job.task != SPOOFED_TASK or isinstance(folder, VaFolder):
         return ReviewPlace(drive=drive, folder_id=folder.folder_id)
     place = review_target(token, owner_id)
     spoofed = account_subfolder(place, folder.folder_id, AccountFolder.SPOOFED)

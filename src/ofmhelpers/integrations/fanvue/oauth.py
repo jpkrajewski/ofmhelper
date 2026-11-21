@@ -1,12 +1,9 @@
-import base64
-import hashlib
-import secrets
 import time
 from http import HTTPStatus
 from urllib.parse import urlencode
 
 import requests
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.chats.schema import ChatTokens
@@ -16,22 +13,6 @@ from ofmhelpers.integrations.fanvue.models import TokenReply
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
-
-
-class Pkce(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    verifier: str
-    challenge: str
-
-
-def pkce_pair() -> Pkce:
-    verifier = secrets.token_urlsafe(64)
-    digest = hashlib.sha256(verifier.encode()).digest()
-    return Pkce(
-        verifier=verifier,
-        challenge=base64.urlsafe_b64encode(digest).rstrip(b"=").decode(),
-    )
 
 
 def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:

@@ -11,8 +11,9 @@ from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.account.keys import Keys, keep_used
+from ofmhelpers.features.account.keys import SAVED_KEY, Keys, keep_used
 from ofmhelpers.features.assets.store import assets_root_for_user
+from ofmhelpers.features.chatting.recent import recent_models
 from ofmhelpers.features.users import service
 from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.integrations.ai_providers import tasks
@@ -196,8 +197,13 @@ def test_a_vas_run_goes_out_on_the_owners_key_which_the_va_never_sees():
     assert Keys.of(va.id).for_run("kie", KIE, "") == "owner-kie-key-1234"
     page = _client(VA, Role.VA).get("/generate").text
     assert "owner-kie-key-1234" not in page
+    assert SAVED_KEY not in page
     assert "data-server-key" in page
-    assert "owner-kie-key-1234" in _client(OWNER).get("/generate").text
+    owner_page = _client(OWNER).get("/generate").text
+    assert SAVED_KEY in owner_page
+    assert "owner-kie-key-1234" not in owner_page
+    assert Keys.of(owner.id).for_run("kie", KIE, SAVED_KEY) == "owner-kie-key-1234"
+    assert Keys.of(va.id).for_run("kie", KIE, SAVED_KEY) == "owner-kie-key-1234"
 
 
 def test_a_va_without_an_owner_has_no_key_and_never_an_env_one(monkeypatch):
@@ -319,6 +325,19 @@ def test_view_as_shows_the_other_persons_pages():
     assert target.email in account
     assert "…1234" in account
     assert "their-kie-key-1234" not in admin.get("/generate").text
+
+
+def test_view_as_does_not_remember_a_chat_visit():
+    admin, target = _viewing()
+
+    answer = admin.post("/chatting/fanvue/x/visits")
+
+    assert answer.status_code == 403
+    assert answer.text == _LOOK_ONLY.format(name=target.label)
+    assert recent_models(target.id) == []
+    page = admin.get("/chatting/fanvue/x", headers={"sec-fetch-mode": "navigate"})
+    assert page.status_code == 200
+    assert "data-chat-visit" not in page.text
 
 
 def test_view_as_changes_nothing():

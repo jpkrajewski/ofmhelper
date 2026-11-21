@@ -78,7 +78,10 @@
                 });
                 const existing = result.existing ? `, ${result.existing} already tracked` : "";
                 setStatus(addStatus, `Added ${result.added.length}${existing}. Syncing…`);
-                window.location.reload();
+                const shown = new URL(window.location.href);
+                shown.searchParams.set("platform", addForm.platform.value);
+                shown.searchParams.delete("page");
+                window.location.assign(shown.toString());
             } catch (error) {
                 setStatus(addStatus, error.message, true);
                 submit.disabled = false;

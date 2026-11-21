@@ -46,6 +46,7 @@ def _account(row: TrackedAccountRow, creator: str | None) -> TrackedAccount:
         profile=None if profile is None else AccountProfile.model_validate(profile),
         metrics=None if metrics is None else AccountMetrics.model_validate(metrics),
         covered_since=row.covered_since,
+        last_scan_at=None,
     )
 
 
@@ -70,17 +71,32 @@ class _AccountBaseline(BaseModel, frozen=True):
     taken_at: float
 
 
+class _AccountScan(BaseModel, frozen=True):
+    account_id: int
+    taken_at: float
+
+
 class _AccountPostViews(BaseModel, frozen=True):
     account_id: int
     post: PostViews
+
+
+def _last_scans(s: Session, account_id: int | None) -> list[_AccountScan]:
+    snap = AccountSnapshotRow
+    query = select(snap.account_id, func.max(snap.taken_at)).group_by(snap.account_id)
+    if account_id is not None:
+        query = query.where(snap.account_id == account_id)
+    return [_AccountScan(account_id=a, taken_at=t) for a, t in s.execute(query)]
 
 
 def _baselines(
     s: Session, cutoff: float | None, account_id: int | None
 ) -> list[_AccountBaseline]:
     snap = AccountSnapshotRow
-    query = select(snap.account_id, snap.followers, snap.taken_at).distinct(
-        snap.account_id
+    query = (
+        select(snap.account_id, snap.followers, snap.taken_at)
+        .distinct(snap.account_id)
+        .where(snap.followers.is_not(None))
     )
     if account_id is not None:
         query = query.where(snap.account_id == account_id)
@@ -225,7 +241,7 @@ def _with_baselines(
 ) -> list[TrackedAccount]:
     now = time.time()
     first = {b.account_id: b for b in _baselines(s, None, account_id)}
-    latest = {b.account_id: b for b in _baselines(s, now, account_id)}
+    last_scan = {x.account_id: x.taken_at for x in _last_scans(s, account_id)}
     periods = {
         d: {b.account_id: b for b in _baselines(s, now - d * 86400, account_id)}
         for d in periods_days
@@ -243,7 +259,7 @@ def _with_baselines(
             if (base := periods[d].get(row.id))
         ]
         item.first = _snapshot_baseline(first.get(row.id))
-        item.latest = _snapshot_baseline(latest.get(row.id))
+        item.last_scan_at = last_scan.get(row.id)
         out.append(item)
     return out
 
@@ -346,7 +362,11 @@ class TrackedAccountRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 select(snap.taken_at, snap.followers, snap.metrics)
-                .where(snap.account_id == account_id, snap.taken_at >= since)
+                .where(
+                    snap.account_id == account_id,
+                    snap.taken_at >= since,
+                    snap.followers.is_not(None),
+                )
                 .order_by(snap.taken_at)
             ).all()
             return [Snapshot(taken_at=t, followers=f, metrics=m) for t, f, m in rows]
@@ -493,7 +513,11 @@ class TrackedAccountRepository(CachedRepository):
                 AccountSnapshotRow(
                     account_id=row.id,
                     taken_at=now,
-                    followers=metrics["followers"],
+                    followers=(
+                        None
+                        if profile.get("followers_hidden")
+                        else metrics["followers"]
+                    ),
                     metrics=metrics,
                 )
             )

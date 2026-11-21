@@ -17,7 +17,9 @@ lazy from ofmhelpers.integrations.pinterest.fake import routes as pinterest_rout
 lazy from ofmhelpers.integrations.senders.telegram.fake import routes as telegram_routes
 lazy from ofmhelpers.integrations.short_links.fake import routes as links_routes
 lazy from ofmhelpers.integrations.signin.fake import routes as signin_routes
+lazy from ofmhelpers.integrations.snapchat.fake import routes as snapchat_routes
 lazy from ofmhelpers.integrations.stacked.fake import routes as stacked_routes
+lazy from ofmhelpers.integrations.x.fake import routes as x_routes
 
 
 def install_fakes() -> None:
@@ -39,5 +41,7 @@ def install_fakes() -> None:
             *apiyi_routes(),
             *telegram_routes(),
             *pinterest_routes(),
+            *snapchat_routes(),
+            *x_routes(),
         ]
     )

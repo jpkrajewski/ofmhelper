@@ -5,7 +5,7 @@ from signin import make_user, sign_in
 from ofmhelpers.db.jobs import store as jobs
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.account.keys import Keys, keep_used
+from ofmhelpers.features.account.keys import SAVED_KEY, Keys, keep_used
 from ofmhelpers.features.jobs import runner
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY, fake_apiyi
@@ -188,3 +188,18 @@ def test_a_failed_run_keeps_no_key():
     assert job is not None
     assert job.status == "failed"
     assert _saved(user_id) == {}
+
+
+@pytest.mark.usefixtures("groups")
+def test_the_saved_key_marker_runs_as_an_empty_key():
+    user_id = _user()
+    users.set_api_key(user_id, "apiyi", DEFAULT_KEY)
+    users.set_api_key(user_id, "apiyi-wan", WAN_KEY)
+    keys = Keys.of(user_id)
+
+    for model in (WAN, SEEDREAM):
+        assert keys.for_run("apiyi", model, SAVED_KEY) == keys.for_run(
+            "apiyi", model, ""
+        )
+    assert keys.for_run("apiyi", WAN, SAVED_KEY) == WAN_KEY
+    assert Keys.of(_user("none2@example.com")).for_run("apiyi", WAN, SAVED_KEY) == ""

@@ -17,7 +17,7 @@ How people sign in (`settings.signin`, `OFM_*` in config/settings.py `SignInSett
 - Every admin way in is that one account: App owner, "admin"/any `OFM_ADMIN_EMAILS` address + admin password, Google/Apple with any `OFM_ADMIN_EMAILS` address (signs in by the verified email; an identity already linked to another user stays linked there). Only the agency admin gets the .env provider keys (kie.ai/Higgsfield prefills excepted: any admin). No per-email admin users. Its Drive: the last admin Google sign-in's token; without one, the bot in `OFM_GDRIVE_ROOT_FOLDER` (features/drive/folders.py).
 - Session = signed cookie with user id/email/role + `credential_stamp` (digest of the password hash), re-checked every request (deactivated/removed user is out at the next click; role change applies at once; a password change signs out every other session).
 - `OFM_FAKE_EXTERNALS=1` with `OFM_ENV=production` fails settings validation (fake consent signs in as any email).
-- State + nonce + next + link travel in a signed cookie `ofm_signin` (path /auth/, SameSite=None+Secure in prod: Apple's cross-site POST would drop a Lax cookie).
+- State + nonce + next + link travel in a signed cookie `ofm_signin` (path /auth/, SameSite=None+Secure in prod: Apple's cross-site POST would drop a Lax cookie); the PKCE verifier does not (the cookie is signed, not encrypted): it sits in Redis `signin:verifier:<state>` for `OFM_SIGNIN_STATE_TTL_S`, `getdel` on the callback. Redis down = the sign-in fails with a plain message, never an exchange without PKCE. A sign-in started before this change is refused once ("took too long").
 
 ## Setup (one time, by hand — consoles, no API)
 Google (Cloud project of the Drive bot, `deft-scope-498514-b7`):
@@ -34,6 +34,7 @@ Apple (needs a paid Apple Developer account):
 A provider shows on /login only when its settings are complete.
 
 ## Findings
+- Apple has no PKCE: the token request takes only `client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri` (confidential client, signed secret), so `apple.py` drops the challenge and verifier. https://developer.apple.com/documentation/signinwithapplerestapi/generate-and-validate-tokens.md (checked 2026-11-21).
 - Id tokens straight from the token endpoint over TLS need no signature check (OpenID Connect Core 3.1.3.7); the nonce still must match. https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
 - Apple sends `email_verified` as the string "true"; the name only on the very first consent (form field `user`). https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server
 - Google returns a refresh token only with `access_type=offline` on a consent screen (`prompt=consent`). https://developers.google.com/identity/protocols/oauth2/web-server#offline

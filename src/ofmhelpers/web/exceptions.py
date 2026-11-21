@@ -27,6 +27,7 @@ from ofmhelpers.features.refusals import NotFoundError as MissingError
 from ofmhelpers.features.trials.folder import NotFoundError
 from ofmhelpers.log import get_logger
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.middleware.frame_guard import FRAME_HEADERS
 
 logger = get_logger(__name__)
 
@@ -55,7 +56,9 @@ async def unhandled(request: Request, exc: Exception) -> Response:
     logger.error("%s %s crashed", request.method, request.url.path, exc_info=exc)
     if AuthMiddleware.is_fetch(request):
         return JSONResponse({"detail": MESSAGE}, status_code=500)
-    return HTMLResponse(f"<p>{MESSAGE}</p>", status_code=500)
+    return HTMLResponse(
+        f"<p>{MESSAGE}</p>", status_code=500, headers=dict(FRAME_HEADERS)
+    )
 
 
 async def invalid_request(_request: Request, exc: RequestValidationError) -> Response:

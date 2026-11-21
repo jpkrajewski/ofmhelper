@@ -11,6 +11,7 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["OFM_EVENTS_SENDERS_OFF"] = ""
 os.environ["OFM_RECOVERY_RESTARTS"] = "true"
 os.environ["OFM_DRIVE_SWEEP"] = "true"
+os.environ["OFM_LINKS_BACKGROUND_SYNC"] = "true"
 
 import pytest
 from cryptography.fernet import Fernet

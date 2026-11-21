@@ -22,7 +22,7 @@ from ofmhelpers.features.previews.render import write_video_thumb
 from ofmhelpers.features.trials import cleanup, folder, media, tasks
 from ofmhelpers.features.trials import state as trial_state
 from ofmhelpers.features.trials.captions import ReelNotes
-from ofmhelpers.integrations.gdrive import DriveError, DriveFile
+from ofmhelpers.integrations.gdrive import DriveError, DriveFile, FolderGoneError
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.video_tools import trials as trials_router
@@ -610,6 +610,57 @@ def test_generate_makes_only_what_is_new_in_posted(drive, made):
     assert r.json() == {"started": True}
     assert made == ["caption 0", "caption 1"]
     assert {x.name: x.made for x in _state(login).reels} == {"a.mp4": 1, "b.mp4": 1}
+
+
+def test_a_trashed_posted_folder_reads_as_gone_not_unreadable_or_nothing_new(
+    drive, made
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    drive.trash(_posted(drive))
+
+    client.post(f"/trials/{login}/generate")
+
+    live = client.get(f"/trials/{login}/live").json()
+    assert live["status"] != tasks.NOTHING_NEW
+    assert live["problem"] == ""
+    assert _state(login).posted_folder_id == ""
+    assert made == ["caption 0"]
+
+
+def test_a_posted_folder_drive_answers_404_for_is_kept_and_the_page_shows_the_drive_problem(
+    drive, made, monkeypatch
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    posted = _posted(drive)
+    folder_of = FakePersonDrive.folder
+
+    def not_shared(self, folder_id):
+        if folder_id == posted:
+            msg = "not found, or not shared with the bot"
+            raise FolderGoneError(msg)
+        return folder_of(self, folder_id)
+
+    monkeypatch.setattr(FakePersonDrive, "folder", not_shared)
+
+    client.post(f"/trials/{login}/generate")
+
+    live = client.get(f"/trials/{login}/live").json()
+    assert live["problem"] == tasks.DRIVE_PROBLEM
+    assert _state(login).posted_folder_id == posted
+
+
+def test_forgetting_a_gone_posted_folder_keeps_an_id_stored_meanwhile():
+    state = trial_state.FolderState(login_id=1, posted_folder_id="new")
+
+    tasks.forget_posted_folder(state, "old")
+    assert state.posted_folder_id == "new"
+
+    tasks.forget_posted_folder(state, "new")
+    assert state.posted_folder_id == ""
 
 
 def test_generate_with_nothing_new_says_so_and_can_be_clicked_again(drive, made):

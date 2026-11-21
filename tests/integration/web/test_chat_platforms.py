@@ -17,11 +17,18 @@ from starlette.websockets import WebSocketDisconnect
 
 from ofmhelpers.cache import get_text
 from ofmhelpers.db.chats import store as chats
-from ofmhelpers.db.chats.schema import DeliveryKind, ReadScope
+from ofmhelpers.db.chats.schema import (
+    ChatAccount,
+    ChatModel,
+    ChatModels,
+    DeliveryKind,
+    ReadScope,
+)
 from ofmhelpers.db.jobs.store import create_job, finish_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.chatting.sync import run_when_due, sync
 from ofmhelpers.features.chatting.webhooks import (
+    drop_unreached,
     ensure_destinations,
     models_delivering,
     sync_done_key,
@@ -29,6 +36,9 @@ from ofmhelpers.features.chatting.webhooks import (
 from ofmhelpers.features.trials.folder import GENERATE
 from ofmhelpers.features.trials.tasks import Made
 from ofmhelpers.integrations.chat_source import ChatSourceError
+from ofmhelpers.integrations.fanvue.source import FanvueSource
+from ofmhelpers.integrations.stacked.client import StackedClient, reach
+from ofmhelpers.integrations.stacked.errors import StackedAuthError
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.usefixtures("fake_externals")
@@ -459,6 +469,30 @@ def test_a_second_round_of_destinations_changes_nothing(side):
     assert chats.webhooks(side.platform) == first
 
 
+def test_a_model_no_key_reaches_any_more_loses_its_webhook_row(side):
+    ensure_destinations()
+    kept = chats.webhooks(side.platform)
+    chats.save_webhook(
+        side.platform,
+        kept[0].model_copy(update={"model_id": "gone-model", "model_username": "gone"}),
+    )
+    assert "gone-model" in {w.model_id for w in chats.webhooks(side.platform)}
+
+    ensure_destinations()
+
+    assert chats.webhooks(side.platform) == kept
+
+
+def test_a_failed_model_read_removes_no_webhook_row(side):
+    ensure_destinations()
+    kept = chats.webhooks(side.platform)
+    other = ChatModel(model_id="other-model", username="other")
+
+    drop_unreached(side.source, ChatModels(found=[other], failed=True))
+
+    assert chats.webhooks(side.platform) == kept
+
+
 def test_the_pages_show_the_late_fan_and_the_average(client, side):
     sign_in_admin(client)
     now = time.time()
@@ -505,3 +539,66 @@ def test_a_platform_that_is_not_set_up_answers_404(client):
 def test_the_old_address_is_gone(client):
     reply = client.post("/webhooks/fanvue", content=b"{}", follow_redirects=False)
     assert reply.status_code != HTTPStatus.OK
+
+
+def test_an_unread_account_or_key_removes_no_webhook_row(side):
+    ensure_destinations()
+    kept = chats.webhooks(side.platform)
+    other = ChatModel(model_id="other-model", username="other")
+
+    drop_unreached(side.source, ChatModels(found=[other], unread=True))
+
+    assert chats.webhooks(side.platform) == kept
+
+
+def test_an_empty_read_removes_no_webhook_row(side):
+    ensure_destinations()
+    kept = chats.webhooks(side.platform)
+
+    drop_unreached(side.source, ChatModels(found=[]))
+
+    assert chats.webhooks(side.platform) == kept
+
+
+def test_a_removed_webhook_row_is_logged_with_its_model(side, caplog):
+    ensure_destinations()
+    kept = chats.webhooks(side.platform)
+    chats.save_webhook(
+        side.platform,
+        kept[0].model_copy(update={"model_id": "gone-model", "model_username": "gone"}),
+    )
+    here = ChatModel(model_id=kept[0].model_id, username=kept[0].model_username)
+
+    drop_unreached(side.source, ChatModels(found=[here]))
+
+    assert any(
+        "gone" in r.getMessage() and side.platform.value in r.getMessage()
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
+
+
+def test_a_fanvue_account_that_needs_reconnecting_marks_the_read_unread():
+    class Tokens:
+        def accounts(self):
+            return [
+                ChatAccount(account_id="a", username="a", needs_reconnect=True),
+            ]
+
+        def access_token(self, account_id):
+            raise AssertionError(account_id)
+
+    reached = FanvueSource(Tokens()).models()
+
+    assert (reached.found, reached.failed, reached.unread) == ([], False, True)
+
+
+def test_a_refused_stacked_key_marks_the_read_unread(monkeypatch):
+    def refuse(self):
+        raise StackedAuthError
+
+    monkeypatch.setattr(StackedClient, "info", refuse)
+
+    reached = reach(["stk_live_refused"])
+
+    assert (reached.found, reached.failed, reached.refused) == ([], False, True)

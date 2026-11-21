@@ -55,8 +55,10 @@ class FanvueSource:
     def models(self) -> ChatModels:
         found: dict[str, ChatModel] = {}
         failed = False
+        unread = False
         for account in self._tokens.accounts():
             if account.needs_reconnect:
+                unread = True
                 continue
             client = FanvueClient(
                 partial(self._tokens.access_token, account.account_id)
@@ -81,6 +83,7 @@ class FanvueSource:
                         ),
                     )
             except FanvueRefusedError:
+                unread = True
                 logger.warning(
                     "fanvue agency %s refused", account.username, exc_info=True
                 )
@@ -89,7 +92,7 @@ class FanvueSource:
                     "fanvue agency %s not read", account.username, exc_info=True
                 )
                 failed = True
-        return ChatModels(found=list(found.values()), failed=failed)
+        return ChatModels(found=list(found.values()), failed=failed, unread=unread)
 
     def new_reads(self, model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
         return _new_reads(model, scope)

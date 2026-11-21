@@ -49,7 +49,8 @@ def _vas_of(owner_id: int) -> list[User]:
 
 def va_sign_in(employer_email: str, password: str) -> User | None:
     employer = users.by_email(normalized_email(employer_email))
-    vas = _vas_of(employer.id) if employer is not None else []
+    working = employer is not None and employer.active
+    vas = _vas_of(employer.id) if employer is not None and working else []
     if not vas:
         verify_password(password, "")
         return None
@@ -107,8 +108,9 @@ def set_password_with_link(token: str, password: str, confirm: str) -> User | No
     user = link_owner(token)
     if user is None:
         return None
-    users.set_password_hash(user.id, hash_password(_checked(password, confirm)))
-    return users.admit(user)
+    hashed = hash_password(_checked(password, confirm))
+    user_id = users.use_password_link(link_hash(token), time.time(), hashed)
+    return users.admit(users.get_user(user_id)) if user_id is not None else None
 
 
 def change_password(user_id: int, current: str, password: str, confirm: str) -> None:

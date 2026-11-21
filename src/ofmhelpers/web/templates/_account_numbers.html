@@ -8,6 +8,18 @@
     {%- if n is none %}{{ nodata(why) }}{% else %}{{ "{:,}".format(n) }}{% endif -%}
 {%- endmacro %}
 
+{% macro hidden() -%}
+    <span class="pending">Hidden</span>
+{%- endmacro %}
+
+{% macro followers(account) -%}
+    {%- if account.followers_hidden %}{{ hidden() }}{% else %}{{ count(account.followers, "Not synced yet") }}{% endif -%}
+{%- endmacro %}
+
+{% macro hidden_posts(n, platform) -%}
+    {%- if n %}{{ n }} hidden by {{ platform }}{% endif -%}
+{%- endmacro %}
+
 {% macro short(n, why="No data yet") -%}
     {%- if n is none %}{{ nodata(why) }}{% else %}{{ rc.short_count(n) }}{% endif -%}
 {%- endmacro %}

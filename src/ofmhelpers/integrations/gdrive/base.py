@@ -18,6 +18,9 @@ class DriveError(Exception): ...
 class FolderGoneError(DriveError): ...
 
 
+class FolderTrashedError(FolderGoneError): ...
+
+
 RECONNECT = "Reconnect Google Drive on your Account page"
 
 

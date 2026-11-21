@@ -130,6 +130,12 @@ def webhook_targets(platform: ChatPlatform) -> list[WebhookTarget]:
     return _repository().webhook_targets(platform)
 
 
+def drop_webhooks_except(
+    platform: ChatPlatform, model_ids: list[str]
+) -> list[ChatWebhook]:
+    return _repository().drop_webhooks_except(platform, model_ids)
+
+
 def save_webhook(platform: ChatPlatform, webhook: ChatWebhook) -> None:
     _repository().save_webhook(platform, webhook)
 

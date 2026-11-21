@@ -385,3 +385,51 @@ def test_spam_applications_go_and_real_leads_stay(db):
     with db.connect() as conn:
         kept = conn.execute(text("SELECT id FROM applications")).scalars().all()
     assert kept == ["real"]
+
+
+def test_a_hidden_snapchat_count_becomes_unknown_and_others_stay(db):
+    cfg = _alembic()
+    command.upgrade(cfg, "6b760327929d")
+    with db.begin() as conn:
+        user = conn.execute(
+            text(
+                "INSERT INTO users (email, name, role, active,"
+                " google_refresh_token, password_hash) VALUES"
+                " ('s@example.com', '', 'user', true, '', '') RETURNING id"
+            )
+        ).scalar_one()
+        for platform, handle, seen in (
+            ("snapchat", "quiet", 0),
+            ("snapchat", "shown", 370),
+            ("instagram", "new", 0),
+        ):
+            account = conn.execute(
+                text(
+                    "INSERT INTO tracked_accounts (user_id, platform, handle)"
+                    " VALUES (:user, :platform, :handle) RETURNING id"
+                ),
+                {"user": user, "platform": platform, "handle": handle},
+            ).scalar_one()
+            conn.execute(
+                text(
+                    "INSERT INTO tracked_account_snapshots"
+                    " (account_id, taken_at, followers, metrics)"
+                    " VALUES (:account, 1, :followers, '{}')"
+                ),
+                {"account": account, "followers": seen},
+            )
+
+    def followers() -> list[tuple[str, int | None]]:
+        with db.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT a.handle, s.followers FROM tracked_account_snapshots s"
+                    " JOIN tracked_accounts a ON a.id = s.account_id ORDER BY a.handle"
+                )
+            ).all()
+        return [(handle, count) for handle, count in rows]
+
+    command.upgrade(cfg, "4c2a8e1f7b3d")
+    assert followers() == [("new", 0), ("quiet", None), ("shown", 370)]
+    command.downgrade(cfg, "6b760327929d")
+    assert followers() == [("new", 0), ("quiet", 0), ("shown", 370)]

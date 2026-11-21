@@ -7,6 +7,8 @@ from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.cached_repository import RepositoryCache
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatPlatform, ChatWebhook
 from ofmhelpers.db.devices.repository import DeviceRepository
 from ofmhelpers.db.drive_folders.repository import DriveFolderRepository
 from ofmhelpers.db.jobs.repository import JobRepository
@@ -144,7 +146,7 @@ def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):
 
     assert cache.get_or_set("get", ("x",), lambda: "suite") == "suite"
     other = Redis.from_url(other_url)
-    other.delete(*other.scan_iter("cache:test-follows-url:*"))
+    other.delete(*other.scan_iter("cache:v2:test-follows-url:*"))
 
 
 def _dead_redis() -> Redis:
@@ -167,3 +169,33 @@ def test_pages_answer_while_the_cache_is_down(monkeypatch):
     monkeypatch.setattr("ofmhelpers.db.cached_repository.get_redis", lambda: dead)
     assert client.get("/generate").status_code == 200
     assert client.get("/generate/gallery?hidden=1").status_code == 200
+
+
+def test_free_text_arguments_never_collide_in_the_cache_key():
+    cache = RepositoryCache(get_redis(), "test-key-encoding")
+
+    first = cache.get_or_set("get", ("a:b", "c"), lambda: "one")
+    second = cache.get_or_set("get", ("a", "b:c"), lambda: "two")
+
+    assert (first, second) == ("one", "two")
+
+
+def test_a_cache_key_never_reads_an_entry_of_the_old_key_format():
+    redis = get_redis()
+    cache = RepositoryCache(redis, "test-key-version")
+    old_key = f"cache:test-key-version:{cache._version()}:get:x"
+    redis.set(old_key, '"old"', ex=60)
+
+    assert cache.get_or_set("get", ("x",), lambda: "new") == "new"
+    redis.delete(old_key)
+
+
+def test_an_empty_webhook_keep_list_deletes_no_row():
+    hook = ChatWebhook(
+        model_id="keep-empty", model_username="k", webhook_id="w", url="u", secret="s"
+    )
+    chats.save_webhook(ChatPlatform.STACKED, hook)
+
+    assert chats.drop_webhooks_except(ChatPlatform.STACKED, []) == []
+    assert hook in chats.webhooks(ChatPlatform.STACKED)
+    chats.drop_webhooks_except(ChatPlatform.STACKED, ["nothing-else"])

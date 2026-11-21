@@ -37,6 +37,7 @@ from ofmhelpers.config.settings import (
     ServerSettings,
     SessionSettings,
     SignInSettings,
+    SnapchatSettings,
     StackedSettings,
     TelegramSettings,
     TelemetrySettings,
@@ -45,6 +46,7 @@ from ofmhelpers.config.settings import (
     VaultSettings,
     ViralSettings,
     WebSettings,
+    XSettings,
 )
 
 _Group = TypeVar("_Group", bound=BaseSettings)
@@ -147,6 +149,14 @@ class Settings:
     @property
     def instagram(self) -> InstagramSettings:
         return self._group(InstagramSettings)
+
+    @property
+    def snapchat(self) -> SnapchatSettings:
+        return self._group(SnapchatSettings)
+
+    @property
+    def x(self) -> XSettings:
+        return self._group(XSettings)
 
     @property
     def accounts(self) -> AccountsSettings:

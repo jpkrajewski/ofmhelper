@@ -1,3 +1,4 @@
+import base64
 import re
 import shlex
 from pathlib import PurePosixPath
@@ -10,12 +11,26 @@ PUNCTUATION = ";&|()"
 PIPES = {"|", "|&"}
 REDIRECT_TO_STREAM = re.compile(r"\d*>&\d+|&>")
 HEREDOC = re.compile(
-    r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n(?:.*?\n)?[ \t]*\3[ \t]*(?=\n|$)", re.DOTALL
+    r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n((?:.*?\n)?)[ \t]*\3[ \t]*(?=\n|$)", re.DOTALL
 )
+QUOTE_PAIR = re.compile(r"([\"'])(.*?)\1")
+ANSI_QUOTED = re.compile(r"(?<![\w'\"\\])\$'((?:[^'\\]|\\.)*)'")
+LOCALE_QUOTED = re.compile(r"\$(?=\")")
+LINE_CONTINUATION = re.compile(r"\\\r?\n")
+POWERSHELL_CONTINUATION = re.compile(r"`\r?\n")
+POWERSHELL_ESCAPE = re.compile(r"`(?=\S)")
+MAX_NESTING = 3
+UNREADABLE = "unreadable-command"
+ENCODED_FLAG = "encodedcommand"
 ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 WRAPPERS = {"rtk", "sudo", "command", "time", "exec", "nohup"}
 SUBSTITUTION = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")
-SHELL_PROGRAMS = {"bash", "sh", "zsh", "powershell", "pwsh"}
+SHELL_PROGRAMS = {"bash", "sh", "zsh", "dash", "ksh", "powershell", "pwsh", "cmd"}
+JOINING_SHELLS = {"powershell", "pwsh", "cmd"}
+EVAL_PROGRAMS = {"eval", "iex", "invoke-expression"}
+INLINE_FLAG = re.compile(
+    r"^-(?:[a-z]*c|com(?:m(?:a(?:n(?:d)?)?)?)?)$|^/[ck]$", re.IGNORECASE
+)
 LAUNCHER_VALUE_FLAGS = frozenset(
     {
         "-u",
@@ -79,17 +94,39 @@ def without_heredoc_bodies(command: str) -> str:
     return HEREDOC.sub(lambda found: found.group(1) + "\n", command)
 
 
+def decoded_ansi_quotes(text: str) -> str:
+    def decode(found: re.Match[str]) -> str:
+        try:
+            return shlex.quote(found.group(1).encode().decode("unicode_escape"))
+        except UnicodeError:  # silent: an undecodable $'..' stays as typed
+            return found.group(0)
+
+    return LOCALE_QUOTED.sub("", ANSI_QUOTED.sub(decode, text))
+
+
+def without_inner_quotes(token: str) -> str:
+    plain = LOCALE_QUOTED.sub("", token.replace("$'", "'"))
+    paired = QUOTE_PAIR.sub(r"\2", plain)
+    return paired if paired != plain else plain.strip("\"'")
+
+
 def tokens(command: str, posix: bool) -> list[str]:
-    text = REDIRECT_TO_STREAM.sub(" ", without_heredoc_bodies(command)).replace(
-        "\n", " ; "
-    )
+    joined = LINE_CONTINUATION.sub(" ", without_heredoc_bodies(command))
+    if not posix:
+        joined = POWERSHELL_CONTINUATION.sub(" ", joined)
+    text = REDIRECT_TO_STREAM.sub(" ", joined).replace("\n", " ; ")
+    plain = decoded_ansi_quotes(text) if posix else POWERSHELL_ESCAPE.sub("", text)
+    return lexed(plain, posix)
+
+
+def lexed(text: str, posix: bool) -> list[str]:
     lexer = shlex.shlex(text, posix=posix, punctuation_chars=PUNCTUATION)
     lexer.whitespace_split = True
     lexer.commenters = ""
     try:
-        return [token if posix else token.strip("\"'") for token in lexer]
-    except ValueError:
-        return text.split()
+        return [token if posix else without_inner_quotes(token) for token in lexer]
+    except ValueError:  # silent: an unparseable command is refused as UNREADABLE
+        return [UNREADABLE]
 
 
 def unwrapped(words: list[str]) -> list[str]:
@@ -119,24 +156,77 @@ def _after_flags(words: list[str], value_flags: frozenset[str]) -> list[str]:
     return words[index:]
 
 
+def is_encoded_flag(word: str) -> bool:
+    name = word.lower().removeprefix("-")
+    return word.startswith("-") and (
+        name in ("e", "ec") or (name.startswith("en") and ENCODED_FLAG.startswith(name))
+    )
+
+
+def decoded_command(encoded: str) -> str:
+    try:
+        return base64.b64decode(encoded, validate=True).decode("utf-16-le")
+    except (
+        ValueError
+    ):  # silent: an unreadable command is returned as UNREADABLE and refused
+        return UNREADABLE
+
+
+def inline_script(words: list[str]) -> str:
+    program = program_name(words[0]) if words else ""
+    if program in EVAL_PROGRAMS:
+        return " ".join(words[1:])
+    if program not in SHELL_PROGRAMS:
+        return ""
+    for index, word in enumerate(words[1:], 1):
+        if program in ("powershell", "pwsh") and is_encoded_flag(word):
+            rest = words[index + 1 :]
+            return decoded_command(rest[0]) if rest else UNREADABLE
+        if INLINE_FLAG.match(word):
+            rest = words[index + 1 :]
+            if program in JOINING_SHELLS:
+                return " ".join(rest)
+            return rest[0] if rest else ""
+    return ""
+
+
 def shell_statements(event: HookEvent) -> list[Statement]:
     return statements(event.command, posix=event.tool_name != "PowerShell")
 
 
-def statements(command: str, posix: bool = True) -> list[Statement]:
+def heredoc_scripts(command: str, posix: bool) -> list[str]:
+    scripts = []
+    for found in HEREDOC.finditer(command):
+        line_start = command.rfind("\n", 0, found.start()) + 1
+        lead = _flat_statements(command[line_start : found.end(1)], posix)
+        programs = {
+            program_name(words[0])
+            for statement in lead
+            for words in (statement.words, *statement.piped_to)
+            if words
+        }
+        if programs & SHELL_PROGRAMS:
+            scripts.append(found.group(4))
+    return scripts
+
+
+def statements(command: str, posix: bool = True, depth: int = 0) -> list[Statement]:
     flat = _flat_statements(command, posix)
     nested = [
         found.group(1) or found.group(2)
         for found in SUBSTITUTION.finditer(without_heredoc_bodies(command))
     ]
-    for statement in flat:
-        words = statement.words
-        if statement.program in SHELL_PROGRAMS and "-c" in words[:-1]:
-            nested.append(words[words.index("-c") + 1])
-        elif statement.program == "eval":
-            nested.append(" ".join(words[1:]))
+    nested += [
+        inline_script(words)
+        for statement in flat
+        for words in (statement.words, *statement.piped_to)
+    ]
+    nested += heredoc_scripts(command, posix)
+    texts = list(dict.fromkeys(text for text in nested if text.strip()))
+    if depth >= MAX_NESTING:
+        return flat + ([Statement(words=[UNREADABLE])] if texts else [])
     return flat + [
-        inner for text in nested if text for inner in statements(text, posix)
+        inner for text in texts for inner in statements(text, posix, depth + 1)
     ]
 
 

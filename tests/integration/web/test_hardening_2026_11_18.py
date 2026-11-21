@@ -60,7 +60,12 @@ def test_an_inactive_persons_event_goes_nowhere(telegram_on):
 
 def test_an_inactive_persons_start_token_links_nothing(telegram_on):
     owner = make_user("gone2@example.com")
-    get_redis().set("telegram:link:tok-inactive", str(owner.id))
+    get_redis().set(
+        "telegram:link:tok-inactive",
+        telegram.PendingLink(
+            user_id=owner.id, issued_at=time.time(), stamp=""
+        ).model_dump_json(),
+    )
     users.set_active(owner.id, active=False)
 
     linked = telegram.link(Start(token="tok-inactive", chat_id="555"))

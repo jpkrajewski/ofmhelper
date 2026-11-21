@@ -5,7 +5,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
-lazy from ofmhelpers.web.api_keys import get_api_key
+lazy from ofmhelpers.web import api_keys
 lazy from ofmhelpers.web.main import app
 
 
@@ -41,4 +41,5 @@ def test_allowlist_comes_from_settings():
 
 
 def test_api_key_prefills_are_not_in_the_auth_module():
-    assert get_api_key.__module__ == "ofmhelpers.web.api_keys"
+    assert not hasattr(api_keys, "get_api_key")
+    assert api_keys.get_api_keys.__module__ == "ofmhelpers.web.api_keys"

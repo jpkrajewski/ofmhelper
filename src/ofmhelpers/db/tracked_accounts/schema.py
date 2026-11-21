@@ -1,5 +1,6 @@
 import itertools
 import math
+import re
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -7,7 +8,7 @@ from enum import StrEnum
 from functools import lru_cache
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Self
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from pydantic import (
     AfterValidator,
@@ -25,6 +26,7 @@ class AccountProfile(BaseModel):
     account_id: str = ""
     display_name: str = ""
     followers: int
+    followers_hidden: bool = False
     following: int | None = None
     is_private: bool = False
     is_verified: bool = False
@@ -71,6 +73,7 @@ class AccountMetrics(BaseModel):
     following: int | None = None
     posts_scanned: int = 0
     views_scanned: int = 0
+    hidden_posts: int = 0
     limited: bool = False
     source: str = ""
 
@@ -78,6 +81,7 @@ class AccountMetrics(BaseModel):
 class AccountStats(BaseModel):
     profile: AccountProfile
     posts: list[PostStat] = []
+    hidden_posts: int = 0
     complete: bool = True
     since: float | None = None
     limited: bool = False
@@ -103,6 +107,7 @@ class AccountStats(BaseModel):
             following=self.profile.following,
             posts_scanned=len(self.posts),
             views_scanned=self.views_scanned,
+            hidden_posts=self.hidden_posts,
             limited=self.limited,
             source=self.source,
         )
@@ -130,7 +135,59 @@ class InstagramNames(PlatformNames):
         return f"https://www.instagram.com/{handle}/"
 
 
-_NAMES: tuple[type[PlatformNames], ...] = (InstagramNames,)
+class _HandleRule(BaseModel, frozen=True):
+    label: str
+    hosts: tuple[str, ...]
+    pattern: re.Pattern[str]
+
+    def bare(self, text: str) -> str:
+        value = text.strip()
+        if any(host in value.lower() for host in self.hosts):
+            path = urlsplit(value if "//" in value else f"https://{value}").path
+            parts = [p for p in path.split("/") if p and p.lower() != "add"]
+            value = parts[0] if parts else ""
+        value = value.lstrip("@").strip("/")
+        if not self.pattern.fullmatch(value):
+            msg = f"Not a valid {self.label} username: {text!r}"
+            raise ValueError(msg)
+        return value.lower()
+
+
+_SNAPCHAT = _HandleRule(
+    label="Snapchat",
+    hosts=("snapchat.com",),
+    pattern=re.compile(r"[A-Za-z][A-Za-z0-9._-]{2,14}"),
+)
+_X = _HandleRule(
+    label="X",
+    hosts=("x.com", "twitter.com"),
+    pattern=re.compile(r"[A-Za-z0-9_]{1,15}"),
+)
+
+
+class SnapchatNames(PlatformNames):
+    key = "snapchat"
+    label = "Snapchat"
+
+    def handle(self, text: str) -> str:
+        return _SNAPCHAT.bare(text)
+
+    def profile_url(self, handle: str) -> str:
+        return f"https://www.snapchat.com/@{handle}"
+
+
+class XNames(PlatformNames):
+    key = "x"
+    label = "X"
+
+    def handle(self, text: str) -> str:
+        return _X.bare(text)
+
+    def profile_url(self, handle: str) -> str:
+        return f"https://x.com/{handle}"
+
+
+_NAMES: tuple[type[PlatformNames], ...] = (InstagramNames, SnapchatNames, XNames)
 
 
 @lru_cache(maxsize=1)
@@ -235,7 +292,7 @@ class TrackedAccount(BaseModel):
     metrics: AccountMetrics | None = None
     baselines: list[Baseline] = []
     first: Baseline | None = None
-    latest: Baseline | None = None
+    last_scan_at: float | None
     post_views: list[PostViews] = []
     covered_since: float | None = None
     posts: list[PostStat] = []
@@ -260,17 +317,33 @@ class TrackedAccount(BaseModel):
         return (self.profile.display_name if self.profile else "") or self.handle
 
     @property
+    def platform_label(self) -> str:
+        return names_of(self.platform).label
+
+    @property
+    def followers_hidden(self) -> bool:
+        return bool(self.profile and self.profile.followers_hidden)
+
+    @property
+    def hidden_posts(self) -> int:
+        return self.metrics.hidden_posts if self.metrics else 0
+
+    @property
     def followers(self) -> int | None:
-        return self.metrics.followers if self.metrics else None
+        if self.metrics is None or self.followers_hidden:
+            return None
+        return self.metrics.followers
 
     def growth(self, days: int) -> Growth | None:
-        if self.metrics is None:
+        if self.metrics is None or self.followers_hidden:
             return None
         now = self.metrics.followers
         base = next((b for b in self.baselines if b.days == days), None)
         if base is not None:
             full = True
-        elif self.first and self.latest and self.first.taken_at < self.latest.taken_at:
+        elif (
+            self.first and self.last_scan_at and self.first.taken_at < self.last_scan_at
+        ):
             base, full = self.first, False
         else:
             return None
@@ -282,10 +355,10 @@ class TrackedAccount(BaseModel):
         )
 
     def window(self, days: int) -> ViewWindow | None:
-        if self.metrics is None or self.latest is None:
+        if self.metrics is None or self.last_scan_at is None:
             return None
         found = ViewWindow.of(
-            self.post_views, days, self.latest.taken_at, self.covered_since
+            self.post_views, days, self.last_scan_at, self.covered_since
         )
         return found if found.covered else None
 
@@ -325,7 +398,7 @@ class AccountSort(StrEnum):
 
 class AccountQuery(BaseModel):
     q: str = Field(default="", max_length=64)
-    platform: str = Field(default="", max_length=32)
+    platform: str = Field(default=InstagramNames.key, max_length=32)
     creator: str = Field(default="", max_length=64)
     status: AccountStatus | None = None
     sort: AccountSort = AccountSort.FOLLOWERS
@@ -406,7 +479,9 @@ class AccountQuery(BaseModel):
 class AccountSummary(BaseModel):
     accounts: int
     followers: int
+    followers_hidden: int
     views: int | None
+    hidden_posts: int
     unreachable: int
     limited: int
 
@@ -417,7 +492,9 @@ class AccountSummary(BaseModel):
         return cls(
             accounts=len(accounts),
             followers=sum(a.followers or 0 for a in accounts),
+            followers_hidden=sum(a.followers_hidden for a in accounts),
             views=sum(c.views for c in changes) if changes else None,
+            hidden_posts=sum(a.hidden_posts for a in accounts),
             unreachable=sum(a.status in bad for a in accounts),
             limited=sum(bool(a.metrics and a.metrics.limited) for a in accounts),
         )
@@ -702,7 +779,7 @@ class AddAccounts(BaseModel):
             except ValueError:  # silent: a bad line is listed back
                 bad.append(line.strip())
         if bad:
-            msg = f"Not a {platform.label} account: " + ", ".join(bad[:5])
+            msg = f"Not a valid {platform.label} account: " + ", ".join(bad[:5])
             raise ValueError(msg)
         return list(dict.fromkeys(handles))
 

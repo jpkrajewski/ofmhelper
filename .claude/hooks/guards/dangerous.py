@@ -1,7 +1,11 @@
 from guards.event import Guard, HookEvent, Verdict, deny
-from guards.shell import Statement, shell_statements
+from guards.shell import UNREADABLE, Statement, shell_statements
 
 NAME = "dangerous"
+UNREADABLE_COMMAND = (
+    "The guards cannot read this command (an undecodable powershell -EncodedCommand, or scripts "
+    "nested more than 3 deep), so none of their rules could be checked. Write the command out plainly."
+)
 DRIVE_ROOTS = {"", "/c", "c:", "C:"}
 RUF100 = (
     "ruff --select RUF100 --fix deletes every # noqa that is not for a selected rule "
@@ -31,6 +35,8 @@ SCP_ENV = (
 
 def problem(statement: Statement) -> str:
     words, program = statement.words, statement.program
+    if program == UNREADABLE:
+        return UNREADABLE_COMMAND
     if (
         program == "ruff"
         and "--fix" in words

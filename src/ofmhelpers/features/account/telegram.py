@@ -1,5 +1,7 @@
 import secrets
+import time
 
+from pydantic import BaseModel, ValidationError
 from redis.exceptions import RedisError
 
 from ofmhelpers.acting import Acting, Via, acting
@@ -21,6 +23,12 @@ NOT_SET_UP = "Telegram is not set up on this server"
 _LINK_KEY = "telegram:link:{token}"
 
 
+class PendingLink(BaseModel):
+    user_id: int
+    issued_at: float
+    stamp: str
+
+
 def enabled() -> bool:
     return (
         settings.telegram.bot_token is not None
@@ -38,10 +46,18 @@ def connect_url(user_id: int) -> str:
     if token is None:
         raise UnavailableError(NOT_SET_UP)
     code = secrets.token_urlsafe(16)
+    person = users.get_user_uncached(user_id)
+    pending = PendingLink(
+        user_id=user_id,
+        issued_at=time.time(),
+        stamp=person.credential_stamp if person else "",
+    )
     try:
         name = bot_name(token.get_secret_value())
         get_redis().set(
-            _LINK_KEY.format(token=code), str(user_id), ex=settings.telegram.link_ttl_s
+            _LINK_KEY.format(token=code),
+            pending.model_dump_json(),
+            ex=settings.telegram.link_ttl_s,
         )
     except TelegramError, RedisError:
         logger.warning("telegram: no link for user %s", user_id, exc_info=True)
@@ -55,10 +71,25 @@ def link(start: Start) -> bool:
         logger.info("telegram: a /start link that is used or too old")
         deliver_to(SENDER, start.chat_id, _old_link())
         return False
-    user_id = int(raw)
-    person = users.get_user(user_id)
+    try:
+        pending = PendingLink.model_validate_json(raw)
+    except ValidationError:
+        logger.warning("telegram: a /start link nobody can read", exc_info=True)
+        deliver_to(SENDER, start.chat_id, _old_link())
+        return False
+    user_id = pending.user_id
+    person = users.get_user_uncached(user_id)
     if person is None or not person.active:
         logger.info("telegram: a /start link of user %s, not active", user_id)
+        deliver_to(SENDER, start.chat_id, _old_link())
+        return False
+    ended = person.sessions_ended_at
+    if person.credential_stamp != pending.stamp or (
+        ended is not None and ended >= pending.issued_at
+    ):
+        logger.info(
+            "telegram: a /start link of user %s from before a sign-out", user_id
+        )
         deliver_to(SENDER, start.chat_id, _old_link())
         return False
     with acting(Acting(via=Via.TELEGRAM, actor_id=user_id, ref="telegram /start")):

@@ -51,6 +51,7 @@ class StackedSource:
                 for r in reached.found
             ],
             failed=reached.failed,
+            unread=reached.refused,
         )
 
     def new_reads(self, model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:

@@ -651,6 +651,31 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
     assert va.js_errors == []
 
 
+def test_a_snapchat_account_is_added_and_shown_under_its_platform(va: Session):
+    va.goto("/accounts")
+    shown = va.page.locator('.accounts-filter-form select[name="platform"]')
+    expect(shown).to_have_value("instagram")
+    va.page.click("#accounts-add-open")
+    va.page.select_option("#accounts-add-platform", "snapchat")
+    va.page.fill("#accounts-add-handles", "https://www.snapchat.com/add/fake_snap")
+    with va.page.expect_navigation():
+        va.page.click('#accounts-add-form button[type="submit"]')
+
+    expect(va.page).to_have_url(re.compile(r"platform=snapchat"))
+    expect(shown).to_have_value("snapchat")
+    row = va.page.locator("#accounts-table tbody tr", has_text="@fake_snap")
+    expect(row).to_have_attribute("data-status", "active", timeout=SCAN_TIMEOUT_MS)
+    expect(row.locator('td[data-label="Followers"]')).to_contain_text("12,400")
+
+    with va.page.expect_navigation():
+        shown.select_option("instagram")
+    expect(
+        va.page.locator("#accounts-table tbody tr", has_text="@fake_snap")
+    ).to_have_count(0)
+
+    assert va.js_errors == []
+
+
 def test_links_are_generated_for_a_models_accounts_and_deleted(admin: Session):
     admin.goto("/accounts")
     admin.page.click("#accounts-add-open")

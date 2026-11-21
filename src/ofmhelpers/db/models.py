@@ -454,7 +454,7 @@ class AccountSnapshotRow(Base):
         ForeignKey("tracked_accounts.id", ondelete="CASCADE"), nullable=False
     )
     taken_at: Mapped[float] = mapped_column(Float, nullable=False)
-    followers: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    followers: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     __table_args__ = (

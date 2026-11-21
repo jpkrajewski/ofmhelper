@@ -53,8 +53,8 @@ class RepositoryCache:
         return "-".join(str(int(v)) if v is not None else "0" for v in found)
 
     def _key(self, method: str, args: Sequence[object]) -> str:
-        parts = ":".join(str(a) for a in args)
-        return f"cache:{self._namespace}:{self._version()}:{method}:{parts}"
+        parts = json.dumps([str(a) for a in args], separators=(",", ":"))
+        return f"cache:v2:{self._namespace}:{self._version()}:{method}:{parts}"
 
     def get_or_set(
         self, method: str, args: Sequence[object], loader: Callable[[], T]

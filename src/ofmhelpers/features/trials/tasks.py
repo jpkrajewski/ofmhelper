@@ -34,6 +34,7 @@ from ofmhelpers.integrations.gdrive import (
     DriveError,
     DriveFile,
     FolderGoneError,
+    FolderTrashedError,
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import (
@@ -102,6 +103,11 @@ def merge_posted(state: FolderState, videos: list[DriveFile]) -> None:
             known[f.id].posted_at = f.created_time
     kept = [r for r in state.reels if r.out or r.key in listed]
     state.reels = sorted([*new, *kept], key=ReelState.posted_or_never, reverse=True)
+
+
+def forget_posted_folder(state: FolderState, gone_id: str) -> None:
+    if state.posted_folder_id == gone_id:
+        state.posted_folder_id = ""
 
 
 def _why(exc: Exception, had_source: bool) -> str:
@@ -234,7 +240,12 @@ class Folder(BaseModel, frozen=True):
         if not posted_id:
             return False
         try:
+            drive.folder(posted_id)
             files = drive.children(posted_id)
+        except FolderTrashedError:  # silent: page reads it as no POSTED
+            logger.info("trials: POSTED of %s is trashed", self.login_id, exc_info=True)
+            self._change(lambda s: forget_posted_folder(s, posted_id))
+            return False
         except DriveError:
             logger.warning(
                 "trials: POSTED of %s unreadable", self.login_id, exc_info=True

@@ -392,7 +392,7 @@
 
 {% include "_landing_footer.html" %}
 
-<script>
+<script nonce="{{ csp_nonce(request) }}">
   // "Phone OR Telegram" is the one rule HTML validation cannot express, and
   // the server answers a violation with a raw 422 -- so say it in the browser
   // first. The server check in routers/apply.py stays the real gate.

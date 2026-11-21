@@ -16,15 +16,19 @@ from ofmhelpers.db.tracked_accounts.schema import ago
 from ofmhelpers.features.drive.posting import window as posting_window
 from ofmhelpers.features.users.presence import idle_limit_s
 from ofmhelpers.features.users.viewing import makers
+from ofmhelpers.log import get_logger
 from ofmhelpers.web.access import Action, Area, opens
 from ofmhelpers.web.nav import nav, nav_of
 from ofmhelpers.web.time_zones import TIME_ZONES, time_zone
 lazy from ofmhelpers.db.users.schema import Viewer
 lazy from ofmhelpers.features.users.viewing import Maker
 
+logger = get_logger(__name__)
+
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 TEMPLATE_RECHECK_S = 1.0
+NONCE_KEY = "csp_nonce"
 
 
 class TemplateSource(BaseModel):
@@ -73,6 +77,13 @@ def _viewer_of(request: Request) -> Viewer | None:
     return getattr(request.state, "viewer", None)
 
 
+def csp_nonce(request: Request) -> str:
+    nonce = getattr(request.state, NONCE_KEY, "")
+    if not nonce:
+        logger.error("template rendered without a CSP nonce: its scripts are blocked")
+    return nonce
+
+
 def _session_max_age(request: Request) -> int:
     viewer = _viewer_of(request)
     signed_in = (viewer.by or viewer.user) if viewer is not None else None
@@ -106,6 +117,7 @@ def get_templates() -> Jinja2Templates:
 
     templates.env.globals["session_max_age"] = _session_max_age
     templates.env.globals["static_url"] = static_url
+    templates.env.globals["csp_nonce"] = csp_nonce
     templates.env.globals["nav"] = nav
     templates.env.globals["nav_of"] = nav_of
     templates.env.globals["viewer_of"] = _viewer_of
@@ -130,7 +142,9 @@ def render(
 
 def render_polled(request: Request, name: str, **context: Any) -> Response:
     response = render(request, name, **context)
-    etag = f'"{hashlib.sha256(response.body).hexdigest()[:20]}"'
+    nonce = csp_nonce(request).encode()
+    stable = bytes(response.body).replace(nonce, b"NONCE") if nonce else response.body
+    etag = f'"{hashlib.sha256(stable).hexdigest()[:20]}"'
     headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)

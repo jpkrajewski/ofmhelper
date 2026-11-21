@@ -16,6 +16,7 @@ from ofmhelpers.integrations.gdrive.base import (
     DriveError,
     DriveFullError,
     FolderGoneError,
+    FolderTrashedError,
 )
 from ofmhelpers.integrations.gdrive.models import (
     FOLDER_MIME,
@@ -157,10 +158,15 @@ class FakeDrive:
 
     def folder(self, folder_id: str) -> DriveFolder:
         with self._state("folder") as state:
-            item = self._live(state, folder_id, f"Folder {folder_id}")
-            if item.mime_type != FOLDER_MIME:
-                msg = f"Folder {folder_id} is trashed or not a folder"
+            chain = list(self._chain(state, folder_id))
+            shared = any(i is not None and i.id in state.shared for i in chain)
+            if any(i is None for i in chain) or not shared:
+                msg = f"Folder {folder_id}: not found, or not shared with the bot"
                 raise FolderGoneError(msg)
+            item = state.items[folder_id]
+            if item.trashed or item.mime_type != FOLDER_MIME:
+                msg = f"Folder {folder_id} is trashed or not a folder"
+                raise FolderTrashedError(msg)
             return DriveFolder(id=item.id, name=item.name, parents=list(item.parents))
 
     def children(
@@ -391,10 +397,22 @@ class FakeDrive:
     def trash_file(self, item_id: str) -> None:
         with self._state("trash_file") as state:
             self._live(state, item_id, f"File {item_id}").trashed = True
+            self._trash_below(state, item_id)
+
+    @staticmethod
+    def _trash_below(state: FakeDriveState, item_id: str) -> None:
+        waiting = [item_id]
+        while waiting:
+            parent = waiting.pop()
+            for item in state.items.values():
+                if parent in item.parents and not item.trashed:
+                    item.trashed = True
+                    waiting.append(item.id)
 
     def trash(self, item_id: str) -> None:
         with self._state() as state:
             state.items[item_id].trashed = True
+            self._trash_below(state, item_id)
 
     def delete(self, item_id: str) -> None:
         with self._state() as state:

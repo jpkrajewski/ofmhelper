@@ -156,9 +156,6 @@ class DriveFolderRepository(CachedRepository):
                 )
 
     @invalidates_cache
-    def logins_changed(self) -> None: ...
-
-    @invalidates_cache
     def forget_account_folder(self, login_id: int) -> None:
         with session_scope() as s:
             s.execute(

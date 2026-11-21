@@ -1,5 +1,5 @@
 {
-  "label": "Near-lossless master at the source's size and rate (recorder input)",
+  "label": "Near-lossless master (recorder input), sized and rated by repurpose.master_for to what the recorder profile needs",
   "video": {
     "profile": "high",
     "preset": "veryfast",

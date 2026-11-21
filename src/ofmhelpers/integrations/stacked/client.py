@@ -222,6 +222,7 @@ class Reached(BaseModel):
 class Reach(BaseModel):
     found: list[Reached]
     failed: bool
+    refused: bool = False
 
 
 class _KeyReach(BaseModel):
@@ -234,12 +235,14 @@ class _KeyReach(BaseModel):
 def reach(api_keys: Iterable[str]) -> Reach:
     read: list[_KeyReach] = []
     failed = False
+    refused = False
     for api_key in api_keys:
         client = StackedClient(api_key)
         try:
             read.append(_KeyReach(client=client, info=client.info()))
         except StackedAuthError, StackedForbiddenError:
             logger.warning("stacked key %s refused", client.key_hint, exc_info=True)
+            refused = True
         except StackedError:
             logger.warning("stacked key %s unusable", client.key_hint, exc_info=True)
             failed = True
@@ -249,7 +252,7 @@ def reach(api_keys: Iterable[str]) -> Reach:
             found.setdefault(
                 creator.user_id, Reached(client=key.client, creator=creator)
             )
-    return Reach(found=list(found.values()), failed=failed)
+    return Reach(found=list(found.values()), failed=failed, refused=refused)
 
 
 def reachable(api_keys: Iterable[str]) -> list[Reached]:

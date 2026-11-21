@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user
@@ -11,6 +13,7 @@ from ofmhelpers.db.short_links.schema import PlannedLink
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links import NewLink
 from ofmhelpers.web.main import app
+from ofmhelpers.web.middleware.bridge import is_tunnel_host
 
 HOST = "mybridge.test"
 DEST = "https://onlyfans.com/dany"
@@ -18,16 +21,16 @@ IG_UA = "Mozilla/5.0 (iPhone) Instagram 300.0"
 CRAWLER_UA = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
 
 
-def _seed_link(slug: str = "dany", destination: str = DEST) -> None:
+def _seed_link(slug: str = "dany", destination: str = DEST, host: str = HOST) -> None:
     user = make_user()
-    self_links.add_domain(HOST, None)
+    self_links.add_domain(host, None)
     [link_id] = short_links.add_creating(
         user.id,
         "self",
         [
             PlannedLink(
                 slug=slug,
-                domain=HOST,
+                domain=host,
                 destination=destination,
                 target="onlyfans",
                 account_id=None,
@@ -39,7 +42,7 @@ def _seed_link(slug: str = "dany", destination: str = DEST) -> None:
     assert provider is not None
     short_links.created(
         link_id,
-        provider.create(NewLink(slug=slug, domain=HOST, destination=destination)),
+        provider.create(NewLink(slug=slug, domain=host, destination=destination)),
     )
 
 
@@ -67,7 +70,10 @@ def test_bridge_serves_the_gate_with_the_destination_inlined(bridge):
     assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
     assert page.headers["referrer-policy"] == "no-referrer"
     assert page.headers["x-frame-options"] == "DENY"
-    assert page.headers["content-security-policy"] == "frame-ancestors 'none'"
+    policy = page.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in policy
+    nonce = re.search(r"'nonce-([\w-]+)'", policy).group(1)
+    assert page.text.count(f'<script nonce="{nonce}">') == 1
 
 
 def test_the_facebook_app_gets_the_open_in_browser_page(bridge):
@@ -173,9 +179,93 @@ def test_a_disabled_link_does_not_serve(bridge):
     assert page.status_code == 404
 
 
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/login"),
+        ("GET", "/auth/google/start"),
+        ("POST", "/events/anything"),
+        ("GET", "/a/b"),
+        ("GET", "/"),
+        ("POST", "/dany"),
+    ],
+)
+def test_a_bridge_host_answers_404_for_everything_but_its_own_paths(
+    bridge, method, path
+):
+    _seed_link()
+    page = bridge.request(
+        method, path, headers={"user-agent": IG_UA}, follow_redirects=False
+    )
+    assert page.status_code == 404
+    assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
+
+
 def test_the_bridge_is_inert_on_a_normal_host():
     _seed_link()
     client = TestClient(app, follow_redirects=False)
     page = client.get("/dany")
     assert "Adults Only" not in page.text
     client.close()
+
+
+TUNNEL = "foo.trycloudflare.com"
+
+
+@pytest.fixture
+def tunnel(monkeypatch):
+    monkeypatch.setenv("OFM_LINKS_TUNNEL_HOST_SUFFIXES", ".trycloudflare.com")
+    c = TestClient(app, base_url=f"https://{TUNNEL}", follow_redirects=False)
+    yield c
+    c.close()
+
+
+@pytest.mark.parametrize("path", ["/login", "/home", "/health", "/privacy", "/"])
+def test_a_tunnel_host_answers_404_for_every_app_page(tunnel, path):
+    page = tunnel.get(path, headers={"user-agent": IG_UA})
+    assert page.status_code == 404
+    assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
+
+
+def test_a_tunnel_host_serves_its_self_link_slug(tunnel):
+    _seed_link(host=TUNNEL)
+    page = tunnel.get("/dany", headers={"user-agent": IG_UA})
+    assert page.status_code == 200
+    assert "Adults Only" in page.text
+    assert len(_clicks("view")) == 1
+
+
+def test_a_tunnel_host_takes_the_beacon(tunnel):
+    _seed_link(host=TUNNEL)
+    response = tunnel.post(
+        "/api/track-direct", json={"slug": "dany"}, headers={"user-agent": IG_UA}
+    )
+    assert response.status_code == 204
+    assert len(_clicks("click")) == 1
+
+
+def test_a_trycloudflare_host_is_a_normal_host_with_the_setting_empty():
+    client = TestClient(app, base_url=f"https://{TUNNEL}", follow_redirects=False)
+    page = client.get("/login")
+    client.close()
+    assert page.status_code != 404
+
+
+@pytest.mark.parametrize(
+    ("suffixes", "host", "expected"),
+    [
+        (".trycloudflare.com", "foo.trycloudflare.com", True),
+        (".trycloudflare.com", "FOO.TryCloudflare.com", True),
+        (".trycloudflare.com", "foo.trycloudflare.com:8081", True),
+        ("trycloudflare.com", "foo.trycloudflare.com", True),
+        ("trycloudflare.com", "eviltrycloudflare.com", False),
+        (".trycloudflare.com", "evil.com", False),
+        (".trycloudflare.com", "x.trycloudflare.com.evil.com", False),
+        (".trycloudflare.com", "eviltrycloudflare.com", False),
+        (".trycloudflare.com", "trycloudflare.com", False),
+        ("", "foo.trycloudflare.com", False),
+    ],
+)
+def test_the_tunnel_host_matcher(monkeypatch, suffixes, host, expected):
+    monkeypatch.setenv("OFM_LINKS_TUNNEL_HOST_SUFFIXES", suffixes)
+    assert is_tunnel_host(host) is expected

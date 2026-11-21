@@ -16,6 +16,7 @@ from ofmhelpers.db.users.schema import Role
 from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import uploads as drive_uploads
+from ofmhelpers.features.drive import va_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.gdrive import DriveError, DriveFile
 from ofmhelpers.integrations.gdrive.fake import fake_drive
@@ -729,6 +730,22 @@ def test_a_spoofed_copy_goes_into_the_spoofed_folder_of_the_account(drive, tmp_p
     (spoofed,) = drive.named("SPOOFED", account)
     assert len(drive.names_in(spoofed)) == 1
     assert _files_in(drive, "ann.ig - Anna") == ["SPOOFED"]
+
+
+def test_a_spoofed_copy_for_a_va_lands_in_the_vas_folder_itself(drive, tmp_path):
+    ann = _client("ann@example.com")
+    _account_folder(ann)
+    va = _va_of("ann@example.com")
+    drive_folders.sync()
+    job = _finished_spoof("ann@example.com", tmp_path)
+
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "va_ids": [va]})
+
+    assert r.status_code == 200, r.text
+    assert _spoof_state(ann, job) == "done"
+    (vas_folder,) = va_folders.of_owner(users.by_email("ann@example.com").id)
+    assert len(drive.names_in(vas_folder.folder_id)) == 1
+    assert drive.named("SPOOFED", vas_folder.folder_id) == []
 
 
 def _spoof_state(client: TestClient, job: str) -> str:

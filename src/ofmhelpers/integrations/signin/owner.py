@@ -45,10 +45,16 @@ class Owner:
         nonce: str,  # noqa: ARG002
         *,
         connect: bool,  # noqa: ARG002
+        challenge: str,  # noqa: ARG002
     ) -> str:
         return f"/auth/owner/consent?state={state}"
 
-    def exchange(self, code: str, redirect_uri: str) -> TokenReply:  # noqa: ARG002
+    def exchange(
+        self,
+        code: str,
+        redirect_uri: str,  # noqa: ARG002
+        verifier: str,  # noqa: ARG002
+    ) -> TokenReply:
         try:
             nonce = _codes().loads(code, max_age=_CODE_TTL_S)
         except BadSignature as exc:

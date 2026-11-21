@@ -13,6 +13,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.repository import JobRepository
 from ofmhelpers.db.jobs.schema import JobPreview
 from ofmhelpers.db.jobs.store import create_job, get_job, set_job_preview
+from ofmhelpers.features.account.keys import SAVED_KEY
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.downloads import videos as download_videos_router
 from ofmhelpers.integrations.ai_providers import base
@@ -87,8 +88,10 @@ def test_page_prefills_each_providers_key_for_the_role(client, monkeypatch):
     keys = json.loads(
         re.search(r'data-keys="([^"]*)"', html).group(1).replace("&#34;", '"')
     )
-    assert keys["kie"] == "kie-admin"
-    assert keys["higgsfield"] == "hf-id:hf-secret"
+    assert keys["kie"] == SAVED_KEY
+    assert keys["higgsfield"] == SAVED_KEY
+    assert "kie-admin" not in html
+    assert "hf-secret" not in html
 
 
 def test_prompt_box_is_shared_outside_the_model_fields(client):

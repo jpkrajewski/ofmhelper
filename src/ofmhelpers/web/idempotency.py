@@ -26,6 +26,8 @@ HEADER = "Idempotency-Key"
 REPLAYED = "Idempotent-Replayed"
 KEY_MAX = 255
 FILE_SAMPLE = 64 * 1024
+RAW_MAX = 64 * 1024
+TOO_LARGE = "Answer too large to replay. The action already ran."
 NO_KEY = "Send an Idempotency-Key header, one per action"
 BUSY = "This request is still being handled"
 ABANDONED = "This request did not finish. Reload the page and try again."
@@ -75,28 +77,71 @@ async def _asked(request: Request, key: str) -> Asked:
     )
 
 
-def _answer(response: Response) -> bytes | None:
+RAW = "__idempotent_raw__"
+
+
+def _is_json(response: Response) -> bool:
+    return response.media_type == "application/json"
+
+
+def _raw_answer(response: Response) -> bytes | None:
     raw = getattr(response, "body", None)
+    return None if raw is None else bytes(raw)
+
+
+def _succeeded(response: Response) -> bool:
+    return HTTPStatus.OK <= response.status_code < HTTPStatus.MULTIPLE_CHOICES
+
+
+def _refusal(response: Response) -> bool:
     code = response.status_code
-    refused = HTTPStatus.BAD_REQUEST <= code < HTTPStatus.INTERNAL_SERVER_ERROR
-    if refused or response.media_type != "application/json" or raw is None:
-        return None
-    return bytes(raw)
+    return HTTPStatus.BAD_REQUEST <= code < HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+def _try_again(response: Response) -> bool:
+    return response.status_code in (
+        HTTPStatus.BAD_GATEWAY,
+        HTTPStatus.SERVICE_UNAVAILABLE,
+    )
+
+
+def _raw_envelope(text: str, response: Response) -> JsonValue:
+    return {RAW: {"text": text, "media_type": response.media_type or ""}}
+
+
+def _stored_body(response: Response, raw: bytes | None) -> JsonValue:
+    if raw is None:
+        return _raw_envelope("", response)
+    if _is_json(response):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            logger.warning("idempotency: answer is not valid JSON", exc_info=True)
+    if len(raw) > RAW_MAX:
+        logger.warning("idempotency: answer of %s bytes too large to keep", len(raw))
+        return _raw_envelope(TOO_LARGE, response)
+    return _raw_envelope(raw.decode(errors="replace"), response)
 
 
 async def _keep(held: Held, response: Response) -> None:
-    raw = _answer(response)
-    if raw is None:
+    raw = _raw_answer(response)
+    json_answer = raw is not None and _is_json(response)
+    if _try_again(response):
         await run_in_threadpool(idempotency.release, held)
-        return
-    try:
-        body = json.loads(raw)
-    except ValueError:
-        path = held.asked.path
-        logger.warning("idempotency: %s answered no JSON", path, exc_info=True)
+    elif response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR and not json_answer:
+        await _finish_crashed(held)
+    elif _refusal(response) or (raw is None and not _succeeded(response)):
         await run_in_threadpool(idempotency.release, held)
-        return
-    await run_in_threadpool(idempotency.finish, held, response.status_code, body)
+    else:
+        body = _stored_body(response, raw)
+        if not json_answer:
+            logger.warning("idempotency: %s answered no JSON", held.asked.path)
+        await run_in_threadpool(idempotency.finish, held, response.status_code, body)
+
+
+async def _finish_crashed(held: Held) -> None:
+    crashed = HTTPStatus.INTERNAL_SERVER_ERROR
+    await run_in_threadpool(idempotency.finish, held, crashed, {"detail": CRASHED})
 
 
 def _refused(exc: BaseException) -> bool:
@@ -112,10 +157,7 @@ async def _settle_crash(held: Held, exc: BaseException) -> None:
         if _refused(exc):
             await run_in_threadpool(idempotency.release, held)
         else:
-            crashed = HTTPStatus.INTERNAL_SERVER_ERROR
-            await run_in_threadpool(
-                idempotency.finish, held, crashed, {"detail": CRASHED}
-            )
+            await _finish_crashed(held)
     except Exception:
         logger.exception("idempotency: key of %s not settled", held.asked.path)
 
@@ -136,7 +178,15 @@ async def _first(handle: Handler, request: Request, held: Held) -> Response:
 def _replayed(status: int | None, body: JsonValue) -> Response:
     stored = status or HTTPStatus.OK
     code = HTTPStatus.OK if stored < HTTPStatus.MULTIPLE_CHOICES else stored
-    return JSONResponse(body, status_code=code, headers={REPLAYED: "true"})
+    headers = {REPLAYED: "true"}
+    if isinstance(body, dict) and isinstance(raw := body.get(RAW), dict):
+        return Response(
+            str(raw["text"]),
+            status_code=stored,
+            media_type=str(raw["media_type"]) or None,
+            headers=headers,
+        )
+    return JSONResponse(body, status_code=code, headers=headers)
 
 
 class IdempotentRoute(APIRoute):

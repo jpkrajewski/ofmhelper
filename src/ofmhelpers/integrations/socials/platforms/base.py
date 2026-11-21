@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from typing import ClassVar
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.tracked_accounts.schema import PlatformNames
@@ -11,6 +12,8 @@ logger = get_logger(__name__)
 
 
 class Platform(PlatformNames):
+    reads_logged_in: ClassVar[bool] = True
+
     @abstractmethod
     def proxies(self) -> list[str]: ...
 
@@ -31,6 +34,6 @@ class Platform(PlatformNames):
                     found.append(api)
             elif name == "proxy":
                 found.append(ProxySource(self.fetch, self.proxies(), start))
-            elif name == "login":
+            elif name == "login" and self.reads_logged_in:
                 found.append(LoginSource(self.fetch, self.proxies(), start))
         return found

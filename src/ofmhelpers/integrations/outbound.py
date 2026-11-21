@@ -7,11 +7,13 @@ lazy from collections.abc import Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field
-from requests.adapters import BaseAdapter
+from requests.adapters import BaseAdapter, HTTPAdapter
 from requests.structures import CaseInsensitiveDict
+from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.config.settings import ProfilePageSettings
 
 logger = get_logger(__name__)
 
@@ -104,6 +106,35 @@ def mount(session: requests.Session) -> requests.Session:
         session.mount("https://", adapter)
         session.mount("http://", adapter)
     return session
+
+
+_RETRY_STATUSES = (500, 502, 503, 504)
+
+
+def page_session(page: ProfilePageSettings, proxy: str | None) -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=page.http_retries,
+        backoff_factor=page.retry_backoff_s,
+        backoff_jitter=page.retry_backoff_s,
+        status_forcelist=_RETRY_STATUSES,
+        allowed_methods=None,
+        raise_on_status=False,
+        respect_retry_after_header=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update(
+        {
+            "User-Agent": page.user_agent,
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+    )
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+    return mount(session)
 
 
 def get(url: str, **kwargs: Any) -> requests.Response:

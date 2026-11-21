@@ -192,3 +192,9 @@ def test_an_admin_adds_a_manager_for_any_user():
     made = user_store.by_email("m2@example.com")
     assert made is not None
     assert (made.role, made.owner_id) == (Role.MANAGER, plain)
+
+
+def test_a_managers_open_of_a_chat_model_is_refused_and_not_remembered(manager):
+    answer = manager.post("/chatting/fanvue/x/visits")
+
+    assert answer.status_code == 403

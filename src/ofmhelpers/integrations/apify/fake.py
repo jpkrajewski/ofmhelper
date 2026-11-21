@@ -13,10 +13,15 @@ lazy import requests
 
 from ofmhelpers.integrations.instagram.fake import CDN, fake_instagram
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
+from ofmhelpers.integrations.x import fake as x_fake
+from ofmhelpers.integrations.x.schema import SNOWFLAKE_EPOCH_MS
 
 HOST = "api.apify.com"
 REEL_SCRAPER = "apify~instagram-reel-scraper"
 PROFILE_SCRAPER = "apify~instagram-profile-scraper"
+X_SCRAPER = "kaitoeasyapi~twitter-x-data-tweet-scraper-pay-per-result-cheapest"
+X_MIN_ROWS = 15
+SNOWFLAKE_TIME_SHIFT = 22
 BROKE_KEY = "fake-apify-broke"
 WRONG_KEY = "fake-apify-wrong"
 USD_PER_REEL = 0.0026
@@ -65,6 +70,63 @@ class FakeReelItem(_Stored):
     seconds: float = Field(serialization_alias="videoDuration")
     timestamp: str
     owner: str = Field(serialization_alias="ownerUsername")
+
+
+class FakeTweetAuthor(_Stored):
+    user_name: str = Field(serialization_alias="userName")
+    id: str
+    name: str
+    followers: int
+    following: int
+    profile_picture: str = Field(serialization_alias="profilePicture")
+
+
+class FakeTweetItem(_Stored):
+    type: str = "tweet"
+    id: str
+    url: str
+    created_at: str = Field(serialization_alias="createdAt")
+    view_count: int = Field(serialization_alias="viewCount")
+    author: FakeTweetAuthor
+
+
+class FakeMockItem(_Stored):
+    type: str = "mock_tweet"
+    id: int = -1
+    text: str = "From KaitoEasyAPI, a reminder: a minimum charge per call"
+
+
+def tweet_items(handle: str, since: float) -> list[FakeTweetItem | FakeMockItem]:
+    profile = next((p for p in x_fake.PROFILES if p.username == handle.lower()), None)
+    found: list[FakeTweetItem | FakeMockItem] = []
+    if profile is not None:
+        author = FakeTweetAuthor(
+            user_name=profile.username,
+            id=profile.user_id,
+            name=profile.name,
+            followers=profile.followers,
+            following=12,
+            profile_picture=f"{x_fake.CDN}/avatar_normal.jpg",
+        )
+        for post in profile.posts:
+            posted = time.time() - post.age_h * 3600
+            if posted < since:
+                continue
+            post_id = str(
+                (int(posted * 1000) - SNOWFLAKE_EPOCH_MS) << SNOWFLAKE_TIME_SHIFT
+            )
+            found.append(
+                FakeTweetItem(
+                    id=post_id,
+                    url=f"https://x.com/{profile.username}/status/{post_id}",
+                    created_at=datetime.fromtimestamp(posted, UTC).strftime(
+                        "%a %b %d %H:%M:%S +0000 %Y"
+                    ),
+                    view_count=post.views,
+                    author=author,
+                )
+            )
+    return found + [FakeMockItem() for _ in range(max(X_MIN_ROWS - len(found), 0))]
 
 
 def _not_found(username: str) -> FakeItemError:
@@ -177,7 +239,7 @@ class FakeApify:
         return _error(404, "page-not-found", f"No fake for {request.method} {path}")
 
     def _start(self, actor: str, token: str, body: Any) -> FakeReply:
-        if actor not in (REEL_SCRAPER, PROFILE_SCRAPER):
+        if actor not in (REEL_SCRAPER, PROFILE_SCRAPER, X_SCRAPER):
             return _error(404, "record-not-found", f"Actor {actor} was not found")
         if token == BROKE_KEY:
             return _error(
@@ -188,8 +250,15 @@ class FakeApify:
         run_input = json.loads(body or b"{}")
         with self._lock:
             self.inputs.append({"actor": actor, **run_input})
-        if actor == PROFILE_SCRAPER:
-            stored: list[_Stored] = [
+        if actor == X_SCRAPER:
+            stored: list[_Stored] = list(
+                tweet_items(
+                    str(run_input.get("from", "")),
+                    float(run_input.get("since_time") or 0),
+                )
+            )
+        elif actor == PROFILE_SCRAPER:
+            stored = [
                 item
                 for username in run_input.get("usernames", [])
                 for item in self.profile_items(username)

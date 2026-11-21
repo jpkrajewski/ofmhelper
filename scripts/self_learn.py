@@ -29,7 +29,19 @@ TEST_SH = re.compile(
 )
 BACKGROUND_ID = re.compile(r"running in background with ID: (\w+)")
 TASK_ID = re.compile(r"<task-id>(\w+)</task-id>")
+TOOL_USE_ID = re.compile(r"<tool-use-id>(\w+)</tool-use-id>")
 TEST_EXIT = re.compile(r"test\.sh: pytest exit (\d+) in (\d+)s")
+SUMMARY_EXIT = re.compile(r"SUMMARY exit (\d+):")
+EXIT_ECHO = re.compile(r"\bexit=(\d+)")
+GIT_PUSH = re.compile(r"\bgit\s+push\b")
+KIMI_RUN = re.compile(
+    r"kimi[/\\]ask\.py"
+    r"|(?:^|[;&|(\n])\s*(?:\w+=\S+\s+)*(?:(?:timeout|nohup|time|env)\s+(?:-\S+\s+|\d+[smhd]?\s+)*)?"
+    r"(?:\S*[/\\])?kimi(?:\.exe)?(?=\s|$)"
+)
+SUMMARY_FILE = "reports/latest/summary.txt"
+QUIET_RUN = re.compile(r">\s*(?!&)\S")
+REVIEWER_AGENT = "caveman:cavecrew-reviewer"
 PRESETS = frozenset(
     {
         "e2e",
@@ -179,18 +191,103 @@ def _test_preset(command: str) -> str | None:
 
 
 def _review_label(name: str, tool_input: dict[str, Any]) -> str | None:
-    text = f"{tool_input.get('description', '')} {tool_input.get('subagent_type', '')}"
-    if name in SUBAGENT_TOOLS and "review" in text.lower():
-        return str(tool_input.get("description") or tool_input.get("subagent_type"))
+    if name in SUBAGENT_TOOLS and tool_input.get("subagent_type") == REVIEWER_AGENT:
+        return str(tool_input.get("description") or REVIEWER_AGENT)
     command = str(tool_input.get("command", ""))
-    if name == "Bash" and "kimi" in command.lower() and "review" in command.lower():
+    if name == "Bash" and KIMI_RUN.search(command) and "review" in command.lower():
         return "kimi review run"
     return None
 
 
-def _test_exit(text: str) -> tuple[int, int] | None:
+def _test_verdict(text: str, *, own: bool) -> tuple[int, int | None] | None:
     found = TEST_EXIT.search(text)
-    return (int(found.group(1)), int(found.group(2))) if found else None
+    code, seconds = (int(found.group(1)), int(found.group(2))) if found else (0, None)
+    if not found:
+        summary = SUMMARY_EXIT.search(text) or (own and EXIT_ECHO.search(text))
+        if summary:
+            code = int(summary.group(1))
+        elif "RESULT NOT GREEN" in text:
+            code = 1
+        elif "RESULT GREEN" not in text:
+            return None
+    if "RESULT NOT GREEN" in text and code == 0:
+        code = 1
+    return code, seconds
+
+
+class TestRuns:
+    __test__ = False
+
+    def __init__(self, session: str) -> None:
+        self.session = session
+        self.pending: dict[str, tuple[str, datetime]] = {}
+        self.background: dict[str, str] = {}
+        self.completed: set[str] = set()
+        self.summary_reads: set[str] = set()
+        self.quiet: set[str] = set()
+        self.ended: dict[str, datetime] = {}
+        self.done: list[TestShRun] = []
+
+    def launch(self, tool_id: str, preset: str, stamp: str) -> None:
+        self.pending[tool_id] = (preset, _when(stamp))
+
+    def read_summary_file(self, tool_id: str, command: str) -> None:
+        if SUMMARY_FILE in command:
+            self.summary_reads.add(tool_id)
+
+    def run_without_output(self, tool_id: str, command: str) -> None:
+        if tool_id in self.pending and QUIET_RUN.search(command):
+            self.quiet.add(tool_id)
+
+    def answer(self, key: str, text: str, stamp: str) -> None:
+        tool_id = self.background.get(key, key)
+        if tool_id not in self.pending:
+            if tool_id in self.summary_reads:
+                self._read_summary(text, stamp)
+        elif started := BACKGROUND_ID.search(text):
+            self.background[started.group(1)] = tool_id
+        else:
+            verdict = _test_verdict(text, own=True)
+            if verdict is not None or tool_id in self.quiet:
+                self.completed.add(tool_id)
+            self._finish(tool_id, verdict, stamp)
+
+    def notified(self, text: str, stamp: str) -> None:
+        found = TOOL_USE_ID.search(text)
+        if found and found.group(1) in self.pending:
+            self.completed.add(found.group(1))
+            self.ended[found.group(1)] = _when(stamp)
+
+    def _read_summary(self, text: str, stamp: str) -> None:
+        verdict = _test_verdict(text, own=False)
+        oldest = next((k for k in self.pending if k in self.completed), None)
+        if oldest:
+            self._finish(oldest, verdict, stamp)
+
+    def _finish(
+        self, tool_id: str, verdict: tuple[int, int | None] | None, stamp: str
+    ) -> None:
+        if verdict is None:
+            return
+        code, seconds = verdict
+        preset, launched = self.pending.pop(tool_id)
+        end = self.ended.get(tool_id) or _when(stamp)
+        self.done.append(
+            TestShRun(
+                session=self.session,
+                preset=preset,
+                seconds=seconds
+                if seconds is not None
+                else max(0, int((end - launched).total_seconds())),
+                result="green" if code == 0 else f"exit {code}",
+            )
+        )
+
+    def all(self) -> list[TestShRun]:
+        return self.done + [
+            TestShRun(session=self.session, preset=p, seconds=0, result=NO_RESULT)
+            for p, _ in self.pending.values()
+        ]
 
 
 def _notified_task(text: str) -> str:
@@ -218,8 +315,8 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
     errors: list[str] = []
     interrupted = rejected = 0
     stamps: list[str] = []
-    runs: list[TestShRun] = []
-    pending: dict[str, str] = {}
+    runs = TestRuns(path.stem[:8])
+    pushes: set[str] = set()
     reviews = Counter[str]()
     task_stops = refused_pushes = peak = 0
     for entry in _entries(path, since):
@@ -252,9 +349,20 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
                     command = str((part.get("input") or {}).get("command", ""))
                     preset = _test_preset(command) if part["name"] == "Bash" else None
                     if preset:
-                        pending[part["id"]] = preset
+                        runs.launch(part["id"], preset, entry["timestamp"])
+                        runs.run_without_output(part["id"], command)
+                    if part["name"] == "Bash":
+                        runs.read_summary_file(part["id"], command)
+                    if part["name"] == "Bash" and GIT_PUSH.search(command):
+                        pushes.add(part["id"])
                     if label := _review_label(part["name"], part.get("input") or {}):
                         reviews[label] += 1
+            continue
+        if entry.get("type") == "attachment":
+            runs.notified(
+                str((entry.get("attachment") or {}).get("prompt", "")),
+                entry["timestamp"],
+            )
             continue
         if entry.get("type") != "user":
             continue
@@ -264,22 +372,10 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
         results = _tool_results(content)
         answers = [
             (p.get("tool_use_id", ""), _text(p.get("content"))) for p in results
-        ] or [(_notified_task(text), text)]
+        ] or ([(task, text)] if (task := _notified_task(text)) else [])
         for run_key, seen_text in answers:
-            refused_pushes += REFUSED_PUSH in seen_text
-            if run_key in pending and (started := BACKGROUND_ID.search(seen_text)):
-                pending[started.group(1)] = pending.pop(run_key)
-            elif (finished := _test_exit(seen_text)) and run_key in pending:
-                code, seconds = finished
-                clean = code == 0 and "RESULT NOT GREEN" not in seen_text
-                runs.append(
-                    TestShRun(
-                        session=path.stem[:8],
-                        preset=pending.pop(run_key),
-                        seconds=seconds,
-                        result="green" if clean else f"exit {code}",
-                    )
-                )
+            refused_pushes += run_key in pushes and REFUSED_PUSH in seen_text
+            runs.answer(run_key, seen_text, entry["timestamp"])
         if owner and not results and _is_owner_prompt(entry, text):
             prompts.append(
                 Correction(
@@ -323,11 +419,7 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
         interrupted=interrupted,
         rejected=rejected,
         errors=errors,
-        test_runs=runs
-        + [
-            TestShRun(session=path.stem[:8], preset=p, seconds=0, result=NO_RESULT)
-            for p in pending.values()
-        ],
+        test_runs=runs.all(),
         reviews=[Repeat(what=w, count=c) for w, c in reviews.most_common()],
         task_stops=task_stops,
         refused_pushes=refused_pushes,

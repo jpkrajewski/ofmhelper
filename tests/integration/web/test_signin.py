@@ -18,6 +18,7 @@ from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.schema import DeviceFields
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
+from ofmhelpers.features.account.keys import SAVED_KEY, Keys
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import Identity
@@ -446,7 +447,9 @@ def test_googles_consent_url_asks_drive_only_when_connecting(monkeypatch):
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
 
     def query(*, connect: bool) -> dict[str, str]:
-        url = Google().consent_url("https://x/cb", "s", "n", connect=connect)
+        url = Google().consent_url(
+            "https://x/cb", "s", "n", connect=connect, challenge="c"
+        )
         return {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
 
     sign_in_query = query(connect=False)
@@ -641,24 +644,33 @@ def test_google_sign_in_url_has_the_callback_and_a_nonce_but_no_drive(
 
 def test_a_users_saved_key_prefills_their_forms_and_nobody_elses(client, monkeypatch):
     monkeypatch.setenv("KIE_AI_API_KEY_ADMIN", "env-admin-key")
-    sign_in(client)
+    user = sign_in(client)
+    assert SAVED_KEY not in client.get("/generate").text
     assert "env-admin-key" not in client.get("/generate").text
 
     r = client.post("/account/keys", data={"key_kie": " user-key-1234 "})
     assert "kie.ai key saved." in r.text
     assert "…1234" in r.text
-    assert "user-key-1234" in client.get("/generate").text
+    page = client.get("/generate").text
+    assert SAVED_KEY in page
+    assert "user-key-1234" not in page
+    assert Keys.of(user.id).for_run("kie", "", SAVED_KEY) == "user-key-1234"
 
     other = TestClient(app)
-    sign_in(other, "other@example.com")
-    assert "user-key-1234" not in other.get("/generate").text
+    other_user = sign_in(other, "other@example.com")
+    other_page = other.get("/generate").text
+    assert SAVED_KEY not in other_page
+    assert "user-key-1234" not in other_page
+    assert Keys.of(other_user.id).for_run("kie", "", SAVED_KEY) != "user-key-1234"
 
     admin = TestClient(app)
     sign_in_admin(admin)
-    assert "env-admin-key" in admin.get("/generate").text
+    admin_page = admin.get("/generate").text
+    assert SAVED_KEY in admin_page
+    assert "env-admin-key" not in admin_page
 
     client.post("/account/keys", data={"remove": "kie"})
-    assert "user-key-1234" not in client.get("/generate").text
+    assert SAVED_KEY not in client.get("/generate").text
 
 
 def _saved_keys(user_id: int) -> dict[str, str]:

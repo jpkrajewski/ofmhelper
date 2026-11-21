@@ -1,6 +1,9 @@
+import base64
+import importlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -91,10 +94,41 @@ class Hooks:
         return self.send("PostToolUse", tool_name="Skill", tool_input={"skill": name})
 
 
+FAKE_DOCKER = (
+    "import pathlib, sys, time\n"
+    "mode = pathlib.Path({mode!r}).read_text()\n"
+    "args = sys.argv[1:]\n"
+    "if args[:1] == ['info']:\n"
+    "    sys.exit(1 if mode == 'down' else 0)\n"
+    "if mode == 'hang':\n"
+    "    time.sleep(30)\n"
+    "if mode == 'fail':\n"
+    "    sys.stderr.write('no such container')\n"
+    "    sys.exit(1)\n"
+    "if mode == 'garbage':\n"
+    "    print('not a number')\n"
+    "    sys.exit(0)\n"
+    "busy = mode.partition(':')[2].split(',')\n"
+    "for line in sys.stdin:\n"
+    "    print(1 if line.split()[1].removeprefix('rq:wip:') in busy else 0)\n"
+)
+
+
 @pytest.fixture
-def hooks(tmp_path: Path) -> Hooks:
+def docker_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    mode = tmp_path / "docker_mode"
+    mode.write_text("up")
+    fake = tmp_path / "fake_docker.py"
+    fake.write_text(FAKE_DOCKER.format(mode=str(mode)))
+    monkeypatch.setenv("CLAUDE_GUARDS_DOCKER", f"{sys.executable} {fake}")
+    return mode
+
+
+@pytest.fixture
+def hooks(tmp_path: Path, docker_mode: Path) -> Hooks:
     (tmp_path / "scripts").mkdir()
     shutil.copy(REPO / "scripts" / "check_no_comments.py", tmp_path / "scripts")
+    shutil.copy(REPO / "scripts" / "import_graph.py", tmp_path / "scripts")
     shutil.copy(REPO / "CLAUDE.md", tmp_path / "CLAUDE.md")
     (tmp_path / "src" / "ofmhelpers" / "features" / "old").mkdir(parents=True)
     (tmp_path / "src" / "ofmhelpers" / "features" / "old" / "service.py").write_text(
@@ -116,6 +150,11 @@ def hooks(tmp_path: Path) -> Hooks:
         ("git -C . push origin dev", "never commit"),
         ("git reset --hard HEAD~1", "never commit"),
         ("gh pr merge 101 --merge", "never commit"),
+        ('powershell -Command "git commit -m x"', "never commit"),
+        ("PowerShell -c git push origin dev", "never commit"),
+        ("cmd /c git reset --hard HEAD~1", "never commit"),
+        ('iex "git commit -m x"', "never commit"),
+        ("nice gh pr merge 101 --merge", "never commit"),
         ("git stash", "Never git stash"),
         ("git stash pop", "Never git stash"),
         ("mypy src", "runs in Docker"),
@@ -206,6 +245,119 @@ def test_an_ordinary_command_passes(hooks: Hooks, command: str) -> None:
     assert hooks.bash(command).decision == "allow"
 
 
+def encoded(text: str) -> str:
+    return base64.b64encode(text.encode("utf-16-le")).decode()
+
+
+def nested_in_bash(command: str, depth: int) -> str:
+    for _ in range(depth):
+        command = "bash -c " + shlex.quote(command)
+    return command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"powershell -EncodedCommand {encoded('git commit -m x')}",
+        f"pwsh -enc {encoded('git commit -m x')}",
+        f"powershell -NoProfile -ec {encoded('git push origin dev')}",
+        f"powershell -e {encoded('git reset --hard HEAD~1')}",
+        f"powershell -EncodedCommand {encoded('powershell -Command git commit')}",
+        "powershell -EncodedCommand not-base64!",
+        "powershell -EncodedCommand",
+        "bash <<'EOF'\ngit commit -m x\nEOF",
+        "cat <<EOF | bash\ngit commit -m x\nEOF",
+        "sh - <<EOF\ngit push origin dev\nEOF",
+        "$'git' commit -m x",
+        'g"it" commit -m x',
+        "$'g\\x69t' commit -m x",
+        nested_in_bash("git commit -m x", 5),
+    ],
+)
+def test_encoded_heredoc_quoted_and_deeply_nested_commands_are_not_a_way_around(
+    hooks: Hooks, command: str
+) -> None:
+    assert hooks.bash(command).decision == "deny"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git \\\n  push origin dev",
+        "git \\\r\n  push origin dev",
+        'echo "$(printf \'"\')"; git push --force',
+        "echo 'unterminated; git push origin dev",
+    ],
+)
+def test_a_line_continuation_or_an_unparseable_command_is_not_a_way_around(
+    hooks: Hooks, command: str
+) -> None:
+    assert hooks.bash(command).decision == "deny"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git `\n  push origin dev",
+        "g`it push origin dev",
+        "git `\r\n  commit -m x",
+    ],
+)
+def test_powershell_continuations_and_escapes_still_name_the_program(
+    hooks: Hooks, command: str
+) -> None:
+    answer = hooks.send(
+        "PreToolUse", tool_name="PowerShell", tool_input={"command": command}
+    )
+
+    assert answer.decision == "deny"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git status",
+        f"{DEV_COMPOSE} ps",
+        "cat README.md | head",
+        "grep -n x CLAUDE.md",
+        "bash scripts/test.sh tests/unit",
+        "git log --oneline \\\n  -5",
+    ],
+)
+def test_ordinary_commands_are_not_refused_by_the_shell_parser(
+    hooks: Hooks, command: str
+) -> None:
+    assert hooks.bash(command).decision == "allow"
+
+
+@pytest.mark.parametrize(
+    "command", ['g"it" commit -m x', "g'it' push origin dev", "&'git' commit -m x"]
+)
+def test_quote_tricks_in_powershell_still_name_the_program(
+    hooks: Hooks, command: str
+) -> None:
+    answer = hooks.send(
+        "PreToolUse", tool_name="PowerShell", tool_input={"command": command}
+    )
+
+    assert answer.decision == "deny"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat <<'EOF'\ngit commit -m x\nEOF",
+        f"powershell -EncodedCommand {encoded('Get-Date')}",
+        nested_in_bash("git status", 2),
+        "echo $(echo $(echo hi)) $(echo $(echo hi))",
+    ],
+)
+def test_harmless_encoded_heredoc_and_nested_commands_pass(
+    hooks: Hooks, command: str
+) -> None:
+    assert hooks.bash(command).decision == "allow"
+
+
 def test_a_scoped_test_run_passes_and_asks_for_the_report(hooks: Hooks) -> None:
     answer = hooks.bash(
         "scripts/test.sh tests/unit/test_x.py tests/integration/test_y.py"
@@ -280,14 +432,62 @@ NONE_OPEN = '0 {"open": 0, "more": false}'
 MORE_PAGES = '0 {"open": 0, "more": true}'
 
 
-def _guard_hook_budget_s() -> float:
+def _guard_hook_budget_s(event: str = "PreToolUse") -> float:
     settings = json.loads((REPO / ".claude" / "settings.json").read_text())
     return next(
         hook["timeout"]
-        for entry in settings["hooks"]["PreToolUse"]
+        for entry in settings["hooks"][event]
         for hook in entry["hooks"]
         if "guard.py" in hook["command"]
     )
+
+
+FAKE_GH = (
+    "import json, pathlib, sys, time\n"
+    "pathlib.Path({asked!r}).write_text(chr(10).join(sys.argv[1:]))\n"
+    "text = pathlib.Path({answer!r}).read_text()\n"
+    "time.sleep(10 if text == 'hang' else 0)\n"
+    "code, out = text.split(' ', 1)\n"
+    "if '--jq' in sys.argv and out.startswith('{{\"data\"'):\n"
+    "    if sys.argv[sys.argv.index('--jq') + 1] != {count!r}:\n"
+    "        sys.stderr.write('the guard changed its jq expression: update this fake')\n"
+    "        sys.exit(3)\n"
+    "    pr = json.loads(out)['data']['repository']['pullRequest']\n"
+    "    threads, reviews = pr['reviewThreads'], pr['latestReviews']\n"
+    "    unresolved = [n for n in threads['nodes'] if not n['isResolved']]\n"
+    "    asked = [n for n in reviews['nodes'] if n['state'] == 'CHANGES_REQUESTED']\n"
+    "    more = threads['pageInfo']['hasNextPage'] or reviews['pageInfo']['hasNextPage']\n"
+    "    out = json.dumps({{'open': len(unresolved) + len(asked), 'more': more}})\n"
+    "print(out)\n"
+    "sys.exit(int(code))\n"
+)
+
+
+def guard_count() -> str:
+    sys.path.insert(0, str(REPO / ".claude" / "hooks"))
+    try:
+        return importlib.import_module("guards.pr_comments").COUNT
+    finally:
+        sys.path.remove(str(REPO / ".claude" / "hooks"))
+
+
+def graphql_answer(
+    threads: list[bool],
+    reviews: list[str],
+    more_threads: bool = False,
+    more_reviews: bool = False,
+) -> str:
+    pull_request = {
+        "reviewThreads": {
+            "nodes": [{"isResolved": resolved} for resolved in threads],
+            "pageInfo": {"hasNextPage": more_threads},
+        },
+        "latestReviews": {
+            "nodes": [{"state": state} for state in reviews],
+            "pageInfo": {"hasNextPage": more_reviews},
+        },
+    }
+    return "0 " + json.dumps({"data": {"repository": {"pullRequest": pull_request}}})
 
 
 @pytest.fixture
@@ -296,13 +496,7 @@ def github(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
     asked = hooks.root / "gh_asked"
     fake = hooks.root / "fake_gh.py"
     fake.write_text(
-        "import pathlib, sys, time\n"
-        f"pathlib.Path({str(asked)!r}).write_text(chr(10).join(sys.argv[1:]))\n"
-        f"text = pathlib.Path({str(answer)!r}).read_text()\n"
-        "time.sleep(10 if text == 'hang' else 0)\n"
-        "code, out = text.split(' ', 1)\n"
-        "print(out)\n"
-        "sys.exit(int(code))\n"
+        FAKE_GH.format(asked=str(asked), answer=str(answer), count=guard_count())
     )
     monkeypatch.setenv("CLAUDE_GUARDS_GH", f"{sys.executable} {fake}")
     hooks.prompt("ship")
@@ -327,6 +521,39 @@ def test_a_pr_with_open_review_comments_is_never_merged_even_on_the_ship_word(
 
     assert verdict.decision == "deny"
     assert reason in verdict.reason
+
+
+@pytest.mark.parametrize(
+    ("answer", "reason"),
+    [
+        (graphql_answer([True, False, False], ["APPROVED"]), "PR #103 has 2"),
+        (graphql_answer([True], ["CHANGES_REQUESTED"]), "PR #103 has 1"),
+        (graphql_answer([False], ["CHANGES_REQUESTED"]), "PR #103 has 2"),
+        (graphql_answer([True], [], more_threads=True), "more than 100"),
+        (graphql_answer([], [], more_reviews=True), "more than 100"),
+    ],
+)
+def test_the_guards_own_graphql_query_and_count_decide_the_merge(
+    hooks: Hooks, github: Path, answer: str, reason: str
+) -> None:
+    github.write_text(answer)
+
+    verdict = hooks.bash("gh pr merge 103 --merge")
+
+    assert verdict.decision == "deny"
+    assert reason in verdict.reason
+    asked = (hooks.root / "gh_asked").read_text()
+    assert "reviewThreads" in asked
+    assert "latestReviews" in asked
+    assert "isResolved" in asked
+
+
+def test_resolved_threads_and_plain_reviews_let_the_graphql_answer_merge(
+    hooks: Hooks, github: Path
+) -> None:
+    github.write_text(graphql_answer([True, True], ["APPROVED", "COMMENTED"]))
+
+    assert hooks.bash("gh pr merge 103 --merge").decision == "allow"
 
 
 def test_a_pr_without_open_review_comments_merges_on_the_ship_word(
@@ -361,6 +588,22 @@ def test_a_pr_without_open_review_comments_merges_on_the_ship_word(
         "gh pr merge 1 --merge && gh pr merge 2 --merge",
         "bash -c 'gh pr merge 103 --merge'",
         "gh api -X PUT repos/o/r/pulls/7/merge",
+        "gh api --method PUT /repos/o/r/pulls/7/merge/",
+        "GH.exe api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+        "cd ../other && gh pr merge 7 --merge",
+        "cd ../other; gh pr merge 7 --merge",
+        "pushd ../other && gh pr merge 7 --merge",
+        'powershell -Command "gh pr merge 103 --merge"',
+        "pwsh -NoProfile -c gh pr merge 103 --merge",
+        "powershell.exe -command gh pr merge 103 --merge",
+        "cmd /c gh pr merge 103 --merge",
+        'cmd.exe /C "gh pr merge 103 --merge"',
+        'iex "gh pr merge 103 --merge"',
+        "Invoke-Expression 'gh pr merge 103 --merge'",
+        "eval gh pr merge 103 --merge",
+        "bash -lc 'gh pr merge 103 --merge'",
+        "echo y | bash -c 'gh pr merge 103 --merge'",
+        "echo $(gh pr merge 103 --merge)",
         "echo 7 | xargs gh pr merge 7 --merge",
         "nice -n 5 gh pr merge 7 --merge",
         "'C:/tools/GitHub CLI/gh.exe' pr merge 7 --merge",
@@ -795,7 +1038,9 @@ def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -
 
     hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
     hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
-    restart = {"command": f"{DEV_COMPOSE} restart worker media-worker sweeps"}
+    restart = {
+        "command": f"{DEV_COMPOSE} restart worker media-worker preview-worker edit-worker sweeps"
+    }
     hooks.send("PostToolUse", tool_name="Bash", tool_input=restart)
     assert hooks.send("SubagentStop").decision == "allow"
 
@@ -805,6 +1050,386 @@ def test_a_doc_beside_worker_code_needs_no_worker_restart(hooks: Hooks) -> None:
     hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
 
     assert hooks.send("SubagentStop").decision == "allow"
+
+
+def worker_code_changed(hooks: Hooks) -> Answer:
+    return hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+
+
+def restart_command(text: str) -> str:
+    return text.partition("restart ")[2].partition(",")[0]
+
+
+def test_a_queue_with_a_running_job_is_not_asked_to_restart(
+    hooks: Hooks, docker_mode: Path
+) -> None:
+    docker_mode.write_text("busy:media,default")
+
+    note = worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    stop = hooks.send("SubagentStop")
+
+    for text in (note.context, stop.reason):
+        assert restart_command(text) == "preview-worker edit-worker sweeps"
+        assert "Do NOT restart worker media-worker" in text
+    assert stop.decision == "block"
+
+
+@pytest.mark.parametrize("mode", ["fail", "hang", "garbage"])
+def test_a_queue_that_cannot_be_read_is_never_asked_to_restart_a_worker(
+    hooks: Hooks, docker_mode: Path, mode: str
+) -> None:
+    docker_mode.write_text(mode)
+
+    worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    stop = hooks.send("SubagentStop")
+
+    assert restart_command(stop.reason) == "sweeps"
+    assert (
+        "Do NOT restart worker media-worker preview-worker edit-worker" in stop.reason
+    )
+
+
+def test_a_restart_of_the_idle_services_ends_the_ask_while_a_queue_is_busy(
+    hooks: Hooks, docker_mode: Path
+) -> None:
+    docker_mode.write_text("busy:media")
+    worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    restart = {
+        "command": f"{DEV_COMPOSE} restart worker preview-worker edit-worker sweeps"
+    }
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=restart)
+
+    assert hooks.send("SubagentStop").decision == "allow"
+
+
+def restart_of(
+    hooks: Hooks, command: str, event: str = "PostToolUse", **fields: object
+) -> None:
+    hooks.send(event, tool_name="Bash", tool_input={"command": command}, **fields)
+
+
+def test_a_restart_of_one_service_leaves_the_others_asked_for(hooks: Hooks) -> None:
+    worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    restart_of(hooks, f"{DEV_COMPOSE} restart worker")
+
+    stop = hooks.send("SubagentStop")
+
+    assert stop.decision == "block"
+    assert (
+        restart_command(stop.reason) == "media-worker preview-worker edit-worker sweeps"
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'echo "restart worker media-worker preview-worker edit-worker sweeps"',
+        "docker ps | grep restart worker",
+        f"{DEV_COMPOSE} logs worker",
+    ],
+)
+def test_a_command_that_only_mentions_a_restart_is_no_restart(
+    hooks: Hooks, command: str
+) -> None:
+    worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    restart_of(hooks, command)
+
+    assert hooks.send("SubagentStop").decision == "block"
+
+
+@pytest.mark.parametrize(
+    ("event", "fields"),
+    [
+        ("PostToolUseFailure", {}),
+        ("PostToolUse", {"tool_response": {"exit_code": 1}}),
+    ],
+)
+def test_a_failed_restart_does_not_count(
+    hooks: Hooks, event: str, fields: dict[str, object]
+) -> None:
+    worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    restart_of(
+        hooks,
+        f"{DEV_COMPOSE} restart worker media-worker preview-worker edit-worker sweeps",
+        event,
+        **fields,
+    )
+
+    assert hooks.send("SubagentStop").decision == "block"
+
+
+def test_an_up_without_service_names_restarts_every_service(hooks: Hooks) -> None:
+    worker_code_changed(hooks)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    restart_of(hooks, f"{DEV_COMPOSE} up -d --build")
+
+    assert hooks.send("SubagentStop").decision == "allow"
+
+
+def test_a_subagent_worker_edit_is_asked_of_the_main_session_not_the_subagent(
+    hooks: Hooks,
+) -> None:
+    subagent = Hooks(hooks.root, agent="agent-7")
+    subagent.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+    subagent.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    assert subagent.send("SubagentStop").decision == "allow"
+
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "restart worker media-worker" in stop.reason
+
+    restart_of(
+        hooks,
+        f"{DEV_COMPOSE} restart worker media-worker preview-worker edit-worker sweeps",
+    )
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_one_call_that_restarts_and_edits_worker_code_still_asks_for_a_restart(
+    hooks: Hooks,
+) -> None:
+    hooks.skill("senior-python-rules")
+    (hooks.root / "src" / "ofmhelpers" / "made_by_python.py").write_text("x = 1\n")
+    both = (
+        f"{DEV_COMPOSE} restart worker media-worker preview-worker edit-worker sweeps"
+        " && python -c \"open('src/ofmhelpers/made_by_python.py','w')\""
+    )
+    hooks.send(
+        "PostToolUse", tool_name="Bash", tool_input={"command": both}, duration_ms=300
+    )
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    stop = hooks.send("Stop")
+
+    assert stop.decision == "block"
+    assert "restart worker" in stop.reason
+
+
+def test_a_git_that_fails_after_a_shell_write_is_a_note_not_a_crash(
+    hooks: Hooks,
+) -> None:
+    (hooks.root / ".git" / "HEAD").write_text("garbage")
+    write = {"command": "python -c \"open('src/ofmhelpers/made_by_python.py','w')\""}
+
+    answer = hooks.send(
+        "PostToolUse", tool_name="Bash", tool_input=write, duration_ms=300
+    )
+
+    assert "could not be checked for worker code" in answer.context
+    assert "guard restart_workers" not in answer.stderr
+
+
+def test_the_restart_advice_says_to_recheck_that_no_job_runs(hooks: Hooks) -> None:
+    assert "re-check that no job runs" in worker_code_changed(hooks).context
+
+
+def test_a_hanging_redis_stays_inside_the_post_call_budget(
+    hooks: Hooks, docker_mode: Path
+) -> None:
+    docker_mode.write_text("hang")
+    started = time.monotonic()
+
+    worker_code_changed(hooks)
+
+    assert time.monotonic() - started < _guard_hook_budget_s("PostToolUse") - 3
+
+
+WINDOWS_HOST = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the fake Docker Desktop is a .sh script; these tests run in the Linux tests container",
+)
+
+
+def start_desktop(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
+    started = hooks.root / "desktop_started"
+    launcher = hooks.root / "fake_desktop.sh"
+    launcher.write_text(f"#!/bin/sh\ntouch {started}\n")
+    launcher.chmod(0o755)
+    monkeypatch.setenv("CLAUDE_GUARDS_DOCKER_DESKTOP", str(launcher))
+    return started
+
+
+def wait_for(path: Path) -> bool:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if path.exists():
+            return True
+        time.sleep(0.05)
+    return False
+
+
+@WINDOWS_HOST
+def test_docker_desktop_is_started_at_session_start_when_the_engine_is_down(
+    hooks: Hooks, docker_mode: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started = start_desktop(hooks, monkeypatch)
+    docker_mode.write_text("down")
+
+    answer = hooks.send("SessionStart")
+
+    assert "Docker Desktop was down at session start" in answer.context
+    assert wait_for(started)
+
+
+@WINDOWS_HOST
+def test_docker_desktop_is_left_alone_when_the_engine_answers(
+    hooks: Hooks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started = start_desktop(hooks, monkeypatch)
+
+    answer = hooks.send("SessionStart")
+
+    assert answer.context == ""
+    assert not wait_for(started)
+
+
+@WINDOWS_HOST
+def test_a_missing_docker_cli_counts_as_a_down_engine(
+    hooks: Hooks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started = start_desktop(hooks, monkeypatch)
+    monkeypatch.setenv("CLAUDE_GUARDS_DOCKER", str(hooks.root / "no_such_docker"))
+
+    answer = hooks.send("SessionStart")
+
+    assert "Docker Desktop was down" in answer.context
+    assert wait_for(started)
+
+
+@WINDOWS_HOST
+def test_a_docker_desktop_that_cannot_launch_is_reported_not_crashed(
+    hooks: Hooks, docker_mode: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    broken = hooks.root / "not_executable"
+    broken.write_text("x")
+    broken.chmod(0o644)
+    monkeypatch.setenv("CLAUDE_GUARDS_DOCKER_DESKTOP", str(broken))
+    docker_mode.write_text("down")
+
+    answer = hooks.send("SessionStart")
+
+    assert "could not be started" in answer.context
+
+
+def test_nothing_is_started_when_docker_desktop_is_not_installed(
+    hooks: Hooks, docker_mode: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLAUDE_GUARDS_DOCKER_DESKTOP", str(hooks.root / "absent.exe"))
+    docker_mode.write_text("down")
+
+    assert hooks.send("SessionStart").context == ""
+
+
+@pytest.fixture
+def hanging_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "git"
+    fake.write_text("#!/bin/sh\nexec sleep 30\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_a_git_that_hangs_does_not_hold_a_secrets_check_past_its_timeout(
+    hooks: Hooks, hanging_git: None
+) -> None:
+    started = time.monotonic()
+
+    answer = hooks.send(
+        "PreToolUse",
+        tool_name="Write",
+        tool_input={
+            "file_path": str(hooks.root / "notes.txt"),
+            "content": "host 203.0.113.7",
+        },
+    )
+
+    assert answer.decision == "deny"
+    assert "a file git tracks" in answer.reason
+    assert time.monotonic() - started < 10
+
+
+def test_a_hanging_git_costs_all_post_call_guards_one_shared_budget(
+    hooks: Hooks, hanging_git: None
+) -> None:
+    write = {
+        "command": "python - <<'EOF'\nopen('src/ofmhelpers/features/old/service.py','w')\nEOF"
+    }
+    started = time.monotonic()
+
+    answer = hooks.send(
+        "PostToolUse", tool_name="Bash", tool_input=write, duration_ms=300
+    )
+
+    assert answer.decision == "allow"
+    assert time.monotonic() - started < _guard_hook_budget_s("PostToolUse") - 3
+
+
+def test_a_git_that_hangs_leaves_a_visible_note_not_a_silent_pass(
+    hooks: Hooks, hanging_git: None
+) -> None:
+    write = {
+        "command": "python - <<'EOF'\nopen('src/ofmhelpers/shell_made.py','w')\nEOF"
+    }
+
+    answer = hooks.send(
+        "PostToolUse", tool_name="Bash", tool_input=write, duration_ms=300
+    )
+
+    assert answer.decision == "allow"
+    assert "could not be checked" in answer.context
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cp /tmp/made.py src/ofmhelpers/shell_made.py",
+        "mv /tmp/made.py src/ofmhelpers/shell_made.py",
+        "git apply made.patch",
+        "patch -p1 < made.patch",
+        "ruff format src",
+        "ruff check --fix src",
+        "prettier --write src/ofmhelpers/shell_made.py",
+    ],
+)
+def test_copy_move_patch_and_formatters_get_the_shell_write_checks(
+    hooks: Hooks, command: str
+) -> None:
+    (hooks.root / "src" / "ofmhelpers" / "shell_made.py").write_bytes(b"x = 2\r\n")
+
+    answer = shell_wrote(hooks, command)
+
+    assert answer.decision == "block"
+    assert "CRLF written into src/ofmhelpers/shell_made.py" in answer.reason
+
+
+def test_a_name_appended_from_the_shell_to_an_existing_script_needs_research(
+    hooks: Hooks,
+) -> None:
+    hooks.prompt("build the guard")
+    hooks.skill("senior-python-rules")
+    tool = hooks.root / "scripts" / "old_tool.py"
+    tool.write_text("x = 1\n")
+    committed(hooks, "scripts/old_tool.py")
+    append = "python -c \"open('scripts/old_tool.py', 'a').write('y')\""
+
+    tool.write_text("x = 1\ny = 2\n")
+    shell_wrote(hooks, append)
+    assert "written from the shell" not in hooks.send("Stop").reason
+
+    tool.write_text("x = 1\ndef run():\n    return 1\n")
+    shell_wrote(hooks, append)
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "written from the shell (scripts/old_tool.py)" in stop.reason
 
 
 def ui_check_ran(hooks: Hooks, last_line: str, command: str = UI_RUN) -> None:
@@ -1625,3 +2250,83 @@ def test_an_existing_python_file_is_changed_with_edit_not_rewritten(
         "change it with Edit" not in write("src/ofmhelpers/features/old/new.py").reason
     )
     assert write("notes.txt").decision == "allow"
+
+
+def _break_a_layer(hooks: Hooks) -> None:
+    (hooks.root / "src" / "ofmhelpers" / "db").mkdir()
+    (hooks.root / "src" / "ofmhelpers" / "db" / "rows.py").write_text(
+        "from ofmhelpers.features.old import service\n"
+    )
+
+
+def test_a_clean_import_graph_lets_the_review_start_and_says_so(hooks: Hooks) -> None:
+    started = hooks.send("PreToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    assert started.decision == "allow"
+    assert "0 layer breaks, 0 packages importing each other" in started.context
+
+
+def test_a_layer_break_stops_the_review_until_it_is_fixed(hooks: Hooks) -> None:
+    _break_a_layer(hooks)
+
+    agent = hooks.send("PreToolUse", tool_name="Agent", tool_input=REVIEWER)
+    kimi = hooks.send("PreToolUse", tool_name="Bash", tool_input=KIMI)
+    windows = {"command": r"python .claude\skills\kimi\ask.py review task.md x"}
+    kimi_on_windows = hooks.send(
+        "PreToolUse", tool_name="PowerShell", tool_input=windows
+    )
+
+    assert agent.decision == "deny"
+    assert "layer break: db.rows -> features.old.service" in agent.reason
+    assert "layer break: db.rows -> features.old.service" in kimi.reason
+    assert "layer break: db.rows -> features.old.service" in kimi_on_windows.reason
+    (hooks.root / "src" / "ofmhelpers" / "db" / "rows.py").write_text("x = 1\n")
+    assert (
+        hooks.send("PreToolUse", tool_name="Agent", tool_input=REVIEWER).decision
+        == "allow"
+    )
+
+
+def test_a_kimi_research_call_is_not_a_review(hooks: Hooks) -> None:
+    _break_a_layer(hooks)
+    research = {"command": 'kimi -p "what changed in rq 2.1"'}
+
+    asked = hooks.send("PreToolUse", tool_name="Bash", tool_input=research)
+
+    assert "layer break" not in asked.reason
+    assert "Import graph" not in asked.context
+
+
+def test_a_kimi_review_with_a_windows_path_counts_as_the_review(hooks: Hooks) -> None:
+    windows = {"command": r"python .claude\skills\kimi\ask.py review task.md x"}
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
+    hooks.send("PostToolUse", tool_name="PowerShell", tool_input=windows)
+
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_a_graph_that_cannot_be_read_stops_the_review(hooks: Hooks) -> None:
+    (hooks.root / "src" / "ofmhelpers" / "features" / "old" / "half.py").write_text(
+        "def run(:\n"
+    )
+
+    agent = hooks.send("PreToolUse", tool_name="Agent", tool_input=REVIEWER)
+
+    assert agent.decision == "deny"
+    assert "import_graph_before_review crashed" in agent.reason
+
+
+def test_the_reviewer_gets_the_graph_and_other_agents_do_not(hooks: Hooks) -> None:
+    _break_a_layer(hooks)
+    helper = {"description": "Find code", "subagent_type": "general-purpose"}
+
+    reviewer = hooks.send("SubagentStart", agent_type=REVIEWER["subagent_type"])
+    other = hooks.send("SubagentStart", agent_type="general-purpose")
+    launched = hooks.send("PreToolUse", tool_name="Agent", tool_input=helper)
+
+    assert "layer break: db.rows -> features.old.service" in reviewer.context
+    assert "Import graph" not in other.context
+    assert "Import graph" not in launched.context + launched.reason
+    assert launched.decision == "allow"

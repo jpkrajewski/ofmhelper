@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
 from ofmhelpers.db.models import (
@@ -14,7 +15,14 @@ from ofmhelpers.db.models import (
     UserRow,
 )
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.users.schema import LinkedAccount, Role, SavedKey, SavedKeys, User
+from ofmhelpers.db.users.schema import (
+    LinkedAccount,
+    Role,
+    SavedKey,
+    SavedKeys,
+    Standing,
+    User,
+)
 
 
 def _credential_stamp(password_hash: str) -> str:
@@ -60,11 +68,42 @@ class OwnsDataError(ValueError): ...
 class UserRepository(CachedRepository):
     cache_namespace = "user"
 
-    @cached
-    def get(self, user_id: int) -> User | None:
+    def fresh(self, user_id: int) -> User | None:
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             return _user(row) if row else None
+
+    def standing(self, user_id: int) -> Standing | None:
+        employer = aliased(UserRow)
+        employer_active = (
+            select(employer.active)
+            .where(employer.id == UserRow.owner_id)
+            .scalar_subquery()
+        )
+        with session_scope() as s:
+            found = s.execute(
+                select(
+                    UserRow.role,
+                    UserRow.active,
+                    UserRow.password_hash,
+                    UserRow.sessions_ended_at,
+                    employer_active,
+                ).where(UserRow.id == user_id)
+            ).one_or_none()
+        if found is None:
+            return None
+        role, active, password_hash, ended, employer_is_active = found
+        return Standing(
+            role=Role(role),
+            active=active,
+            credential_stamp=_credential_stamp(password_hash),
+            sessions_ended_at=ended.timestamp() if ended else None,
+            employer_active=employer_is_active,
+        )
+
+    @cached
+    def get(self, user_id: int) -> User | None:
+        return self.fresh(user_id)
 
     @cached
     def by_email(self, email: str) -> User | None:
@@ -346,6 +385,26 @@ class UserRepository(CachedRepository):
                     token_hash=token_hash, user_id=user_id, expires_at=expires_at
                 )
             )
+
+    @invalidates_cache
+    def use_password_link(
+        self, token_hash: str, now: float, password_hash: str
+    ) -> int | None:
+        with session_scope() as s:
+            user_id = s.execute(
+                delete(PasswordLinkRow)
+                .where(
+                    PasswordLinkRow.token_hash == token_hash,
+                    PasswordLinkRow.expires_at >= now,
+                )
+                .returning(PasswordLinkRow.user_id)
+            ).scalar_one_or_none()
+            row = s.get(UserRow, user_id) if user_id is not None else None
+            if row is None or not row.active:
+                return None
+            row.password_hash = password_hash
+            s.execute(delete(PasswordLinkRow).where(PasswordLinkRow.user_id == user_id))
+            return user_id
 
     def link_user(self, token_hash: str, now: float) -> int | None:
         with session_scope() as s:

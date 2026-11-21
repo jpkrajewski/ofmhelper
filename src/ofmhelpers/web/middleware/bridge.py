@@ -36,7 +36,6 @@ _HEADERS = {
     "x-robots-tag": "noindex, nofollow, noarchive",
     "referrer-policy": "no-referrer",
     "x-frame-options": "DENY",
-    "content-security-policy": "frame-ancestors 'none'",
     "cache-control": "no-store",
 }
 _PLATFORMS = (
@@ -56,6 +55,15 @@ def _app_hosts() -> set[str]:
         return set()
     twin = host[4:] if host.startswith("www.") else f"www.{host}"
     return {host, twin}
+
+
+def is_tunnel_host(host: str) -> bool:
+    name = host.lower().rsplit(":", 1)[0] if host.count(":") == 1 else host.lower()
+    return name.endswith(tuple(settings.links.tunnel_suffixes()))
+
+
+def _is_bridge_host(host: str) -> bool:
+    return is_tunnel_host(host) or host in set(self_links.active_hosts())
 
 
 def _platform(ua: str) -> str | None:
@@ -155,14 +163,13 @@ class BridgeMiddleware:
             return
         request = Request(scope, receive)
         host = (request.url.hostname or "").lower()
-        if host and host not in _app_hosts() and host in set(self_links.active_hosts()):
+        if host and host not in _app_hosts() and _is_bridge_host(host):
             response = await self._handle(request, host)
-            if response is not None:
-                await response(scope, receive, send)
-                return
+            await response(scope, receive, send)
+            return
         await self.app(scope, receive, send)
 
-    async def _handle(self, request: Request, host: str) -> Response | None:
+    async def _handle(self, request: Request, host: str) -> Response:
         path = request.url.path
         if request.method == "POST" and path == _TRACK_PATH:
             return await self._track(request, host)
@@ -170,17 +177,20 @@ class BridgeMiddleware:
             slug = path.strip("/")
             if slug and "/" not in slug and _SLUG.match(slug):
                 return await self._page(request, host, slug)
-        return None
+        return await self._not_found(request)
+
+    async def _not_found(self, request: Request) -> Response:
+        response = await run_in_threadpool(
+            render, request, "bridge.html", status_code=404, destination=None
+        )
+        response.headers.update(_HEADERS)
+        return response
 
     async def _page(self, request: Request, host: str, slug: str) -> Response:
         ua = request.headers.get("user-agent", "")
         link = await run_in_threadpool(self_links.bridge_target, host, slug)
         if link is None or not _is_http(link.destination):
-            response = await run_in_threadpool(
-                render, request, "bridge.html", status_code=404, destination=None
-            )
-            response.headers.update(_HEADERS)
-            return response
+            return await self._not_found(request)
         if request.method == "GET" and not _BOT.search(ua) and _allow(request):
             await run_in_threadpool(_record, _visitor(request, "view", link.id, None))
         response = await run_in_threadpool(

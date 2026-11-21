@@ -475,6 +475,28 @@ class ChatRepository:
             )
             return [WebhookTarget.model_validate(dict(row)) for row in rows.mappings()]
 
+    def drop_webhooks_except(
+        self, platform: str, model_ids: list[str]
+    ) -> list[ChatWebhook]:
+        if not model_ids:
+            return []
+        with session_scope() as s:
+            dropped = s.execute(
+                delete(ChatWebhookRow)
+                .where(
+                    ChatWebhookRow.platform == platform,
+                    ChatWebhookRow.model_id.not_in(model_ids),
+                )
+                .returning(
+                    ChatWebhookRow.model_id,
+                    ChatWebhookRow.model_username,
+                    ChatWebhookRow.webhook_id,
+                    ChatWebhookRow.url,
+                    ChatWebhookRow.secret,
+                )
+            )
+            return [ChatWebhook.model_validate(dict(row)) for row in dropped.mappings()]
+
     def save_webhook(self, platform: str, webhook: ChatWebhook) -> None:
         values = webhook.model_dump(exclude={"model_id"})
         with session_scope() as s:

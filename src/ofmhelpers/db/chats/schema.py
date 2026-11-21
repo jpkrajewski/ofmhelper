@@ -33,6 +33,7 @@ class ChatModel(BaseModel):
 class ChatModels(BaseModel):
     found: list[ChatModel]
     failed: bool = False
+    unread: bool = False
 
 
 class ChatPosition(BaseModel):

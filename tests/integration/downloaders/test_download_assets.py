@@ -87,33 +87,38 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
     assert client.get(f"/download-videos/jobs/{job_id}").status_code == 200
 
 
+def _png(color: str) -> io.BytesIO:
+    image = io.BytesIO()
+    Image.new("RGB", (8, 8), color).save(image, "PNG")
+    image.seek(0)
+    return image
+
+
 def test_clean_images_json_run_and_status(client, monkeypatch, tmp_path):
     monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
-    monkeypatch.setattr(clean_image_router, "clean_metadata", lambda d: None)
 
-    files = [("files", ("photo.png", io.BytesIO(b"img bytes"), "image/png"))]
+    files = [("files", ("photo.png", _png("red"), "image/png"))]
     r = client.post("/clean-images/run", files=files)
     assert r.status_code == 202
     job_id = r.json()["job_id"]
 
     status = client.get(f"/clean-images/jobs/{job_id}/status").json()
     assert status["status"] == "done"
-    assert status["result"][0]["name"] == "photo.png"
+    assert status["result"][0]["name"] == "IMG_0001.png"
     assert status["result"][0]["kind"] == "image"
 
 
 def test_clean_images_keeps_two_images_with_one_name(client, monkeypatch, tmp_path):
     monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
-    monkeypatch.setattr(clean_image_router, "clean_metadata", lambda d: None)
 
     files = [
-        ("files", ("image.png", io.BytesIO(b"first"), "image/png")),
-        ("files", ("image.png", io.BytesIO(b"second"), "image/png")),
+        ("files", ("image.png", _png("red"), "image/png")),
+        ("files", ("image.png", _png("blue"), "image/png")),
     ]
     r = client.post("/clean-images/run", files=files)
 
     status = client.get(f"/clean-images/jobs/{r.json()['job_id']}/status").json()
-    assert [f["name"] for f in status["result"]] == ["image.png", "image_2.png"]
+    assert [f["name"] for f in status["result"]] == ["IMG_0001.png", "IMG_0002.png"]
 
 
 def test_a_cleaned_image_saves_under_a_name_of_its_own_job(

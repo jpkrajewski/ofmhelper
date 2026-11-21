@@ -4,16 +4,30 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from guards.event import ROOT, Guard, HookEvent, Verdict, block, defined_names
+from guards.event import (
+    ROOT,
+    Guard,
+    HookEvent,
+    Verdict,
+    block,
+    context,
+    defined_names,
+    git_timeout,
+)
 from guards.no_comments import checker
 from guards.skills import loaded, required
 
 NAME = "shell_writes"
 SCRIPTED_WRITE = re.compile(
     r"\bsed\s+-i|\bpython|\bperl\b|\bawk\b|\bcat\s+>|\btee\b|[^0-9&]>\s*[\w./\"']|"
-    r"Set-Content|Out-File|Add-Content"
+    r"Set-Content|Out-File|Add-Content|\bcp\s|\bmv\s|\bgit\s+apply\b|\bpatch\b|"
+    r"\bruff\b[^;&|]*(?:--fix|format)|\bprettier\b[^;&|]*--write"
 )
-GIT_TIMEOUT_S = 5
+UNNAMED_WRITE = re.compile(r"\bgit\s+apply\b|\bpatch\b|\bruff\b|\bprettier\b")
+UNCHECKED = (
+    "The files this shell call wrote could not be checked ({error}); git was slow or failed. "
+    "Run the CRLF, comment and skill checks by hand on the files you wrote."
+)
 CRLF = "CRLF written into {files} (Windows text mode; .gitattributes is eol=lf): rewrite them with LF."
 COMMENTS = "Comments or docstrings written from the shell: {spots} (CLAUDE.md NO COMMENTS, EVER)."
 SKILLS = (
@@ -44,7 +58,7 @@ def committed_text(path: str) -> str:
         capture_output=True,
         encoding="utf-8",
         errors="replace",
-        timeout=GIT_TIMEOUT_S,
+        timeout=git_timeout(),
         check=False,
     )
     return shown.stdout if shown.returncode == 0 else ""
@@ -55,7 +69,7 @@ def changed_by_this_call(event: HookEvent) -> list[ChangedFile]:
         ["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=all"],
         capture_output=True,
         text=True,
-        timeout=GIT_TIMEOUT_S,
+        timeout=git_timeout(),
         check=True,
     )
     cutoff = event.started_at
@@ -75,7 +89,11 @@ def changed_by_this_call(event: HookEvent) -> list[ChangedFile]:
 
 
 def named_by(command: str, path: str) -> bool:
-    return path in command or Path(path).name in command
+    return (
+        bool(UNNAMED_WRITE.search(command))
+        or path in command
+        or Path(path).name in command
+    )
 
 
 def problems(event: HookEvent, files: list[ChangedFile]) -> list[str]:
@@ -96,8 +114,11 @@ def problems(event: HookEvent, files: list[ChangedFile]) -> list[str]:
 def check(event: HookEvent) -> Verdict | None:
     if not SCRIPTED_WRITE.search(event.command):
         return None
-    files = changed_by_this_call(event)
-    found = problems(event, files) if files else []
+    try:
+        files = changed_by_this_call(event)
+        found = problems(event, files) if files else []
+    except (OSError, subprocess.SubprocessError) as error:
+        return context(NAME, UNCHECKED.format(error=type(error).__name__))
     return block(NAME, "\n".join(found)) if found else None
 
 
