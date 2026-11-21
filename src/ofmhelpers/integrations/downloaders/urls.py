@@ -1,9 +1,17 @@
+import re
+import unicodedata
 from urllib.parse import urlsplit
+
+_INVISIBLE: frozendict[str, str] = frozendict({"Cc": " ", "Cf": ""})
+_TRAILING = ",;"
+_TLD = re.compile(r"\.(?:[^\W\d_]{2,}|xn--[a-z0-9-]+)\.?$", re.IGNORECASE)
+_IPV4 = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
+_HOST_END = re.compile(r"[/?#]")
 
 
 class NotALinkError(ValueError):
     def __init__(self) -> None:
-        super().__init__("Paste links only, one per line")
+        super().__init__("Paste links only, separated by spaces or new lines")
 
 
 def _is_web_address(url: str) -> bool:
@@ -16,13 +24,18 @@ def _is_web_address(url: str) -> bool:
 
 def read_links(pasted: str) -> list[str]:
     links = []
-    for line in (raw.strip() for raw in pasted.splitlines()):
-        if not line:
+    visible = "".join(
+        _INVISIBLE.get(unicodedata.category(char), char) for char in pasted
+    )
+    for token in visible.split():
+        link = token.rstrip(_TRAILING)
+        if not link:
             continue
-        link = line
-        if "://" not in link and "." in link.split("/", 1)[0] and ":" not in link:
+        host = _HOST_END.split(link, maxsplit=1)[0]
+        named = _TLD.search(host) or _IPV4.fullmatch(host)
+        if ":" not in host and "@" not in host and named:
             link = f"https://{link}"
-        if " " in link or not _is_web_address(link):
+        if not _is_web_address(link):
             raise NotALinkError
         links.append(link)
     return links

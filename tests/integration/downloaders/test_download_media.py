@@ -50,6 +50,32 @@ def test_a_dead_link_reports_both_downloaders(client):
     assert "images: gallery-dl: 404 Not Found" in failed["error"]
 
 
+def test_links_pasted_on_one_line_with_spaces_all_download(client):
+    first = "https://www.instagram.com/reel/abc/"
+    second = "https://www.instagram.com/reel/def/"
+    third = "https://www.instagram.com/reel/ghi/"
+
+    r = client.post(
+        "/download-media/run",
+        data={"urls": f"{first} {second}\n{third}"},
+        headers=keyed(),
+    )
+    assert r.status_code == 202
+    status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
+
+    assert [a["source"] for a in status["result"]] == [first, second, third]
+
+
+def test_text_that_is_not_a_link_is_refused(client):
+    refused = client.post(
+        "/download-media/run",
+        data={"urls": "https://www.instagram.com/reel/abc/ see this"},
+        headers=keyed(),
+    )
+    assert refused.status_code == 400
+    assert "separated by spaces or new lines" in refused.text
+
+
 def test_an_empty_form_is_refused(client):
     refused = client.post("/download-media/run", data={"urls": " \n "}, headers=keyed())
     assert refused.status_code == 400

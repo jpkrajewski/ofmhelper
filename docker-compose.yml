@@ -457,6 +457,9 @@ services:
     environment:
       <<: [*app-environment]
       OFM_ENV:
+      OFM_PHONES_BACKUP_KEEP:
+      OFM_PHONES_BACKUP_SWEEP_S:
+      OFM_PHONES_HISTORY_LIMIT:
     # Read-only: alembic b1c2d3e4f5a7 moves the old shared cookies.txt into
     # the password admin's own cookies (user_cookies) and leaves the file.
     volumes:
