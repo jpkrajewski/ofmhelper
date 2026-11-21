@@ -29,6 +29,7 @@ from ofmhelpers.integrations.gdrive.base import (
     DriveFullError,
     DriveNotSetUpError,
     FolderGoneError,
+    FolderTrashedError,
 )
 from ofmhelpers.integrations.gdrive.models import (
     FOLDER_MIME,
@@ -314,7 +315,7 @@ class Drive:
         )
         if found.trashed or found.mime_type != FOLDER_MIME:
             msg = f"Folder {folder_id} is trashed or not a folder"
-            raise FolderGoneError(msg)
+            raise FolderTrashedError(msg)
         return DriveFolder(id=found.id, name=found.name, parents=found.parents)
 
     def _list(self, query: str, fields: str, what: str) -> list[DriveRow]:

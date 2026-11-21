@@ -16,6 +16,7 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_ROOT = "uploads"
+KEPT_OUT_OF_UPLOADS = ("backups",)
 
 _BYTES_PER_UNIT = 1024
 
@@ -53,14 +54,39 @@ def safe_path(root_name: str, rel_path: str, *, allow_root: bool = True) -> Path
         msg = "Invalid path"
         raise RefusedError(msg)
     root = _get_root(root_name)
-    candidate = (root / rel_path).resolve()
-    if not candidate.is_relative_to(root):
+    try:
+        candidate = (root / rel_path).resolve()
+    except OSError:
+        logger.warning("path %s cannot be resolved", rel_path, exc_info=True)
+        msg = "Invalid path"
+        raise RefusedError(msg) from None
+    if not candidate.is_relative_to(root) or _kept_out(root, candidate):
         msg = "Invalid path"
         raise RefusedError(msg)
     if not allow_root and candidate == root:
         msg = "The root cannot be deleted"
         raise RefusedError(msg)
     return candidate
+
+
+def _kept_out(root: Path, candidate: Path) -> bool:
+    return root == _roots()["uploads"] and any(
+        candidate.is_relative_to(root / name) for name in KEPT_OUT_OF_UPLOADS
+    )
+
+
+def within_roots(path: str | Path) -> bool:
+    if "\0" in str(path):
+        return False
+    try:
+        resolved = Path(path).resolve()
+    except OSError:
+        logger.warning("path %s cannot be resolved", path, exc_info=True)
+        return False
+    return any(
+        resolved.is_relative_to(root) and not _kept_out(root, resolved)
+        for root in _roots().values()
+    )
 
 
 def _human_size(num_bytes: int) -> str:
@@ -94,8 +120,14 @@ def folder(root_name: str, rel_dir: str) -> Folder:
     for entry in directory.iterdir():
         rel = str(entry.relative_to(root)).replace("\\", "/")
         try:
+            if _kept_out(root, entry.resolve()):
+                continue
             st = entry.stat()
-        except OSError:  # silent: deleted while listing, or a broken symlink
+        except FileNotFoundError:
+            logger.debug("file manager: %s vanished", rel, exc_info=True)
+            continue
+        except OSError:
+            logger.warning("file manager: %s skipped", rel, exc_info=True)
             continue
         if entry.info.is_dir():
             dirs.append(DirEntry(name=entry.name, rel_path=rel, mtime=st.st_mtime))

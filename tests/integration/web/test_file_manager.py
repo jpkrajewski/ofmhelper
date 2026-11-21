@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import UserForm
 from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.files.disk import within_roots
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
 
@@ -163,7 +165,7 @@ def assets(monkeypatch, tmp_path):
 def _run(tmp_path, actor: int, task: str, name: str, *, status: str = "done") -> str:
     job_id = create_job(task, {"model": "wan-3"}, actor=str(actor))
     if status == "done":
-        path = tmp_path / name
+        path = tmp_path / "kieai_out" / name
         Image.new("RGB", (64, 64), "blue").save(path)
         run_job(job_id, lambda: [{"name": name, "path": str(path)}], {})
     elif status == "failed":
@@ -239,7 +241,7 @@ def test_a_long_clone_is_filed_under_clone(client, tmp_path, assets):
 def test_a_done_run_whose_file_is_gone_shows_nothing(client, tmp_path, assets):
     ann = users.add_user(UserForm(email="ann@example.com"))
     _run(tmp_path, ann.id, "download_videos", "v.png")
-    (tmp_path / "v.png").unlink()
+    (tmp_path / "kieai_out" / "v.png").unlink()
     assert "fm-tile" not in _section(client, ann.id, "downloads")
 
 
@@ -251,7 +253,7 @@ def test_deleting_a_runs_file_goes_back_to_its_section(client, tmp_path, assets)
 
     assert r.status_code == 303
     assert r.headers["location"] == f"/file-manager?user={ann.id}&section=clone"
-    assert not (tmp_path / "gone.png").exists()
+    assert not (tmp_path / "kieai_out" / "gone.png").exists()
     assert "gone.png" not in _section(client, ann.id, "clone")
 
 
@@ -318,3 +320,70 @@ def test_a_user_sees_no_ones_files(tmp_path, assets):
     assert c.get(f"/file-manager/runs/{job}/0").status_code == 403
     assert c.post(f"/file-manager/assets/{ann.id}/upload").status_code == 403
     c.close()
+
+
+def test_a_run_result_outside_the_roots_is_not_served_or_deleted(
+    client, tmp_path, assets
+):
+    ann = users.add_user(UserForm(email="ann@example.com"))
+    outside = tmp_path / "outside.png"
+    Image.new("RGB", (8, 8)).save(outside)
+    job = create_job("clone", {"model": "wan-3"}, actor=str(ann.id))
+    run_job(job, lambda: [{"name": "outside.png", "path": str(outside)}], {})
+
+    assert client.get(f"/file-manager/runs/{job}/0").status_code == 404
+    assert client.post(f"/file-manager/runs/{job}/0/delete").status_code == 404
+    assert outside.exists()
+    assert "fm-tile" not in _section(client, ann.id, "clone")
+
+
+def test_the_phones_backup_folder_is_never_listed_or_opened(client, tmp_path):
+    kept = tmp_path / "uploads" / "backups" / "phones"
+    kept.mkdir(parents=True)
+    (kept / "dump.enc").write_bytes(b"secret")
+    (tmp_path / "uploads" / "visible.txt").write_text("x")
+
+    listing = client.get("/file-manager/disk", params={"root": "uploads"}).text
+
+    assert "visible.txt" in listing
+    assert "backups" not in listing
+    for route in ("view", "download"):
+        r = client.get(
+            f"/file-manager/{route}",
+            params={"root": "uploads", "path": "backups/phones/dump.enc"},
+        )
+        assert r.status_code == 400
+    r = client.post(
+        "/file-manager/delete",
+        data={"root": "uploads", "path": "backups"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    assert (kept / "dump.enc").exists()
+
+
+def _symlink_loop(tmp_path):
+    loop = tmp_path / "kieai_out" / "loop"
+    try:
+        loop.symlink_to(loop)
+    except OSError:
+        pytest.skip("symlinks need privileges here")
+    return loop
+
+
+def test_a_symlink_loop_does_not_break_the_listing(client, tmp_path):
+    (tmp_path / "kieai_out" / "ok.txt").write_text("x")
+    _symlink_loop(tmp_path)
+
+    page = _page(client)
+
+    assert "ok.txt" in page
+
+
+def test_a_path_that_cannot_be_resolved_is_outside_the_roots(tmp_path, monkeypatch):
+    def fail(self, strict=False):
+        raise OSError
+
+    monkeypatch.setattr(Path, "resolve", fail)
+
+    assert within_roots(tmp_path / "kieai_out" / "loop") is False

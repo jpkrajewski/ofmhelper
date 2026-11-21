@@ -8,7 +8,13 @@ from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.signin.consent import redirect_uri
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
-from ofmhelpers.features.signin.state import HOME, SignInState, safe_next, unseal
+from ofmhelpers.features.signin.state import (
+    HOME,
+    SignInState,
+    safe_next,
+    take_verifier,
+    unseal,
+)
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
 from ofmhelpers.log import get_logger
 
@@ -34,7 +40,9 @@ def _identity(provider: Provider, back: Callback) -> _Verified:
         msg = f"{provider.label} sign-in was cancelled"
         raise SignInError(msg)
     carried = unseal(back.cookie, provider.name, back.state)
-    reply = provider.exchange(back.code, redirect_uri(provider, back.site))
+    reply = provider.exchange(
+        back.code, redirect_uri(provider, back.site), take_verifier(carried.state)
+    )
     return _Verified(carried=carried, identity=provider.identity(reply, carried.nonce))
 
 

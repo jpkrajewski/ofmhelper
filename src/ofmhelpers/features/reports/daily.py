@@ -6,6 +6,7 @@ lazy from datetime import date
 from pydantic import BaseModel
 
 from ofmhelpers.cache import get_text, set_text
+from ofmhelpers.config import settings
 from ofmhelpers.db.chats.schema import ChatPlatform
 from ofmhelpers.db.report_runs import store as report_runs
 from ofmhelpers.db.report_runs.schema import DayCount
@@ -267,9 +268,10 @@ def _fresh_links(owner: int) -> list[ShortLink]:
         for p in link_providers()
         if link_keys.api_key(owner, p)
     ]
-    link_store.mark_due(owner)
-    for key in link_store.claim_due(keyed):
-        sync_links(key.user_id, key.provider)
+    if settings.links.syncing_in_background(settings.infra.production):
+        link_store.mark_due(owner)
+        for key in link_store.claim_due(keyed):
+            sync_links(key.user_id, key.provider)
     return link_store.list_links(owner)
 
 

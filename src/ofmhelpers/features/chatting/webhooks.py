@@ -21,7 +21,7 @@ from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.features.reports.mass import tell_mass
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.chats.schema import ChatModel
+lazy from ofmhelpers.db.chats.schema import ChatModel, ChatModels
 lazy from ofmhelpers.integrations.chat_source import ChatSource
 
 logger = get_logger(__name__)
@@ -147,15 +147,31 @@ def cover_models(source: ChatSource, models: list[ChatModel]) -> None:
     _save_rows(source, stale, made)
 
 
+def drop_unreached(source: ChatSource, reached: ChatModels) -> None:
+    if reached.failed or reached.unread or not reached.found:
+        return
+    dropped = chats.drop_webhooks_except(
+        source.platform, [model.model_id for model in reached.found]
+    )
+    for row in dropped:
+        logger.warning(
+            "%s: webhook row of %s removed, no account or key reaches it; its subscription stays live",
+            source.platform.value,
+            row.model_username,
+        )
+
+
 def ensure_destinations() -> None:
     for source in configured_sources():
         url = webhook_url(source.platform)
+        reached = source.models()
+        drop_unreached(source, reached)
         if source.shared_secret():
-            cover_models(source, source.models().found)
+            cover_models(source, reached.found)
             continue
         mine = {w.model_id: w for w in chats.webhooks(source.platform)}
         owners: dict[str, list[ChatModel]] = {}
-        for model in source.models().found:
+        for model in reached.found:
             owners.setdefault(model.owner, []).append(model)
         for owner, models in owners.items():
             try:

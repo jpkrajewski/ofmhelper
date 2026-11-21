@@ -182,7 +182,7 @@ def test_one_apify_batch_spends_at_a_time(fakes):
     lock = get_redis().lock("lock:accounts-apify", timeout=60)
     assert lock.acquire(blocking=False)
     try:
-        with instagram_apify._one_at_a_time(1, wait_s=0.1) as held:
+        with instagram_apify.one_apify_batch(1, wait_s=0.1) as held:
             pass
     finally:
         lock.release()

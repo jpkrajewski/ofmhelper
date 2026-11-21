@@ -10,6 +10,7 @@ from ofmhelpers.cache import get_redis
 from ofmhelpers.db.audit_log import store as audit_log
 from ofmhelpers.db.event_targets import store as event_targets
 from ofmhelpers.db.users.schema import Role
+from ofmhelpers.features.account.telegram import PendingLink
 from ofmhelpers.features.events import Event
 from ofmhelpers.features.events.dispatch import dispatch
 from ofmhelpers.features.reports import asks
@@ -73,7 +74,12 @@ def test_a_link_works_once():
 
 
 def test_a_link_of_a_person_deleted_since_is_refused_and_read_once():
-    get_redis().set("telegram:link:gone-person", "987654321")
+    get_redis().set(
+        "telegram:link:gone-person",
+        PendingLink(
+            user_id=987_654_321, issued_at=time.time(), stamp=""
+        ).model_dump_json(),
+    )
     fake_telegram().wrote(555, text="/start gone-person")
 
     asks.answer_asks()

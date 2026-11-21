@@ -1,10 +1,18 @@
 import secrets
 
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.features.signin.state import SignInState, safe_next, seal, unseal
+from ofmhelpers.features.refusals import NotFoundError, RefusedError, UnavailableError
+from ofmhelpers.features.signin.state import (
+    SignInState,
+    keep_verifier,
+    safe_next,
+    seal,
+    unseal,
+)
+from ofmhelpers.integrations.pkce import pkce_pair
 from ofmhelpers.integrations.signin import SignInError, configured, providers
 from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
 from ofmhelpers.log import get_logger
@@ -39,6 +47,7 @@ def redirect_uri(provider: Provider, site: str) -> str:
 def begin(
     provider: Provider, site: str, next_url: str, link_user_id: int | None
 ) -> ConsentStart:
+    pkce = pkce_pair()
     carried = SignInState(
         provider=provider.name,
         state=secrets.token_urlsafe(24),
@@ -46,6 +55,14 @@ def begin(
         next=safe_next(next_url),
         link_user_id=link_user_id,
     )
+    try:
+        keep_verifier(carried.state, pkce.verifier)
+    except RedisError as exc:
+        logger.warning(
+            "sign-in: verifier not kept for %s", provider.name, exc_info=True
+        )
+        msg = "Sign-in is not available right now. Try again in a minute."
+        raise UnavailableError(msg) from exc
     if settings.infra.fake_externals and not provider.local_consent:
         url = f"/auth/fake-consent?provider={provider.name}&state={carried.state}"
     else:
@@ -54,6 +71,7 @@ def begin(
             carried.state,
             carried.nonce,
             connect=link_user_id is not None,
+            challenge=pkce.challenge,
         )
     return ConsentStart(url=url, cookie=seal(carried))
 

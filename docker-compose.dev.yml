@@ -64,6 +64,9 @@ services:
       # FastAPI's debug mode: a crash answers its traceback page. The web
       # service only; production refuses to start with it (InfraSettings).
       - OFM_DEBUG=1
+      # Dev tunnel only: a request from a *.trycloudflare.com host gets the
+      # bridge's rule (its own slugs and beacon, 404 for every other path).
+      - OFM_LINKS_TUNNEL_HOST_SUFFIXES=.trycloudflare.com
     dns: *public-dns
     volumes:
       # Merged with (not replacing) the base file's volume list.
@@ -117,13 +120,14 @@ services:
   # same site file: http://localhost:8080 goes through it, :8000 straight to
   # the app. The image is nginx.org's stable; the server has Ubuntu's package.
   nginx:
-    image: nginx:1.28.0
+    image: nginx:1.28.0@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/ofmhelpers.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/upstream.dev.conf:/etc/nginx/conf.d/upstream.conf:ro
+      - ./nginx/tunnel.dev.conf:/etc/nginx/conf.d/tunnel.conf:ro
     depends_on:
       - ofmhelpers
     networks:
@@ -203,7 +207,7 @@ services:
   # TRUNCATE before each test) is as cheap as it gets, and no test can
   # reach the dev data.
   postgres-test:
-    image: postgres:16
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     profiles:
       - test
     environment:
@@ -231,7 +235,7 @@ services:
       - internal
 
   redis-test:
-    image: redis:7
+    image: redis:7@sha256:a8f08480e1f88f2647fed492d1178c06abb0d0c1fbf02c682a61e2f483fb3954
     profiles:
       - test
     command: ["redis-server", "--save", "", "--appendonly", "no"]
@@ -258,19 +262,25 @@ services:
 
   # RQ job dashboard. Reuses the app image (rq-dashboard is a project
   # dependency) so there is no extra unpinned third-party image to trust.
+  # HTTP basic auth: user ofmhelpers, password REDIS_PASSWORD from .env (it
+  # can requeue and delete jobs; security audit 2026-11-18, item 222).
   rq-dashboard:
     build: .
     container_name: ofmhelpers-rq-dashboard
     profiles:
       - dev
+    healthcheck:
+      disable: true
     command:
       - rq-dashboard
-      - --redis-url
-      - redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
       - --bind
       - 0.0.0.0
       - --port
       - "9181"
+    environment:
+      - RQ_DASHBOARD_REDIS_URL=redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
+      - RQ_DASHBOARD_USERNAME=ofmhelpers
+      - RQ_DASHBOARD_PASSWORD=${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
     ports:
       - "127.0.0.1:9181:9181"
     depends_on:
@@ -291,14 +301,22 @@ services:
   # Add that host on /self-links (Add a domain), generate a self link on
   # /links, and open it on the phone. The tunnel sets CF-Connecting-IP and the
   # visitor-location headers, so dev logs clicks with geo just like prod.
+  # It goes through the nginx service's :8081 (nginx/tunnel.dev.conf), which
+  # forwards only the bridge's two requests: GET /<slug> and POST
+  # /api/track-direct. Dev holds a production snapshot, so no other page of
+  # the app is reachable from the internet (security audit 2026-11-18, items
+  # 216 and 220). The app's OFM_LINKS_TUNNEL_HOST_SUFFIXES only opens that gate
+  # for any *.trycloudflare.com host: slugs still resolve per registered host,
+  # so the tunnel's current host must be added as a self-link domain on /links.
+  # Stop it after the phone test.
   cloudflared:
-    image: cloudflare/cloudflared:2024.12.2
+    image: cloudflare/cloudflared:2024.12.2@sha256:cb38f3f30910a7d51545118a179b8516eb7066eac61855d62ce6ed733c54ce70
     container_name: ofmhelpers-cloudflared
     profiles:
       - dev
-    command: ["tunnel", "--no-autoupdate", "--url", "http://ofmhelpers:8000"]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://nginx:8081"]
     depends_on:
-      - ofmhelpers
+      - nginx
     networks:
       - internal
     security_opt:

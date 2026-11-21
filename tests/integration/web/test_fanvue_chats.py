@@ -32,6 +32,8 @@ from ofmhelpers.web.main import app
 pytestmark = pytest.mark.usefixtures("fake_externals")
 
 LATE = 600
+USER_ID = 7
+SESSION = "session-a"
 PLATFORM = ChatPlatform.FANVUE
 AGENCY = fanvue_fake.AGENCY
 HANDLE = fanvue_fake.CREATOR_HANDLE
@@ -314,9 +316,9 @@ def test_a_read_failing_is_an_outage(side):
 def test_connecting_keeps_the_login_for_this_server(monkeypatch):
     monkeypatch.setenv("FANVUE_CLIENT_ID", "fake-client")
     monkeypatch.setenv("FANVUE_CLIENT_SECRET", "fake-secret")
-    state = parse_qs(urlsplit(connect_url()).query)["state"][0]
+    state = parse_qs(urlsplit(connect_url(USER_ID, SESSION)).query)["state"][0]
 
-    assert finish(fanvue_fake.GOOD_CODE, state) is True
+    assert finish(USER_ID, SESSION, fanvue_fake.GOOD_CODE, state) is True
 
     [account] = chats.accounts(PLATFORM)
     assert (account.username, account.is_agency) == (fanvue_fake.AGENCY_HANDLE, True)
@@ -326,10 +328,10 @@ def test_a_trip_that_is_not_ours_or_a_bad_code_connects_nobody(monkeypatch):
     monkeypatch.setenv("FANVUE_CLIENT_ID", "fake-client")
     monkeypatch.setenv("FANVUE_CLIENT_SECRET", "fake-secret")
 
-    assert finish(fanvue_fake.GOOD_CODE, "no-such-trip") is False
+    assert finish(USER_ID, SESSION, fanvue_fake.GOOD_CODE, "no-such-trip") is False
 
-    state = parse_qs(urlsplit(connect_url()).query)["state"][0]
-    assert finish("wrong-code", state) is False
+    state = parse_qs(urlsplit(connect_url(USER_ID, SESSION)).query)["state"][0]
+    assert finish(USER_ID, SESSION, "wrong-code", state) is False
     assert chats.accounts(PLATFORM) == []
 
 

@@ -24,6 +24,10 @@ async def _current_user(request: Request) -> SessionUser:
     return AuthMiddleware.user(request)
 
 
+async def _session_id(request: Request) -> str:
+    return AuthMiddleware.session_id(request)
+
+
 async def _actor(request: Request) -> str:
     return AuthMiddleware.actor(request)
 
@@ -77,6 +81,7 @@ def _api_keys(request: Request) -> MappingProxyType[str, str]:
 Viewing = Annotated[Viewer, Depends(_viewer)]
 CurrentUser = Annotated[SessionUser, Depends(_current_user)]
 SignedIn = Annotated[Callable[[], Reader | None], Depends(_signed_in)]
+SessionId = Annotated[str, Depends(_session_id)]
 Actor = Annotated[str, Depends(_actor)]
 Actors = Annotated[frozenset[str], Depends(_actors)]
 OwnerId = Annotated[int, Depends(_owner_id)]

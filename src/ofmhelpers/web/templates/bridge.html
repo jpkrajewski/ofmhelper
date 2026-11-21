@@ -35,7 +35,7 @@
         <div class="step"><div class="num">2</div><div>Select "Open in external browser"</div></div>
     </div>
     <button class="btn" id="bn" type="button">Open in browser</button>
-    <script>
+    <script nonce="{{ csp_nonce(request) }}">
     (function () {
         var ua = navigator.userAgent || '',
             ios = /iPhone|iPad|iPod/i.test(ua),
@@ -62,7 +62,7 @@
                     document.body.appendChild(anchor);
                     try { anchor.click(); } finally { document.body.removeChild(anchor); }
                 } else {
-                    window.location.href = 'intent://' + target.host + target.pathname + target.search + target.hash + '#Intent;scheme=' + target.protocol.slice(0, -1) + ';S.browser_fallback_url=' + encodeURIComponent(target.href) + ';end';
+                    window.location.href = 'intent://' + target.host + target.pathname + target.search + '#Intent;scheme=' + target.protocol.slice(0, -1) + ';S.browser_fallback_url=' + encodeURIComponent(target.href) + ';end';
                 }
             } catch (e) {}
         }
@@ -85,7 +85,7 @@
             Or <a id="dlink" href="#" target="_blank" rel="noopener">tap here to continue</a>.
         </div>
     </div>
-    <script>
+    <script nonce="{{ csp_nonce(request) }}">
     (function () {
         var dest = {{ destination | tojson }};
         var slug = {{ slug | tojson }};

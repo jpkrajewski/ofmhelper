@@ -63,7 +63,7 @@ def reel_input(handles: list[str], limit: int, days: int) -> ReelScraperInput:
     )
 
 
-def _parsed[T: BaseModel](
+def parsed_items[T: BaseModel](
     items: list[DatasetItem], model: type[T], what: str
 ) -> list[T]:
     found: list[T] = []
@@ -130,8 +130,8 @@ def _stats(profile: ApifyProfile, reels: list[ApifyReel], now: float) -> Account
 
 
 @contextmanager
-def _one_at_a_time(keys: int, wait_s: float | None = None) -> Generator[bool]:
-    longest = keys * 2 * (settings.accounts.apify_run_timeout_s + 60) + 60
+def one_apify_batch(runs: int, wait_s: float | None = None) -> Generator[bool]:
+    longest = runs * (settings.accounts.apify_run_timeout_s + 60) + 60
     wait = longest if wait_s is None else wait_s
     lock = get_redis().lock(_LOCK, timeout=longest, blocking_timeout=wait)
     try:
@@ -166,7 +166,7 @@ class ApifyInstagramSource(AccountSource):
         owners: dict[str, list[str]] = {}
         for target in targets:
             owners.setdefault(target.handle, []).append(target.key)
-        with _one_at_a_time(len(keys)) as held:
+        with one_apify_batch(2 * len(keys)) as held:
             read = (
                 self._through_keys(keys, list(owners)) if held else MappingProxyType({})
             )
@@ -218,7 +218,7 @@ class ApifyInstagramSource(AccountSource):
             s.apify_profile_actor, profile_input(handles), s.apify_run_timeout_s
         )
         profiles: dict[str, ApifyProfile] = {}
-        for profile in _parsed(client.items(run), ApifyProfile, "profile"):
+        for profile in parsed_items(client.items(run), ApifyProfile, "profile"):
             handle = _handle_of(profile, asked)
             if handle is not None:
                 profiles[handle] = profile
@@ -277,7 +277,7 @@ class ApifyInstagramSource(AccountSource):
             )
             return _ReelRun(reels=None, cost_usd=0.0)
         reels: dict[str, list[ApifyReel]] = {h: [] for h in public}
-        for reel in _parsed(items, ApifyReel, "reel"):
+        for reel in parsed_items(items, ApifyReel, "reel"):
             handle = handle_of.get(reel.owner.lower())
             if handle is not None:
                 reels[handle].append(reel)

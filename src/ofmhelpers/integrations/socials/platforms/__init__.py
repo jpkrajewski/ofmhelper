@@ -3,8 +3,14 @@ from types import MappingProxyType
 
 from ofmhelpers.integrations.socials.platforms.base import Platform
 from ofmhelpers.integrations.socials.platforms.instagram import InstagramPlatform
+from ofmhelpers.integrations.socials.platforms.snapchat import SnapchatPlatform
+from ofmhelpers.integrations.socials.platforms.x import XPlatform
 
-_PLATFORM_TYPES: tuple[type[Platform], ...] = (InstagramPlatform,)
+_PLATFORM_TYPES: tuple[type[Platform], ...] = (
+    InstagramPlatform,
+    SnapchatPlatform,
+    XPlatform,
+)
 
 
 @lru_cache(maxsize=1)

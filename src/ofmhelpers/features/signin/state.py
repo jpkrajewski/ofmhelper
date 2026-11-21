@@ -2,15 +2,21 @@ import secrets
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from pydantic import BaseModel, ValidationError
+from redis.exceptions import RedisError
 lazy from fastapi.responses import Response
 
+from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 STATE_COOKIE = "ofm_signin"
 _COOKIE_PATH = "/auth/"
 HOME = "/home"
 _SPACE = 0x20
+_VERIFIER_KEY = "signin:verifier:{state}"
 
 
 class SignInState(BaseModel):
@@ -54,6 +60,25 @@ def unseal(cookie: str, name: str, state: str) -> SignInState:
         msg = "This sign-in was not started here: try again"
         raise SignInError(msg)
     return carried
+
+
+def keep_verifier(state: str, verifier: str) -> None:
+    get_redis().set(
+        _VERIFIER_KEY.format(state=state), verifier, ex=settings.signin.state_ttl_s
+    )
+
+
+def take_verifier(state: str) -> str:
+    try:
+        raw = get_redis().getdel(_VERIFIER_KEY.format(state=state))
+    except RedisError as exc:
+        logger.warning("sign-in: verifier store unreachable", exc_info=True)
+        msg = "Sign-in did not work. Try again."
+        raise SignInError(msg) from exc
+    if raw is None:
+        msg = "This sign-in took too long or was already used: try again"
+        raise SignInError(msg)
+    return raw.decode() if isinstance(raw, bytes) else raw
 
 
 def carry_state(response: Response, sealed: str) -> None:

@@ -87,6 +87,9 @@ def sweeps() -> list[Sweep]:
             name="link sync",
             run=link_sync.queue_due_syncs,
             interval_s=lambda: settings.links.sync_check_interval_s,
+            enabled=lambda: settings.links.syncing_in_background(
+                settings.infra.production
+            ),
         ),
         Sweep(
             name="distribution",

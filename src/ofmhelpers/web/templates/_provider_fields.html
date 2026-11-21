@@ -19,7 +19,7 @@
            data-lpignore="true" data-1p-ignore data-bwignore="true" data-dashlane-ignore="true"
            data-form-type="other">
 </div>
-<script>
+<script nonce="{{ csp_nonce(request) }}">
 (function () {
     // Browsers and password-manager extensions routinely ignore
     // autocomplete="off" on password fields and replace the server-rendered

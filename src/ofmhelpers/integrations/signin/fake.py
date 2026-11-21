@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 from urllib.parse import parse_qs, urlsplit
 lazy from collections.abc import Mapping
 
@@ -40,9 +41,18 @@ def _account(code: str) -> FakeAccount | None:
         return None
 
 
-def _id_token(host: str, account: FakeAccount) -> str:
+_ISSUERS = {
+    "oauth2.googleapis.com": "https://accounts.google.com",
+    "appleid.apple.com": "https://appleid.apple.com",
+}
+_VALID_S = 600
+
+
+def _id_token(host: str, account: FakeAccount, client_id: str) -> str:
     claims = {
-        "iss": f"https://{host}",
+        "iss": _ISSUERS[host],
+        "aud": client_id,
+        "exp": time.time() + _VALID_S,
         "sub": account.subject or f"{host}:{account.email}",
         "email": account.email,
         "email_verified": "true" if account.email_verified else "false",
@@ -56,11 +66,15 @@ def _id_token(host: str, account: FakeAccount) -> str:
 def token_reply(request: requests.PreparedRequest) -> FakeReply:
     body = request.body or ""
     raw = body.decode() if isinstance(body, bytes) else str(body)
-    account = _account(parse_qs(raw).get("code", [""])[0])
+    fields = parse_qs(raw)
+    account = _account(fields.get("code", [""])[0])
     if account is None:
         return FakeReply.json_body({"error": "invalid_grant"}, status=400)
     host = urlsplit(request.url or "").hostname or ""
-    reply = {"access_token": "fake-access", "id_token": _id_token(host, account)}
+    reply = {
+        "access_token": "fake-access",
+        "id_token": _id_token(host, account, fields.get("client_id", [""])[0]),
+    }
     if host == "oauth2.googleapis.com" and account.refresh_token:
         reply["refresh_token"] = f"fake-refresh:{account.email}"
     return FakeReply.json_body(reply)

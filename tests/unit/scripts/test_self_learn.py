@@ -239,7 +239,7 @@ def test_the_digest_reports_test_runs_reviews_stops_pushes_and_peak_context(tmp_
                     (
                         "a2",
                         "Agent",
-                        {"description": "Review idempotency", "subagent_type": "x"},
+                        {"description": "Fix round", "subagent_type": "x"},
                     ),
                 ],
             ),
@@ -279,13 +279,168 @@ def test_the_digest_reports_test_runs_reviews_stops_pushes_and_peak_context(tmp_
         ("push", 0, "no result seen"),
     ]
     assert [(r.what, r.count) for r in d.reviews] == [
-        ("Review idempotency", 2),
+        ("Review idempotency", 1),
         ("kimi review run", 1),
     ]
-    assert (d.task_stops, d.refused_pushes) == (1, 2)
+    assert (d.task_stops, d.refused_pushes) == (1, 1)
     [cost] = d.costs
     assert cost.peak_context_tokens == 900_000
     report = self_learn.render(d)
     assert "- bbbb2222 deploy: 410s, green" in report
     assert "TaskStop calls: 1" in report
     assert "900,000" in report
+
+
+def _notification(minute: int, tool_id: str) -> dict:
+    return {
+        "parentUuid": "p",
+        "type": "attachment",
+        "timestamp": _at(minute),
+        "attachment": {
+            "type": "queued_command",
+            "prompt": f"<task-notification><task-id>b9</task-id><tool-use-id>{tool_id}</tool-use-id><status>completed</status></task-notification>",
+        },
+    }
+
+
+def test_runs_that_end_in_a_file_are_paired_with_the_summary_read_later(tmp_path):
+    logs = tmp_path / "logs"
+    quiet = ' > /dev/null 2>&1; echo "exit=$?"'
+    _write(
+        logs / "cccc3333-main.jsonl",
+        [
+            _prompt(1, "run it"),
+            _assistant(
+                2,
+                "m1",
+                [
+                    ("f1", "Bash", {"command": "scripts/test.sh tests/a.py" + quiet}),
+                ],
+            ),
+            _results(
+                5, [("f1", "exit=0\nSUMMARY exit 0: 3 passed\nRESULT GREEN", False)]
+            ),
+            _assistant(
+                6,
+                "m2",
+                [("f2", "Bash", {"command": "scripts/test.sh tests/b.py" + quiet})],
+            ),
+            _results(6, [("f2", "Command running in background with ID: b9", False)]),
+            _notification(16, "f2"),
+            _assistant(
+                17,
+                "m3",
+                [("r1", "Bash", {"command": "cat reports/latest/summary.txt"})],
+            ),
+            _results(17, [("r1", "SUMMARY exit 1: 2 failed\nRESULT NOT GREEN", False)]),
+            _assistant(
+                18,
+                "m4",
+                [("f3", "Bash", {"command": "scripts/test.sh tests/c.py" + quiet})],
+            ),
+            _results(19, [("f3", "", False)]),
+            _prompt(20, "it said failed to push and RESULT GREEN, why?"),
+            _assistant(
+                21,
+                "m5",
+                [
+                    (
+                        "a1",
+                        "Agent",
+                        {
+                            "description": "Fix round after review",
+                            "subagent_type": "general-purpose",
+                        },
+                    ),
+                    ("g1", "Bash", {"command": "git status"}),
+                ],
+            ),
+            _results(22, [("a1", "done", False), ("g1", "failed to push", False)]),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [(t.preset, t.seconds, t.result) for t in d.test_runs] == [
+        ("files", 180, "green"),
+        ("files", 600, "exit 1"),
+        ("files", 0, "no result seen"),
+    ]
+    assert d.reviews == []
+    assert d.refused_pushes == 0
+
+
+def test_a_stray_green_in_other_output_does_not_finish_a_run(tmp_path):
+    logs = tmp_path / "logs"
+    quiet = ' > /dev/null 2>&1; echo "exit=$?"'
+    _write(
+        logs / "dddd4444-main.jsonl",
+        [
+            _prompt(1, "run it"),
+            _assistant(
+                2,
+                "m1",
+                [("f1", "Bash", {"command": "scripts/test.sh tests/a.py" + quiet})],
+            ),
+            _results(3, [("f1", "", False)]),
+            _assistant(4, "m2", [("o1", "Bash", {"command": "cat notes.txt"})]),
+            _results(5, [("o1", "SUMMARY exit 0: 3 passed\nRESULT GREEN", False)]),
+            _assistant(
+                6,
+                "m3",
+                [("s1", "Bash", {"command": "cat reports/latest/summary.txt"})],
+            ),
+            _results(7, [("s1", "SUMMARY exit 1: 2 failed\nRESULT NOT GREEN", False)]),
+            _assistant(
+                8,
+                "m4",
+                [("f2", "Bash", {"command": "scripts/test.sh tests/b.py"})],
+            ),
+            _results(9, [("f2", "still going", False)]),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [(t.result) for t in d.test_runs] == ["exit 1", "no result seen"]
+
+
+def test_kimi_reviews_are_found_behind_timeout_and_the_skill_script(tmp_path):
+    logs = tmp_path / "logs"
+    commands = [
+        "timeout 600 kimi review",
+        "python .claude/skills/kimi/ask.py review the diff",
+        "cd x && kimi -p review",
+        "echo kimi_review",
+    ]
+    _write(
+        logs / "eeee5555-main.jsonl",
+        [
+            _prompt(1, "go"),
+            _assistant(
+                2,
+                "m1",
+                [(f"k{i}", "Bash", {"command": c}) for i, c in enumerate(commands)],
+            ),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert sum(r.count for r in d.reviews) == 3
+
+
+def test_an_attachment_line_without_its_key_is_skipped(tmp_path):
+    logs = tmp_path / "logs"
+    _write(
+        logs / "ffff6666-main.jsonl",
+        [
+            _prompt(1, "go"),
+            {"type": "attachment", "timestamp": _at(2)},
+            _assistant(3, "m1", [("g1", "Bash", {"command": "git status"})]),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert d.test_runs == []

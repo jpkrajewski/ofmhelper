@@ -9,6 +9,7 @@ from sqlalchemy.exc import DBAPIError
 
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.drive_folders import store as drive_folders
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.phone_revisions import store
 from ofmhelpers.db.session import session_scope
@@ -158,6 +159,18 @@ def test_a_deleted_phone_comes_back_with_its_accounts_and_passwords(owner):
     assert _usernames(owner) == ["danewalker"]
     secrets = devices.secrets(login, owner)
     assert (secrets.password, secrets.backup_codes) == (PASSWORD, CODES)
+
+
+def test_a_restore_shows_the_accounts_back_in_the_drive_targets_at_once(owner):
+    phone = _phone(owner)
+    login = _login(phone, owner)
+    before = _revisions(owner)[0].id
+    devices.delete_device(phone, owner)
+    assert drive_folders.targets(owner) == []
+
+    store.restore(before, owner)
+
+    assert [t.login_id for t in drive_folders.targets(owner)] == [login]
 
 
 def test_what_was_added_since_leaves_and_a_restore_can_be_undone(owner):

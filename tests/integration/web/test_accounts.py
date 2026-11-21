@@ -114,7 +114,7 @@ def _snapshot(handle: str, followers: int, age_s: float) -> None:
 def test_page_is_in_the_nav(client):
     html = client.get("/accounts").text
     assert 'href="/accounts"' in html
-    assert "No accounts yet" in html
+    assert "No Instagram accounts yet" in html
     assert 'id="accounts-add"' in html
 
 

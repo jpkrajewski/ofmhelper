@@ -23,6 +23,7 @@ RANK = {
     "cache": 1,
     "config": 1,
 }
+TOP_LEVEL_MODULES = {"acting", "log", "redact"}
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}
 MAX_ROUTE_LINES = 25
 QUEUE_MACHINERY = ("features/jobs/", "features/events/")
@@ -276,6 +277,16 @@ def check(found: set[str], known: set[str]) -> None:
         "breaks the rule: fix the code, not the baseline"
     )
     assert sorted(known - found) == [], "fixed: delete these lines from baseline.json"
+
+
+def test_every_top_level_name_is_ranked_or_a_known_module():
+    names = {
+        path.stem
+        for path in SRC.iterdir()
+        if path.name not in {"__init__.py", "__pycache__"}
+    }
+
+    assert sorted(names - RANK.keys() - TOP_LEVEL_MODULES) == []
 
 
 def test_layers_import_downwards_only():

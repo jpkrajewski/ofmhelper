@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 from typing import Protocol, runtime_checkable
 
 import requests
@@ -20,6 +21,9 @@ class Claims(BaseModel):
     email_verified: bool = False
     name: str = ""
     nonce: str = ""
+    iss: str = ""
+    aud: str | list[str] = ""
+    exp: float = 0
 
     @field_validator("email", mode="after")
     @classmethod
@@ -44,10 +48,16 @@ class Provider(Protocol):
     def configured(self) -> bool: ...
 
     def consent_url(
-        self, redirect_uri: str, state: str, nonce: str, *, connect: bool
+        self,
+        redirect_uri: str,
+        state: str,
+        nonce: str,
+        *,
+        connect: bool,
+        challenge: str,
     ) -> str: ...
 
-    def exchange(self, code: str, redirect_uri: str) -> TokenReply: ...
+    def exchange(self, code: str, redirect_uri: str, verifier: str) -> TokenReply: ...
 
     def identity(self, reply: TokenReply, nonce: str) -> Identity: ...
 
@@ -62,8 +72,23 @@ def claims(id_token: str) -> Claims:
         raise SignInError(msg) from exc
 
 
-def checked(found: Claims, nonce: str) -> Claims:
-    if not nonce or found.nonce != nonce:
+def checked(
+    found: Claims,
+    nonce: str,
+    *,
+    issuers: tuple[str, ...],
+    audience: str,
+    now: float | None = None,
+) -> Claims:
+    audiences = [found.aud] if isinstance(found.aud, str) else found.aud
+    current = time.time() if now is None else now
+    if (
+        not nonce
+        or found.nonce != nonce
+        or found.iss not in issuers
+        or audience not in audiences
+        or found.exp <= current
+    ):
         msg = "The sign-in answer did not match this sign-in: try again"
         raise SignInError(msg)
     return found

@@ -51,7 +51,7 @@
 </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce(request) }}">
 // Same pattern as /generate: only one tool's fieldset is shown/enabled at a
 // time (`disabled` keeps FormData from submitting the inactive tools'
 // same-named fields, display:none hides them).

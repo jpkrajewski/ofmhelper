@@ -1,12 +1,16 @@
+import ast
+import re
 from typing import Any
 lazy from pathlib import Path
 
 import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict
+from pydantic_settings import BaseSettings
 from repo_paths import REPO
 
 from ofmhelpers.cache import QueueName
+from ofmhelpers.config import settings
 
 DEPLOYS = [
     REPO / "scripts" / "deploy.sh",
@@ -168,6 +172,7 @@ def test_the_database_and_redis_passwords_are_required_never_a_default():
     services = _compose().services
     postgres = services["postgres"].model_dump()["environment"]
     app = services["ofmhelpers"].model_dump()["environment"]
+    app_lines = [f"{key}={value}" for key, value in app.items()]
     redis = services["redis"].model_dump()
     required_pg = "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
     required_redis = "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"
@@ -175,8 +180,8 @@ def test_the_database_and_redis_passwords_are_required_never_a_default():
     assert (
         f"OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:{required_pg}"
         "@postgres:5432/ofmhelpers"
-    ) in app
-    assert f"OFM_REDIS_URL=redis://:{required_redis}@redis:6379/0" in app
+    ) in app_lines
+    assert f"OFM_REDIS_URL=redis://:{required_redis}@redis:6379/0" in app_lines
     assert redis["command"][-2:] == ["--requirepass", required_redis]
     whole = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
     assert ":-ofmhelpers}" not in whole
@@ -239,7 +244,7 @@ def _mount_of(path: str, volumes: list[str]) -> str:
 @pytest.mark.parametrize("name", ["ofmhelpers", *sorted(WORKERS)])
 def test_results_land_in_the_asset_stores_mount(name: str):
     service = _compose().services[name].model_dump()
-    env = dict(line.split("=", 1) for line in service["environment"])
+    env = service["environment"]
 
     out = _mount_of(f"{env['OFM_KIEAI_OUT_DIR']}/x", service["volumes"])
 
@@ -260,3 +265,187 @@ def test_both_deploys_keep_the_image_of_the_one_running_app_container(path: Path
     text = path.read_text(encoding="utf-8")
     assert "running=$($compose ps -q ofmhelpers | head -n 1)" in text
     assert "ps -aq ofmhelpers" not in text
+
+
+def _env_names(cls: type[BaseSettings], fields: set[str] | None = None) -> set[str]:
+    names = set()
+    prefix = cls.model_config.get("env_prefix") or ""
+    for field, info in cls.model_fields.items():
+        if fields is not None and field not in fields:
+            continue
+        alias = info.validation_alias
+        if alias is None:
+            names.add((prefix + field).upper())
+        elif isinstance(alias, str):
+            names.add(alias)
+        else:
+            names.update(alias.choices)
+    return names
+
+
+def _settings_env_names() -> set[str]:
+    names = set()
+    pending = list(BaseSettings.__subclasses__())
+    while pending:
+        cls = pending.pop()
+        pending.extend(cls.__subclasses__())
+        if cls.__module__ == "ofmhelpers.config.settings":
+            names |= _env_names(cls)
+    return names
+
+
+SOURCE = REPO / "src"
+EDIT_AND_PREVIEW_TASKS = [
+    "ofmhelpers.features.edit.service",
+    "ofmhelpers.features.edit.cleanup",
+    "ofmhelpers.features.edit.clips",
+    "ofmhelpers.features.previews.render",
+    "ofmhelpers.features.previews.backfill",
+    "ofmhelpers.features.trials.cleanup",
+    "ofmhelpers.features.downloads.cleanup",
+    "ofmhelpers.features.viral.cleanup",
+    "ofmhelpers.features.jobs.raw_files",
+]
+
+
+def _module_file(module: str) -> Path | None:
+    base = SOURCE.joinpath(*module.split("."))
+    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _imported_modules(tree: ast.AST) -> set[str]:
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            "ofmhelpers"
+        ):
+            found.add(node.module or "")
+            found.update(f"{node.module}.{alias.name}" for alias in node.names)
+        elif isinstance(node, ast.Import):
+            found.update(a.name for a in node.names if a.name.startswith("ofmhelpers"))
+    return found
+
+
+def _settings_reads(tree: ast.AST) -> set[tuple[str, str]]:
+    return {
+        (node.value.attr, node.attr)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Attribute)
+        and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "settings"
+    }
+
+
+SECRET_NAME = re.compile(
+    r"(KEYS?|SECRET|TOKEN|PASSWORD|DSN|PRIVATE_KEY|SERVICE_ACCOUNT)"
+    r"(_ADMIN|_DEFAULT|_WAN|_SEEDANCE)?$"
+)
+TELEMETRY_THE_MEDIA_SERVICES_MAY_HOLD = {"LOGFIRE_TOKEN", "SENTRY_DSN"}
+WITHHELD_FROM_THE_MEDIA_SERVICES = {
+    "APP_PASSWORD_ADMIN",
+    "CEREBRAS_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OFM_APPLE_PRIVATE_KEY",
+    "OFM_GDRIVE_SERVICE_ACCOUNT",
+    "OFM_GOOGLE_CLIENT_SECRET",
+    "OFM_TELEGRAM_BOT_TOKEN",
+    "OFM_VAULT_KEY",
+    "SESSION_SECRET",
+}
+URLS_WITH_A_PASSWORD = {"OFM_DATABASE_URL", "OFM_REDIS_URL"}
+
+
+def _import_closure(entries: list[str]) -> dict[str, ast.AST]:
+    trees: dict[str, ast.AST] = {}
+    pending = list(entries)
+    while pending:
+        module = pending.pop()
+        if module in trees:
+            continue
+        file = _module_file(module)
+        if file is None:
+            continue
+        trees[module] = ast.parse(file.read_text(encoding="utf-8"))
+        parent, _, _ = module.rpartition(".")
+        pending.extend(_imported_modules(trees[module]) | ({parent} - {""}))
+    return trees
+
+
+def _env_names_read_by_tasks() -> set[str]:
+    trees = _import_closure(EDIT_AND_PREVIEW_TASKS)
+    assert set(EDIT_AND_PREVIEW_TASKS) <= set(trees)
+    names = set()
+    for group, attr in set().union(*map(_settings_reads, trees.values())):
+        cls = type(getattr(settings, group))
+        names |= _env_names(cls, {attr} if attr in cls.model_fields else None)
+    return names
+
+
+def test_only_secrets_the_media_tasks_read_are_withheld_from_them():
+    assert all(map(SECRET_NAME.search, WITHHELD_FROM_THE_MEDIA_SERVICES))
+    assert _env_names_read_by_tasks() >= WITHHELD_FROM_THE_MEDIA_SERVICES
+
+
+def _service_env(name: str) -> dict[str, Any]:
+    return _compose().services[name].model_dump()["environment"]
+
+
+def test_the_services_that_may_hold_every_key_take_the_whole_env_file():
+    with_file = {
+        name
+        for name, s in _compose().services.items()
+        if s.model_dump().get("env_file")
+    }
+    assert with_file == {"ofmhelpers", "worker", "sweeps", "media-worker"}
+
+
+@pytest.mark.parametrize("name", ["edit-worker", "preview-worker"])
+def test_a_names_only_service_lists_every_setting_its_tasks_read(name: str):
+    read = _env_names_read_by_tasks() - WITHHELD_FROM_THE_MEDIA_SERVICES
+    assert read - set(_service_env(name)) == set()
+
+
+@pytest.mark.parametrize("name", ["edit-worker", "preview-worker"])
+def test_a_service_passes_in_only_names_settings_reads(name: str):
+    passed = {key for key, value in _service_env(name).items() if value is None}
+    assert passed
+    assert passed <= _settings_env_names()
+
+
+def test_the_services_that_run_media_hold_no_provider_key_or_vault_key():
+    secrets = {
+        "OFM_VAULT_KEY",
+        "SESSION_SECRET",
+        "KIE_AI_API_KEY_ADMIN",
+        "HF_API_KEY_ADMIN",
+        "GEMINI_API_KEY",
+        "APIFY_API_KEYS",
+        "OFM_GDRIVE_SERVICE_ACCOUNT",
+        "OFM_TELEGRAM_BOT_TOKEN",
+    }
+    for name in ("edit-worker", "preview-worker", "migrate"):
+        assert secrets.isdisjoint(_service_env(name)), name
+    for name in ("edit-worker", "preview-worker"):
+        env = _service_env(name)
+        assert WITHHELD_FROM_THE_MEDIA_SERVICES.isdisjoint(env), name
+        assert {k for k in env if SECRET_NAME.search(k)} == (
+            TELEMETRY_THE_MEDIA_SERVICES_MAY_HOLD
+        ), name
+        assert {k for k, v in env.items() if "PASSWORD" in str(v)} == (
+            URLS_WITH_A_PASSWORD
+        ), name
+    assert [k for k in _service_env("migrate") if SECRET_NAME.search(k)] == []
+
+
+def test_the_rq_dashboard_and_the_tunnel_are_dev_only_and_on_loopback():
+    base = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "cloudflared" not in base.replace("# ", "")
+    dev = yaml.safe_load((REPO / "docker-compose.dev.yml").read_text(encoding="utf-8"))
+    dashboard = dev["services"]["rq-dashboard"]
+    assert dashboard["ports"] == ["127.0.0.1:9181:9181"]
+    assert dashboard["profiles"] == ["dev"]

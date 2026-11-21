@@ -1,7 +1,7 @@
 # ---- Build stage ----
-FROM python:3.15-slim-trixie AS builder
+FROM python:3.15-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -24,9 +24,9 @@ RUN uv sync --frozen --no-install-project --no-dev --compile-bytecode
 # dev host. The repo is bind-mounted at /app; the venv lives outside it so a
 # host .venv can never leak in. Not built by a plain `docker build`: the
 # last stage (runtime) is the default target.
-FROM python:3.15-slim-trixie AS test
+FROM python:3.15-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS test
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b /uv /uvx /bin/
 
 # ffmpeg as in runtime; exiftool (Debian's libimage-exiftool-perl) to inspect
 # media the app writes; git for pre-commit; node for the static-JS unit tests;
@@ -54,7 +54,7 @@ ADD --chmod=755     --checksum=sha256:ce247fb644999ef52e5111dd6fd6e471019669fc9c
 # ---- Allure report CLI (scripts/test.sh, scripts/report.sh) ----
 # Java lives here, never on the host. Pinned and checksummed (Maven Central's
 # published sha256).
-FROM eclipse-temurin:21-jre AS allure
+FROM eclipse-temurin:21-jre@sha256:d77e090ae1f6970c047b443c6f0a6c1358b0426d44432bb5a7753408cd43de0d AS allure
 
 ADD --checksum=sha256:37428164f310c8d137cfdd2c3a25d049b233261ddab13e1bd4dfd7627b5cbf8d     https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/2.46.1/allure-commandline-2.46.1.tgz     /tmp/allure.tgz
 RUN tar -xzf /tmp/allure.tgz -C /opt &&     ln -s /opt/allure-2.46.1/bin/allure /usr/local/bin/allure &&     rm /tmp/allure.tgz
@@ -63,7 +63,7 @@ WORKDIR /app
 ENTRYPOINT ["allure"]
 
 # ---- Runtime stage ----
-FROM python:3.15-slim-trixie AS runtime
+FROM python:3.15-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS runtime
 
 RUN groupadd --gid 1000 appuser && \
     useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser

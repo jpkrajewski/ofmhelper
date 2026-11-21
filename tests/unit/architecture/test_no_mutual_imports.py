@@ -34,3 +34,29 @@ def test_the_check_sees_two_packages_that_import_each_other():
     found = import_graph.Graph(modules=["a.x", "a.w", "b.y", "b.z", "c.q"], edges=edges)
 
     assert [(p.first, p.second) for p in found.mutual("area")] == [("a", "b")]
+
+
+BOTTOM_UP = (
+    {"config", "redact", "acting"},
+    {"log"},
+    {"cache", "monitoring"},
+    {"db", "media"},
+    {"integrations"},
+    {"features"},
+    {"web", "background"},
+)
+LEVEL = {area: level for level, areas in enumerate(BOTTOM_UP) for area in areas}
+
+
+def test_every_area_imports_only_areas_strictly_below_it():
+    found = {
+        f"{c.source} -> {c.target}"
+        for c in import_graph.graph().counts("area")
+        if LEVEL.get(c.target, len(BOTTOM_UP)) >= LEVEL.get(c.source, -1)
+    }
+
+    assert sorted(found) == []
+
+
+def test_no_import_cycle_among_the_imports_that_run_at_load():
+    assert import_graph.graph().cycles(eager_only=True) == []

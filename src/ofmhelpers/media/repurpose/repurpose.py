@@ -1,3 +1,4 @@
+import math
 import random
 import tempfile
 import time
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.media.ffmpeg import run
 from ofmhelpers.media.recorder import load_profile
-from ofmhelpers.media.recorder.models import Recording
+from ofmhelpers.media.recorder.models import DeviceProfile, Recording
 from ofmhelpers.media.recorder.recorder import record
 from ofmhelpers.media.repurpose import command, container
 from ofmhelpers.media.repurpose.command import EncodeDraws
@@ -33,6 +34,8 @@ from ofmhelpers.media.repurpose.transformations.video import (
 _DEFAULT_DEVICE = "strip"
 _MASTER_DEVICE = "master"
 _DEFAULT_TIMEOUT_S = 600
+_MASTER_HEADROOM = 1.5
+_FPS_TOLERANCE = 0.01
 
 
 class EncodeStep(BaseModel):
@@ -41,6 +44,21 @@ class EncodeStep(BaseModel):
     audio: AudioDraws
     encode: EncodeDraws
     makeup_db: float
+
+
+def master_for(profile: DeviceProfile, source: Source) -> Device:
+    master = load_device(_MASTER_DEVICE)
+    shown = source.display_size
+    frame_w, frame_h = profile.video.width, profile.video.height
+    if shown.width > shown.height:
+        frame_w, frame_h = frame_h, frame_w
+    cover = max(frame_w / shown.width, frame_h / shown.height) * _MASTER_HEADROOM
+    update: dict[str, float | int | None] = {}
+    if cover < 1:
+        update["max_width"] = math.ceil(shown.width * cover / 2) * 2
+    if source.fps and source.fps > profile.video.fps + _FPS_TOLERANCE:
+        update["fps"] = profile.video.fps
+    return master.model_copy(update={"video": master.video.model_copy(update=update)})
 
 
 class _Recorded(BaseModel):
@@ -172,19 +190,20 @@ class Repurpose:
     ) -> _Recorded:
         edited = self.video != VideoSettings() or self.audio != AudioSettings()
         recording = self._recording(recorder, rng)
+        profile = load_profile(recorder.profile)
         with tempfile.TemporaryDirectory(prefix="repurpose_rec_") as work:
             step = None
             recorder_input = self.src
             if edited:
                 recorder_input = Path(work) / "master.mp4"
-                master = load_device(_MASTER_DEVICE)
+                master = master_for(profile, source)
                 with logfire.span("repurpose master encode"):
                     step = self._encode(source, master, recorder_input, rng)
             with logfire.span("repurpose record {profile}", profile=recorder.profile):
                 record(
                     recorder_input,
                     self.dst,
-                    load_profile(recorder.profile),
+                    profile,
                     recording,
                     self.timeout_s,
                 )

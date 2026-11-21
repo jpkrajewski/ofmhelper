@@ -2,6 +2,9 @@
 {% import "components/ui.html" as ui %}
 {% block title %}Chatting: @{{ report.username }}{% endblock %}
 {% block content %}
+{% if not viewer_of(request).read_only %}
+<div data-chat-visit="/chatting/{{ platform.value }}/{{ report.username | urlencode }}/visits" hidden></div>
+{% endif %}
 {{ ui.back_link("/chatting/" ~ platform.value, platform.label) }}
 {{ ui.page_header("@" ~ report.username) }}
 <div class="stat-grid">
@@ -35,4 +38,5 @@
 {{ ui.empty("None.") }}
 {% endif %}
 {% endcall %}
+<script src="{{ static_url('js/chatting-model.js') }}" defer></script>
 {% endblock %}

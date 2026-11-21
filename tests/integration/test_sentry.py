@@ -1,8 +1,14 @@
+import inspect
+import logging
+import sys
+from contextlib import contextmanager
 from typing import Any
-lazy from collections.abc import Callable
+lazy from collections.abc import Callable, Iterator
 
 import pytest
 import sentry_sdk
+import sentry_sdk.integrations
+import sentry_sdk.scope
 import worker_tasks
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -10,6 +16,7 @@ from rq import Queue, SimpleWorker
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 from signin import make_user
+from starlette.applications import Starlette
 
 from ofmhelpers.background import alive
 from ofmhelpers.cache import get_redis
@@ -33,6 +40,20 @@ from ofmhelpers.web.exceptions import exception_handlers
 
 DSN = "https://public@sentry.invalid/1"
 API_KEY = "sk-" + "a1B2c3D4" * 6
+PATCHED_PACKAGES = frozenset(
+    {
+        "starlette",
+        "fastapi",
+        "rq",
+        "redis",
+        "logging",
+        "threading",
+        "subprocess",
+        "urllib3",
+        "http",
+        "sys",
+    }
+)
 
 
 class _Kept(Transport):
@@ -43,21 +64,87 @@ class _Kept(Transport):
     def capture_envelope(self, envelope: Envelope) -> None:
         event = envelope.get_event()
         if event is not None:
-            self.events.append(event)
+            self.events.append(dict(event))
         for item in envelope.items:
             if item.type == "check_in" and item.payload.json is not None:
                 self.events.append({"type": "check_in", **item.payload.json})
+
+
+def _routines(owner: Any) -> dict[str, Any]:
+    return {
+        attribute: value
+        for attribute, value in list(vars(owner).items())
+        if inspect.isroutine(value) or isinstance(value, classmethod | staticmethod)
+    }
+
+
+def _library_functions() -> dict[tuple[str, str | None], dict[str, Any]]:
+    found: dict[tuple[str, str | None], dict[str, Any]] = {}
+    for name, module in list(sys.modules.items()):
+        if module is None or name.split(".")[0] not in PATCHED_PACKAGES:
+            continue
+        owners = {None: module} | {
+            key: value
+            for key, value in list(vars(module).items())
+            if inspect.isclass(value)
+            and getattr(value, "__module__", "").split(".")[0] in PATCHED_PACKAGES
+        }
+        for key, owner in owners.items():
+            found[(name, key)] = _routines(owner)
+    return found
+
+
+def _sentry_made(routine: Any, saved: set[int]) -> bool:
+    function = getattr(routine, "__func__", routine)
+    seen = set()
+    while function is not None and id(function) not in seen:
+        seen.add(id(function))
+        if getattr(function, "__module__", "").startswith("sentry_sdk"):
+            return True
+        if id(function) in saved:
+            return True
+        function = getattr(function, "__wrapped__", None)
+    return False
+
+
+def _put_back(before: dict[tuple[str, str | None], dict[str, Any]]) -> None:
+    for (module_name, class_name), functions in before.items():
+        module = sys.modules.get(module_name)
+        owner = module if class_name is None else getattr(module, class_name, None)
+        if owner is None:
+            continue
+        saved = {id(original) for original in functions.values()}
+        for attribute, added in _routines(owner).items():
+            if attribute not in functions and _sentry_made(added, saved):
+                delattr(owner, attribute)
+        for attribute, original in functions.items():
+            if vars(owner).get(attribute) is not original:
+                setattr(owner, attribute, original)
+
+
+@contextmanager
+def _sdk_sandbox() -> Iterator[None]:
+    before = _library_functions()
+    processors = list(sentry_sdk.scope.global_event_processors)
+    try:
+        yield
+    finally:
+        sentry_sdk.get_global_scope().set_client(None)
+        _put_back(before)
+        sentry_sdk.scope.global_event_processors[:] = processors
+        sentry_sdk.integrations._installed_integrations.clear()
+        sentry_sdk.integrations._processed_integrations.clear()
 
 
 @pytest.fixture
 def sent(monkeypatch):
     monkeypatch.setenv("SENTRY_DSN", DSN)
     monkeypatch.setenv("OFM_RELEASE", "abc1234")
-    configure_sentry("ascend-test")
-    kept = _Kept()
-    sentry_sdk.get_client().transport = kept
-    yield kept.events
-    sentry_sdk.get_global_scope().set_client(None)
+    with _sdk_sandbox():
+        configure_sentry("ascend-test")
+        kept = _Kept()
+        sentry_sdk.get_client().transport = kept
+        yield kept.events
 
 
 def _client() -> TestClient:
@@ -273,3 +360,40 @@ def test_configuring_twice_keeps_the_first_client(sent):
 
     assert sentry_sdk.get_client() is first
     assert sent == []
+
+
+def test_the_sdk_leaves_starlette_and_rq_as_it_found_them(monkeypatch):
+    monkeypatch.setenv("SENTRY_DSN", DSN)
+    app_call = Starlette.__call__
+    enqueue = Queue.enqueue_job
+
+    with _sdk_sandbox():
+        configure_sentry("ascend-test")
+
+        assert Starlette.__call__ is not app_call
+        assert Queue.enqueue_job is not enqueue
+
+    assert Starlette.__call__ is app_call
+    assert Queue.enqueue_job is enqueue
+    assert not sentry_sdk.is_initialized()
+
+
+def _wrapper_depth(function: Any) -> int:
+    depth = 0
+    while function.__name__ == "sentry_patched_callhandlers":
+        closure = dict(
+            zip(function.__code__.co_freevars, function.__closure__, strict=True)
+        )
+        function = closure["old_callhandlers"].cell_contents
+        depth += 1
+    return depth
+
+
+def test_two_inits_leave_one_wrapper_and_the_sandbox_undoes_logging(monkeypatch):
+    monkeypatch.setenv("SENTRY_DSN", DSN)
+    original = logging.Logger.callHandlers
+    with _sdk_sandbox():
+        configure_sentry("ascend-test")
+        configure_sentry("ascend-test")
+        assert _wrapper_depth(logging.Logger.callHandlers) == 1
+    assert logging.Logger.callHandlers is original

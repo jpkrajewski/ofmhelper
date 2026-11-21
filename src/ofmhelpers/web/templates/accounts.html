@@ -8,9 +8,13 @@
 {{ ui.page_header("Accounts") }}
 
 {% set reach_note %}{% if summary.unreachable %}<span class="accounts-problem-text">{{ summary.unreachable }} unreachable</span>{% else %}All reachable{% endif %}{% endset %}
+{% set platform_label = platforms[query.platform].label if query.platform in platforms else "" %}
+{% set counted = summary.accounts - summary.followers_hidden %}
+{% set followers_note %}{% if summary.followers_hidden and not counted %}Hidden by {{ platform_label }}{% else %}Across {{ counted }} account{{ "" if counted == 1 else "s" }}{% if summary.followers_hidden %} · {{ summary.followers_hidden }} hidden by {{ platform_label }}{% endif %}{% endif %}{% endset %}
+{% set views_note %}On posts published in the period{% if summary.hidden_posts %} · {{ num.hidden_posts(summary.hidden_posts, platform_label) }}{% endif %}{% endset %}
 <div class="stat-grid">
-    {{ ui.stat("Total followers", num.short(summary.followers), "Across " ~ summary.accounts ~ " account" ~ ("" if summary.accounts == 1 else "s")) }}
-    {{ ui.stat("Views · " ~ period.label|lower, num.short(summary.views, "No synced account covers the period yet"), "On posts published in the period") }}
+    {{ ui.stat("Total followers", num.hidden() if summary.accounts and not counted else num.short(summary.followers), followers_note) }}
+    {{ ui.stat("Views · " ~ period.label|lower, num.short(summary.views, "No synced account covers the period yet"), views_note) }}
     {{ ui.stat("Tracked accounts", summary.accounts, reach_note) }}
 </div>
 
@@ -21,6 +25,11 @@
 <div class="accounts-filters">
     <input type="search" id="accounts-search" placeholder="Search accounts…" aria-label="Search accounts" autocomplete="off">
     <form method="get" action="/accounts" data-autosubmit class="accounts-filter-form">
+        <select name="platform" aria-label="Platform">
+            {% for key, p in platforms.items() %}
+            <option value="{{ key }}" {% if key == query.platform %}selected{% endif %}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
         <select name="period" aria-label="Reporting period">
             {% for p in periods %}
             <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
@@ -59,7 +68,7 @@
     {% if query.creator %}
     No accounts for {{ query.creator }}. <a href="{{ query.link(creator='') }}">All creators</a>
     {% else %}
-    No accounts yet
+    No {{ platforms[query.platform].label if query.platform in platforms else "" }} accounts yet
     {% endif %}
 {% endcall %}
 {% else %}
@@ -109,12 +118,13 @@
                         </div>
                     </div>
                 </td>
-                <td class="num" data-label="Followers"><strong>{{ num.count(a.followers, "Not synced yet") }}</strong></td>
-                <td class="num" data-label="Growth · {{ period.short }}">{{ num.growth(a.growth(period.days)) }}</td>
+                <td class="num" data-label="Followers"><strong>{{ num.followers(a) }}</strong></td>
+                <td class="num" data-label="Growth · {{ period.short }}">{% if a.followers_hidden %}{{ num.nodata("Hidden by " ~ a.platform_label) }}{% else %}{{ num.growth(a.growth(period.days)) }}{% endif %}</td>
                 <td class="num" data-label="Views · {{ period.short }}">
                     {% if views %}<strong>{{ num.short(views.views) }}</strong>
                     <div class="accounts-sub">{{ num.views_vs(views, period) }}</div>
                     {% else %}{{ num.nodata("Not synced yet, or the scan does not cover the period") }}{% endif %}
+                    {% if a.hidden_posts %}<div class="accounts-sub">{{ num.hidden_posts(a.hidden_posts, a.platform_label) }}</div>{% endif %}
                 </td>
                 <td data-label="Creator">{% if a.creator %}<span class="accounts-creator-tag">{{ a.creator }}</span>{% else %}<span class="pending">—</span>{% endif %}</td>
                 <td data-label="Phone">
@@ -172,7 +182,7 @@
         <div class="field">
             <label for="accounts-add-platform">Platform</label>
             <select id="accounts-add-platform" name="platform">
-                {% for key, p in platforms.items() %}<option value="{{ key }}">{{ p.label }}</option>{% endfor %}
+                {% for key, p in platforms.items() %}<option value="{{ key }}" {% if key == query.platform %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
             </select>
         </div>
         {% else %}

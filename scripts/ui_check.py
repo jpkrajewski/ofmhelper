@@ -1029,7 +1029,10 @@ def checked(args: Args, form: PageForm, base_url: str, out: Path) -> list[Step]:
 
 def reported(args: Args, form: PageForm, base_url: str) -> Report:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    out = OUT / f"{args.path.strip('/').replace('/', '-') or 'root'}-{stamp}"
+    slug = "".join(
+        c if c.isalnum() or c in "._-" else "-" for c in args.path.strip("/")
+    )
+    out = OUT / f"{slug or 'root'}-{stamp}"
     steps = checked(args, form, base_url, out)
     report = Report(page=args.path, base_url=base_url, stamp=stamp, steps=steps)
     (out / "report.md").write_text(report.markdown(), encoding="utf-8")

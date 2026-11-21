@@ -1,6 +1,7 @@
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
+from ofmhelpers.db.cached_repository import CachedRepository, invalidates_cache
 from ofmhelpers.db.models import Base
 from ofmhelpers.db.phone_revisions.schema import PhoneRevision, PhoneState, Restored
 from ofmhelpers.db.session import session_scope
@@ -116,12 +117,15 @@ _PUT_BACK = (
 )
 
 
-class PhoneRevisionRepository:
+class PhoneRevisionRepository(CachedRepository):
+    cache_namespace = "device"
+
     def page(self, owner: int, limit: int) -> list[PhoneRevision]:
         with session_scope() as s:
             rows = s.execute(_LIST, {"owner": owner, "limit": limit}).mappings()
             return [PhoneRevision.model_validate(dict(r)) for r in rows]
 
+    @invalidates_cache
     def restore(self, revision_id: int, owner: int) -> Restored | None:
         asked = {"revision": revision_id, "owner": owner}
         with session_scope() as s:

@@ -21,13 +21,13 @@
 # the worker always mounts exactly the same filesystem the API serves results
 # from (uploads/kieai_out/downloads) and reads the same env.
 x-app-environment: &app-environment
-  - BGUTIL_POT_PROVIDER_URL=http://pot-provider:4416
-  - OFM_COOKIES_FILE=/app/cookies/cookies.txt
+  BGUTIL_POT_PROVIDER_URL: http://pot-provider:4416
+  OFM_COOKIES_FILE: /app/cookies/cookies.txt
   # Inside the uploads mount: the asset store's copy of each result is then
   # a hard link, not a second file (two mounts cannot link: prod
   # 2026-11-11, 17.5 GB of the 72 GB disk was every result twice). The old
   # ./kieai_out mount stays: earlier jobs name files there.
-  - OFM_KIEAI_OUT_DIR=/app/uploads/kieai_out
+  OFM_KIEAI_OUT_DIR: /app/uploads/kieai_out
   # Postgres (durable job/application store) and Redis (RQ broker). The code
   # defaults these to the service names, but we set them explicitly so the same
   # file documents the wiring on any host. The passwords: POSTGRES_PASSWORD
@@ -37,11 +37,167 @@ x-app-environment: &app-environment
   # escaping. The deploy sets the database user's password to
   # POSTGRES_PASSWORD every time (`ALTER ROLE`), so a new value in .env is
   # all a rotation takes.
-  - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/ofmhelpers
-  - OFM_REDIS_URL=redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
+  OFM_DATABASE_URL: postgresql+psycopg://ofmhelpers:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/ofmhelpers
+  OFM_REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
   # What is running, on every trace (telemetry.py): both deploy paths export
   # the deployed commit; anything else (dev, a manual `up`) says "dev".
-  - OFM_RELEASE=${OFM_RELEASE:-dev}
+  OFM_RELEASE: ${OFM_RELEASE:-dev}
+
+# The server keeps ONE .env. The web service and the services that hold the
+# same keys anyway (worker, sweeps, media-worker) take the whole file
+# (env_file:), so no setting silently falls back to its code default. The two
+# services that decode uploaded media (preview-worker, edit-worker) and the
+# migration take no file: they get names only, so they never hold a provider
+# key, the vault key or the session secret (security audit 2026-11-18, item
+# 215). They still hold the database and Redis URLs above, with their
+# passwords: a worker writes job rows and takes its jobs from RQ. A name with
+# no value below is passed in from .env (unset there = not set in the
+# container). tests/unit/test_worker_services.py fails when a setting the
+# edit or preview tasks read is missing from the list, or a secret reaches
+# them.
+x-env-runtime: &env-runtime
+  OFM_ENV:
+  LOGFIRE_TOKEN:
+  SENTRY_DSN:
+  OFM_LOG_LEVEL:
+  OFM_LOG_FORMAT:
+  OFM_LOG_ACCESS:
+  OFM_TELEMETRY_FLUSH_S:
+  OFM_RQ_ASYNC:
+  OFM_RQ_JOB_TIMEOUT_S:
+  OFM_RQ_WORKERS:
+  OFM_PREVIEW_WORKERS:
+  OFM_CLONE_LINKS_WORKERS:
+  OFM_MEDIA_WORKERS:
+  OFM_EVENTS_WORKERS:
+  OFM_EDIT_WORKERS:
+  OFM_UPLOADS_ROOT:
+  OFM_CACHE_TTL_S:
+  APP_BASE_URL:
+  SESSION_MAX_AGE_S:
+  OFM_AIGEN_OUT_DIR:
+  OFM_AIGEN_RAW_KEEP_S:
+  OFM_AIGEN_RESUME_MAX_AGE_S:
+  OFM_COOKIES_FROM_BROWSER:
+  OFM_DOWNLOADS_KEEP_CLONED_S:
+  OFM_DOWNLOADS_KEEP_UNUSED_S:
+  OFM_DOWNLOAD_PROBE_TIMEOUT_S:
+  OFM_DOWNLOAD_REENCODE_TIMEOUT_S:
+  OFM_DOWNLOAD_SINGLE_POST_ITEMS:
+  OFM_EDIT_CUT_TIMEOUT_S:
+  OFM_EDIT_FRAME_PARALLEL:
+  OFM_EDIT_MAX_INPUT_S:
+  OFM_EDIT_MAX_UPLOAD_MB:
+  OFM_EDIT_PREPARE_TIMEOUT_S:
+  OFM_FAKE_EXTERNALS:
+  OFM_FFMPEG_TIMEOUT_S:
+  OFM_IMAGE_PREVIEW_PX:
+  OFM_KIEAI_RESUME_MAX_AGE_S:
+  OFM_POSTER_SIZE:
+  OFM_PREVIEW_BACKFILL_GUARD_S:
+  OFM_PREVIEW_TIMEOUT_S:
+  OFM_TRIALS_KEEP_S:
+  OFM_TRIALS_REMAKE_S:
+  OFM_VIRAL_KEEP_S:
+
+# Settings the import graph of the edit and preview tasks reaches beyond their
+# own modules (the job runner pulls in most of the app). None is a secret; the
+# test lists them from the code, so a new reachable setting fails it until it
+# is added here.
+x-env-reachable: &env-reachable
+  LLM_DEFAULT_CHAT:
+  LLM_DEFAULT_VIDEO:
+  LLM_FALLBACK_VIDEO:
+  OFM_ACCOUNTS_APIFY_DAYS:
+  OFM_ACCOUNTS_APIFY_EST_REELS:
+  OFM_ACCOUNTS_APIFY_PROFILE_ACTOR:
+  OFM_ACCOUNTS_APIFY_REEL_ACTOR:
+  OFM_ACCOUNTS_APIFY_RUN_TIMEOUT_S:
+  OFM_ACCOUNTS_APIFY_USD_PER_ITEM:
+  OFM_ACCOUNTS_APIFY_USD_PER_RUN:
+  OFM_ACCOUNTS_APIFY_X_ACTOR:
+  OFM_ACCOUNTS_APIFY_X_MAX_ITEMS:
+  OFM_ACCOUNTS_APIFY_X_USD_PER_RUN:
+  OFM_ACCOUNTS_BATCH_SIZE:
+  OFM_ACCOUNTS_CLAIM_TTL_S:
+  OFM_ACCOUNTS_DEFAULT_PAGE_SIZE:
+  OFM_ACCOUNTS_DEFAULT_PERIOD_DAYS:
+  OFM_ACCOUNTS_HISTORY_DAYS:
+  OFM_ACCOUNTS_MAX_ADD:
+  OFM_ACCOUNTS_MAX_RESCAN_INTERVAL_S:
+  OFM_ACCOUNTS_PAGE_SIZES:
+  OFM_ACCOUNTS_PERIODS_DAYS:
+  OFM_ACCOUNTS_PROXY_RETRIES:
+  OFM_ACCOUNTS_RESCAN_CHECK_INTERVAL_S:
+  OFM_ACCOUNTS_RESCAN_INTERVAL_S:
+  OFM_ACCOUNTS_RETRY_JITTER_S:
+  OFM_ACCOUNTS_SCAN_TIMES:
+  OFM_ACCOUNTS_SCAN_TIMEZONE:
+  OFM_ACCOUNTS_SCHEDULED_SCANS:
+  OFM_ACCOUNTS_SOURCES:
+  OFM_ACCOUNTS_TOP_POSTS:
+  OFM_ADMIN_EMAILS:
+  OFM_AIGEN_DOWNLOAD_TIMEOUT_S:
+  OFM_APPLE_KEY_ID:
+  OFM_APPLE_SERVICES_ID:
+  OFM_APPLE_TEAM_ID:
+  OFM_CEREBRAS_MODEL:
+  OFM_CHATTING_NOTIFICATION_SHOWN_S:
+  OFM_CHATTING_UNANSWERED_AFTER_S:
+  OFM_DEBUG:
+  OFM_DRIVE_READ_LIVE:
+  OFM_EVENTS_FAILED_KEEP_S:
+  OFM_EVENTS_KEY_TTL_S:
+  OFM_EVENTS_MAX_WAIT_S:
+  OFM_EVENTS_RETRY_WAITS_S:
+  OFM_EVENTS_SEND_TIMEOUT_S:
+  OFM_EVENTS_SENDERS_OFF:
+  OFM_FAKES_DIR:
+  OFM_GDRIVE_LIST_WORKERS:
+  OFM_GDRIVE_POSTED_FOLDER:
+  OFM_GDRIVE_RETRIES:
+  OFM_GDRIVE_REVIEW_FOLDER_TTL_S:
+  OFM_GDRIVE_REVIEW_LOCK_S:
+  OFM_GDRIVE_ROOT_FOLDER:
+  OFM_GDRIVE_SHEET_MAX_BYTES:
+  OFM_GDRIVE_THUMB_PX:
+  OFM_GDRIVE_TIMEZONE:
+  OFM_GDRIVE_UPLOAD_STALE_S:
+  OFM_GEMINI_MODEL:
+  OFM_GOOGLE_CLIENT_ID:
+  OFM_GROQ_MODEL:
+  OFM_JOBS_MAX_ENTRIES:
+  OFM_KIEAI_DOWNLOAD_TIMEOUT_S:
+  OFM_LLM_FILE_READY_TIMEOUT_S:
+  OFM_LLM_IMAGE_MAX_BYTES:
+  OFM_LLM_IMAGE_MAX_SIDE:
+  OFM_LLM_INLINE_MAX_BYTES:
+  OFM_LLM_RETRIES:
+  OFM_LLM_RETRY_MAX_WAIT_S:
+  OFM_LLM_RETRY_WAIT_S:
+  OFM_LLM_SHAPE_RETRIES:
+  OFM_LLM_TIMEOUT_S:
+  OFM_LLM_VIDEO_SHEET_FRAME_PX:
+  OFM_LLM_VIDEO_SHEET_FRAMES:
+  OFM_LLM_VIDEO_SHEET_TIMEOUT_S:
+  OFM_NO_CREDITS_NOTICE_EVERY_S:
+  OFM_PASSWORD_HASH_CONCURRENCY:
+  OFM_PASSWORD_LINK_TTL_S:
+  OFM_PASSWORD_MIN_LENGTH:
+  OFM_PHONES_BACKUP_KEEP:
+  OFM_PHONES_BACKUP_SWEEP_S:
+  OFM_PHONES_HISTORY_LIMIT:
+  OFM_REF_USAGE_MAX_TRACKED:
+  OFM_REPORTS_TIMEZONE:
+  OFM_SIGNIN_STATE_TTL_S:
+  OFM_SNAPCHAT_FONT:
+  OFM_TELEGRAM_API_URL:
+  OFM_TELEGRAM_TIMEOUT_S:
+  OFM_UPLOAD_LOCK_S:
+  OFM_VA_REELS_NOTICE_EVERY:
+  OFM_VA_SPEND_NOTICE_EVERY_USD:
+  OFM_VIRAL_DOWNLOAD_TIMEOUT_S:
+  OFM_VIRAL_DOWNLOAD_WORKERS:
 
 # One image for every app service, named by the commit it was built from: both
 # deploy paths export OFM_RELEASE, tag the build with it and keep the one
@@ -235,9 +391,8 @@ services:
     stop_grace_period: 120s
     healthcheck:
       disable: true
-    environment: *app-environment
-    env_file:
-      - .env
+    environment:
+      <<: [*app-environment, *env-runtime, *env-reachable]
     volumes: *app-volumes
     depends_on:
       migrate:
@@ -268,9 +423,8 @@ services:
     stop_grace_period: 120s
     healthcheck:
       disable: true
-    environment: *app-environment
-    env_file:
-      - .env
+    environment:
+      <<: [*app-environment, *env-runtime, *env-reachable]
     volumes: *app-volumes
     depends_on:
       migrate:
@@ -300,9 +454,8 @@ services:
     command: ["alembic", "upgrade", "head"]
     healthcheck:
       disable: true
-    environment: *app-environment
-    env_file:
-      - .env
+    environment:
+      <<: [*app-environment]
     # Read-only: alembic b1c2d3e4f5a7 moves the old shared cookies.txt into
     # the password admin's own cookies (user_cookies) and leaves the file.
     volumes:
@@ -318,7 +471,7 @@ services:
       - ALL
 
   postgres:
-    image: postgres:16
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     container_name: ofmhelpers-postgres
     restart: unless-stopped
     environment:
@@ -344,7 +497,7 @@ services:
       - no-new-privileges:true
 
   redis:
-    image: redis:7
+    image: redis:7@sha256:a8f08480e1f88f2647fed492d1178c06abb0d0c1fbf02c682a61e2f483fb3954
     container_name: ofmhelpers-redis
     restart: unless-stopped
     command:

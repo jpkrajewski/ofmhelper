@@ -96,13 +96,21 @@ def _id_token(claims_: dict) -> str:
 def test_id_token_claims_apples_string_true_and_the_nonce_check():
     found = claims(
         _id_token(
-            {"sub": "s", "email": "A@B.C", "email_verified": "true", "nonce": "n"}
+            {
+                "sub": "s",
+                "email": "A@B.C",
+                "email_verified": "true",
+                "nonce": "n",
+                "iss": "i",
+                "aud": ["x", "a"],
+                "exp": 100,
+            }
         )
     )
     assert (found.email, found.email_verified) == ("a@b.c", True)
-    assert checked(found, "n") is found
+    assert checked(found, "n", issuers=("i",), audience="a", now=1) is found
     with pytest.raises(SignInError):
-        checked(found, "other")
+        checked(found, "other", issuers=("i",), audience="a", now=1)
     with pytest.raises(SignInError):
         claims("not-a-jwt")
 

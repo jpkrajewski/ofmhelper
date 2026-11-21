@@ -1,3 +1,4 @@
+import asyncio
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -11,6 +12,13 @@ from httpx import Response
 from idempotent import keyed
 from signin import sign_in
 from sqlalchemy import update
+from starlette.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    StreamingResponse,
+)
+from starlette.responses import Response as BareResponse
 
 from ofmhelpers.db.idempotency_keys.schema import Asked, Outcome
 from ofmhelpers.db.jobs.store import list_jobs_page
@@ -21,7 +29,16 @@ from ofmhelpers.features.downloads import media as download_media
 from ofmhelpers.features.downloads import service as download_service
 from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.refusals import UnavailableError
-from ofmhelpers.web.idempotency import MISMATCH, IdempotentRoute, marked
+from ofmhelpers.web.idempotency import (
+    CRASHED,
+    MISMATCH,
+    RAW_MAX,
+    TOO_LARGE,
+    IdempotentRoute,
+    _keep,
+    _replayed,
+    marked,
+)
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import ROUTERS
 
@@ -227,6 +244,106 @@ def test_an_answer_for_another_claim_of_the_key_is_not_kept(client):
     assert idempotency.claim(asked).outcome is Outcome.BUSY
     idempotency.finish(held, 202, {"job_id": "mine"})
     assert idempotency.claim(asked).response_body == {"job_id": "mine"}
+
+
+def test_a_successful_answer_that_is_not_json_is_kept_not_freed(client, caplog):
+    asked = _asked(client, keyed(), A)
+    held = idempotency.claim(asked).held
+    assert held is not None
+
+    with caplog.at_level("WARNING"):
+        asyncio.run(_keep(held, PlainTextResponse("started", status_code=202)))
+
+    assert f"{asked.path} answered no JSON" in caplog.text
+    again = idempotency.claim(asked)
+    assert again.outcome is Outcome.REPLAY
+    assert again.response_status == 202
+    replay = _replayed(again.response_status, again.response_body)
+    assert replay.status_code == 202
+    assert bytes(replay.body) == b"started"
+    assert replay.media_type == "text/plain"
+    assert replay.headers["content-type"].startswith("text/plain")
+
+
+def test_a_server_error_that_is_not_json_is_kept_as_a_crash(client):
+    asked = _asked(client, keyed(), A)
+    held = idempotency.claim(asked).held
+    assert held is not None
+
+    asyncio.run(_keep(held, HTMLResponse("<h1>boom</h1>", status_code=500)))
+
+    again = idempotency.claim(asked)
+    assert again.outcome is Outcome.REPLAY
+    assert again.response_status == 500
+    assert again.response_body == {"detail": CRASHED}
+    assert json.loads(_replayed(500, again.response_body).body) == {"detail": CRASHED}
+
+
+def test_a_returned_503_frees_the_key(client):
+    asked = _asked(client, keyed(), A)
+    held = idempotency.claim(asked).held
+    assert held is not None
+
+    asyncio.run(_keep(held, JSONResponse({"detail": "try again"}, status_code=503)))
+
+    assert idempotency.claim(asked).outcome is Outcome.NEW
+
+
+def test_a_returned_500_is_kept_and_replayed(client):
+    again = _kept(client, JSONResponse({"detail": "boom"}, status_code=500))
+
+    assert again.response_status == 500
+    assert again.response_body == {"detail": "boom"}
+
+
+def _kept(client, response):
+    asked = _asked(client, keyed(), A)
+    held = idempotency.claim(asked).held
+    assert held is not None
+    asyncio.run(_keep(held, response))
+    again = idempotency.claim(asked)
+    assert again.outcome is Outcome.REPLAY
+    return again
+
+
+def test_a_huge_answer_that_is_not_json_is_replayed_as_a_short_marker(client):
+    again = _kept(client, PlainTextResponse("x" * (RAW_MAX + 1), status_code=202))
+
+    replay = _replayed(again.response_status, again.response_body)
+    assert replay.status_code == 202
+    assert bytes(replay.body) == TOO_LARGE.encode()
+    assert replay.headers["content-type"].startswith("text/plain")
+
+
+def test_a_streamed_answer_is_replayed_empty_with_its_type_and_status(client):
+    again = _kept(
+        client,
+        StreamingResponse(iter([b"a"]), status_code=201, media_type="video/mp4"),
+    )
+
+    replay = _replayed(again.response_status, again.response_body)
+    assert replay.status_code == 201
+    assert bytes(replay.body) == b""
+    assert replay.headers["content-type"] == "video/mp4"
+
+
+def test_a_204_is_replayed_with_no_content_type(client):
+    again = _kept(client, BareResponse(status_code=204))
+
+    replay = _replayed(again.response_status, again.response_body)
+    assert replay.status_code == 204
+    assert "content-type" not in replay.headers
+    assert replay.headers["idempotent-replayed"] == "true"
+
+
+def test_a_refusal_that_is_not_json_frees_the_key(client):
+    asked = _asked(client, keyed(), A)
+    held = idempotency.claim(asked).held
+    assert held is not None
+
+    asyncio.run(_keep(held, PlainTextResponse("no", status_code=400)))
+
+    assert idempotency.claim(asked).outcome is Outcome.NEW
 
 
 def test_keys_older_than_their_keep_time_are_removed(client):

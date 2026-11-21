@@ -1,3 +1,4 @@
+import secrets
 import time
 from urllib.parse import quote, urlsplit
 
@@ -15,10 +16,11 @@ lazy from starlette.requests import HTTPConnection, Request
 
 from ofmhelpers.acting import Acting, Via, acting
 from ofmhelpers.config import settings
-from ofmhelpers.db.users.schema import SessionUser, User
+from ofmhelpers.db.users.schema import Role, SessionUser, User
 from ofmhelpers.features.signin import state as signin_state
 from ofmhelpers.features.users import presence
 from ofmhelpers.features.users.viewing import (
+    Seated,
     signed_in_user,
     viewer_for,
     viewing_ended,
@@ -35,6 +37,7 @@ _KEYS = ("user_id", "email", "role")
 _STAMP = "stamp"
 _SEEN = "seen"
 _SINCE = "since"
+_SID = "sid"
 SESSION_PATH = "/session"
 _VIEWING = "viewing"
 _READS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -62,9 +65,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             with acting(_request(request)):
                 return await call_next(request)
         current = self.session_user(request)
-        user = await run_in_threadpool(signed_in_user, current.id) if current else None
-        reason = self._refused(request, current, user)
-        if reason is not None or current is None or user is None:
+        seated = (
+            await run_in_threadpool(signed_in_user, current.id) if current else None
+        )
+        reason = self._refused(request, current, seated)
+        if reason is not None or current is None or seated is None:
             if reason != "no session" or request.cookies.get("ofm_session"):
                 logger.warning(
                     "auth: %s refused (%s), user %s",
@@ -74,6 +79,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 )
             request.session.clear()
             return self._to_login(request)
+        user = seated.user
         if user.role != current.role or user.email != current.email:
             self.remember(request, user)
         if self._acted(request):
@@ -126,21 +132,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _refused(
-        request: HTTPConnection, current: SessionUser | None, user: User | None
+        request: HTTPConnection, current: SessionUser | None, seated: Seated | None
     ) -> str | None:
         if current is None:
             return "no session"
-        if user is None:
+        if seated is None:
             return "user gone"
-        if not user.active:
+        standing = seated.standing
+        if not standing.active:
             return "deactivated"
-        if request.session.get(_STAMP, "") != user.credential_stamp:
+        if standing.role == Role.VA and standing.employer_active is False:
+            return "employer deactivated"
+        if request.session.get(_STAMP, "") != standing.credential_stamp:
             return "password changed"
-        ended = user.sessions_ended_at
+        ended = standing.sessions_ended_at
         if ended is not None and request.session.get(_SINCE, 0) <= ended:
             return "logged out"
         last = request.session.get(_SEEN) or request.session.get(_SINCE)
-        if last and time.time() - last > presence.idle_limit_s(user.role):
+        if last and time.time() - last > presence.idle_limit_s(standing.role):
             return "idle"
         return None
 
@@ -208,6 +217,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.session[_SINCE] = time.time()
 
     @staticmethod
+    def session_id(request: HTTPConnection) -> str:
+        found = request.session.get(_SID)
+        if not found:
+            found = secrets.token_urlsafe(16)
+            request.session[_SID] = found
+        return found
+
+    @staticmethod
     def signed_in_at(request: Request) -> float | None:
         return request.session.get(_SINCE)
 
@@ -223,8 +240,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
     @classmethod
     def valid_user(cls, request: HTTPConnection) -> User | None:
         current = cls.session_user(request)
-        user = signed_in_user(current.id) if current else None
-        return user if cls._refused(request, current, user) is None else None
+        seated = signed_in_user(current.id) if current else None
+        if cls._refused(request, current, seated) is not None or seated is None:
+            return None
+        return seated.user
 
     @classmethod
     def socket_viewer(cls, connection: HTTPConnection) -> Viewer | None:

@@ -1,6 +1,6 @@
 {% extends "_gallery_card.html" %}
 {% block lead %}{% if job.source and not (job.status == "done" and job.assets) %}
-    <img class="result-video" data-clone-source src="{{ job.source.thumb_url }}" alt="{{ job.source.name }}" loading="lazy" decoding="async" onerror="this.hidden=true">
+    <img class="result-video" data-clone-source src="{{ job.source.thumb_url }}" alt="{{ job.source.name }}" loading="lazy" decoding="async">
 {% endif %}{% endblock %}
 {% block below %}
     {% include "_drive_states.html" %}

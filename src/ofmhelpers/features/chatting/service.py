@@ -72,12 +72,9 @@ def model_report(platform: ChatPlatform, username: str, zone: str) -> ModelRepor
     )
 
 
-def open_model(
-    user_id: int, platform: ChatPlatform, username: str, zone: str
-) -> ModelReport:
+def remember_visit(user_id: int, platform: ChatPlatform, username: str) -> None:
     if username in platform_models(platform):
         remember(user_id, platform, username)
-    return model_report(platform, username, zone)
 
 
 def platform_models(platform: ChatPlatform) -> list[str]:

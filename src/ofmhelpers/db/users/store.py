@@ -6,6 +6,7 @@ from ofmhelpers.db.users.repository import UserRepository
 from ofmhelpers.db.users.schema import (
     LinkedAccount,
     Role,
+    Standing,
     User,
     UserForm,
     normalized_email,
@@ -30,6 +31,14 @@ def is_env_admin(email: str) -> bool:
 
 def get_user(user_id: int) -> User | None:
     return _repository().get(user_id)
+
+
+def standing(user_id: int) -> Standing | None:
+    return _repository().standing(user_id)
+
+
+def get_user_uncached(user_id: int) -> User | None:
+    return _repository().fresh(user_id)
 
 
 def by_email(email: str) -> User | None:
@@ -161,6 +170,10 @@ def replace_password_hash(user_id: int, expected: str, hashed: str) -> bool:
 
 def add_password_link(user_id: int, token_hash: str, expires: float) -> None:
     _repository().add_password_link(user_id, token_hash, expires)
+
+
+def use_password_link(token_hash: str, now: float, hashed: str) -> int | None:
+    return _repository().use_password_link(token_hash, now, hashed)
 
 
 def link_user(token_hash: str, now: float) -> int | None:

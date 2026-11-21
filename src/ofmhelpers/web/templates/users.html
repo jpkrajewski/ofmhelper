@@ -73,7 +73,7 @@
                     {% for o in owners if o.id == u.owner_id %}<span class="pending users-note">VA of {{ o.label }}</span>{% endfor %}
                     {% elif u.role in ("va", "manager") %}
                     <form method="post" action="/users/{{ u.id }}/owner">
-                        <select name="owner_id" class="users-role" aria-label="Owner of {{ u.email }}" onchange="this.form.submit()">
+                        <select name="owner_id" class="users-role" data-submit-on-change aria-label="Owner of {{ u.email }}">
                             {% if not u.owner_id %}<option value="" selected>No employer</option>{% endif %}
                             {% for o in owners %}<option value="{{ o.id }}"{% if o.id == u.owner_id %} selected{% endif %}>{{ "VA of" if u.role == "va" else "Manager of" }} {{ o.label }}</option>{% endfor %}
                         </select>
@@ -124,8 +124,11 @@
             {% endfor %}
         </tbody>
     {% endcall %}
-<script>
+<script nonce="{{ csp_nonce(request) }}">
 (() => {
+    document.querySelectorAll("[data-submit-on-change]").forEach((field) => {
+        field.addEventListener("change", () => field.form.submit());
+    });
     const link = document.getElementById("users-link");
     const copy = document.getElementById("users-link-copy");
     if (link) link.addEventListener("focus", () => link.select());

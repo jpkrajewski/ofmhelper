@@ -43,6 +43,14 @@ class User(BaseModel):
         return self.name or self.email
 
 
+class Standing(BaseModel):
+    role: Role
+    active: bool
+    credential_stamp: str
+    sessions_ended_at: float | None
+    employer_active: bool | None
+
+
 class SessionUser(BaseModel):
     model_config = ConfigDict(frozen=True)
 

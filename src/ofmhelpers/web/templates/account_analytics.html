@@ -49,19 +49,22 @@
 {% call ui.notice(kind="warn") %}Synced without an Instagram login: some reels are missing. <a href="/cookies">Upload cookies</a>{% endcall %}
 {% endif %}
 
-{% set views_note %}{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}{% endset %}
-{% set growth_note %}{% if growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}{% endset %}
+{% set hidden_note %}{% if account.hidden_posts %} · {{ num.hidden_posts(account.hidden_posts, account.platform_label) }}{% endif %}{% endset %}
+{% set views_note %}{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}{{ hidden_note }}{% endset %}
+{% set growth_note %}{% if account.followers_hidden %}Hidden by {{ account.platform_label }}{% elif growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}{% endset %}
 <div class="stat-grid">
-    {{ ui.stat("Followers", num.count(account.followers, "Not synced yet"), "Current total") }}
+    {{ ui.stat("Followers", num.followers(account), "Hidden by " ~ account.platform_label if account.followers_hidden else "Current total") }}
     {{ ui.stat("Views", num.short(views.views if views else none, "The scan does not cover the period"), views_note) }}
     {{ ui.stat("Follower growth", num.growth(growth), growth_note) }}
-    {{ ui.stat("Posts published", num.count(account.posts_in(period.days), "The scan does not cover the period"), period.label) }}
+    {{ ui.stat("Posts published", num.count(account.posts_in(period.days), "The scan does not cover the period"), period.label ~ hidden_note) }}
 </div>
 
 <section class="accounts-card">
     <h2>Followers · {{ period.label|lower }}</h2>
     {% set when = "%b %d, %H:%M" %}
-    {% if chart.ready %}
+    {% if account.followers_hidden %}
+    <p class="accounts-empty">{{ account.platform_label }} hides this account's follower count.</p>
+    {% elif chart.ready %}
     <figure class="fchart" data-fchart data-step="{{ "day" if chart.daily else "sync" }}">
         <div class="fchart-summary">
             <div class="fchart-stat">

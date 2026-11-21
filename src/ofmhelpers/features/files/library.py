@@ -14,6 +14,7 @@ from ofmhelpers.features.assets.store import (
     save_asset,
     strip_asset_hash_prefix,
 )
+from ofmhelpers.features.files.disk import within_roots
 from ofmhelpers.features.files.schema import FileTile, UserFiles
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
@@ -118,7 +119,7 @@ class Library(BaseModel):
                 f"/file-manager/runs/{job.id}/{i}",
             )
             for i, path in enumerate(job.local_paths())
-            if path and Path(path).is_file()
+            if path and within_roots(path) and Path(path).is_file()
         ]
 
     def _section_tiles(self, user_id: int, section: str, page: int) -> Tiles:
@@ -189,7 +190,7 @@ def run_file(job_id: str, index: int) -> Path:
     job = get_job(job_id)
     paths = job.local_paths() if job else []
     path = paths[index] if 0 <= index < len(paths) else None
-    if not path or not Path(path).is_file():
+    if not path or not within_roots(path) or not Path(path).is_file():
         msg = "File not found"
         raise NotFoundError(msg)
     return Path(path)

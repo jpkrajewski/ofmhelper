@@ -225,7 +225,8 @@ def shell_new_code(event: HookEvent) -> list[str]:
     return [
         f.path
         for f in changed_by_this_call(event)
-        if f.is_new and is_new_code_file(f.path)
+        if not never_blocked(f.path)
+        and ((f.is_new and is_new_code_file(f.path)) or f.added_names())
     ]
 
 

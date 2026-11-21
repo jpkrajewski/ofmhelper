@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -14,11 +15,26 @@ SHIP_OPEN = STATE / "ship.open"
 NOTIFICATION = "<task-notification>"
 STALE_LOCK_S = 3600
 CLOCK_SLACK_S = 2.0
+GIT_PROGRAM = "git"
+GIT_CALL_TIMEOUT_S = 5
+GIT_BUDGET_S = 8
+GIT_DEADLINE = time.monotonic() + GIT_BUDGET_S
 DEFINITION = re.compile(
     r"^[ \t]*(?:async\s+def|def|class|(?:export\s+)?(?:default\s+)?(?:async\s+)?function)"
     r"[\s*]+([A-Za-z_$][\w$]*)",
     re.MULTILINE,
 )
+
+
+def budget_timeout(cap: float, program: str = GIT_PROGRAM) -> float:
+    remaining = GIT_DEADLINE - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(program, GIT_BUDGET_S)
+    return min(cap, remaining)
+
+
+def git_timeout() -> float:
+    return budget_timeout(GIT_CALL_TIMEOUT_S)
 
 
 def defined_names(text: str) -> set[str]:

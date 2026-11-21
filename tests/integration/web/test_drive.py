@@ -729,15 +729,14 @@ def test_a_trashed_account_folder_is_still_told_on_the_page(drive):
     assert "Nothing waiting to post" in html
 
 
-def test_page_sees_a_trashed_account_folder_that_still_lists(drive):
+def test_page_sees_a_trashed_account_folder_whose_contents_went_with_it(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     account = _account(drive, "ann.ig")
     drive.add_file(account, "kept.jpg")
     drive.trash(account)
-    assert [f.name for f in drive.children(account) if f.kind != "folder"] == [
-        "kept.jpg"
-    ]
+    with pytest.raises(FolderGoneError):
+        drive.folder(account)
 
     html = _client().get("/drive/live").text
 

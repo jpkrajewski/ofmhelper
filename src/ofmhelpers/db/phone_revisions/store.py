@@ -1,7 +1,6 @@
 from functools import lru_cache
 
 from ofmhelpers.db.phone_revisions.repository import PhoneRevisionRepository
-lazy from ofmhelpers.db.drive_folders import store as drive_folders
 lazy from ofmhelpers.db.phone_revisions.schema import (
     PhoneRevision,
     PhoneState,
@@ -21,10 +20,7 @@ def page(owner: int, limit: int) -> list[PhoneRevision]:
 
 
 def restore(revision_id: int, owner: int) -> Restored | None:
-    done = _repository().restore(revision_id, owner)
-    if done is not None:
-        drive_folders.logins_changed()
-    return done
+    return _repository().restore(revision_id, owner)
 
 
 def history() -> list[PhoneState]:

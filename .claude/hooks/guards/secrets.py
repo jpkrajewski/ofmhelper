@@ -1,6 +1,6 @@
 import subprocess
 
-from guards.event import ROOT, Guard, HookEvent, Verdict, deny
+from guards.event import ROOT, Guard, HookEvent, Verdict, deny, git_timeout
 
 NAME = "secrets"
 LOCAL_ENV = ROOT / "deploy.local.env"
@@ -23,12 +23,21 @@ def production_hosts() -> list[str]:
 
 
 def ignored(relative: str) -> bool:
-    return (
-        subprocess.run(
-            ["git", "-C", str(ROOT), "check-ignore", "-q", relative], check=False
-        ).returncode
-        == 0
-    )
+    try:
+        return (
+            subprocess.run(
+                ["git", "-C", str(ROOT), "check-ignore", "-q", relative],
+                capture_output=True,
+                check=False,
+                timeout=git_timeout(),
+            ).returncode
+            == 0
+        )
+    except (
+        OSError,
+        subprocess.TimeoutExpired,
+    ):  # silent: unknown = not ignored, so denied
+        return False
 
 
 def check(event: HookEvent) -> Verdict | None:

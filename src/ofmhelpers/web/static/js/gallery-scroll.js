@@ -81,7 +81,18 @@
         watch();
     }
 
+    document.addEventListener(
+        "error",
+        (event) => {
+            if (event.target.matches?.("img[data-clone-source]")) event.target.hidden = true;
+        },
+        true
+    );
+
     document.addEventListener("DOMContentLoaded", () => {
+        document.querySelectorAll("img[data-clone-source]").forEach((img) => {
+            if (img.complete && img.naturalWidth === 0 && img.currentSrc) img.hidden = true;
+        });
         document.querySelectorAll("[data-gallery-endpoint]").forEach(initGalleryScroll);
     });
 })();

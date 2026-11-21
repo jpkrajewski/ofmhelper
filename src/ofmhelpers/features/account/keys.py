@@ -16,6 +16,7 @@ lazy from ofmhelpers.integrations.ai_providers.tasks import ProviderTask
 logger = get_logger(__name__)
 
 KEY_TAIL = 4
+SAVED_KEY = "use-saved-key"
 
 
 def key_tail(api_key: str) -> str | None:
@@ -62,7 +63,7 @@ class Keys(BaseModel):
 
     def for_run(self, provider: str, model: str, typed: str) -> str:
         cls = provider_class(provider)
-        typed = typed.strip()
+        typed = "" if typed.strip() == SAVED_KEY else typed.strip()
         known = [*self._own(cls), *self._env(cls)]
         if typed and typed not in known:
             return typed
@@ -95,7 +96,9 @@ def prefilled(user_id: int | None) -> MappingProxyType[str, str]:
     if user_id is None:
         return MappingProxyType(dict.fromkeys(names, ""))
     keys = Keys.of(user_id)
-    return MappingProxyType({name: keys.prefill(name) for name in names})
+    return MappingProxyType(
+        {name: SAVED_KEY if keys.prefill(name) else "" for name in names}
+    )
 
 
 def known_provider(provider: str) -> None:
