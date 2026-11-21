@@ -1,4 +1,5 @@
 import re
+from html.parser import HTMLParser
 
 import pytest
 from app_pages import ADMIN_HEADER
@@ -134,10 +135,22 @@ def test_a_crash_answers_the_plain_sentence_with_debug_off():
     assert "RuntimeError" not in response.text
 
 
-_INLINE_SCRIPT = re.compile(
-    r'<script(?![^>]*\bsrc=)(?![^>]*type="application/json")([^>]*)>'
-)
-_INLINE_HANDLER = re.compile(r"<[a-z][^>]*\son[a-z]+=", re.IGNORECASE)
+class _Scripts(HTMLParser):
+    def __init__(self, page: str) -> None:
+        super().__init__()
+        self.inline_nonces: list[str | None] = []
+        self.handlers: list[str] = []
+        self.feed(page)
+        self.close()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        named: dict[str, str | None] = {}
+        for name, value in attrs:
+            named.setdefault(name, value)
+        self.handlers += [name for name in named if name.startswith("on")]
+        data = (named.get("type") or "").lower() == "application/json"
+        if tag == "script" and "src" not in named and not data:
+            self.inline_nonces.append(named.get("nonce"))
 
 
 def _nonce_of(response) -> str:
@@ -149,20 +162,38 @@ def _nonce_of(response) -> str:
     return found.group(1)
 
 
+def test_the_script_check_reads_tags_and_attributes_in_any_spelling():
+    found = _Scripts(
+        "<SCRIPT>a()</SCRIPT>"
+        '<Script NONCE="n" title="a>b">b()</Script>'
+        '<script data-src="x">c()</script>'
+        '<script src = "/x.js"></script>'
+        "<script type='application/json'>{}</script>"
+        '<img src="x" onerror = "d()">'
+        '<script nonce="first" nonce="second">e()</script>'
+    )
+
+    assert found.inline_nonces == [None, "n", None, "first"]
+    assert found.handlers == ["onerror"]
+
+
 def test_every_page_runs_only_scripts_that_carry_its_own_nonce():
     client = TestClient(create_app())
     sign_in_agency(client)
     nonces = set()
+    inline = 0
 
     for path in ADMIN_HEADER:
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 200, path
         nonce = _nonce_of(response)
         nonces.add(nonce)
-        for attributes in _INLINE_SCRIPT.findall(response.text):
-            assert f'nonce="{nonce}"' in attributes, path
-        assert not _INLINE_HANDLER.search(response.text), path
+        scripts = _Scripts(response.text)
+        inline += len(scripts.inline_nonces)
+        assert set(scripts.inline_nonces) <= {nonce}, path
+        assert scripts.handlers == [], path
     assert len(nonces) == len(ADMIN_HEADER)
+    assert inline > 0
 
 
 def test_the_policy_names_a_new_nonce_for_every_request():
