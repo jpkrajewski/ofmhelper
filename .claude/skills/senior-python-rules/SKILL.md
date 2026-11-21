@@ -10,10 +10,17 @@ Apply these rules to every Python task: new code, changes, reviews, and debuggin
 ## Before coding
 1. **Business logic first.** Before writing code, state in plain words what the feature must do: its inputs, outputs, and edge cases. If any of that is unclear, ask before coding. Code written against a guessed requirement is waste.
 2. **Read the surrounding code.** Match the patterns already in the repo. Do not introduce a second way to do something that the repo already does one way.
+   **Except a pattern that is clearly wrong.** Before copying a pattern, ask if it is the simplest thing that works. If it is clearly wrong (overbuilt, fragile, the reason for the bug in front of you), say so, find the better way, and replace it when the change is cheap (a few files, this task's scope); otherwise write one `IMPROVEMENTS.md` line. Never copy it into new code just because it exists. Example (2026-11-21): every /clone chip required a regex `pattern`, so the agent wrote another regex instead of asking why chips need patterns at all; the cheap fix (exact text, highlighted, delete-whole) removed the field from all chips.
 
 ## Writing code
 3. **No new packages, dependencies, or services.** Solve the problem with the standard library and what is already in the repo. If you believe a new dependency is truly needed, stop and ask, explaining what it replaces and why existing tools cannot do it.
 4. **Keep it stupid simple.** Pick the most obvious solution, the one a tired person can read at 3am. No layers, patterns, options, or config that the current task does not need. No speculative features.
+   **Don't overengineer — example (2026-11-21).** Ask: add the text "don't change anything in his pants" as a /clone prompt chip. What the agent built, widened over 4 review rounds to catch wordings nobody types:
+   ```json
+   "pattern": "\\b(don.?t|do not|never)\\s+change\\b(\\s+\\w+){0,3}\\s+(pants|trousers|jeans)\\b|\\b(keep|leave)\\s+(his\\s+|the\\s+)?(pants|trousers|jeans)\\b|\\bsame\\s+(pants|trousers|jeans)\\b"
+   ```
+   plus a regex `pattern` on every chip, tests per wording and container restarts. The owner's solution: no patterns at all. A click adds the chip's exact text, the UI highlights it, and deleting any letter of it deletes the whole text. That's it.
+   The rule: build the literal ask the simplest way; a reviewer's edge case about input nobody types is not a reason to add matching, parsing or options.
 5. **Automate repetition.** When the same shape appears a third time (requests, parsing, conversions, mappings), build one typed helper, decorator, or parser that generates it, so each new case is a few declarative lines. This is where the team gets its speed.
 6. **Use advanced Python when it earns its place.** Generics, protocols, context managers, pydantic validators, and similar features are welcome when they make the code that uses them shorter and harder to get wrong. Never use them to show off, and keep the clever part small and in one place.
 
