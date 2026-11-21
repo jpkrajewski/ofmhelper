@@ -376,14 +376,39 @@ def _import_closure(entries: list[str]) -> dict[str, ast.AST]:
     return trees
 
 
-def _env_names_read_by_tasks() -> set[str]:
-    trees = _import_closure(EDIT_AND_PREVIEW_TASKS)
-    assert set(EDIT_AND_PREVIEW_TASKS) <= set(trees)
+def _env_names_read(trees: dict[str, ast.AST]) -> set[str]:
     names = set()
     for group, attr in set().union(*map(_settings_reads, trees.values())):
         cls = type(getattr(settings, group))
-        names |= _env_names(cls, {attr} if attr in cls.model_fields else None)
+        required = {f for f, info in cls.model_fields.items() if info.is_required()}
+        fields = {attr} | required if attr in cls.model_fields else None
+        names |= _env_names(cls, fields)
     return names
+
+
+def _env_names_read_by_tasks() -> set[str]:
+    trees = _import_closure(EDIT_AND_PREVIEW_TASKS)
+    assert set(EDIT_AND_PREVIEW_TASKS) <= set(trees)
+    return _env_names_read(trees)
+
+
+MIGRATIONS = [
+    REPO / "alembic" / "env.py",
+    *(REPO / "alembic" / "versions").glob("*.py"),
+]
+WITHHELD_FROM_MIGRATE = {"OFM_VAULT_KEY", "LOGFIRE_TOKEN"}
+
+
+def _env_names_read_by_migrations() -> set[str]:
+    trees = {str(p): ast.parse(p.read_text(encoding="utf-8")) for p in MIGRATIONS}
+    imported = set().union(*map(_imported_modules, trees.values()))
+    return _env_names_read(trees | _import_closure(sorted(imported)))
+
+
+def test_migrate_gets_every_setting_the_migrations_read_but_the_secrets():
+    read = _env_names_read_by_migrations()
+    assert read >= WITHHELD_FROM_MIGRATE
+    assert read - WITHHELD_FROM_MIGRATE - set(_service_env("migrate")) == set()
 
 
 def test_only_secrets_the_media_tasks_read_are_withheld_from_them():
