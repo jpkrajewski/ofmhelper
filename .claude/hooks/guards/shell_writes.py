@@ -1,20 +1,19 @@
 import re
 import subprocess
-import time
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from guards.event import ROOT, Guard, HookEvent, Markers, Verdict, block
+from guards.event import ROOT, Guard, HookEvent, Verdict, block, defined_names
 from guards.no_comments import checker
-from guards.skills import required, skill_marker
+from guards.skills import loaded, required
 
 NAME = "shell_writes"
 SCRIPTED_WRITE = re.compile(
     r"\bsed\s+-i|\bpython|\bperl\b|\bawk\b|\bcat\s+>|\btee\b|[^0-9&]>\s*[\w./\"']|"
     r"Set-Content|Out-File|Add-Content"
 )
-SLACK_S = 2.0
+GIT_TIMEOUT_S = 5
 CRLF = "CRLF written into {files} (Windows text mode; .gitattributes is eol=lf): rewrite them with LF."
 COMMENTS = "Comments or docstrings written from the shell: {spots} (CLAUDE.md NO COMMENTS, EVER)."
 SKILLS = (
@@ -27,15 +26,39 @@ class ChangedFile(BaseModel):
     path: str
     is_new: bool
 
+    def added_names(self) -> set[str]:
+        now = (ROOT / self.path).read_text(encoding="utf-8", errors="replace")
+        before = "" if self.is_new else committed_text(self.path)
+        return defined_names(now) - defined_names(before)
+
+    def skills(self) -> list[str]:
+        plain = required(self.path, self.is_new, adds_names=False)
+        if plain == required(self.path, self.is_new, adds_names=True):
+            return plain
+        return required(self.path, self.is_new, adds_names=bool(self.added_names()))
+
+
+def committed_text(path: str) -> str:
+    shown = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"HEAD:{path}"],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=GIT_TIMEOUT_S,
+        check=False,
+    )
+    return shown.stdout if shown.returncode == 0 else ""
+
 
 def changed_by_this_call(event: HookEvent) -> list[ChangedFile]:
     listed = subprocess.run(
         ["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=all"],
         capture_output=True,
         text=True,
+        timeout=GIT_TIMEOUT_S,
         check=True,
     )
-    cutoff = time.time() - event.duration_ms / 1000 - SLACK_S
+    cutoff = event.started_at
     found = [
         ChangedFile(
             path=line[3:].split(" -> ")[-1].strip('"'), is_new=line.startswith("??")
@@ -57,17 +80,9 @@ def named_by(command: str, path: str) -> bool:
 
 def problems(event: HookEvent, files: list[ChangedFile]) -> list[str]:
     paths = [f.path for f in files]
-    markers = Markers.of(event)
     crlf = [p for p in paths if b"\r\n" in (ROOT / p).read_bytes()]
     spots = checker().problems(ROOT, paths)
-    missing = sorted(
-        {
-            s
-            for f in files
-            for s in required(f.path, f.is_new)
-            if not markers.has(skill_marker(s))
-        }
-    )
+    missing = sorted({s for f in files for s in f.skills() if not loaded(event, s)})
     found = []
     if crlf:
         found.append(CRLF.format(files=", ".join(crlf)))

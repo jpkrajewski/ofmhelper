@@ -1,5 +1,6 @@
 import re
 import shlex
+from pathlib import PurePosixPath
 
 from pydantic import BaseModel
 
@@ -15,21 +16,54 @@ ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 WRAPPERS = {"rtk", "sudo", "command", "time", "exec", "nohup"}
 SUBSTITUTION = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")
 SHELL_PROGRAMS = {"bash", "sh", "zsh", "powershell", "pwsh"}
-LAUNCHER_VALUE_FLAGS = {
-    "-u",
-    "--unset",
-    "-C",
-    "--chdir",
-    "-p",
-    "--package",
-    "--from",
-    "--with",
-    "--python",
-    "--directory",
-    "--project",
-}
-TIMEOUT_VALUE_FLAGS = {"-k", "--kill-after", "-s", "--signal"}
-UV_VALUE_FLAGS = {"--project", "--with", "--python", "--directory", "--package"}
+LAUNCHER_VALUE_FLAGS = frozenset(
+    {
+        "-u",
+        "--unset",
+        "-C",
+        "--chdir",
+        "-p",
+        "--package",
+        "--from",
+        "--with",
+        "--python",
+        "--directory",
+        "--project",
+    }
+)
+TIMEOUT_VALUE_FLAGS = frozenset({"-k", "--kill-after", "-s", "--signal"})
+UV_VALUE_FLAGS = frozenset(
+    {"--project", "--with", "--python", "--directory", "--package"}
+)
+FLAG_WRAPPERS = frozendict(
+    {
+        "npx": LAUNCHER_VALUE_FLAGS,
+        "uvx": LAUNCHER_VALUE_FLAGS,
+        "env": LAUNCHER_VALUE_FLAGS,
+        "xargs": frozenset(
+            {
+                "-a",
+                "-d",
+                "-E",
+                "-I",
+                "-L",
+                "-n",
+                "-P",
+                "-s",
+                "--arg-file",
+                "--delimiter",
+            }
+        ),
+        "nice": frozenset({"-n", "--adjustment"}),
+        "setsid": frozenset(),
+        "stdbuf": frozenset({"-i", "-o", "-e", "--input", "--output", "--error"}),
+        "ionice": frozenset({"-c", "-n", "-p", "-P", "-u", "--class", "--classdata"}),
+    }
+)
+
+
+def program_name(word: str) -> str:
+    return PurePosixPath(word.replace("\\", "/")).name.lower().removesuffix(".exe")
 
 
 class Statement(BaseModel):
@@ -38,7 +72,7 @@ class Statement(BaseModel):
 
     @property
     def program(self) -> str:
-        return self.words[0].lower() if self.words else ""
+        return program_name(self.words[0]) if self.words else ""
 
 
 def without_heredoc_bodies(command: str) -> str:
@@ -60,42 +94,28 @@ def tokens(command: str, posix: bool) -> list[str]:
 
 def unwrapped(words: list[str]) -> list[str]:
     while words:
-        head = words[0].lower()
+        head = program_name(words[0])
         if ENV_ASSIGNMENT.match(words[0]) or head in WRAPPERS:
             words = words[1:]
         elif head == "uv" and words[1:2] == ["run"]:
-            words = _after_uv_flags(words[2:])
+            words = _after_flags(words[2:], UV_VALUE_FLAGS)
         elif head == "uv" and words[1:3] == ["tool", "run"]:
-            words = _after_launcher_flags(words[3:])
+            words = _after_flags(words[3:], LAUNCHER_VALUE_FLAGS)
         elif head in ("python", "python3", "py") and words[1:2] == ["-m"]:
             words = words[2:]
-        elif head in ("npx", "uvx", "env"):
-            words = _after_launcher_flags(words[1:])
+        elif head in FLAG_WRAPPERS:
+            words = _after_flags(words[1:], FLAG_WRAPPERS[head])
         elif head == "timeout":
-            words = _after_timeout(words[1:])
+            words = _after_flags(words[1:], TIMEOUT_VALUE_FLAGS)[1:]
         else:
             return words
     return words
 
 
-def _after_launcher_flags(words: list[str]) -> list[str]:
+def _after_flags(words: list[str], value_flags: frozenset[str]) -> list[str]:
     index = 0
     while index < len(words) and words[index].startswith("-"):
-        index += 2 if words[index] in LAUNCHER_VALUE_FLAGS else 1
-    return words[index:]
-
-
-def _after_timeout(words: list[str]) -> list[str]:
-    index = 0
-    while index < len(words) and words[index].startswith("-"):
-        index += 2 if words[index] in TIMEOUT_VALUE_FLAGS else 1
-    return words[index + 1 :]
-
-
-def _after_uv_flags(words: list[str]) -> list[str]:
-    index = 0
-    while index < len(words) and words[index].startswith("-"):
-        index += 2 if words[index] in UV_VALUE_FLAGS else 1
+        index += 2 if words[index] in value_flags else 1
     return words[index:]
 
 

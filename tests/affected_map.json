@@ -1,0 +1,80 @@
+{
+  "links": [
+    {
+      "when": ["src/ofmhelpers/web/templates/edit.html", "src/ofmhelpers/web/static/js/edit.js"],
+      "run": ["tests/e2e/test_edit_page.py"]
+    },
+    {
+      "when": [
+        "src/ofmhelpers/web/templates/trials*.html",
+        "src/ofmhelpers/web/templates/_trials_cards.html",
+        "src/ofmhelpers/web/static/js/trials.js"
+      ],
+      "run": ["tests/e2e/test_trials_page.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/web/templates/viral.html", "src/ofmhelpers/web/static/js/viral.js"],
+      "run": ["tests/e2e/test_viral_page.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/web/static/js/tour.js"],
+      "run": ["tests/e2e/test_tour_page.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/web/static/js/clone-picks.js"],
+      "run": ["tests/e2e/test_clone_picks_page.py"]
+    },
+    {
+      "when": [
+        "src/ofmhelpers/web/static/js/notifications.js",
+        "src/ofmhelpers/web/static/js/notify.js",
+        "src/ofmhelpers/web/static/js/menu.js"
+      ],
+      "run": ["tests/e2e/test_notifications_menu.py"]
+    },
+    {
+      "when": [
+        "src/ofmhelpers/web/static/js/hidden-cards.js",
+        "src/ofmhelpers/web/templates/_card_hide.html",
+        "src/ofmhelpers/web/templates/_gallery_hidden.html"
+      ],
+      "run": ["tests/e2e/test_gallery_hide.py"]
+    },
+    {
+      "when": [
+        "src/ofmhelpers/web/static/js/download.js",
+        "src/ofmhelpers/web/templates/_download_gallery_card.html",
+        "src/ofmhelpers/web/templates/download_gallery_fragment.html"
+      ],
+      "run": ["tests/e2e/test_download_cards_page.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/web/templates/download_assets_form.html"],
+      "run": ["tests/e2e/test_download_sheet_page.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/web/static/js/idempotency.js", "src/ofmhelpers/web/static/js/upload-guard.js"],
+      "run": ["tests/e2e/test_lost_connection.py", "tests/e2e/test_slow_connection.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/config/retired.json", "src/ofmhelpers/web/nav.py"],
+      "run": ["tests/integration/web/test_nav.py", "tests/integration/web/test_page_chrome.py"]
+    },
+    {
+      "when": ["src/ofmhelpers/background/sweeps.py"],
+      "run": ["tests/unit/web/test_sweeps.py", "tests/unit/test_sweeps_entrypoint.py"]
+    },
+    {
+      "when": ["scripts/*.sh", ".github/workflows/*.yml"],
+      "run": ["tests/unit/scripts/test_shell_parses.py", "tests/unit/scripts/test_workflows.py"]
+    },
+    {
+      "when": ["scripts/test.sh"],
+      "run": ["tests/unit/scripts/test_test_sh.py"]
+    },
+    {
+      "when": [".claude/hooks/**"],
+      "run": ["tests/unit/hooks/test_guards.py"]
+    }
+  ]
+}

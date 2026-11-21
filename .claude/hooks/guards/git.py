@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, deny, owner_said_ship
-from guards.shell import Statement, shell_statements
+from guards.shell import Statement, program_name, shell_statements
 
 NAME = "git"
 OWNER_ONLY = {"commit", "push"}
@@ -18,14 +18,25 @@ FOREGROUND_PUSH = (
     "git push runs the 3+ minute pre-push suite and times out in the foreground: run it with "
     "run_in_background, then compare git ls-remote origin dev with HEAD. Never push twice."
 )
+PIPED_PUSH = (
+    "Never pipe git push through tail, head or grep: the pipe hides the pre-push verdict and "
+    "its exit code. Write the push log to a file (git push origin dev > reports/loops/push.log "
+    "2>&1, run_in_background) and read that file."
+)
+READ_ONLY_STASH = ("list", "show")
+LOG_FILTERS = {"tail", "head", "grep", "rg", "select-object", "select-string"}
 
 
-def subcommand(statement: Statement) -> str:
+def subcommand(statement: Statement) -> list[str]:
     words = statement.words[1:]
     index = 0
     while index < len(words) and words[index].startswith("-"):
         index += 2 if words[index] in VALUE_FLAGS else 1
-    return words[index] if index < len(words) else ""
+    return words[index:]
+
+
+def piped_to_a_filter(statement: Statement) -> bool:
+    return any(program_name(words[0]) in LOG_FILTERS for words in statement.piped_to)
 
 
 def outside_this_repo(statement: Statement, event: HookEvent) -> bool:
@@ -47,12 +58,14 @@ def judge(statement: Statement, event: HookEvent) -> Verdict | None:
         return None if owner_said_ship(event) else deny(NAME, NOT_YOURS)
     if statement.program != "git":
         return None
-    action = subcommand(statement)
-    if action == "stash":
+    action, *rest = subcommand(statement) or [""]
+    if action == "stash" and next(iter(rest), "") not in READ_ONLY_STASH:
         return deny(NAME, STASH)
     if action in OWNER_ONLY or (action == "reset" and "--hard" in statement.words):
         if not owner_said_ship(event):
             return deny(NAME, NOT_YOURS)
+        if action == "push" and piped_to_a_filter(statement):
+            return deny(NAME, PIPED_PUSH)
         if action == "push" and not event.in_background:
             return deny(NAME, FOREGROUND_PUSH)
     return None

@@ -16,6 +16,14 @@ class SkillRule(BaseModel):
     path: re.Pattern[str]
     skills: tuple[str, ...]
     new_files_only: bool = False
+    new_code_only: bool = False
+
+    def needed(self, relative: str, is_new: bool, adds_names: bool) -> bool:
+        if not self.path.search(relative):
+            return False
+        if self.new_files_only:
+            return is_new
+        return is_new or adds_names or not self.new_code_only
 
 
 RULES = (
@@ -31,6 +39,13 @@ RULES = (
         path=re.compile(r"^src/ofmhelpers/(features|integrations)/"),
         skills=("architecture",),
         new_files_only=True,
+    ),
+    SkillRule(
+        path=re.compile(
+            r"^src/ofmhelpers/(web/routers|web/static/js|features|integrations)/.*\.(py|js|html)$"
+        ),
+        skills=("failure-modes",),
+        new_code_only=True,
     ),
     SkillRule(
         path=re.compile(r"(^|/)(jobs|tasks|worker|sweeps|queues?)(\.py$|/)"),
@@ -49,28 +64,31 @@ def skill_marker(name: str) -> str:
     return f"skill-{name.rsplit(':', maxsplit=1)[-1]}"
 
 
-def required(relative: str, is_new: bool) -> list[str]:
+def required(relative: str, is_new: bool, adds_names: bool) -> list[str]:
     return [
         skill
         for rule in RULES
-        if rule.path.search(relative) and (is_new or not rule.new_files_only)
+        if rule.needed(relative, is_new, adds_names)
         for skill in rule.skills
     ]
 
 
+def loaded(event: HookEvent, skill: str) -> bool:
+    marker = skill_marker(skill)
+    return Markers.of(event).has(marker) or Markers.main(event).has(marker)
+
+
 def check(event: HookEvent) -> Verdict | None:
-    markers = Markers.of(event)
     if event.hook_event_name == "PostToolUse":
         skill = str(event.tool_input.get("skill") or "")
         if skill:
-            markers.set(skill_marker(skill))
+            Markers.of(event).set(skill_marker(skill))
         return None
     if not event.relative:
         return None
     is_new = not (ROOT / event.relative).exists()
-    missing = [
-        s for s in required(event.relative, is_new) if not markers.has(skill_marker(s))
-    ]
+    needed = required(event.relative, is_new, bool(event.added_names()))
+    missing = [s for s in needed if not loaded(event, s)]
     if not missing:
         return None
     return deny(NAME, LOAD_FIRST.format(skills=", ".join(missing), path=event.relative))

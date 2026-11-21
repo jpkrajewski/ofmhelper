@@ -1,15 +1,22 @@
+import os
 import sys
 import time
 import traceback
 
 from guards import GUARDS
-from guards.event import STATE, HookEvent, Verdict
+from guards.event import STATE, HookEvent, Verdict, deny
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic.alias_generators import to_camel
 
 AUDIT = STATE / "audit.jsonl"
+AUDIT_OLD = STATE / "audit.jsonl.1"
+AUDIT_LIMIT_BYTES = 20 * 1024 * 1024
 ERRORS = STATE / "errors.log"
 TARGET_LIMIT = 160
+FAIL_CLOSED = frozenset({"git", "pr_comments", "tests"})
+CRASHED = "guard {name} crashed: {error}; fix it before this command"
+REFUSED_EXIT = 2
+STDOUT_FD = 1
 
 
 class AuditLine(BaseModel):
@@ -46,8 +53,19 @@ def audit(event: HookEvent, verdicts: list[Verdict]) -> None:
         fields=sorted(event.model_extra or {}),
     )
     STATE.mkdir(parents=True, exist_ok=True)
+    rotate_audit()
     with AUDIT.open("a", encoding="utf-8") as log:
         log.write(line.model_dump_json() + "\n")
+
+
+def rotate_audit() -> None:
+    try:
+        if AUDIT.stat().st_size > AUDIT_LIMIT_BYTES:
+            AUDIT.replace(AUDIT_OLD)
+    except (
+        OSError
+    ):  # silent: missing, or another hook rotated or holds it; the next call retries
+        return
 
 
 class SpecificOutput(BaseModel):
@@ -96,29 +114,49 @@ def response(event: HookEvent, verdicts: list[Verdict]) -> HookAnswer | None:
     return None
 
 
-def failed(where: str) -> None:
+def failed(where: str, outcome: str) -> None:
     trace = traceback.format_exc()
-    STATE.mkdir(parents=True, exist_ok=True)
-    with ERRORS.open("a", encoding="utf-8") as log:
-        log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {where}\n{trace}\n")
-    sys.stderr.write(f"guard {where} failed, call allowed: {trace.splitlines()[-1]}\n")
+    try:
+        STATE.mkdir(parents=True, exist_ok=True)
+        with ERRORS.open("a", encoding="utf-8") as log:
+            log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {where}\n{trace}\n")
+    except OSError as exc:
+        sys.stderr.write(f"guard errors.log unwritable: {exc}\n")
+    sys.stderr.write(
+        f"guard {where} failed, call {outcome}: {trace.splitlines()[-1]}\n"
+    )
 
 
 def main() -> int:
     try:
         event = HookEvent.model_validate_json(sys.stdin.read())
     except ValidationError:
-        failed("input")
+        failed("input", "allowed")
         return 0
     try:
         verdicts = judged(event)
-        audit(event, verdicts)
-        answer = response(event, verdicts)
     except Exception:
-        failed("dispatcher")
+        failed("dispatcher", "allowed")
         return 0
-    if answer:
-        print(answer.model_dump_json(exclude_none=True))
+    try:
+        audit(event, verdicts)
+    except Exception:
+        failed("audit", "judged unaudited")
+    return answered(event, verdicts)
+
+
+def answered(event: HookEvent, verdicts: list[Verdict]) -> int:
+    try:
+        answer = response(event, verdicts)
+        if answer:
+            print(answer.model_dump_json(exclude_none=True), flush=True)
+    except Exception:
+        refused = reasons(verdicts, "deny") or reasons(verdicts, "block")
+        failed("response", "refused by exit 2" if refused else "allowed")
+        if refused:
+            sys.stderr.write(refused + "\n")
+            os.dup2(os.open(os.devnull, os.O_WRONLY), STDOUT_FD)
+            return REFUSED_EXIT
     return 0
 
 
@@ -127,8 +165,14 @@ def judged(event: HookEvent) -> list[Verdict]:
     for guard in GUARDS:
         try:
             verdict = guard.check(event) if guard.applies(event) else None
-        except Exception:
-            failed(guard.name)
+        except Exception as exc:
+            closed = guard.name in FAIL_CLOSED
+            failed(guard.name, "denied" if closed else "allowed")
+            if closed:
+                error = f"{type(exc).__name__}: {exc}"[:300]
+                verdicts.append(
+                    deny(guard.name, CRASHED.format(name=guard.name, error=error))
+                )
             continue
         if verdict:
             verdicts.append(verdict)

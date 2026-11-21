@@ -7,16 +7,19 @@ NAME = "review_before_done"
 EDITS = {"Edit", "Write", "MultiEdit"}
 AGENTS = {"Agent", "Task"}
 SHELLS = {"Bash", "PowerShell"}
-REVIEW_WORDS = re.compile(r"review", re.IGNORECASE)
+REVIEWER_AGENT = "caveman:cavecrew-reviewer"
 KIMI_RUN = re.compile(
     r"kimi/ask\.py\s+review|kimi\.exe|(^|[;&|(]\s*)kimi\s+(-p|-r)\b", re.MULTILINE
 )
 REVIEWER_FIRST = (
     "Owner (2026-11-20): before calling a feature done, an independent reviewer checks it for failures, "
     "races, scale and safety, and you fix what it finds. The reviewer is the cavecrew reviewer: the Agent "
-    "tool with subagent_type caveman:cavecrew-reviewer on the diff. Only if it fails or times out, Kimi as "
-    "backup: python .claude/skills/kimi/ask.py review <task.md> <name> (say why the reviewer failed). "
-    "If this stop is a question to the owner, not done, say so and stop again."
+    "tool with subagent_type caveman:cavecrew-reviewer on the diff. Brief it with "
+    ".claude/skills/failure-modes/SKILL.md and the .claude/rules files that match the changed paths, and "
+    "ask for every finding in one pass. Then one fix round, then one review of the fixes only. Every "
+    "finding that breaks the feature's contract is fixed; none is deferred. Only if the reviewer fails "
+    "or times out, Kimi as backup: python .claude/skills/kimi/ask.py review <task.md> <name> (say why "
+    "the reviewer failed). If this stop is a question to the owner, not done, say so and stop again."
 )
 
 
@@ -25,8 +28,10 @@ def is_kimi(event: HookEvent) -> bool:
 
 
 def is_review_agent(event: HookEvent) -> bool:
-    text = f"{event.tool_input.get('description', '')} {event.tool_input.get('subagent_type', '')}"
-    return event.tool_name in AGENTS and bool(REVIEW_WORDS.search(text))
+    return (
+        event.tool_name in AGENTS
+        and event.tool_input.get("subagent_type") == REVIEWER_AGENT
+    )
 
 
 def is_code(path: str) -> bool:

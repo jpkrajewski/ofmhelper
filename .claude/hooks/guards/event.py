@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +13,16 @@ TEST_LOCK = ROOT / "reports" / ".running"
 SHIP_OPEN = STATE / "ship.open"
 NOTIFICATION = "<task-notification>"
 STALE_LOCK_S = 3600
+CLOCK_SLACK_S = 2.0
+DEFINITION = re.compile(
+    r"^[ \t]*(?:async\s+def|def|class|(?:export\s+)?(?:default\s+)?(?:async\s+)?function)"
+    r"[\s*]+([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+
+
+def defined_names(text: str) -> set[str]:
+    return {found[1] for found in DEFINITION.finditer(text)}
 
 
 class HookEvent(BaseModel):
@@ -28,10 +39,15 @@ class HookEvent(BaseModel):
     stop_hook_active: bool = False
     last_assistant_message: str = ""
     duration_ms: float = 0.0
+    transcript_path: str = ""
 
     @property
     def command(self) -> str:
         return str(self.tool_input.get("command") or "")
+
+    @property
+    def started_at(self) -> float:
+        return time.time() - self.duration_ms / 1000 - CLOCK_SLACK_S
 
     @property
     def in_background(self) -> bool:
@@ -70,6 +86,14 @@ class HookEvent(BaseModel):
         ]
         return "\n".join(str(part) for part in parts if part)
 
+    def added_names(self) -> set[str]:
+        target = ROOT / self.relative
+        if self.tool_name == "Write" and self.relative and target.is_file():
+            old = target.read_text(encoding="utf-8", errors="replace")
+        else:
+            old = self.replaced_text
+        return defined_names(self.written_text) - defined_names(old)
+
     @property
     def is_owner_prompt(self) -> bool:
         return bool(self.prompt.strip()) and not self.prompt.lstrip().startswith(
@@ -104,9 +128,17 @@ class Markers(BaseModel):
             folder=STATE / "state" / f"{event.session_id}-{event.agent_id or 'main'}"
         )
 
-    def set(self, name: str) -> None:
+    @classmethod
+    def main(cls, event: HookEvent) -> Markers:
+        return cls.of(event.model_copy(update={"agent_id": ""}))
+
+    def set(self, name: str, value: str = "") -> None:
         self.folder.mkdir(parents=True, exist_ok=True)
-        (self.folder / name).write_text(str(time.time()), encoding="utf-8")
+        (self.folder / name).write_text(value or str(time.time()), encoding="utf-8")
+
+    def value(self, name: str) -> str:
+        path = self.folder / name
+        return path.read_text(encoding="utf-8") if path.is_file() else ""
 
     def clear(self, name: str) -> None:
         (self.folder / name).unlink(missing_ok=True)
@@ -117,6 +149,13 @@ class Markers(BaseModel):
     def since(self, name: str) -> float:
         path = self.folder / name
         return path.stat().st_mtime if path.is_file() else 0.0
+
+
+def modified_at(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:  # silent: a missing file has no time
+        return 0.0
 
 
 def owner_said_ship(event: HookEvent) -> bool:
