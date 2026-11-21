@@ -1,12 +1,9 @@
 (() => {
 
-    const PIECES = /(\s*,\s*|\s*\r?\n\s*)/;
-
     let syncChips = () => {};
 
     function asks(prompt, chip) {
-        const pattern = new RegExp(chip.dataset.pattern, "i");
-        return prompt.split(PIECES).some((piece, i) => i > 1 && i % 2 === 0 && pattern.test(piece));
+        return prompt.includes(chip.dataset.text);
     }
 
     function withAddon(prompt, chip) {
@@ -14,14 +11,35 @@
         return base ? `${base}, ${chip.dataset.text}` : chip.dataset.text;
     }
 
+    function cut(prompt, from, to) {
+        const before = prompt.slice(0, from).replace(/[\s,]+$/, "");
+        const after = prompt.slice(to).replace(/^[\s,]+/, "");
+        return before && after ? `${before}, ${after}` : before || after;
+    }
+
     function withoutAddon(prompt, chip) {
-        const pattern = new RegExp(chip.dataset.pattern, "i");
-        const parts = prompt.split(PIECES);
-        const kept = [parts[0]];
-        for (let i = 1; i < parts.length; i += 2) {
-            if (!pattern.test(parts[i + 1])) kept.push(parts[i], parts[i + 1]);
+        const at = prompt.indexOf(chip.dataset.text);
+        return at < 0 ? prompt : cut(prompt, at, at + chip.dataset.text.length);
+    }
+
+    function deleteWholeAddon(prompt, chips, before) {
+        const now = prompt.value;
+        if (now.length >= before.length) return false;
+        let from = 0;
+        while (from < now.length && now[from] === before[from]) from += 1;
+        let kept = 0;
+        while (kept < now.length - from && now[now.length - 1 - kept] === before[before.length - 1 - kept]) kept += 1;
+        const to = before.length - kept;
+        for (const chip of chips()) {
+            const at = before.indexOf(chip.dataset.text);
+            const end = at + chip.dataset.text.length;
+            if (at < 0 || to <= at || from >= end) continue;
+            const start = Math.min(from, at);
+            prompt.value = cut(before, start, Math.max(to, end));
+            prompt.setSelectionRange(start, start);
+            return true;
         }
-        return kept.join("");
+        return false;
     }
 
     function initChips(form) {
@@ -49,6 +67,15 @@
                 audio.checked = !audio.checked;
                 audio.dispatchEvent(new Event("change", { bubbles: true }));
             }
+        });
+        let before = prompt.value;
+        prompt.addEventListener("beforeinput", () => {
+            before = prompt.value;
+        });
+        prompt.addEventListener("input", (e) => {
+            const fixed = e.isTrusted && deleteWholeAddon(prompt, chips, before);
+            before = prompt.value;
+            if (fixed) prompt.dispatchEvent(new Event("input", { bubbles: true }));
         });
         prompt.addEventListener("input", sync);
         audio.addEventListener("change", sync);

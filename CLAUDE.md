@@ -33,6 +33,7 @@ Define success criteria; loop until verified.
 - **PROTECT PAID AND LIVE SYSTEMS.** API cost, proxies, rate limits, retries, concurrency, background jobs, security, data integrity. Never destructive on prod, never expose secrets, never overwrite valuable data, no unnecessary paid call. Verify on dev.
 - **THE RULES DECIDE.** A question a rule answers is not a question for the owner: apply it, report it done. Only destructive, paid or production choices go to the owner.
 - **HANDOFF.** What changed, design decisions, files, commands run with results, remaining risks, what to check by hand.
+- **ONE ITEM, SHIP, NEXT.** A list of asks is worked one item at a time: finish the item, ship it on its own, then start the next. Never several items in one batch (owner 2026-11-21).
 
 ## SELF-LEARNING
 @BRAIN.md

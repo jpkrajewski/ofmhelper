@@ -54,8 +54,15 @@ def test_a_chip_adds_its_words_and_takes_them_back_out(va: Session):
     chip.click()
     expect(prompt).to_have_value(DEFAULT_PROMPT)
     expect(chip).to_have_attribute("aria-pressed", "false")
-    prompt.fill(f"{DEFAULT_PROMPT}, NO TATTOS")
-    expect(chip).to_have_attribute("aria-pressed", "true")
+    chip.click()
+    prompt.press("End")
+    prompt.press("Backspace")
+    expect(prompt).to_have_value(DEFAULT_PROMPT)
+    expect(chip).to_have_attribute("aria-pressed", "false")
+    chip.click()
+    prompt.press("End")
+    prompt.press("Control+Backspace")
+    expect(prompt).to_have_value(DEFAULT_PROMPT)
     assert va.js_errors == []
 
 

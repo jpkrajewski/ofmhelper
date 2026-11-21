@@ -2,7 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
 {% import "_icons.html" as ic %}
-{% macro addon_chip(a) %}{{ ui.chip(a.label, hook="addon-chip", attrs={"data-text": a.text, "data-pattern": a.pattern}) }}{% endmacro %}
+{% macro addon_chip(a) %}{{ ui.chip(a.label, hook="addon-chip", attrs={"data-text": a.text}) }}{% endmacro %}
 {% block content %}
 {{ ui.page_header("Clone") }}
 {% set sop = true %}
