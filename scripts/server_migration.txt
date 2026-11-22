@@ -1,0 +1,207 @@
+SERVER MIGRATION
+scripts/server_migration.sh: moves production from the old server to a new one.
+
+Placeholders in this text:
+  <old>        the old server, user@address, from OFM_DEPLOY_HOST in deploy.local.env
+  <new>        the new server, user@address, given on the command line
+  <old-ip>     the address the old server connects from
+  <new-ip>     the new server's IP
+  <dir>        the app checkout on the server, OFM_DEPLOY_DIR in deploy.local.env
+  <domain>     the site's domain, read from APP_BASE_URL in <dir>/.env
+  <key>        the deploy SSH key, OFM_DEPLOY_SSH_KEY in deploy.local.env
+
+
+1. HOW TO RUN IT
+
+Before:
+  - Order a fresh Ubuntu 24.04 VPS. Pick the deploy SSH key (the public half
+    of <key>) when ordering, so the user ubuntu logs in with it and has
+    passwordless sudo (the provider default).
+  - Run on your PC, from this checkout, in Git Bash. deploy.local.env must
+    exist (as for scripts/deploy.sh). gh must be logged in (gh auth status).
+
+Move:
+  scripts/server_migration.sh ubuntu@<new-ip>
+
+  It prints each step. When it ends with "moved", production runs on the new
+  server and the old server forwards every request to it.
+
+After:
+  - At your DNS provider, set the A records of <domain> and www.<domain> to
+    <new-ip>. Delete any AAAA record of them.
+  - When the new address is live (minutes to hours, the record's TTL):
+      scripts/server_migration.sh ubuntu@<new-ip> finish
+    It checks public DNS (A = <new-ip> only, no AAAA) and https://<domain>/health,
+    and stops the new server trusting the old one's forwarded client addresses.
+  - Keep the old server a few days, then cancel it.
+
+Settings (environment variables, optional):
+  OFM_MIGRATION_DRAIN_S   how long to wait for running jobs before the stop
+                          (default 900 s; jobs still running after that are
+                          cut off and restarted by recovery, as after a deploy)
+
+
+2. WHAT IT DOES, STEP BY STEP
+
+ 1. Checks both servers: ssh works with <key>, passwordless sudo, the new one
+    is Ubuntu, the new one has enough free disk (what the old one uses + 20 %
+    + 10 GB), the new one is not the old one (a random token written to
+    ~/.ofm_migration_id on the old server must not be readable on the new
+    one), the app runs on the old one, nothing runs on the new one yet, no
+    Deploy run is queued or running.
+ 2. Turns the GitHub Deploy workflow off for the whole run, so no deploy can
+    start the old stack again or deploy into the half-built new one.
+ 3. Installs on the new server: Docker at the old server's exact version,
+    nginx, certbot, ufw, rsync.
+ 4. Copies the host setup from the old server: /etc/nginx (site, upstream),
+    /etc/letsencrypt (the TLS certificates and their renewal config), the
+    sshd hardening drop-in, the BBR sysctl file, Docker's daemon.json, the
+    time zone, and the old server's authorized SSH keys (merged). Then
+    checks the sshd and nginx configs, reloads them, opens ufw 22/80/443.
+ 5. Sets up the direct server-to-server copy (section 3).
+ 6. Copies the whole checkout <dir> while the old server still serves: .git,
+    .env, uploads/, downloads/, kieai_out/, everything in it.
+ 7. Copies the app images: the release that runs now and the one kept for a
+    rollback (the same image moves, it is not rebuilt). Pulls the pinned
+    Postgres, Redis and pot-provider images. Creates the containers and the
+    empty volumes on the new server, without starting them.
+ 8. Waits for running jobs to end (up to OFM_MIGRATION_DRAIN_S).
+ 9. DOWNTIME STARTS: stops the app, the workers and the sweeps on the old
+    server, counts the rows of every table, stops Postgres, Redis and
+    pot-provider (Postgres must exit cleanly).
+10. Copies what changed since step 6, then every volume of the app (Postgres
+    data, Redis data, cookies) byte for byte.
+11. Starts Postgres and Redis on the new server and compares the row count
+    of every table with the old one: any difference stops the move.
+12. Starts everything on the new server, then requires: /health 200, every
+    worker and the sweeps running with no restart, and
+    https://<domain>/health 200 on <new-ip> (nginx, certificate, firewall).
+13. DOWNTIME ENDS: the old server's nginx now forwards every request to the
+    new server (https, same domain), and the new server's nginx takes the
+    real client address from the old one's X-Forwarded-For. From here the
+    DNS switch costs no downtime: old addresses still reach the old server,
+    which forwards.
+14. Points deploys at the new server: deploy.local.env OFM_DEPLOY_HOST and
+    the GitHub secrets OFM_DEPLOY_HOST and OFM_DEPLOY_KNOWN_HOSTS.
+15. Moves the crontab: the old server's crontab goes to the new one; on the
+    old one it is saved to ~/crontab.before-migration and cleared.
+16. Turns the Deploy workflow back on.
+
+Nothing on the old server is deleted. Its containers are stopped (they do
+not come back on a reboot), its data, uploads and images stay.
+
+
+3. HOW THE DATA GOES FROM ONE SERVER TO THE OTHER
+
+The script runs on your PC and steers both servers over ssh with <key>.
+The big data never passes through your PC:
+
+  - The script makes a temporary key on the old server
+    (~/.ssh/ofm_migration).
+  - It adds that key's public half to the new server's authorized_keys as
+      from="<old-ip>",restrict <the key>
+    so the new server accepts it only from the old server's address, with
+    no shell features (no pty, no forwarding).
+  - It checks the old server can log in to the new one with it.
+  - Then the old server sends straight to the new one:
+      files:    rsync -aH --numeric-ids --delete over ssh into <dir>
+                (--delete only on the new side; the old side is never
+                changed)
+      images:   docker save | gzip | ssh <new> "gunzip | docker load"
+      volumes:  tar of each stopped volume | ssh <new> tar into the same
+                volume there (emptied first, so a rerun is clean)
+  - Only the small files of step 4 go through your PC:
+      ssh <old> "tar c ..." | ssh <new> "tar x ..."
+  - On every exit, success or failure, the temporary key is removed from
+    the new server's authorized_keys and deleted on the old server.
+
+If the old server reaches the new one from another address than its own
+(a NAT between them), the test login in step 5 fails and the script stops
+with that message before anything is copied.
+
+
+4. WHAT HAPPENS WHEN SOMETHING FAILS
+
+  - Before step 9 (the old server still serves): the script stops with the
+    reason. Nothing changed on the old server. Run it again: every step can
+    run twice (installs are skipped when present, rsync copies only what
+    differs, the image load is skipped when the image is there, volumes are
+    emptied before they are filled).
+  - From step 9 until the move is done: the script stops the new server,
+    checks that nothing runs there, puts the old server's nginx site back
+    (from /etc/nginx/sites-available/ofmhelpers.before-migration) and starts
+    the old stack again with its release. If the new server cannot be
+    confirmed stopped, it does NOT start the old one (two live copies would
+    both send messages and write to Drive) and prints the two commands to
+    run by hand.
+  - The Deploy workflow is turned back on, unless the GitHub secrets were
+    half changed; then it stays off and the script says which to set.
+  - Ctrl+C, a closed terminal or a kill: handled the same way.
+  - A second run while one runs: refused (lock in reports/.server_migration).
+
+
+5. HOW IT WAS VERIFIED (2026-11-22)
+
+Test servers: two throwaway Docker containers on the owner's PC, each a
+real Ubuntu 24.04 with sshd, sudo, apt and its own Docker inside, on a
+private network, reached over ssh with a test key.
+
+  Old test server, set up like production: Docker 29.10, nginx with the
+  repo's site (nginx/ofmhelpers.conf) and a self-signed certificate for a
+  test domain, the sshd hardening, BBR and daemon.json files, the checkout
+  in <dir>, the release image built from the main commit, the production
+  snapshot loaded into its database, 25 upload files, a crontab. All 9
+  services up, /health 200, https 200.
+
+  New test server: bare Ubuntu.
+
+Run: the real script with OFM_MIGRATION_LOCAL=1 (the test switch: no
+deploy.local.env, no GitHub, no public DNS; OFM_MIGRATION_OLD,
+OFM_DEPLOY_DIR, OFM_DEPLOY_SSH_KEY, OFM_MIGRATION_SSH_CONFIG and
+OFM_MIGRATION_NEW_IP say where the test servers are).
+
+Three runs stopped on real bugs, each fixed:
+  1. The same-server check compared /etc/machine-id, which both test
+     servers shared (same image); a cloned VPS could share it too. Now a
+     random token (step 1).
+  2. A fresh nginx ships sites-enabled/default; with the copied site nginx
+     saw two default servers and refused to start. Now sites-enabled is
+     emptied before the copy (step 4).
+  3. rsync was given the ssh command with the host in it, so the host ended
+     up as the remote command. Now rsync gets the ssh command only.
+
+The fourth run ended "moved", exit 0, in 3 min 15 s. Then checked by hand on
+both servers:
+  New server: all 9 services up, 27 of 27 upload files, 48 tables with every
+  row count equal, Postgres, Redis and cookie volumes present, the sshd, BBR,
+  TLS and nginx files in place, the crontab moved, the temporary key gone.
+  Old server: every container stopped, its data and uploads kept, https
+  through it answered 200 from the new server, its crontab saved and
+  cleared, the temporary key gone.
+
+Not proven by the test:
+  - systemd: the test servers use a stand-in systemctl; a real VPS uses
+    systemd.
+  - ufw and certbot renewal on a real VPS kernel.
+  - Real public addresses (a NAT is refused, section 3).
+  - The GitHub part (Deploy workflow off/on, the two secrets): skipped in
+    the test.
+  - Size and downtime: production holds about 46 GB, the test 0.7 GB. The
+    bulk copy runs before the downtime; the downtime copies only what
+    changed since, plus the database, Redis and cookie volumes.
+  - The finish step (after the DNS change).
+
+
+6. REPEAT THE TEST
+
+  OFM_MIGRATION_LOCAL=1 \
+  OFM_MIGRATION_OLD=ubuntu@<test old> \
+  OFM_DEPLOY_DIR=<dir> \
+  OFM_DEPLOY_SSH_KEY=<test key> \
+  OFM_MIGRATION_SSH_CONFIG=<ssh config that names both test servers> \
+  OFM_MIGRATION_NEW_IP=<test new ip> \
+  scripts/server_migration.sh ubuntu@<test new>
+
+The test servers are not in the repo (they were throwaway containers); build
+two Ubuntu 24.04 machines or containers with sshd and passwordless sudo, put
+the app on the old one as on production, and run the command above.
