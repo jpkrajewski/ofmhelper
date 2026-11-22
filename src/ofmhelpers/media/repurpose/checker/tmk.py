@@ -4,24 +4,13 @@ import tempfile
 import time
 from pathlib import Path
 
-from pydantic import BaseModel
-
 from ofmhelpers.config import settings
 from ofmhelpers.media.ffmpeg import binary
+from ofmhelpers.media.repurpose.checker.schema import TmkScore
 
 THRESHOLD = 0.7
 _KEEP_S = 86400
 _TOOLS = ("tmk-hash-video", "tmk-two-level-score")
-
-
-class TmkScore(BaseModel, frozen=True):
-    level1: float
-    level2: float
-    threshold: float = THRESHOLD
-
-    @property
-    def matched(self) -> bool:
-        return self.level1 >= self.threshold and self.level2 >= self.threshold
 
 
 def _tool(name: str) -> Path:
@@ -94,5 +83,9 @@ def compare(source: Path, copy: Path, timeout_s: int) -> TmkScore:
             timeout=timeout_s,
         ).stdout.split()
     if len(out) < 2:  # noqa: PLR2004 - "level1 level2 file file"
-        return TmkScore(level1=0.0, level2=0.0)
-    return TmkScore(level1=round(float(out[0]), 4), level2=round(float(out[1]), 4))
+        return TmkScore(level1=0.0, level2=0.0, threshold=THRESHOLD)
+    return TmkScore(
+        level1=round(float(out[0]), 4),
+        level2=round(float(out[1]), 4),
+        threshold=THRESHOLD,
+    )

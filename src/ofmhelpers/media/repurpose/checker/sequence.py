@@ -1,13 +1,8 @@
 import numpy as np
-from pydantic import BaseModel
+
+from ofmhelpers.media.repurpose.checker.schema import SequenceMatch
 
 _SCALES = sorted(np.round(np.arange(0.80, 1.2501, 0.01), 2), key=lambda s: abs(s - 1))
-
-
-class SequenceMatch(BaseModel, frozen=True):
-    share: float
-    scale: float
-    offset_s: float
 
 
 def best_line(

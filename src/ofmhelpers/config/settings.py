@@ -1389,6 +1389,15 @@ class RepurposeSettings(BaseSettings):
     attempts: int = Field(
         default=3, ge=1, le=10, validation_alias="OFM_REPURPOSE_ATTEMPTS"
     )
+    strength_rounds: int = Field(
+        default=2, ge=1, le=3, validation_alias="OFM_REPURPOSE_STRENGTH_ROUNDS"
+    )
+    strength_step: float = Field(
+        default=0.02, ge=0, le=0.1, validation_alias="OFM_REPURPOSE_STRENGTH_STEP"
+    )
+    max_tries: int = Field(
+        default=10, ge=1, le=10, validation_alias="OFM_REPURPOSE_MAX_TRIES"
+    )
     max_copies: int = Field(
         default=5, ge=1, validation_alias="OFM_REPURPOSE_MAX_COPIES"
     )

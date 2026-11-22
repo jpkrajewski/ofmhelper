@@ -9,21 +9,13 @@ lazy import torch
 
 from ofmhelpers.config import settings
 from ofmhelpers.media.repurpose.checker import frames
-from ofmhelpers.media.repurpose.checker.sequence import SequenceMatch, best_line
+from ofmhelpers.media.repurpose.checker.schema import DescriptorScore
+from ofmhelpers.media.repurpose.checker.sequence import best_line
 
 _SIZE = 288
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 _BATCH = 16
-
-
-class DescriptorScore(BaseModel, frozen=True):
-    kind: str = "sscd"
-    threshold: float
-    nearest: list[float]
-    median: float
-    matched_share: float
-    sequence: SequenceMatch
 
 
 def threshold() -> float:

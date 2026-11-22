@@ -1,24 +1,13 @@
 lazy import random
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ofmhelpers.media.repurpose.values import Value, draw, pick
-
-_PITCH_MIN = 0.01
-_PHASER_DELAY_PER_UNIT = 0.4
-_PHASER_DELAY_MS: tuple[float, float] = (0.5, 5.0)
-_ROOM_ECHO_SECOND_TAP = 0.7
-
-_LOUD_RANGE: dict[str, tuple[float, float]] = {
-    "chorus": (30, 50),
-    "flanger": (2, 10),
-    "phaser": (1, 4),
-    "tremolo": (2, 8),
-    "vibrato": (2, 8),
-}
+from ofmhelpers.media.repurpose.transformations.constants import AudioConstants
+from ofmhelpers.media.repurpose.values import Knobs, Value, draw, pick
 
 
-class AudioSettings(BaseModel, frozen=True):
+class AudioSettings(Knobs, frozen=True):
+    constants: AudioConstants = Field(default=AudioConstants(), exclude=True)
     volume: Value | None = None
     pitch: Value | None = None
     phaser_shift: Value | None = None
@@ -64,15 +53,17 @@ def _draw(s: AudioSettings, rng: random.Random) -> AudioDraws:
     echo = pick(s.echo, rng) or (
         "reverb" if s.reverb_ms else "room" if s.room_ms else None
     )
+    c = s.constants
     loud = pick(s.loud, rng)
+    span = c.loud_range.get(loud) if loud else None
     phaser = draw(s.phaser_shift, rng)
     return AudioDraws(
         volume=draw(s.volume, rng),
         pitch=draw(s.pitch, rng),
         phaser_ms=(
             min(
-                _PHASER_DELAY_MS[1],
-                max(_PHASER_DELAY_MS[0], phaser * _PHASER_DELAY_PER_UNIT),
+                c.phaser_delay_ms[1],
+                max(c.phaser_delay_ms[0], phaser * c.phaser_delay_per_unit),
             )
             if phaser
             else None
@@ -83,8 +74,8 @@ def _draw(s: AudioSettings, rng: random.Random) -> AudioDraws:
         echo=echo,
         echo_ms=draw(s.reverb_ms if echo == "reverb" else s.room_ms, rng),
         echo_decay=draw(s.reverb_decay, rng),
-        loud=loud if loud in _LOUD_RANGE else None,
-        loud_value=rng.uniform(*_LOUD_RANGE[loud]) if loud in _LOUD_RANGE else None,
+        loud=loud if span else None,
+        loud_value=rng.uniform(*span) if span else None,
         compress_db=draw(s.compress_db, rng),
         deess_db=draw(s.deess_db, rng),
         limit=draw(s.limit, rng),
@@ -137,7 +128,7 @@ class AudioTransformer:
         chain = []
         tempo = self.speed
         pitch = self.draws.pitch
-        if pitch is not None and abs(pitch) >= _PITCH_MIN:
+        if pitch is not None and abs(pitch) >= self.settings.constants.pitch_min:
             rate = round(self.sample_rate * 2 ** (pitch / 12))
             chain += [
                 f"aresample={self.sample_rate}",
@@ -153,9 +144,8 @@ class AudioTransformer:
             return []
         if d.echo == "reverb":
             return [f"aecho=0.8:0.88:{d.echo_ms:.0f}:{d.echo_decay or 0.4:.2f}"]
-        return [
-            f"aecho=0.8:0.9:{d.echo_ms:.0f}|{d.echo_ms * _ROOM_ECHO_SECOND_TAP:.0f}:0.3|0.2"
-        ]
+        tap = d.echo_ms * self.settings.constants.room_echo_second_tap
+        return [f"aecho=0.8:0.9:{d.echo_ms:.0f}|{tap:.0f}:0.3|0.2"]
 
     def _loud(self) -> list[str]:
         d = self.draws

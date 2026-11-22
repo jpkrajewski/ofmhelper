@@ -1,6 +1,7 @@
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -50,3 +51,21 @@ def test_a_hash_unused_for_a_day_goes_when_the_next_is_made(hashed):
     new = tmk._source("/videos/new.mp4", 1.0, 30)
 
     assert sorted(tmk.sources_dir().iterdir()) == sorted([used, new])
+
+
+def test_every_tmk_score_carries_the_match_line(hashed, monkeypatch, tmp_path):
+    answers = iter(["0.81 0.92 source.tmk copy.tmk", ""])
+    monkeypatch.setattr(
+        tmk.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(stdout=next(answers)),
+    )
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"video")
+
+    scored = tmk.compare(source, tmp_path / "copy.mp4", 30)
+    unscored = tmk.compare(source, tmp_path / "copy.mp4", 30)
+
+    assert (scored.level1, scored.level2) == (0.81, 0.92)
+    assert (scored.threshold, scored.matched) == (tmk.THRESHOLD, True)
+    assert (unscored.threshold, unscored.matched) == (tmk.THRESHOLD, False)

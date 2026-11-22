@@ -6,35 +6,14 @@ from pydantic import BaseModel, ConfigDict
 lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker import audio, frames, sscd, tmk, visual
-from ofmhelpers.media.repurpose.checker.audio import AudioScore
 from ofmhelpers.media.repurpose.checker.normalize import is_flat, normalize
-from ofmhelpers.media.repurpose.checker.sscd import DescriptorScore
-from ofmhelpers.media.repurpose.checker.tmk import TmkScore
-from ofmhelpers.media.repurpose.checker.visual import HashKind, HashScore
+from ofmhelpers.media.repurpose.checker.schema import CheckReport, HashKind
 from ofmhelpers.media.repurpose.probe import probe
 
 _DEFAULT_FPS = 1.0
 _SOURCE_FPS = 10.0
 _DEFAULT_TIMEOUT_S = 600
 CAUGHT_SHARE = 0.5
-
-
-class CheckReport(BaseModel, frozen=True):
-    source_file: Path
-    copy_file: Path
-    source_frames: int
-    copy_frames: int
-    flat_copy_frames: int
-    hashes: list[HashScore]
-    descriptors: list[DescriptorScore] = []
-    tmk: TmkScore | None = None
-    audio: AudioScore | None
-    looks_like_source: bool
-    sounds_like_source: bool | None
-
-    @property
-    def unique(self) -> bool:
-        return not self.looks_like_source and not self.sounds_like_source
 
 
 class _Usable(BaseModel):

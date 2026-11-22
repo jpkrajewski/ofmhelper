@@ -51,7 +51,8 @@ def test_a_spoof_copy_is_a_real_iphone_h264_file_that_passed_the_self_check(tmp_
     streams = _streams(copy)
     assert copy.is_file()
     assert copy != source
-    assert result.score.unique
+    assert result.report is not None
+    assert result.report.unique
     assert result.step is not None
     assert (streams["video"]["codec_name"], streams["video"]["height"]) == (
         "h264",

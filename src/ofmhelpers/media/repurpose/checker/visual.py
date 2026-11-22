@@ -1,23 +1,14 @@
 import statistics
-from enum import StrEnum
 lazy from collections.abc import Callable
 
 import imagehash
 import numpy as np
 import pdqhash
-from pydantic import BaseModel
 lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker.normalize import dihedral, views
-from ofmhelpers.media.repurpose.checker.sequence import SequenceMatch, best_line
-
-
-class HashKind(StrEnum):
-    PDQ = "pdq"
-    PHASH = "phash"
-    DHASH = "dhash"
-    WHASH = "whash"
-
+from ofmhelpers.media.repurpose.checker.schema import HashKind, HashScore
+from ofmhelpers.media.repurpose.checker.sequence import best_line
 
 SAME_PICTURE: dict[HashKind, int] = {
     HashKind.PDQ: 64,
@@ -31,17 +22,6 @@ _IMAGEHASH: dict[HashKind, Callable[[Image.Image], imagehash.ImageHash]] = {
     HashKind.DHASH: imagehash.dhash,
     HashKind.WHASH: imagehash.whash,
 }
-
-
-class HashScore(BaseModel, frozen=True):
-    kind: HashKind
-    bits: int
-    threshold: int
-    nearest: list[int]
-    median: float
-    minimum: int
-    matched_share: float
-    sequence: SequenceMatch
 
 
 def _packed(bits: np.ndarray) -> np.ndarray:

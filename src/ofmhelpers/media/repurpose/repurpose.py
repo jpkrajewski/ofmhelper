@@ -118,6 +118,11 @@ class Repurpose:
             self.apply_device_preset(device)
         return self
 
+    def stronger(self, factor: float) -> Self:
+        self.video = self.video.stronger(factor)
+        self.audio = self.audio.stronger(factor)
+        return self
+
     def apply_device_preset(self, name: str) -> Self:
         self.device = load_device(name)
         self.device_name = name

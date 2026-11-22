@@ -5,6 +5,8 @@ lazy from pathlib import Path
 from PIL import Image, ImageDraw
 from pydantic import BaseModel, SkipValidation
 
+from ofmhelpers.media.repurpose.transformations.constants import PatternConstants
+
 
 class Pattern(StrEnum):
     STRIPES = "stripes"
@@ -15,44 +17,31 @@ class Pattern(StrEnum):
     PSYCHE = "psyche"
 
 
-_STRIPE_PERIOD = 12
-_STRIPE_WIDTH = 6
-_GRID_SPACING = 10
-_GRID_GREY = (179, 179, 179)
-_CHECK_SIZE = 16
-_SPIRAL_SECTORS = 8
-_PARTICLE_COUNT = 300
-_PARTICLE_RADIUS = (1.0, 4.0)
-_PARTICLE_BACKGROUND = "#050505"
-_PARTICLE_COLOURS = ("#4DA3FF", "#FE1648", "#FFB020", "#42A6FE", "#F13BDE", "#880DFB")
-_PSYCHE_COLOURS = ("#FE1648", "#F13BDE", "#880DFB", "#42A6FE", "#FFB020")
-
-
 class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
     pen: SkipValidation[ImageDraw.ImageDraw]
     w: int
     h: int
+    c: PatternConstants
 
     def stripes(self) -> None:
         w, h = self.w, self.h
-        for offset in range(-h, w + h, _STRIPE_PERIOD):
+        for offset in range(-h, w + h, self.c.stripe_period):
             self.pen.line(
-                [(offset, 0), (offset + h, h)], fill="white", width=_STRIPE_WIDTH
+                [(offset, 0), (offset + h, h)], fill="white", width=self.c.stripe_width
             )
 
     def grid(self) -> None:
-        for x in range(0, self.w + 1, _GRID_SPACING):
-            self.pen.line([(x, 0), (x, self.h)], fill=_GRID_GREY)
-        for y in range(0, self.h + 1, _GRID_SPACING):
-            self.pen.line([(0, y), (self.w, y)], fill=_GRID_GREY)
+        for x in range(0, self.w + 1, self.c.grid_spacing):
+            self.pen.line([(x, 0), (x, self.h)], fill=self.c.grid_grey)
+        for y in range(0, self.h + 1, self.c.grid_spacing):
+            self.pen.line([(0, y), (self.w, y)], fill=self.c.grid_grey)
 
     def check(self) -> None:
-        for y in range(0, self.h, _CHECK_SIZE):
-            for x in range(0, self.w, _CHECK_SIZE):
-                if (x // _CHECK_SIZE + y // _CHECK_SIZE) % 2 == 0:
-                    self.pen.rectangle(
-                        [x, y, x + _CHECK_SIZE - 1, y + _CHECK_SIZE - 1], fill="white"
-                    )
+        size = self.c.check_size
+        for y in range(0, self.h, size):
+            for x in range(0, self.w, size):
+                if (x // size + y // size) % 2 == 0:
+                    self.pen.rectangle([x, y, x + size - 1, y + size - 1], fill="white")
 
     def sectors(self, fills: list[str | None]) -> None:
         w, h = self.w, self.h
@@ -64,19 +53,21 @@ class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
                 self.pen.pieslice(box, i * step, (i + 1) * step, fill=fill)
 
     def particles(self, rng: random.Random) -> None:
-        for _ in range(_PARTICLE_COUNT):
+        for _ in range(self.c.particle_count):
             x, y = rng.uniform(0, self.w), rng.uniform(0, self.h)
-            r = rng.uniform(*_PARTICLE_RADIUS)
+            r = rng.uniform(*self.c.particle_radius)
             self.pen.ellipse(
-                [x - r, y - r, x + r, y + r], fill=rng.choice(_PARTICLE_COLOURS)
+                [x - r, y - r, x + r, y + r], fill=rng.choice(self.c.particle_colours)
             )
 
 
-def draw(pattern: Pattern, size: tuple[int, int], rng: random.Random) -> Image.Image:
+def draw(
+    pattern: Pattern, size: tuple[int, int], rng: random.Random, c: PatternConstants
+) -> Image.Image:
     w, h = size
-    background = _PARTICLE_BACKGROUND if pattern is Pattern.PARTICLES else "black"
+    background = c.particle_background if pattern is Pattern.PARTICLES else "black"
     image = Image.new("RGB", size, background)
-    canvas = _Canvas(pen=ImageDraw.Draw(image), w=w, h=h)
+    canvas = _Canvas(pen=ImageDraw.Draw(image), w=w, h=h, c=c)
     if pattern is Pattern.STRIPES:
         canvas.stripes()
     elif pattern is Pattern.GRID:
@@ -84,14 +75,20 @@ def draw(pattern: Pattern, size: tuple[int, int], rng: random.Random) -> Image.I
     elif pattern is Pattern.CHECK:
         canvas.check()
     elif pattern is Pattern.SPIRAL:
-        canvas.sectors(["white", None] * (_SPIRAL_SECTORS // 2))
+        canvas.sectors(["white", None] * (c.spiral_sectors // 2))
     elif pattern is Pattern.PARTICLES:
         canvas.particles(rng)
     else:
-        canvas.sectors(list(_PSYCHE_COLOURS))
+        canvas.sectors(list(c.psyche_colours))
     return image
 
 
-def write(pattern: Pattern, size: tuple[int, int], seed: int, dest: Path) -> Path:
-    draw(pattern, size, random.Random(seed)).save(dest, "PNG")  # noqa: S311 - art, not crypto
+def write(
+    pattern: Pattern,
+    size: tuple[int, int],
+    seed: int,
+    dest: Path,
+    c: PatternConstants,
+) -> Path:
+    draw(pattern, size, random.Random(seed), c).save(dest, "PNG")  # noqa: S311 - art, not crypto
     return dest

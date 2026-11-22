@@ -1,9 +1,8 @@
 import struct
 lazy from pathlib import Path
 
-from pydantic import BaseModel
-
 from ofmhelpers.media.ffmpeg import binary, run_bytes
+from ofmhelpers.media.repurpose.checker.schema import AudioScore
 
 _BITS = 32
 _ITEM_S = 4096 / 3 / 11025
@@ -12,13 +11,6 @@ _MIN_OVERLAP = 16
 SAME_AUDIO = 0.7
 _WINDOW = 16
 _DRIFT_ITEMS = 16
-
-
-class AudioScore(BaseModel, frozen=True):
-    similarity: float
-    offset_s: float
-    threshold: float
-    matched_share: float
 
 
 def fingerprint(path: Path, timeout_s: int) -> list[int]:
