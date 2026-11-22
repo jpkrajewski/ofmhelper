@@ -7,7 +7,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
-from ofmhelpers.db.drive_folders.schema import AccountScan, StoredFolder, VaFolder
+from ofmhelpers.db.drive_folders.schema import (
+    AccountScan,
+    PostedSeen,
+    StoredFolder,
+    VaFolder,
+)
 from ofmhelpers.db.models import (
     DriveAccountFolderRow,
     DrivePostedFileRow,
@@ -148,12 +153,13 @@ class DriveFolderRepository(CachedRepository):
         if not scans:
             return
         with session_scope() as s:
-            for login_id, scan in scans.items():
-                s.execute(
-                    update(DriveAccountFolderRow)
-                    .where(DriveAccountFolderRow.login_id == login_id)
-                    .values(scan=scan, scanned_at=at)
-                )
+            s.execute(
+                update(DriveAccountFolderRow),
+                [
+                    {"login_id": login_id, "scan": scan, "scanned_at": at}
+                    for login_id, scan in scans.items()
+                ],
+            )
 
     @invalidates_cache
     def forget_account_folder(self, login_id: int) -> None:
@@ -174,26 +180,21 @@ class DriveFolderRepository(CachedRepository):
             )
 
     @invalidates_cache
-    def record_posted(
-        self,
-        login_id: int,
-        folder_id: str,
-        files: list[tuple[str, str, str]],
-        seen_at: float,
-    ) -> int | None:
-        if not files:
-            return 0
+    def record_posted(self, seen: list[PostedSeen], seen_at: float) -> int | None:
         rows = [
             {
-                "file_id": file_id,
-                "login_id": login_id,
-                "folder_id": folder_id,
-                "name": name[:512],
-                "kind": kind,
+                "file_id": file.id,
+                "login_id": folder.login_id,
+                "folder_id": folder.folder_id,
+                "name": file.name[:512],
+                "kind": file.kind,
                 "first_seen_at": seen_at,
             }
-            for file_id, name, kind in files
+            for folder in seen
+            for file in folder.files
         ]
+        if not rows:
+            return 0
         try:
             with session_scope() as s:
                 added = s.execute(

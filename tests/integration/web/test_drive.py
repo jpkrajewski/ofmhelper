@@ -7,6 +7,8 @@ import pytest
 import time_machine
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_agency
+from sqlalchemy import text
+from statements import counting
 
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
@@ -14,6 +16,7 @@ from ofmhelpers.db.devices.schema import AddedLogin
 from ofmhelpers.db.drive_folders import store
 from ofmhelpers.db.drive_folders.schema import VaFolder
 from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts import store as tracked_accounts
 from ofmhelpers.db.tracked_accounts.store import list_accounts, track
 from ofmhelpers.db.users import store as users
@@ -1290,3 +1293,53 @@ def test_an_archived_account_is_restored_onto_its_phone(drive):
     assert devices.archived_logins() == []
     assert [x.id for d in devices.list_devices() for x in d.logins] == [login]
     assert "ann.ig" in [a.handle for a in list_accounts()]
+
+
+def test_a_live_read_of_many_accounts_writes_each_table_once(drive):
+    _three_logins()
+    drive_folders.sync()
+    for i, owner in enumerate(("Anna", "Bob", "Cleo")):
+        drive.add_file(_posted(drive, f"h{i}.ig", owner), f"old{i}.mp4", "video/mp4")
+
+    with counting() as seen:
+        assert _client().get("/drive/live").status_code == 200
+
+    assert len(seen.writing("drive_posted_files")) == 1
+    assert len(seen.writing("drive_account_folders")) == 1
+    folders = store.account_folders().folders
+    assert len(folders) == 3
+    assert [len(f.scan.posted) for f in folders if f.scan] == [1, 1, 1]
+
+
+def test_a_login_gone_during_a_live_read_loses_only_its_own_posted_files(
+    drive, monkeypatch, caplog
+):
+    _three_logins()
+    drive_folders.sync()
+    for i, owner in enumerate(("Anna", "Bob", "Cleo")):
+        drive.add_file(_posted(drive, f"h{i}.ig", owner), f"old{i}.mp4", "video/mp4")
+    [gone] = [t for t in store.targets() if t.handle == "h0.ig"]
+    listed = drive.children_of
+    calls: list[list[str]] = []
+
+    def listed_while_a_phone_goes(parent_ids: list[str]):
+        calls.append(parent_ids)
+        if len(calls) == 2:
+            devices.delete_device(gone.device.id)
+        return listed(parent_ids)
+
+    monkeypatch.setattr(drive, "children_of", listed_while_a_phone_goes)
+
+    with caplog.at_level("INFO", logger="ofmhelpers.features.drive.folders"):
+        assert _client().get("/drive/live").status_code == 200
+
+    assert (
+        f"login {gone.login_id} went meanwhile, its 1 posted files are not kept"
+        in caplog.text
+    )
+    with session_scope() as s:
+        saved = s.execute(text("SELECT name FROM drive_posted_files")).scalars()
+        assert sorted(saved) == ["old1.mp4", "old2.mp4"]
+    scans = {f.login_id: f.scan for f in store.account_folders().folders}
+    assert gone.login_id not in scans
+    assert [len(scan.posted) for scan in scans.values() if scan] == [1, 1]

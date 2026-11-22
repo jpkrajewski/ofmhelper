@@ -252,8 +252,10 @@ class UserRepository(CachedRepository):
 
     def refresh_token(self, user_id: int) -> str:
         with session_scope() as s:
-            row = s.get(UserRow, user_id)
-            return row.google_refresh_token if row else ""
+            token = s.execute(
+                select(UserRow.google_refresh_token).where(UserRow.id == user_id)
+            ).scalar_one_or_none()
+            return token or ""
 
     def api_keys(self, user_id: int) -> SavedKeys:
         with session_scope() as s:

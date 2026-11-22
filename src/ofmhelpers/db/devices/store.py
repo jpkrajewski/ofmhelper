@@ -110,15 +110,8 @@ def restore_device(device_id: int, owner: int | None = None) -> bool:
     return _repository().set_retired(device_id, retired=False, owner=owner)
 
 
-def _logins_gone() -> None:
-    _repository().logins_changed()
-
-
 def delete_device(device_id: int, owner: int | None = None) -> bool:
-    deleted = _repository().delete_device(device_id, owner)
-    if deleted:
-        _logins_gone()
-    return deleted
+    return _repository().delete_device(device_id, owner)
 
 
 def add_login(
@@ -132,18 +125,11 @@ def update_login(login_id: int, fields: LoginFields, owner: int | None = None) -
 
 
 def archive_logins(login_ids: list[int], owner: int | None = None) -> int:
-    archived = _repository().archive_logins(login_ids, owner)
-    if archived:
-        _logins_gone()
-    return archived
+    return _repository().archive_logins(login_ids, owner)
 
 
 def restore_login(login_id: int, owner: int | None = None) -> ArchivedLogin | None:
-    found = _repository().restore_login(login_id, owner)
-    if found is None:
-        return None
-    _logins_gone()
-    return found
+    return _repository().restore_login(login_id, owner)
 
 
 def archived_logins(owner: int | None = None) -> list[ArchivedLogin]:
@@ -151,7 +137,4 @@ def archived_logins(owner: int | None = None) -> list[ArchivedLogin]:
 
 
 def remove_login(device_id: int, login_id: int, owner: int | None = None) -> bool:
-    removed = _repository().unlink_login(device_id, login_id, owner)
-    if removed:
-        _logins_gone()
-    return removed
+    return _repository().unlink_login(device_id, login_id, owner)

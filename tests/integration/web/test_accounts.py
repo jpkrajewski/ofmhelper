@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from signin import sign_in_agency
+from statements import counting
 
 from ofmhelpers.config.settings import AccountsSettings
 from ofmhelpers.db.models import AccountSnapshotRow, TrackedPostRow
@@ -1088,3 +1089,24 @@ def test_proxy_pool_starts_where_told():
     pool = ProxyPool(["a", "b", "c"], start=4)
     assert [pool.next() for _ in range(3)] == ["b", "c", "a"]
     assert ProxyPool([], start=3).next() is None
+
+
+def test_every_periods_followers_come_in_one_query():
+    track("instagram", "a")
+    track("instagram", "b")
+    _snapshot("a", 800, 40 * DAY)
+    _snapshot("a", 900, 8 * DAY)
+    _snapshot("b", 50, 3 * DAY)
+    accounts = tracked_accounts_repository.TrackedAccountRepository()
+
+    with counting() as one:
+        accounts.list_all([2])
+    with counting() as five:
+        found = accounts.list_all([2, 3, 9, 41, 60])
+
+    snapshots = "tracked_account_snapshots"
+    assert len(five.reading(snapshots)) == len(one.reading(snapshots)) == 3
+    assert {a.handle: [(b.days, b.followers) for b in a.baselines] for a in found} == {
+        "a": [(2, 900), (3, 900), (9, 800)],
+        "b": [(2, 50), (3, 50)],
+    }

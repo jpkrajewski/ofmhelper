@@ -3,7 +3,7 @@
 One package per table (`<table>/repository.py`, `store.py`, `schema.py`); only the repositories and stores touch the database (`.claude/rules/database.md`); the rest of what this folder holds is described in `web/CLAUDE.md` "db/".
 
 ## A cache that reads another table (2026-11-20)
-- `CachedRepository.cache_depends_on` names the namespaces its reads come from: `DriveFolderRepository` (`drive_folder`) reads phone logins, so it depends on `device`, and `DeviceRepository.logins_changed()` bumps `device`. The store that changes rows bumps its own table only; it never imports another table's store to clear its cache (that made `db.devices` and `db.drive_folders` import each other).
+- `CachedRepository.cache_depends_on` names the namespaces its reads come from: `DriveFolderRepository` (`drive_folder`) reads phone logins, so it depends on `device`, and every `DeviceRepository` write bumps `device` (`@invalidates_cache`; `list_all` is `@cached`, 2026-11-22). The store that changes rows bumps its own table only; it never imports another table's store to clear its cache (that made `db.devices` and `db.drive_folders` import each other).
 
 ## Who did what: `audit_log` and the row stamps (2026-11-15)
 Owner's backlog: "who changed this and from what", "can an AI agent search user actions with ease?".

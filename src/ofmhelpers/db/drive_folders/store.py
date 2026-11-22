@@ -11,7 +11,7 @@ from ofmhelpers.db.drive_folders.schema import (
     VaFolder,
 )
 from ofmhelpers.db.users.store import list_users
-lazy from ofmhelpers.db.drive_folders.schema import DriveFile
+lazy from ofmhelpers.db.drive_folders.schema import PostedSeen
 lazy from ofmhelpers.db.users.schema import User
 
 _SERVICE = "instagram"
@@ -89,11 +89,8 @@ def forget_posted_folder(login_id: int) -> None:
     _repository().save_posted_folder(login_id, None)
 
 
-def record_posted(
-    login_id: int, folder_id: str, files: list[DriveFile], seen_at: float
-) -> int | None:
-    rows = [(f.id, f.name, f.kind) for f in files]
-    return _repository().record_posted(login_id, folder_id, rows, seen_at)
+def record_posted(seen: list[PostedSeen], seen_at: float) -> int | None:
+    return _repository().record_posted(seen, seen_at)
 
 
 def save_scans(scans: dict[int, AccountScan], at: float) -> None:

@@ -18,6 +18,7 @@ from ofmhelpers.db.drive_folders import store
 from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard, DriveTarget
 from ofmhelpers.db.drive_folders.schema import (
     AccountScan,
+    PostedSeen,
     StoredFolder,
     SyncReport,
     UploadedToday,
@@ -548,7 +549,14 @@ def _tally_one(
         report.renamed.append(target.folder_name)
     if not _kept_posted_ok(scan, stored):
         _posted_folder(drive, target, stored.folder_id, stored.posted_folder_id, report)
-    newly = store.record_posted(target.login_id, stored.folder_id, scan.posted, seen_at)
+    newly = store.record_posted(
+        [
+            PostedSeen(
+                login_id=target.login_id, folder_id=stored.folder_id, files=scan.posted
+            )
+        ],
+        seen_at,
+    )
     if newly is None:
         logger.info("drive: %s gone meanwhile, not tallied", target.handle)
         return report
@@ -660,8 +668,31 @@ def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
         )
         card.error = "Drive could not be read"
         return
-    store.record_posted(card.target.login_id, folder_id, card.scan.posted, seen_at)
+    _record_posted(
+        [
+            PostedSeen(
+                login_id=card.target.login_id,
+                folder_id=folder_id,
+                files=card.scan.posted,
+            )
+        ],
+        seen_at,
+    )
     store.save_scans({card.target.login_id: card.scan}, seen_at)
+
+
+def _record_posted(seen: list[PostedSeen], seen_at: float) -> None:
+    if store.record_posted(seen, seen_at) is not None:
+        return
+    gone = seen
+    if len(seen) > 1:
+        gone = [one for one in seen if store.record_posted([one], seen_at) is None]
+    for one in gone:
+        logger.info(
+            "drive: login %s went meanwhile, its %s posted files are not kept",
+            one.login_id,
+            len(one.files),
+        )
 
 
 def _root_folders(user_id: int, drive: DriveApi, root: str) -> list[DriveFile]:
@@ -693,12 +724,20 @@ def _list_batched(
         for d in _posted_dirs(inside.of(c.account_folder_id or ""), c.posted_folder_id)
     ]
     posted_items = drive.children_of(posted_ids)
+    seen = []
     for card in cards:
         folder_id = card.account_folder_id or ""
         card.scan = _build_scan(
             names[folder_id], inside.of(folder_id), card.posted_folder_id, posted_items
         )
-        store.record_posted(card.target.login_id, folder_id, card.scan.posted, seen_at)
+        seen.append(
+            PostedSeen(
+                login_id=card.target.login_id,
+                folder_id=folder_id,
+                files=card.scan.posted,
+            )
+        )
+    _record_posted(seen, seen_at)
     store.save_scans({c.target.login_id: c.scan for c in cards}, seen_at)
 
 

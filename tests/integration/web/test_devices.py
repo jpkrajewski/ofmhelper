@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from pydantic import ValidationError
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, select, table, text
+from statements import counting
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.devices import store
@@ -742,3 +743,39 @@ def test_accounts_page_shows_the_phone_in_place_of_notes(va):
     assert "<span>Anna</span>" in html
     assert html.count("data-no-phone") == 1
     assert f'id="phone-{device}"' in va.get("/phones").text
+
+
+def test_archived_logins_are_read_in_one_query_whatever_their_count():
+    first, second = _phone("Phone 01"), _phone("Phone 02")
+    ids = [_add_login(first, "instagram", f"user{n}") for n in range(4)]
+    _add_login(second, "instagram", "user0")
+    store.archive_logins(ids)
+
+    with counting() as seen:
+        archived = store.archived_logins()
+
+    assert len(seen.run) == 1
+    assert {a.username: a.on for a in archived} == {
+        "user0": ["Phone 01", "Phone 02"],
+        "user1": ["Phone 01"],
+        "user2": ["Phone 01"],
+        "user3": ["Phone 01"],
+    }
+
+
+def test_the_phone_list_comes_from_the_cache_until_a_phone_changes():
+    phone = _phone("Phone 01")
+    _add_login(phone, "instagram", "anna")
+
+    with counting() as first:
+        store.list_devices()
+    with counting() as cached:
+        store.list_devices()
+    store.retire_device(phone)
+    with counting() as fresh:
+        [device] = store.list_devices()
+
+    assert cached.reading("devices") == []
+    assert len(fresh.reading("devices")) == len(first.reading("devices")) == 2
+    assert device.retired
+    assert [x.username for x in device.logins] == ["anna"]

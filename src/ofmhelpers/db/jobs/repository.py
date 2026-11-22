@@ -309,22 +309,31 @@ class JobRepository(CachedRepository):
         asked = values(column("fragment", Text), name="asked").data(
             [(fragment,) for fragment in fragments]
         )
-        fragment = asked.c.fragment
-        in_params = func.strpos(cast(JobRow.params, Text), fragment) > 0
-        in_result = (
-            func.strpos(func.coalesce(cast(JobRow.result, Text), ""), fragment) > 0
+        as_text = (
+            select(
+                JobRow.created_at,
+                JobRow.status,
+                cast(JobRow.params, Text).label("params"),
+                func.coalesce(cast(JobRow.result, Text), "").label("result"),
+            )
+            .cte("as_text")
+            .prefix_with("MATERIALIZED")
         )
+        fragment = asked.c.fragment
+        in_params = func.strpos(as_text.c.params, fragment) > 0
+        in_result = func.strpos(as_text.c.result, fragment) > 0
         query = (
             select(
                 fragment,
-                func.max(JobRow.created_at).filter(in_params),
+                func.max(as_text.c.created_at).filter(in_params),
                 func.coalesce(
-                    func.bool_or(JobRow.status == "running").filter(in_params), False
+                    func.bool_or(as_text.c.status == "running").filter(in_params),
+                    False,
                 ),
                 func.bool_or(in_result),
             )
             .select_from(asked)
-            .join(JobRow, or_(in_params, in_result))
+            .join(as_text, or_(in_params, in_result))
             .group_by(fragment)
         )
         with session_scope() as s:

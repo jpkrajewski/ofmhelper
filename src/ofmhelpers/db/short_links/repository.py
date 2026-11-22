@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 lazy from sqlalchemy.orm import Session
@@ -320,6 +320,7 @@ class ShortLinkRepository(CachedRepository):
             by_remote = {r.remote_id: r for r in rows if r.remote_id}
             by_address = {(r.domain, r.slug): r for r in rows}
             seen: set[int] = set()
+            kept: list[tuple[ShortLinkRow, list[dict]]] = []
             for remote in remotes:
                 row = by_remote.get(remote["remote_id"]) or by_address.get(
                     (remote["domain"], remote["slug"])
@@ -357,9 +358,10 @@ class ShortLinkRepository(CachedRepository):
                     row.adult = remote["adult"]
                 if row.error != "Delete interrupted: delete it again":
                     row.error = None
-                s.flush()
-                seen.add(row.id)
-                self._replace_days(s, row.id, days.get(remote["remote_id"], []))
+                kept.append((row, days.get(remote["remote_id"], [])))
+            s.flush()
+            seen.update(row.id for row, _ in kept)
+            self._replace_days(s, {row.id: link_days for row, link_days in kept})
             for row in rows:
                 if row.id in seen:
                     continue
@@ -372,13 +374,22 @@ class ShortLinkRepository(CachedRepository):
                     )
 
     @staticmethod
-    def _replace_days(s: Session, link_id: int, days: list[dict]) -> None:
-        if not days:
+    def _replace_days(s: Session, days_of: dict[int, list[dict]]) -> None:
+        days_of = {link_id: days for link_id, days in days_of.items() if days}
+        if not days_of:
             return
-        first = min(date.fromisoformat(d["day"]) for d in days)
         s.execute(
             delete(ShortLinkDayRow).where(
-                ShortLinkDayRow.link_id == link_id, ShortLinkDayRow.day >= first
+                or_(
+                    *(
+                        and_(
+                            ShortLinkDayRow.link_id == link_id,
+                            ShortLinkDayRow.day
+                            >= min(date.fromisoformat(d["day"]) for d in days),
+                        )
+                        for link_id, days in days_of.items()
+                    )
+                )
             )
         )
         s.execute(
@@ -390,6 +401,7 @@ class ShortLinkRepository(CachedRepository):
                     "views": d["views"],
                     "clicks": d["clicks"],
                 }
+                for link_id, days in days_of.items()
                 for d in days
             ],
         )

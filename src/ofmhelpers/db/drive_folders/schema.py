@@ -51,6 +51,12 @@ class DriveFile(BaseModel):
         return f"https://drive.google.com/file/d/{self.id}/view"
 
 
+class PostedSeen(BaseModel, frozen=True):
+    login_id: int
+    folder_id: str
+    files: list[DriveFile]
+
+
 class UploadPick(BaseModel):
     job_id: str
     name: str

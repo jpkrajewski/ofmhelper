@@ -3,7 +3,17 @@ from typing import Any
 lazy from collections.abc import Sequence
 
 from pydantic import BaseModel
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import (
+    Float,
+    Integer,
+    column,
+    delete,
+    func,
+    or_,
+    select,
+    update,
+    values,
+)
 from sqlalchemy.dialects.postgresql import insert
 lazy from sqlalchemy import Row
 lazy from sqlalchemy.orm import Session
@@ -75,6 +85,10 @@ class _AccountBaseline(BaseModel, frozen=True):
     taken_at: float
 
 
+class _PeriodBaseline(_AccountBaseline, frozen=True):
+    days: int
+
+
 class _AccountScan(BaseModel, frozen=True):
     account_id: int
     taken_at: float
@@ -93,26 +107,43 @@ def _last_scans(s: Session, account_id: int | None) -> list[_AccountScan]:
     return [_AccountScan(account_id=a, taken_at=t) for a, t in s.execute(query)]
 
 
-def _baselines(
-    s: Session, cutoff: float | None, account_id: int | None
-) -> list[_AccountBaseline]:
+def _first_baselines(s: Session, account_id: int | None) -> list[_AccountBaseline]:
     snap = AccountSnapshotRow
     query = (
         select(snap.account_id, snap.followers, snap.taken_at)
         .distinct(snap.account_id)
         .where(snap.followers.is_not(None))
+        .order_by(snap.account_id, snap.taken_at.asc())
     )
     if account_id is not None:
         query = query.where(snap.account_id == account_id)
-    if cutoff is None:
-        query = query.order_by(snap.account_id, snap.taken_at.asc())
-    else:
-        query = query.where(snap.taken_at <= cutoff).order_by(
-            snap.account_id, snap.taken_at.desc()
-        )
     return [
         _AccountBaseline(account_id=a, followers=f, taken_at=t)
         for a, f, t in s.execute(query).all()
+    ]
+
+
+def _period_baselines(
+    s: Session, cutoffs: dict[int, float], account_id: int | None
+) -> list[_PeriodBaseline]:
+    if not cutoffs:
+        return []
+    snap = AccountSnapshotRow
+    asked = values(column("days", Integer), column("cutoff", Float), name="asked").data(
+        list(cutoffs.items())
+    )
+    query = (
+        select(asked.c.days, snap.account_id, snap.followers, snap.taken_at)
+        .join(asked, snap.taken_at <= asked.c.cutoff)
+        .distinct(asked.c.days, snap.account_id)
+        .where(snap.followers.is_not(None))
+        .order_by(asked.c.days, snap.account_id, snap.taken_at.desc())
+    )
+    if account_id is not None:
+        query = query.where(snap.account_id == account_id)
+    return [
+        _PeriodBaseline(days=d, account_id=a, followers=f, taken_at=t)
+        for d, a, f, t in s.execute(query).all()
     ]
 
 
@@ -244,12 +275,12 @@ def _with_baselines(
     account_id: int | None,
 ) -> list[TrackedAccount]:
     now = time.time()
-    first = {b.account_id: b for b in _baselines(s, None, account_id)}
+    first = {b.account_id: b for b in _first_baselines(s, account_id)}
     last_scan = {x.account_id: x.taken_at for x in _last_scans(s, account_id)}
-    periods = {
-        d: {b.account_id: b for b in _baselines(s, now - d * 86400, account_id)}
-        for d in periods_days
-    }
+    cutoffs = {d: now - d * 86400 for d in periods_days}
+    periods: dict[int, dict[int, _AccountBaseline]] = {d: {} for d in cutoffs}
+    for found in _period_baselines(s, cutoffs, account_id):
+        periods[found.days][found.account_id] = found
     post_views: dict[int, list[PostViews]] = {}
     for entry in _post_views(s, account_id):
         post_views.setdefault(entry.account_id, []).append(entry.post)

@@ -4,6 +4,7 @@ import threading
 from fastapi.testclient import TestClient
 from redis import Redis
 from signin import make_user, sign_in
+from statements import counting
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.cached_repository import RepositoryCache
@@ -14,6 +15,7 @@ from ofmhelpers.db.drive_folders.repository import DriveFolderRepository
 from ofmhelpers.db.jobs.repository import JobRepository
 from ofmhelpers.db.models import JobRow
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.db.users import store as users
 from ofmhelpers.web.main import app
 
 
@@ -124,15 +126,26 @@ def test_a_bump_of_a_namespace_it_depends_on_invalidates_the_cache():
     assert calls == [1, 1]
 
 
-def test_a_logins_change_on_a_phone_drops_the_drive_targets_cache():
+def test_a_phone_write_drops_the_drive_targets_cache():
     folders = DriveFolderRepository()
     redis = get_redis()
     before = redis.get("cache:device:v")
 
-    DeviceRepository().logins_changed()
+    DeviceRepository().set_retired(0, retired=True)
 
     assert redis.get("cache:device:v") != before
     assert folders._cache._depends_on == ("device",)
+
+
+def test_a_google_token_is_read_in_one_query():
+    user = make_user()
+    users._repository().signed_in(user.id, "", "a-refresh-token")
+
+    with counting() as seen:
+        token = users.refresh_token(user.id)
+
+    assert (token, len(seen.run)) == ("a-refresh-token", 1)
+    assert users.refresh_token(987_654_321) == ""
 
 
 def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):

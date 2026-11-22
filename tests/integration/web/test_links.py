@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, text
+from statements import counting
 
 from ofmhelpers.db.jobs.store import history
 from ofmhelpers.db.models import ShortLinkRow
@@ -583,3 +584,21 @@ def test_accounts_link_column_says_today_for_one_day(client, admin):
     page = client.get("/accounts?period=1").text
     assert "Links · today" in page
     assert "Links · 24h" not in page
+
+
+def test_a_sync_writes_every_links_days_in_one_delete_and_one_insert(admin):
+    today = utc_today()
+    for handle in ("one", "two", "three"):
+        fake_oopsie().add_page(handle, "https://onlyfans.com/x")
+        fake_oopsie().set_traffic(handle, today, 10, 8)
+
+    with counting() as seen:
+        link_sync.sync_now(admin.id)
+
+    assert len(seen.writing("short_link_daily_stats")) == 2
+    links = _links(admin.id)
+    assert {slug: link.clicks(7) for slug, link in links.items()} == {
+        "one": 8,
+        "two": 8,
+        "three": 8,
+    }

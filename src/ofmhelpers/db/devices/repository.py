@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import undefer_group
 lazy from sqlalchemy.orm import Session
 
-from ofmhelpers.db.cached_repository import CachedRepository, invalidates_cache
+from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
 from ofmhelpers.db.devices.models import Device, DeviceLogin
 from ofmhelpers.db.devices.schema import AddedLogin, ArchivedLogin, LoginSecrets
 from ofmhelpers.db.encrypted import VaultError
@@ -87,9 +87,10 @@ def _devices(
     links = [
         (device_id, login_id)
         for device_id, login_id in s.execute(
-            select(DeviceLoginRow.device_id, DeviceLoginRow.login_id).order_by(
-                DeviceLoginRow.created_at, DeviceLoginRow.login_id
-            )
+            select(DeviceLoginRow.device_id, DeviceLoginRow.login_id)
+            .join(DeviceRow, DeviceRow.id == DeviceLoginRow.device_id)
+            .where(*mine(DeviceRow.user_id, owner))
+            .order_by(DeviceLoginRow.created_at, DeviceLoginRow.login_id)
         ).all()
         if device_id in labels and login_id in logins
     ]
@@ -113,10 +114,12 @@ def _touch(s: Session, device_ids: list[int]) -> None:
         )
 
 
-def _phones_of(s: Session, login_id: int) -> list[int]:
+def _phones_of(s: Session, login_ids: list[int]) -> list[int]:
     return list(
         s.execute(
-            select(DeviceLoginRow.device_id).where(DeviceLoginRow.login_id == login_id)
+            select(DeviceLoginRow.device_id)
+            .where(DeviceLoginRow.login_id.in_(login_ids))
+            .distinct()
         ).scalars()
     )
 
@@ -133,9 +136,7 @@ def _drop_orphans(s: Session, owner_id: int) -> None:
 class DeviceRepository(CachedRepository):
     cache_namespace = "device"
 
-    @invalidates_cache
-    def logins_changed(self) -> None: ...
-
+    @cached
     def list_all(self, owner: int | None = None) -> list[Device]:
         with session_scope() as s:
             rows = s.execute(
@@ -198,6 +199,7 @@ class DeviceRepository(CachedRepository):
             row = s.get(LoginRow, login_id)
             return row.user_id if row else None
 
+    @invalidates_cache
     def add_device(self, fields: dict, user_id: int) -> int:
         with _writing(fields), session_scope() as s:
             row = DeviceRow(**fields, user_id=user_id)
@@ -205,6 +207,7 @@ class DeviceRepository(CachedRepository):
             s.flush()
             return row.id
 
+    @invalidates_cache
     def update_device(
         self, device_id: int, fields: dict, owner: int | None = None
     ) -> bool:
@@ -217,6 +220,7 @@ class DeviceRepository(CachedRepository):
             )
             return updated.scalar_one_or_none() is not None
 
+    @invalidates_cache
     def set_retired(
         self, device_id: int, *, retired: bool, owner: int | None = None
     ) -> bool:
@@ -230,6 +234,7 @@ class DeviceRepository(CachedRepository):
             )
             return updated.scalar_one_or_none() is not None
 
+    @invalidates_cache
     def delete_device(self, device_id: int, owner: int | None = None) -> bool:
         with session_scope() as s:
             row = s.get(DeviceRow, device_id)
@@ -241,6 +246,7 @@ class DeviceRepository(CachedRepository):
             _drop_orphans(s, owner_id)
             return True
 
+    @invalidates_cache
     def add_login(
         self, device_id: int, fields: dict, owner: int | None = None
     ) -> AddedLogin | None:
@@ -289,6 +295,7 @@ class DeviceRepository(CachedRepository):
             _touch(s, [device_id])
             return AddedLogin(id=row.id, existed=existed)
 
+    @invalidates_cache
     def archive_logins(self, login_ids: list[int], owner: int | None = None) -> int:
         if not login_ids:
             return 0
@@ -305,10 +312,11 @@ class DeviceRepository(CachedRepository):
                 .returning(LoginRow.id)
             ).scalars()
             ids = list(done)
-            for login_id in ids:
-                _touch(s, _phones_of(s, login_id))
+            if ids:
+                _touch(s, _phones_of(s, ids))
             return len(ids)
 
+    @invalidates_cache
     def restore_login(
         self, login_id: int, owner: int | None = None
     ) -> ArchivedLogin | None:
@@ -321,7 +329,7 @@ class DeviceRepository(CachedRepository):
             ):
                 return None
             row.archived_at = None
-            _touch(s, _phones_of(s, login_id))
+            _touch(s, _phones_of(s, [login_id]))
             return ArchivedLogin(
                 id=login_id, service=row.service, username=row.username
             )
@@ -329,31 +337,37 @@ class DeviceRepository(CachedRepository):
     def archived(self, owner: int | None = None) -> list[ArchivedLogin]:
         with session_scope() as s:
             rows = s.execute(
-                select(LoginRow)
+                select(
+                    LoginRow.id,
+                    LoginRow.service,
+                    LoginRow.username,
+                    LoginRow.archived_at,
+                    DeviceRow.label,
+                )
+                .outerjoin(DeviceLoginRow, DeviceLoginRow.login_id == LoginRow.id)
+                .outerjoin(DeviceRow, DeviceRow.id == DeviceLoginRow.device_id)
                 .where(
                     *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_not(None)
                 )
-                .order_by(LoginRow.archived_at.desc())
-            ).scalars()
-            found = []
-            for row in rows:
-                labels = s.execute(
-                    select(DeviceRow.label)
-                    .join(DeviceLoginRow, DeviceLoginRow.device_id == DeviceRow.id)
-                    .where(DeviceLoginRow.login_id == row.id)
-                    .order_by(DeviceRow.label)
-                ).scalars()
-                found.append(
+                .order_by(LoginRow.archived_at.desc(), LoginRow.id, DeviceRow.label)
+            )
+            found: dict[int, ArchivedLogin] = {}
+            for login_id, service, username, archived_at, label in rows:
+                login = found.setdefault(
+                    login_id,
                     ArchivedLogin(
-                        id=row.id,
-                        service=row.service,
-                        username=row.username,
-                        archived_at=row.archived_at or 0,
-                        on=list(labels),
-                    )
+                        id=login_id,
+                        service=service,
+                        username=username,
+                        archived_at=archived_at or 0,
+                        on=[],
+                    ),
                 )
-            return found
+                if label is not None:
+                    login.on.append(label)
+            return list(found.values())
 
+    @invalidates_cache
     def update_login(
         self, login_id: int, fields: dict, owner: int | None = None
     ) -> bool:
@@ -364,9 +378,10 @@ class DeviceRepository(CachedRepository):
             for name, value in fields.items():
                 setattr(row, name, value)
             s.flush()
-            _touch(s, _phones_of(s, login_id))
+            _touch(s, _phones_of(s, [login_id]))
             return True
 
+    @invalidates_cache
     def unlink_login(
         self, device_id: int, login_id: int, owner: int | None = None
     ) -> bool:
