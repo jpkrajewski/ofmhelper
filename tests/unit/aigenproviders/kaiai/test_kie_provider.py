@@ -70,7 +70,8 @@ def test_kies_in_body_code_maps_to_an_error_type(provider, code, error):
             provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
 
     assert type(raised.value) is error
-    assert "nope" in str(raised.value) + getattr(raised.value, "detail", "")
+    detail = raised.value.detail if isinstance(raised.value, ProviderAuthError) else ""
+    assert "nope" in str(raised.value) + detail
 
 
 def test_no_credits_keeps_the_text_the_card_reads(provider):

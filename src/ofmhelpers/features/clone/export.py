@@ -7,6 +7,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import ResultFile
 from ofmhelpers.db.jobs.store import merge_params
 from ofmhelpers.features.assets.store import register_generated_asset
+from ofmhelpers.features.refusals import ResumableError
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions, get_export
 
@@ -15,10 +16,9 @@ logger = get_logger(__name__)
 EXPORT_FAILURES = "export_failures"
 
 
-class ExportFailedError(RuntimeError):
+class ExportFailedError(ResumableError):
     def __init__(self, export: str) -> None:
         super().__init__(f"Export failed ({export}): run it again")
-        self.keep_request = True
 
 
 def export_choice(export: str | None, capcut: bool = False) -> str:

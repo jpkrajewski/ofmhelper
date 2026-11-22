@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from signin import sign_in_agency
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.routing import Mount, Route, WebSocketRoute
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.exceptions import MESSAGE
@@ -24,7 +25,11 @@ DOCS = {"/docs", "/redoc", "/openapi.json"}
 
 
 def _paths() -> set[str]:
-    return {getattr(route, "path", "") for route in create_app().routes}
+    return {
+        route.path
+        for route in create_app().routes
+        if isinstance(route, Route | WebSocketRoute | Mount)
+    }
 
 
 def test_development_serves_the_docs():

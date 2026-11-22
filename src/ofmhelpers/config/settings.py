@@ -1035,7 +1035,11 @@ class LinksSettings(BaseSettings):
         return max(*self.periods_days, 30)
 
     def admin_key(self, provider: str) -> str | None:
-        return getattr(self, f"{provider}_api_key_admin", None) or None
+        keys = {
+            "oopsie": self.oopsie_api_key_admin,
+            "bouncy": self.bouncy_api_key_admin,
+        }
+        return keys.get(provider) or None
 
     @model_validator(mode="after")
     def _default_period_is_offered(self) -> LinksSettings:
@@ -1385,15 +1389,6 @@ class RepurposeSettings(BaseSettings):
     )
     job_timeout_s: int = Field(
         default=5400, ge=60, validation_alias="OFM_REPURPOSE_JOB_TIMEOUT_S"
-    )
-    attempts: int = Field(
-        default=3, ge=1, le=10, validation_alias="OFM_REPURPOSE_ATTEMPTS"
-    )
-    strength_rounds: int = Field(
-        default=2, ge=1, le=3, validation_alias="OFM_REPURPOSE_STRENGTH_ROUNDS"
-    )
-    strength_step: float = Field(
-        default=0.02, ge=0, le=0.1, validation_alias="OFM_REPURPOSE_STRENGTH_STEP"
     )
     max_tries: int = Field(
         default=10, ge=1, le=10, validation_alias="OFM_REPURPOSE_MAX_TRIES"

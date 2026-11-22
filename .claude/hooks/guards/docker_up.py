@@ -1,6 +1,7 @@
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from guards.event import Guard, HookEvent, Verdict, context
@@ -42,11 +43,11 @@ def engine_answers() -> bool:
 def check(_event: HookEvent) -> Verdict | None:
     if engine_answers() or not DOCKER_DESKTOP.is_file():
         return None
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.DETACHED_PROCESS
     try:
-        subprocess.Popen(
-            [str(DOCKER_DESKTOP)],
-            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
-        )
+        subprocess.Popen([str(DOCKER_DESKTOP)], creationflags=creationflags)
     except OSError as error:
         return context(NAME, NOT_STARTED.format(error=error))
     return context(NAME, STARTED)

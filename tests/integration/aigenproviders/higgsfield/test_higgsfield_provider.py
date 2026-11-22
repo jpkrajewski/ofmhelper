@@ -255,7 +255,8 @@ def test_http_errors_map_to_error_types(wire, provider, status, headers, error):
         provider.submit(SPEC, {}, "job")
 
     assert type(raised.value) is error
-    assert "nope" in str(raised.value) + getattr(raised.value, "detail", "")
+    detail = raised.value.detail if isinstance(raised.value, ProviderAuthError) else ""
+    assert "nope" in str(raised.value) + detail
 
 
 @pytest.mark.parametrize("status", [402, 403])

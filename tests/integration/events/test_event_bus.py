@@ -395,7 +395,8 @@ class TestOnTheRealQueue:
 
         failures = [r for r in caplog.records if r.name == "rq.worker"]
         assert failures
-        assert {getattr(r, "arguments", None) for r in failures} == {"[hidden]"}
+        shown = {r.arguments for r in failures}  # type: ignore[attr-defined]
+        assert shown == {"[hidden]"}
 
 
 def test_a_message_that_replaces_deletes_the_one_before_in_each_chat():

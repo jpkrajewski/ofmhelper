@@ -999,7 +999,7 @@ def parse_args(argv: list[str]) -> Args:
     parser.add_argument("--submit")
     parser.add_argument("--post")
     parser.add_argument("--real", action="store_true")
-    return Args.model_validate(vars(parser.parse_args(argv)))
+    return Args.model_validate(parser.parse_args(argv), from_attributes=True)
 
 
 def refusal(args: Args, form: PageForm) -> str | None:

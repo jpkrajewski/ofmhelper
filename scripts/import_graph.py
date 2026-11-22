@@ -193,7 +193,7 @@ def graph() -> Graph:
     for module, path in modules.items():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import | ast.ImportFrom):
-                lazy = bool(getattr(node, "is_lazy", 0))
+                lazy = bool(node.is_lazy)
                 edges |= {
                     Edge(source=module, target=target, lazy=lazy)
                     for target in targets(node, module, path, set(modules))

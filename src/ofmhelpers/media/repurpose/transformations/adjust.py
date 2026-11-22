@@ -46,7 +46,9 @@ class AdjustDraws(BaseModel, frozen=True):
 
     @classmethod
     def sample(cls, s: AdjustSettings, rng: random.Random) -> AdjustDraws:
-        return cls(**{name: draw(getattr(s, name), rng) for name in cls.model_fields})
+        return cls(
+            **{name: draw(value, rng) for name, value in s if name in cls.model_fields}
+        )
 
     def colour(self, c: AdjustConstants) -> list[str]:
         chain = []

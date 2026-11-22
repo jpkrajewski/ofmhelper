@@ -1,6 +1,7 @@
 import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -18,7 +19,8 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 _BATCH = 50
-_RULES = ("unused", "cloned", "max")
+type Rule = Literal["unused", "cloned", "max"]
+_RULES: tuple[Rule, ...] = ("unused", "cloned", "max")
 
 
 class _Judged(BaseModel):
@@ -28,7 +30,7 @@ class _Judged(BaseModel):
     fragment: str | None = None
     use: Named | None = None
     idle_since: datetime
-    rule: str | None = None
+    rule: Rule | None = None
 
     @property
     def path(self) -> Path:
@@ -103,7 +105,7 @@ def _look(file: Download, *, write: bool) -> _Judged:
     )
 
 
-def _rule(seen: _Judged, now: datetime) -> str | None:
+def _rule(seen: _Judged, now: datetime) -> Rule | None:
     cfg = settings.downloaders
     idle = now - seen.idle_since
     if idle <= timedelta(seconds=cfg.keep_unused_s):
@@ -240,7 +242,13 @@ def _sweep_one(seen: _Judged, now: datetime, done: Swept) -> None:
         return
     done.removed += 1
     done.freed += freed
-    setattr(done, seen.rule, getattr(done, seen.rule) + 1)
+    match seen.rule:
+        case "unused":
+            done.unused += 1
+        case "cloned":
+            done.cloned += 1
+        case "max":
+            done.max += 1
 
 
 def _idle_before(now: datetime) -> datetime:

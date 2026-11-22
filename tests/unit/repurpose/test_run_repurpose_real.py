@@ -7,6 +7,8 @@ import pytest
 
 from ofmhelpers.features.repurpose import service
 from ofmhelpers.media.recorder import load_profile
+from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
+from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 from ofmhelpers.media.repurpose.repurpose import Repurpose
 from ofmhelpers.media.repurpose.transformations.video import VideoSettings
 
@@ -42,10 +44,29 @@ def _streams(path: Path) -> dict[str, dict]:
     return {s["codec_type"]: s for s in json.loads(out)["streams"]}
 
 
-def test_a_spoof_copy_is_a_real_iphone_h264_file_that_passed_the_self_check(tmp_path):
+def _by_the_job(tmp_path: Path, source: Path) -> RepurposeResult:
+    [result] = service.run_repurpose(str(tmp_path), str(source), 7)
+    return result
+
+
+def _by_the_pipeline(tmp_path: Path, source: Path) -> RepurposeResult:
+    [result] = (
+        Pipeline.paths(source, tmp_path / "IMG_7.mov")
+        .return_on_unique()
+        .seed(7)
+        .load("spoof")
+        .run()
+    )
+    return result
+
+
+@pytest.mark.parametrize("made_by", [_by_the_job, _by_the_pipeline])
+def test_a_spoof_copy_is_a_real_iphone_h264_file_that_passed_the_self_check(
+    tmp_path, made_by
+):
     source = _clip(tmp_path / "src.mp4")
 
-    [result] = service.run_repurpose(str(tmp_path), str(source), 7)
+    result = made_by(tmp_path, source)
 
     copy = Path(result.path)
     streams = _streams(copy)

@@ -9,7 +9,7 @@ lazy import logging
 lazy from collections.abc import Callable, Mapping
 
 import logfire
-from logfire._internal.exporters.otlp import OTLPExporterHttpSession
+from logfire._internal.exporters.otlp import _DISK_RETRYERS, OTLPExporterHttpSession
 from logfire._internal.http_transport import install_connection_policy
 from opentelemetry.sdk.trace import Event, SpanProcessor
 from pydantic import BaseModel, model_serializer
@@ -170,11 +170,16 @@ def _renew_connections_at_fork() -> None:
 
 
 def _renew_connections(sessions: weakref.WeakSet[OTLPExporterHttpSession]) -> None:
-    for session in sessions:
-        install_connection_policy(session)
-        retryer = session.__dict__.pop("retryer", None)
+    for kept in _DISK_RETRYERS:
+        retryer = kept()
         if retryer is not None:
             retryer.thread = None
+    for session in sessions:
+        install_connection_policy(session)
+        try:
+            del session.retryer
+        except AttributeError:  # silent: no retryer was made before the fork
+            continue
 
 
 def _drop_connect_spans() -> None:

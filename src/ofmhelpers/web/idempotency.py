@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Header, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -85,8 +85,9 @@ def _is_json(response: Response) -> bool:
 
 
 def _raw_answer(response: Response) -> bytes | None:
-    raw = getattr(response, "body", None)
-    return None if raw is None else bytes(raw)
+    if isinstance(response, (FileResponse, StreamingResponse)):
+        return None
+    return bytes(response.body)
 
 
 def _succeeded(response: Response) -> bool:

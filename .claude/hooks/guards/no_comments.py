@@ -1,20 +1,22 @@
 import importlib.util
+from pathlib import Path
 from types import ModuleType
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, block
 
 NAME = "no_comments"
 CHECKER = ROOT / "scripts" / "check_no_comments.py"
+GETATTR_CHECKER = ROOT / "scripts" / "check_no_getattr.py"
 FOUND = (
     "CLAUDE.md: NO COMMENTS, NO DOCSTRINGS, EVER: {spots}. Remove them; a descriptive name says it. "
     "Only machine directives stay (# noqa, # type: ignore, # fmt:, # pragma, # silent: <reason>)."
 )
 
 
-def checker() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("check_no_comments", CHECKER)
+def checker(script: Path = CHECKER) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(script.stem, script)
     if spec is None or spec.loader is None:
-        raise FileNotFoundError(CHECKER)
+        raise FileNotFoundError(script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

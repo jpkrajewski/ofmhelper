@@ -96,8 +96,14 @@ x-env-runtime: &env-runtime
   OFM_POSTER_SIZE:
   OFM_PREVIEW_BACKFILL_GUARD_S:
   OFM_PREVIEW_TIMEOUT_S:
+  OFM_REPURPOSE_MAX_TRIES:
+  OFM_SSCD_MODEL:
+  OFM_SSCD_THREADS:
+  OFM_SSCD_THRESHOLD:
+  OFM_TMK_DIR:
   OFM_TRIALS_KEEP_S:
   OFM_TRIALS_REMAKE_S:
+  OFM_UNIQIFY_ENCODE_TIMEOUT_S:
   OFM_VIRAL_KEEP_S:
 
 # Settings the import graph of the edit and preview tasks reaches beyond their

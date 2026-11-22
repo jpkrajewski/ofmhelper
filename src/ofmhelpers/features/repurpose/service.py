@@ -2,7 +2,6 @@ import secrets
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel
 lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import QueueName, enqueue_to
@@ -17,14 +16,12 @@ from ofmhelpers.features.drive.uploads import SPOOFED_TASK
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.features.repurpose.models import RepurposeCard, RepurposeResult
+from ofmhelpers.features.repurpose.models import RepurposeCard
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.repurpose.audio_check import BrokenAudioError, verify_audio
-from ofmhelpers.media.repurpose.checker.schema import CheckReport
-from ofmhelpers.media.repurpose.repurpose import EncodeStep, Repurpose
+from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
+from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
-lazy from ofmhelpers.media.repurpose.checker import check
 
 logger = get_logger(__name__)
 
@@ -32,13 +29,10 @@ TASK = SPOOFED_TASK
 PREFIX = "/spoof"
 FILES_PREFIX = f"{PREFIX}/files"
 DEVICE_LABEL = "iPhone 16 Pro Max"
-PRESET = "spoof"
+PIPELINE = "spoof"
 DEFAULT_COPIES = 1
 NO_VIDEO = "Pick one video"
 NOT_FOUND = "Job not found"
-
-
-class StillLooksLikeSourceError(RuntimeError): ...
 
 
 def upload_root() -> Path:
@@ -47,55 +41,6 @@ def upload_root() -> Path:
 
 def _copy_name(seed: int) -> str:
     return f"IMG_{1000 + seed % 9000}.mov"
-
-
-class _Made(BaseModel):
-    report: CheckReport
-    step: EncodeStep | None
-
-
-def _made(
-    source: Path, copy: Path, seed: int, timeout: int, strength: float
-) -> _Made | None:
-    run = (
-        Repurpose(source, copy, seed=seed, timeout_s=timeout)
-        .apply_json_preset(PRESET)
-        .stronger(strength)
-        .run()
-    )
-    try:
-        verify_audio(source, copy)
-    except BrokenAudioError:
-        logger.warning("repurpose: seed %s broke the audio", seed, exc_info=True)
-        return None
-    return _Made(report=check(source, copy, timeout_s=timeout), step=run.step)
-
-
-def _first_unique(source: Path, copy: Path, seed: int) -> RepurposeResult:
-    timeout = settings.web.uniqify_encode_timeout_s
-    knobs = settings.repurpose
-    tries = min(knobs.attempts * knobs.strength_rounds, knobs.max_tries)
-    for attempt in range(1, tries + 1):
-        strength = round(1 + knobs.strength_step * ((attempt - 1) // knobs.attempts), 4)
-        made = _made(source, copy, seed + attempt, timeout, strength)
-        if made is not None and made.report.unique:
-            return RepurposeResult(
-                name=copy.name,
-                path=str(copy),
-                report=made.report,
-                attempts=attempt,
-                strength=strength,
-                step=made.step,
-            )
-        logger.warning(
-            "repurpose: attempt %s of %s at strength %s did not pass: %s",
-            attempt,
-            tries,
-            strength,
-            made.report.model_dump_json() if made else "broken audio",
-        )
-    msg = f"Still matches the source after {tries} tries"
-    raise StillLooksLikeSourceError(msg)
 
 
 def run_repurpose(
@@ -109,11 +54,7 @@ def run_repurpose(
             seed,
         )
     copy = Path(job_dir) / _copy_name(seed)
-    try:
-        return [_first_unique(Path(source), copy, seed)]
-    except BaseException:
-        copy.unlink(missing_ok=True)
-        raise
+    return Pipeline.paths(source, copy).seed(seed).load(PIPELINE).run()
 
 
 def _card(job: Job, uploads: list[DriveUpload]) -> RepurposeCard:

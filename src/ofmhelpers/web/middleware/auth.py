@@ -267,9 +267,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def viewer(request: Request) -> Viewer:
-        found = getattr(request.state, "viewer", None)
-        if found is None:
+        if "viewer" not in request.state:
             raise HTTPException(status_code=401, detail="Not signed in")
+        found: Viewer = request.state["viewer"]
         return found
 
     @classmethod

@@ -481,7 +481,7 @@ def _clips(codes: list[str], cursor: str | None) -> dict:
 
 def _with_login(session) -> InstagramClient:
     client = InstagramClient()
-    client.__dict__["_logged_in"] = session
+    client._logged_in = session
     return client
 
 

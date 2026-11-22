@@ -74,11 +74,15 @@ def utc(ts: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
 
 
 def _viewer_of(request: Request) -> Viewer | None:
-    return getattr(request.state, "viewer", None)
+    if "viewer" in request.state:
+        return request.state["viewer"]
+    return None
 
 
 def csp_nonce(request: Request) -> str:
-    nonce = getattr(request.state, NONCE_KEY, "")
+    nonce: str = ""
+    if NONCE_KEY in request.state:
+        nonce = request.state[NONCE_KEY]
     if not nonce:
         logger.error("template rendered without a CSP nonce: its scripts are blocked")
     return nonce

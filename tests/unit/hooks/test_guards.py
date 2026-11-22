@@ -128,6 +128,7 @@ def docker_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def hooks(tmp_path: Path, docker_mode: Path) -> Hooks:
     (tmp_path / "scripts").mkdir()
     shutil.copy(REPO / "scripts" / "check_no_comments.py", tmp_path / "scripts")
+    shutil.copy(REPO / "scripts" / "check_no_getattr.py", tmp_path / "scripts")
     shutil.copy(REPO / "scripts" / "import_graph.py", tmp_path / "scripts")
     shutil.copy(REPO / "CLAUDE.md", tmp_path / "CLAUDE.md")
     (tmp_path / "src" / "ofmhelpers" / "features" / "old").mkdir(parents=True)
@@ -804,6 +805,67 @@ def test_a_changed_signature_is_not_new_code_but_a_new_name_is(hooks: Hooks) -> 
     assert added.decision == "deny"
     assert "adds new code" in added.reason
     assert "failure-modes" in added.reason
+
+
+def test_a_pydantic_class_waits_for_the_pydantic_docs(hooks: Hooks) -> None:
+    hooks.skill("senior-python-rules")
+    researched(hooks)
+    write_note(hooks)
+    path = "tests/unit/test_x.py"
+    model = "class Spec(BaseModel):\n    name: str"
+
+    denied = hooks.edit(path, new=model)
+    assert denied.decision == "deny"
+    assert "pydantic" in denied.reason
+    assert hooks.edit(path, new="spec = Spec.model_validate_json(text)").decision == (
+        "deny"
+    )
+    assert hooks.edit(path, new="x = 2").decision == "allow"
+    existing = "tests/unit/test_model.py"
+    (hooks.root / existing).parent.mkdir(parents=True, exist_ok=True)
+    (hooks.root / existing).write_text(f"{model}\n")
+    field = hooks.edit(existing, old="name: str", new="name: str\n    note: str = ''")
+    assert field.decision == "deny"
+    assert "pydantic" in field.reason
+
+    hooks.skill("pydantic")
+    assert hooks.edit(path, new=model).decision == "allow"
+    assert hooks.edit(existing, old="name: str", new="name: int").decision == "allow"
+
+
+def test_an_edit_that_adds_getattr_is_refused(hooks: Hooks) -> None:
+    hooks.skill("senior-python-rules")
+    path = "tests/unit/test_x.py"
+
+    for new in (
+        "value = getattr(row, name)",
+        "from operator import attrgetter",
+        "value = row.__getattribute__('name')",
+    ):
+        denied = hooks.edit(path, old="x = 1", new=new)
+        assert denied.decision == "deny"
+        assert "vars() and __dict__ are banned" in denied.reason
+    assert hooks.edit(path, old="v = getattr(row, 'a')", new="v = row.a").decision == (
+        "allow"
+    )
+    assert hooks.edit(path, old="a", new="said = 'no getattr here'").decision == "allow"
+    unclosed = "def f(\n    said='getattr is only a word here',"
+    assert hooks.edit(path, old="a", new=unclosed).decision == "allow"
+    indented = "        said = 'getattr is only a word here'\n        done = True"
+    assert hooks.edit(path, old="a", new=indented).decision == "allow"
+    broken_indent = "if x:\n        a = 1\n    b = getattr(o, 'y')"
+    assert hooks.edit(path, old="a", new=broken_indent).decision == "deny"
+    assert hooks.edit("README.md", new="getattr(x)").decision == "allow"
+    hooks.skill("failure-modes")
+    production = "src/ofmhelpers/features/old/service.py"
+    for target, new in (
+        (production, "x = vars(a)"),
+        (path, "x = vars(a)"),
+        (path, "x = a.__dict__"),
+    ):
+        refused = hooks.edit(target, old="x = 1", new=new)
+        assert refused.decision == "deny"
+        assert "vars() and __dict__ are banned" in refused.reason
 
 
 def test_a_subagent_uses_the_main_sessions_skills_but_not_another_agents(

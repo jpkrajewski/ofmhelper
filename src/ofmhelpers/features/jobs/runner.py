@@ -10,7 +10,7 @@ from rq.timeouts import JobTimeoutException
 from ofmhelpers.acting import Acting, Via, acting
 from ofmhelpers.cache import QueueName, enqueue_to, running_job
 from ofmhelpers.db.jobs import store
-from ofmhelpers.db.jobs.schema import GenerationRecord, JobMeta
+from ofmhelpers.db.jobs.schema import DownloadResult, GenerationRecord, JobMeta
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.account.keys import keep_used, key_tail
 from ofmhelpers.features.clone_pricing.cost import cost_of
@@ -25,6 +25,7 @@ from ofmhelpers.features.refusals import (
     ForbiddenError,
     NotFoundError,
     RefusedError,
+    ResumableError,
     TooSoonError,
     TryAgainError,
 )
@@ -53,8 +54,8 @@ class Requeued(BaseModel): ...
 
 
 def resumable(exc: BaseException) -> bool:
-    return isinstance(exc, (ProviderError, JobTimeoutException)) or bool(
-        getattr(exc, "keep_request", False)
+    return isinstance(exc, (ProviderError, JobTimeoutException)) or (
+        isinstance(exc, ResumableError) and exc.keep_request
     )
 
 
@@ -178,7 +179,9 @@ def start_job(
 
 def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None:
     items = result if isinstance(result, list) else []
-    failed = [item for item in items if getattr(item, "success", True) is False]
+    failed = [
+        item for item in items if isinstance(item, DownloadResult) and not item.success
+    ]
     if not failed:
         return
     span.set_attributes({"results": len(items), "results_failed": len(failed)})
@@ -188,7 +191,7 @@ def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None
         job_id,
         len(failed),
         len(items),
-        [getattr(item, "error", None) for item in failed],
+        [item.error for item in failed],
     )
 
 

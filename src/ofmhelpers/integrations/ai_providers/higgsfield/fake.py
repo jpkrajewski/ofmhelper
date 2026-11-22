@@ -104,7 +104,7 @@ def fake_higgsfield() -> FakeHiggsfield:
 
 def install(client: SyncClient) -> None:
     transport = fake_higgsfield().transport()
-    client.__dict__["_client"] = httpx.Client(
+    client._client = httpx.Client(  # noqa: SLF001
         transport=transport,
         base_url=client.base_url,
         timeout=client.timeout,
@@ -113,7 +113,7 @@ def install(client: SyncClient) -> None:
             "Content-Type": "application/json",
         },
     )
-    client.__dict__["_upload_client"] = httpx.Client(
+    client._upload_client = httpx.Client(  # noqa: SLF001
         transport=transport, timeout=client.timeout
     )
 

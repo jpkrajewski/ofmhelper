@@ -28,8 +28,8 @@ def tests_importing(modules: set[str]) -> dict[str, set[str]]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         names: set[str] = set()
         for node in ast.walk(tree):
-            if isinstance(node, ast.Import | ast.ImportFrom) and not getattr(
-                node, "level", 0
+            if isinstance(node, ast.Import) or (
+                isinstance(node, ast.ImportFrom) and not node.level
             ):
                 names |= set(targets(node, "", path, modules))
         for name in names:

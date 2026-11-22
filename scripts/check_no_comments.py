@@ -37,7 +37,7 @@ def python_comment_lines(source: str) -> list[int]:
 def python_docstring_lines(source: str) -> list[int]:
     owners = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     return [
-        getattr(node, "lineno", 1)
+        1 if isinstance(node, ast.Module) else node.lineno
         for node in ast.walk(ast.parse(source))
         if isinstance(node, owners) and ast.get_docstring(node) is not None
     ]

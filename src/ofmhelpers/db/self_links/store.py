@@ -2,6 +2,9 @@ from functools import lru_cache
 from types import MappingProxyType
 lazy from datetime import date
 
+lazy from sqlalchemy.orm import InstrumentedAttribute
+
+from ofmhelpers.db.models import SelfLinkClickRow
 from ofmhelpers.db.self_links.repository import SelfLinkRepository
 from ofmhelpers.db.short_links.catalog import LinkDays, LinkHours
 from ofmhelpers.db.short_links.repository import ShortLinkRepository
@@ -124,7 +127,7 @@ def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
     per = {c.link_id: c for c in _self().per_link(ids, start, end)}
     series = _self().series(ids, start, end, by_hour=by_hour)
 
-    def rows_of(column: str) -> list[SelfBreakdownRow]:
+    def rows_of(column: InstrumentedAttribute[str | None]) -> list[SelfBreakdownRow]:
         return _self().breakdown(ids, start, end, column)
 
     links = sorted(
@@ -152,10 +155,10 @@ def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
         visitors=totals.visitors,
         series=series,
         chart=SelfChart.build(series, by_hour=by_hour),
-        countries=rows_of("country"),
-        devices=rows_of("device"),
-        platforms=rows_of("platform"),
-        referrers=rows_of("referrer"),
-        browsers=rows_of("browser"),
+        countries=rows_of(SelfLinkClickRow.country),
+        devices=rows_of(SelfLinkClickRow.device),
+        platforms=rows_of(SelfLinkClickRow.platform),
+        referrers=rows_of(SelfLinkClickRow.referrer),
+        browsers=rows_of(SelfLinkClickRow.browser),
         links=links,
     )

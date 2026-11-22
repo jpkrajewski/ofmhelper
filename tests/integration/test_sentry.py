@@ -1,6 +1,7 @@
 import inspect
 import logging
 import sys
+import types
 from contextlib import contextmanager
 from typing import Any
 lazy from collections.abc import Callable, Iterator
@@ -70,55 +71,72 @@ class _Kept(Transport):
                 self.events.append({"type": "check_in", **item.payload.json})
 
 
+def _own(owner: Any) -> dict[str, Any]:
+    members = dict(inspect.getmembers_static(owner))
+    if not isinstance(owner, type):
+        return members
+    bases = [dict(inspect.getmembers_static(base)) for base in owner.__mro__[1:]]
+    return {
+        attribute: value
+        for attribute, value in members.items()
+        if not any(base.get(attribute) is value for base in bases)
+    }
+
+
 def _routines(owner: Any) -> dict[str, Any]:
     return {
         attribute: value
-        for attribute, value in list(vars(owner).items())
+        for attribute, value in _own(owner).items()
         if inspect.isroutine(value) or isinstance(value, classmethod | staticmethod)
     }
 
 
-def _library_functions() -> dict[tuple[str, str | None], dict[str, Any]]:
-    found: dict[tuple[str, str | None], dict[str, Any]] = {}
+type Snapshot = dict[tuple[str, str | None], tuple[Any, dict[str, Any]]]
+
+
+def _library_functions() -> Snapshot:
+    found: Snapshot = {}
     for name, module in list(sys.modules.items()):
         if module is None or name.split(".")[0] not in PATCHED_PACKAGES:
             continue
         owners = {None: module} | {
             key: value
-            for key, value in list(vars(module).items())
-            if inspect.isclass(value)
-            and getattr(value, "__module__", "").split(".")[0] in PATCHED_PACKAGES
+            for key, value in inspect.getmembers_static(module, inspect.isclass)
+            if value.__module__.split(".")[0] in PATCHED_PACKAGES
         }
         for key, owner in owners.items():
-            found[(name, key)] = _routines(owner)
+            found[(name, key)] = (owner, _routines(owner))
     return found
 
 
+def _defined_by_sentry(function: Any, saved: set[int]) -> bool:
+    return id(function) in saved or (
+        isinstance(function, types.FunctionType)
+        and function.__module__.startswith("sentry_sdk")
+    )
+
+
 def _sentry_made(routine: Any, saved: set[int]) -> bool:
-    function = getattr(routine, "__func__", routine)
-    seen = set()
-    while function is not None and id(function) not in seen:
-        seen.add(id(function))
-        if getattr(function, "__module__", "").startswith("sentry_sdk"):
-            return True
-        if id(function) in saved:
-            return True
-        function = getattr(function, "__wrapped__", None)
-    return False
+    function = (
+        routine.__func__
+        if isinstance(routine, classmethod | staticmethod | types.MethodType)
+        else routine
+    )
+    reached = inspect.unwrap(
+        function, stop=lambda step: _defined_by_sentry(step, saved)
+    )
+    return _defined_by_sentry(reached, saved)
 
 
-def _put_back(before: dict[tuple[str, str | None], dict[str, Any]]) -> None:
-    for (module_name, class_name), functions in before.items():
-        module = sys.modules.get(module_name)
-        owner = module if class_name is None else getattr(module, class_name, None)
-        if owner is None:
-            continue
+def _put_back(before: Snapshot) -> None:
+    for owner, functions in before.values():
         saved = {id(original) for original in functions.values()}
         for attribute, added in _routines(owner).items():
             if attribute not in functions and _sentry_made(added, saved):
                 delattr(owner, attribute)
+        current = _routines(owner)
         for attribute, original in functions.items():
-            if vars(owner).get(attribute) is not original:
+            if current.get(attribute) is not original:
                 setattr(owner, attribute, original)
 
 

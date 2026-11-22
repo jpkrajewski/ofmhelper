@@ -60,6 +60,13 @@ repos:
         entry: docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -T tests uv run --frozen python scripts/check_no_comments.py
         language: system
         types_or: [python, javascript, css, html]
+      # getattr is banned (owner 2026-11-22): only the staged files here;
+      # tests/unit/architecture/test_no_getattr.py checks the whole repo in CI.
+      - id: no-getattr
+        name: no getattr, attrgetter or __getattribute__ (changed files, in Docker)
+        entry: docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -T tests uv run --frozen python scripts/check_no_getattr.py
+        language: system
+        types: [python]
       # .env is gitignored; this is the backstop (the Drive key lives there).
       - id: no-env-files
         name: forbid .env files

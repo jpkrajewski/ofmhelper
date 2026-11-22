@@ -206,7 +206,13 @@ class _PreparedPaths(BaseModel, frozen=True):
         return [self.proxy, self.strip, self.frames]
 
     def of(self, kind: PreparedKind) -> Path:
-        return Path(getattr(self, kind))
+        match kind:
+            case "proxy":
+                return self.proxy
+            case "strip":
+                return self.strip
+            case "frames":
+                return self.frames
 
 
 def _prepared_files(path: Path) -> _PreparedPaths:

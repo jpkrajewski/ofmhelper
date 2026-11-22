@@ -3,7 +3,7 @@ lazy from collections.abc import Callable
 
 import requests
 from pydantic import BaseModel, ConfigDict
-from urllib3.exceptions import NewConnectionError
+from urllib3.exceptions import MaxRetryError, NewConnectionError
 
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
@@ -26,7 +26,7 @@ def _never_sent(exc: requests.RequestException) -> bool:
         return True
     cause = exc.args[0] if exc.args else None
     return isinstance(exc, requests.ConnectionError) and isinstance(
-        getattr(cause, "reason", cause), NewConnectionError
+        cause.reason if isinstance(cause, MaxRetryError) else cause, NewConnectionError
     )
 
 

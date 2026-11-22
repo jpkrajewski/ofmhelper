@@ -81,7 +81,7 @@ Handler = Callable[[Request, Any], Coroutine[Any, Any, Response]]
 
 def _refusal(status_code: int) -> Handler:
     async def answer(_request: Request, exc: Exception) -> Response:
-        detail = getattr(exc, "detail", None)
+        detail = exc.detail if isinstance(exc, RefusedError) else None
         return JSONResponse(
             {
                 "detail": detail.model_dump()

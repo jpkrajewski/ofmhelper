@@ -545,7 +545,13 @@ class Drive:
         logger.info("drive: trashed %s", item_id)
 
 
-_THREAD = threading.local()
+class _PerThread(threading.local):
+    def __init__(self) -> None:
+        self.drives: dict[tuple, DriveApi] = {}
+        self.people: dict[tuple, Drive] = {}
+
+
+_THREAD = _PerThread()
 
 
 def connect(*, interactive: bool = False) -> DriveApi:
@@ -559,7 +565,7 @@ def connect(*, interactive: bool = False) -> DriveApi:
         else (None, None)
     )
     cache_key: tuple = (key, timeout_s, retries, s.retries)
-    drives: dict = _THREAD.__dict__.setdefault("drives", {})
+    drives = _THREAD.drives
     if cache_key not in drives:
         drives[cache_key] = Drive(
             _credentials(key), timeout_s=timeout_s, retries=retries
@@ -579,7 +585,7 @@ def connect_as(
         if interactive
         else (None, None)
     )
-    drives: dict = _THREAD.__dict__.setdefault("people", {})
+    drives = _THREAD.people
     key = (refresh_token, timeout_s, retries, s.retries)
     if key not in drives:
         drives[key] = Drive(

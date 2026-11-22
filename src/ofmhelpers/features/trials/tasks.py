@@ -37,10 +37,9 @@ from ofmhelpers.integrations.gdrive import (
     FolderTrashedError,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import (
-    run as pipeline_run,
-)
-lazy from ofmhelpers.media.repurpose.repurpose import RunResult
+from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
+from ofmhelpers.media.repurpose.transformations.video import VideoSettings
+lazy from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 
 logger = get_logger(__name__)
 
@@ -121,7 +120,18 @@ def _why(exc: Exception, had_source: bool) -> str:
 class Draws(BaseModel, extra="allow"): ...
 
 
-def _draws(ran: RunResult | None) -> Draws | None:
+def pipeline_run(src: Path, out: Path, *, caption: str, seed: int) -> RepurposeResult:
+    [made] = (
+        Pipeline.paths(src, out)
+        .seed(seed)
+        .load(PIPELINE)
+        .video(VideoSettings(snapchat_caption=caption))
+        .run()
+    )
+    return made
+
+
+def _draws(ran: RepurposeResult | None) -> Draws | None:
     if ran is None or ran.step is None:
         return None
     return Draws.model_validate(

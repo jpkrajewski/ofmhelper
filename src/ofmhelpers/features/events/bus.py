@@ -33,7 +33,9 @@ def emit(event: Event) -> None:
         )
     except Exception:
         logger.warning(
-            "event %s not queued", getattr(event, "name", "?"), exc_info=True
+            "event %s not queued",
+            event.name if isinstance(event, Event) else type(event).__name__,
+            exc_info=True,
         )
 
 

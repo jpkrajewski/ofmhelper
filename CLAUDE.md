@@ -101,6 +101,7 @@ Rules (`.claude/rules/*.md`) load by themselves when you open a matching file. G
 | Touching | Rules (auto-loaded) | Skill to load |
 |---|---|---|
 | any Python file (write, change, review, debug) | `code.md` | `senior-python-rules` |
+| a Pydantic model, settings class or the model API | `code.md` | `pydantic` |
 | a route, a router, the app | `routers.md` | `fastapi`, `rest-api` |
 | a feature, an integration, a new module | `layers.md`, `code.md` | `architecture` |
 | a background job, a queue, a worker | `jobs.md` | `rq` |

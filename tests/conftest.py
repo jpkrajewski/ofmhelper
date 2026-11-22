@@ -252,12 +252,20 @@ def fake_externals(monkeypatch, tmp_path):
         cached.cache_clear()
 
 
+def _subclasses(cls: type) -> list[type]:
+    return [
+        found
+        for direct in cls.__subclasses__()
+        for found in (direct, *_subclasses(direct))
+    ]
+
+
 _SETTINGS_CLASSES = tuple(
-    cls
-    for cls in vars(settings_module).values()
-    if isinstance(cls, type)
-    and issubclass(cls, BaseSettings)
-    and cls.__module__ == settings_module.__name__
+    dict.fromkeys(
+        cls
+        for cls in _subclasses(BaseSettings)
+        if cls.__module__ == settings_module.__name__
+    )
 )
 
 

@@ -344,7 +344,7 @@ def test_connect_keeps_one_drive_per_thread_and_bounds_interactive_calls(
     monkeypatch.setattr(drive_client, "_credentials", lambda key: object())
     monkeypatch.setenv("OFM_GDRIVE_INTERACTIVE_TIMEOUT_S", "7")
     monkeypatch.setenv("OFM_GDRIVE_INTERACTIVE_RETRIES", "1")
-    drive_client._THREAD.__dict__.pop("drives", None)
+    drive_client._THREAD.drives.clear()
 
     first = drive_client.connect()
     assert drive_client.connect() is first

@@ -19,12 +19,11 @@ from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.db.models import CloneFromLinkRow, JobRow
 from ofmhelpers.db.session import session_scope
 
-_COLUMNS = [c.name for c in CloneFromLinkRow.__table__.columns]
 _RUNNING = ("checking", "uploading")
 
 
 def _review(row: CloneFromLinkRow) -> CloneFromLink:
-    return CloneFromLink.model_validate({name: getattr(row, name) for name in _COLUMNS})
+    return CloneFromLink.model_validate(row, from_attributes=True)
 
 
 def _held(claimed: float | None) -> ColumnElement[bool]:

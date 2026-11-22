@@ -8,13 +8,9 @@ from ofmhelpers.db.clone_ai_checks.schema import StoredCloneAiCheck
 from ofmhelpers.db.models import CloneAiCheckRow
 from ofmhelpers.db.session import session_scope
 
-_COLUMNS = [c.name for c in CloneAiCheckRow.__table__.columns]
-
 
 def _check(row: CloneAiCheckRow) -> StoredCloneAiCheck:
-    return StoredCloneAiCheck.model_validate(
-        {name: getattr(row, name) for name in _COLUMNS}
-    )
+    return StoredCloneAiCheck.model_validate(row, from_attributes=True)
 
 
 class CloneAiCheckRepository(CachedRepository):

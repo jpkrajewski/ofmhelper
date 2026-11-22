@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import Date, cast, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
+lazy from sqlalchemy.orm import InstrumentedAttribute
 
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
 from ofmhelpers.db.devices.repository import DuplicateError
@@ -211,12 +212,16 @@ class SelfLinkRepository(CachedRepository):
         ]
 
     def breakdown(
-        self, link_ids: list[int], start: date, end: date, column: str, limit: int = 8
+        self,
+        link_ids: list[int],
+        start: date,
+        end: date,
+        col: InstrumentedAttribute[str | None],
+        limit: int = 8,
     ) -> list[SelfBreakdownRow]:
         if not link_ids:
             return []
         click = SelfLinkClickRow
-        col = getattr(click, column)
         with session_scope() as s:
             rows = s.execute(
                 select(col.label("value"), func.count().label("clicks"))

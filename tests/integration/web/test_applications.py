@@ -52,8 +52,7 @@ def test_anonymous_submit_stores_every_field():
     assert r.headers["location"] == "/?applied=1"
 
     stored = applications_store.list_applications()[0]
-    for key, value in FORM.items():
-        assert getattr(stored, key) == value
+    assert stored.model_dump(include=set(FORM)) == FORM
 
 
 def test_thank_you_modal_only_shows_after_a_submission():

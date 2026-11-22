@@ -17,19 +17,6 @@ from ofmhelpers.db.models import DeviceLoginRow, DeviceRow, LoginRow
 from ofmhelpers.db.owner_scope import mine
 from ofmhelpers.db.session import session_scope
 
-_DEVICE_FIELDS = (
-    "label",
-    "model_id",
-    "color_id",
-    "custom_model",
-    "owner",
-    "phone_number",
-    "notes",
-)
-_IDENTITY = ("service", "provider", "username")
-_LOGIN_FIELDS = (*_IDENTITY, "notes")
-_SECRETS = ("password", "backup_codes")
-
 
 class DuplicateError(ValueError): ...
 
@@ -57,7 +44,13 @@ def _device(row: DeviceRow, logins: list[DeviceLogin]) -> Device:
     return Device(
         id=row.id,
         user_id=row.user_id,
-        **{f: getattr(row, f) for f in _DEVICE_FIELDS},
+        label=row.label,
+        model_id=row.model_id,
+        color_id=row.color_id,
+        custom_model=row.custom_model,
+        owner=row.owner,
+        phone_number=row.phone_number,
+        notes=row.notes,
         added_at=row.created_at.timestamp(),
         updated_at=row.updated_at.timestamp(),
         retired_at=row.retired_at,
@@ -173,7 +166,12 @@ class DeviceRepository(CachedRepository):
             logins = {
                 r.id: DeviceLogin(
                     id=r.id,
-                    **{f: getattr(r, f) for f in (*_LOGIN_FIELDS, *_SECRETS)},
+                    service=r.service,
+                    provider=r.provider,
+                    username=r.username,
+                    notes=r.notes,
+                    password=r.password,
+                    backup_codes=r.backup_codes,
                     updated_at=r.updated_at.timestamp(),
                     has_password=bool(r.password),
                     has_codes=bool(r.backup_codes),
@@ -250,9 +248,13 @@ class DeviceRepository(CachedRepository):
             device = s.get(DeviceRow, device_id)
             if device is None or (owner is not None and device.user_id != owner):
                 return None
-            same = [getattr(LoginRow, f) == fields[f] for f in _IDENTITY]
             row = s.execute(
-                select(LoginRow).where(*same, LoginRow.user_id == device.user_id)
+                select(LoginRow).where(
+                    LoginRow.service == fields["service"],
+                    LoginRow.provider == fields["provider"],
+                    LoginRow.username == fields["username"],
+                    LoginRow.user_id == device.user_id,
+                )
             ).scalar_one_or_none()
             existed = row is not None
             revived = row is not None and row.archived_at is not None
@@ -263,14 +265,18 @@ class DeviceRepository(CachedRepository):
                 s.add(row)
                 s.flush()
             else:
-                for name in _SECRETS:
-                    typed, saved = fields[name], getattr(row, name)
+                password, codes = fields["password"], fields["backup_codes"]
+                for what, typed, saved in (
+                    ("password", password, row.password),
+                    ("backup codes", codes, row.backup_codes),
+                ):
                     if typed and saved and typed != saved:
-                        what = name.replace("_", " ")
                         msg = f"{row.username} is already saved with other {what}: edit it instead"
                         raise DuplicateError(msg)
-                    if typed and not saved:
-                        setattr(row, name, typed)
+                if password and not row.password:
+                    row.password = password
+                if codes and not row.backup_codes:
+                    row.backup_codes = codes
             linked = s.execute(
                 insert(DeviceLoginRow)
                 .values(device_id=device_id, login_id=row.id)

@@ -21,10 +21,13 @@ def _task_names() -> set[str]:
     found = set()
     for path in SRC.rglob("*.py"):
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            targets = node.targets if isinstance(node, ast.Assign) else []
-            if isinstance(node, ast.AnnAssign):
-                targets = [node.target]
-            value = getattr(node, "value", None)
+            value: ast.expr | None
+            if isinstance(node, ast.Assign):
+                targets, value = node.targets, node.value
+            elif isinstance(node, ast.AnnAssign):
+                targets, value = [node.target], node.value
+            else:
+                continue
             if (
                 isinstance(value, ast.Constant)
                 and isinstance(value.value, str)

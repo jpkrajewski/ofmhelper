@@ -18,11 +18,13 @@ class Knobs(BaseModel, frozen=True):
 
     def stronger(self, factor: float) -> Self:
         update: dict[str, Value | Knobs] = {}
-        for name, field in type(self).model_fields.items():
-            value = getattr(self, name)
+        for name, value in self:
             if isinstance(value, Knobs):
                 update[name] = value.stronger(factor)
-            elif value is not None and field.annotation == Value | None:
+            elif (
+                value is not None
+                and type(self).model_fields[name].annotation == Value | None
+            ):
                 neutral = self.constants.neutral.get(name, 0.0)
                 update[name] = (
                     (

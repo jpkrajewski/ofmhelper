@@ -106,21 +106,21 @@ def test_a_time_a_ratio_or_a_dated_id_is_not_taken_for_a_token(text):
 
 
 def test_rq_failure_lines_lose_the_jobs_arguments():
-    record = logging.LogRecord("rq.worker", logging.ERROR, "", 0, "boom", None, None)
-    record.__dict__.update(
-        arguments=("telegram", "-1001234567", {"title": "t"}),
-        kwargs={"api_key": "sk-secret"},
-        func="ofmhelpers.features.events.dispatch.deliver",
+    record = logging.makeLogRecord(
+        {
+            "name": "rq.worker",
+            "levelno": logging.ERROR,
+            "msg": "boom",
+            "arguments": ("telegram", "-1001234567", {"title": "t"}),
+            "kwargs": {"api_key": "sk-secret"},
+            "func": "ofmhelpers.features.events.dispatch.deliver",
+        }
     )
 
     assert _HideJobArguments().filter(record)
 
-    hidden = {k: record.__dict__[k] for k in ("arguments", "kwargs", "func")}
-    assert hidden == {
-        "arguments": "[hidden]",
-        "kwargs": "[hidden]",
-        "func": "ofmhelpers.features.events.dispatch.deliver",
-    }
+    shown = logging.Formatter("%(arguments)s|%(kwargs)s|%(func)s").format(record)
+    assert shown == "[hidden]|[hidden]|ofmhelpers.features.events.dispatch.deliver"
 
 
 def test_the_app_logging_puts_that_filter_on_rqs_worker_logger():

@@ -257,8 +257,12 @@ def test_a_posted_folder_dragged_out_is_left_there_and_a_new_one_made(drive):
     assert drive.item(posted).parents == [ROOT]
 
 
-@pytest.mark.parametrize("how", ["trash", "delete"])
-def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive, how):
+@pytest.mark.parametrize(
+    "remove", [FakeDrive.trash, FakeDrive.delete], ids=["trash", "delete"]
+)
+def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(
+    drive, remove
+):
     phone = _phone("Phone 01")
     added = devices.add_login(
         phone, LoginFields(service="instagram", username="ann.ig", password="pw")
@@ -268,7 +272,7 @@ def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive
     track("instagram", "ann.ig", user_id=users.agency_id())
     drive_folders.sync()
     account = _account(drive, "ann.ig")
-    getattr(drive, how)(account)
+    remove(drive, account)
 
     report = drive_folders.sync()
 

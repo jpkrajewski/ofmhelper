@@ -1,4 +1,3 @@
-import importlib
 import pickle
 
 import pytest
@@ -83,24 +82,19 @@ QUEUED_PATHS = {
 }
 
 
-def _named(path: str) -> object:
-    module, name = path.rsplit(".", 1)
-    return getattr(importlib.import_module(module), name)
-
-
 @pytest.mark.parametrize(("old", "new"), QUEUED_PATHS.items())
 def test_a_run_function_pickled_under_its_router_path_is_the_features(old, new):
     module, name = old.rsplit(".", 1)
     stored = f"c{module}\n{name}\n.".encode()
 
-    assert pickle.loads(stored) is _named(new)  # noqa: S301
+    assert pickle.loads(stored) is import_attribute(new)  # noqa: S301
 
 
 def test_run_job_still_answers_at_the_stores_path_rq_looks_up():
     old = import_attribute("ofmhelpers.db.stores.jobs.run_job")
 
     assert callable(old)
-    assert _named("ofmhelpers.features.jobs.runner.run_job") is not old
+    assert import_attribute("ofmhelpers.features.jobs.runner.run_job") is not old
 
 
 def test_the_stores_run_job_hands_the_job_to_the_registered_runner(monkeypatch):

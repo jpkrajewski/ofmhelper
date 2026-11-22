@@ -376,10 +376,38 @@ def _import_closure(entries: list[str]) -> dict[str, ast.AST]:
     return trees
 
 
+def _subclasses(cls: type) -> list[type]:
+    return [
+        found
+        for direct in cls.__subclasses__()
+        for found in (direct, *_subclasses(direct))
+    ]
+
+
+def _group_classes() -> dict[str, type[BaseSettings]]:
+    classes = {
+        cls.__name__: cls
+        for cls in _subclasses(BaseSettings)
+        if cls.__module__ == "ofmhelpers.config.settings"
+    }
+    groups = REPO / "src" / "ofmhelpers" / "config" / "__init__.py"
+    return {
+        node.name: classes[node.returns.id]
+        for node in ast.walk(ast.parse(groups.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef)
+        and isinstance(node.returns, ast.Name)
+        and node.returns.id in classes
+        and any(
+            isinstance(d, ast.Name) and d.id == "property" for d in node.decorator_list
+        )
+    }
+
+
 def _env_names_read(trees: dict[str, ast.AST]) -> set[str]:
     names = set()
+    group_classes = _group_classes()
     for group, attr in set().union(*map(_settings_reads, trees.values())):
-        cls = type(getattr(settings, group))
+        cls = group_classes[group]
         required = {f for f, info in cls.model_fields.items() if info.is_required()}
         fields = {attr} | required if attr in cls.model_fields else None
         names |= _env_names(cls, fields)

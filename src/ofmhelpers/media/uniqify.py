@@ -57,9 +57,9 @@ class StrengthPreset(BaseModel, frozen=True):
         return StrengthPreset.model_validate(
             {
                 name: tuple(
-                    neutral + (v - neutral) * factor for v in getattr(self, name)
+                    _NEUTRAL[name] + (v - _NEUTRAL[name]) * factor for v in value
                 )
-                for name, neutral in _NEUTRAL.items()
+                for name, value in self
             }
         )
 

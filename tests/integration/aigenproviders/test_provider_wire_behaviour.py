@@ -321,7 +321,7 @@ def hf(monkeypatch) -> HiggsfieldWire:
     def init(self, api_key):
         real_init(self, api_key)
         client = self.client
-        client.__dict__["_client"] = httpx.Client(
+        client._client = httpx.Client(
             transport=transport,
             base_url=client.base_url,
             headers={"Authorization": f"Key {api_key}"},

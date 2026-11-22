@@ -3,7 +3,6 @@ import os
 import re
 import threading
 from functools import lru_cache
-from operator import attrgetter
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -84,7 +83,7 @@ def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
 
 
 def _newest(files: list[StoredFile], limit: int) -> list[RefEntry]:
-    return [_entry(f) for f in heapq.nlargest(limit, files, key=attrgetter("mtime"))]
+    return [_entry(f) for f in heapq.nlargest(limit, files, key=lambda f: f.mtime)]
 
 
 def listing(

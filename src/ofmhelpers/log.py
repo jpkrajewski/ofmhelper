@@ -12,11 +12,6 @@ lazy from ofmhelpers.config import settings
 
 _configured = False
 
-_RESERVED = frozenset(
-    logging.LogRecord("", 0, "", 0, "", None, None).__dict__
-) | frozenset({"asctime", "message", "taskName"})
-
-
 _ACCESS_ARGS = 5
 _LOGIN_CODE = re.compile(r"([?&]code=)[^&\s]+")
 
@@ -33,8 +28,6 @@ class JsonFormatter(logging.Formatter):
             payload["exc"] = self.formatException(record.exc_info)
         if record.stack_info:
             payload["stack"] = self.formatStack(record.stack_info)
-
-        payload.update({k: v for k, v in record.__dict__.items() if k not in _RESERVED})
         return json.dumps(payload, default=str)
 
 
@@ -55,8 +48,8 @@ class _HideLoginCodes(logging.Filter):
 
 class _HideJobArguments(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        for name in _JOB_ARGUMENTS:
-            if name in record.__dict__:
+        if record.levelno >= logging.ERROR:
+            for name in _JOB_ARGUMENTS:
                 setattr(record, name, _HIDDEN)
         return True
 

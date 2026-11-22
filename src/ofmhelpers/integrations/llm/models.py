@@ -73,12 +73,16 @@ class Usage(BaseModel):
     @classmethod
     def summed(cls, usages: Iterable[Self]) -> Self:
         found = list(usages)
+        return cls(
+            input_tokens=_total(u.input_tokens for u in found),
+            thinking_tokens=_total(u.thinking_tokens for u in found),
+            output_tokens=_total(u.output_tokens for u in found),
+        )
 
-        def total(name: str) -> int | None:
-            counts = [n for u in found if (n := getattr(u, name)) is not None]
-            return sum(counts) if counts else None
 
-        return cls(**{name: total(name) for name in cls.model_fields})
+def _total(counts: Iterable[int | None]) -> int | None:
+    known = [n for n in counts if n is not None]
+    return sum(known) if known else None
 
 
 class Reply(BaseModel):
