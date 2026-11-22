@@ -9,10 +9,10 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.db.watched_profiles.store import list_watched
 from ofmhelpers.features.accounts import page as accounts
 from ofmhelpers.features.accounts import tracker as account_tracker
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.reels import page as reels
 from ofmhelpers.features.reels import watch as reel_watch
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 PHONE = {
@@ -247,7 +247,7 @@ def test_each_users_folders_live_in_their_own_drive(ann, bob, drive):
     ann_login = _add_login(ann, _add_phone(ann), "ann.ig", "")
     _add_login(bob, _add_phone(bob, owner="Bob"), "bob.ig", "")
 
-    drive_folders.sync()
+    storage_jobs.sync()
 
     ann_root = users.by_email("ann@example.com").drive_root_id
     bob_root = users.by_email("bob@example.com").drive_root_id
@@ -281,7 +281,7 @@ def test_an_admin_sees_and_syncs_only_their_own_drive_cards(ann, bob, drive):
         assert "ann.ig" not in html
         assert "bob.ig" not in html
 
-    drive_folders.sync()
+    storage_jobs.sync()
     (ann_folder,) = drive.named(
         "ann.ig - Anna", users.by_email("ann@example.com").drive_root_id
     )

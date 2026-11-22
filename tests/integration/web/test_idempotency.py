@@ -25,8 +25,8 @@ from ofmhelpers.db.jobs.store import list_jobs_page
 from ofmhelpers.db.models import IdempotencyKeyRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.features.assets import store as asset_store
-from ofmhelpers.features.downloads import media as download_media
-from ofmhelpers.features.downloads import service as download_service
+from ofmhelpers.features.downloads import links as download_links
+from ofmhelpers.features.downloads.links import LinkDownloads
 from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.refusals import UnavailableError
 from ofmhelpers.web.idempotency import (
@@ -195,14 +195,14 @@ def test_a_left_key_sent_with_a_different_request_is_refused_as_different(
 
 
 def test_a_crash_after_the_work_started_never_runs_it_again(downloads, monkeypatch):
-    started = download_media.start
+    started = LinkDownloads.start
 
     def start_then_crash(*args, **kwargs):
         started(*args, **kwargs)
         msg = "the cards did not render"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(download_media, "start", start_then_crash)
+    monkeypatch.setattr(LinkDownloads, "start", start_then_crash)
     crashing = TestClient(app, raise_server_exceptions=False)
     crashing.user = sign_in(crashing)  # type: ignore[attr-defined]
     key = keyed()
@@ -218,17 +218,17 @@ def test_a_crash_after_the_work_started_never_runs_it_again(downloads, monkeypat
 def test_an_outside_service_down_frees_the_key_to_try_again(
     client, downloads, monkeypatch
 ):
-    started = download_media.start
+    started = LinkDownloads.start
 
     def down(*_args, **_kwargs):
         msg = "The download service did not answer"
         raise UnavailableError(msg)
 
-    monkeypatch.setattr(download_media, "start", down)
+    monkeypatch.setattr(LinkDownloads, "start", down)
     key = keyed()
     assert _run(client, A, key).status_code == 502
 
-    monkeypatch.setattr(download_media, "start", started)
+    monkeypatch.setattr(LinkDownloads, "start", started)
     assert _run(client, A, key).status_code == 202
     assert downloads.fetched == [A]
 
@@ -360,7 +360,7 @@ def test_keys_older_than_their_keep_time_are_removed(client):
 def test_a_link_still_downloading_is_not_downloaded_twice(
     client, downloads, monkeypatch
 ):
-    monkeypatch.setattr(download_service, "enqueue", lambda *_a, **_k: None)
+    monkeypatch.setattr(download_links, "enqueue", lambda *_a, **_k: None)
     first = _run(client, A, keyed()).json()["job_id"]
     _run(client, B, keyed())
 

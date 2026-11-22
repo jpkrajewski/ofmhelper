@@ -336,14 +336,14 @@ def test_the_web_rule_lets_shapes_through_and_nothing_else():
             from ofmhelpers.db.devices.catalog.schema import Catalog
             from ofmhelpers.db.users import store
             from ofmhelpers.db.session import session_scope
-            from ofmhelpers.integrations.gdrive import connect_as
+            from ofmhelpers.integrations.storage.gdrive import connect_as
         """)
     )
 
     assert reaches_past_features(tree) == {
         "ofmhelpers.db.users",
         "ofmhelpers.db.session",
-        "ofmhelpers.integrations.gdrive",
+        "ofmhelpers.integrations.storage.gdrive",
     }
 
 

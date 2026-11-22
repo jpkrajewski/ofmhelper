@@ -298,9 +298,21 @@ def run_picture(
     assets_root: str,
     provider: str,
     model: str,
-    **params: Any,
+    prompt: str,
+    reference_images: list[str],
+    aspect_ratio: str,
+    resolution: str,
+    preset: int | None = None,  # noqa: ARG001
+    preset_name: str | None = None,  # noqa: ARG001
+    pictures: list[str] | None = None,  # noqa: ARG001
 ) -> list[ResultFile]:
-    fields = values(PICTURE_TARGETS[provider], params).model_dump()
+    chosen = {
+        "prompt": prompt,
+        "reference_images": reference_images,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+    }
+    fields = values(PICTURE_TARGETS[provider], chosen).model_dump()
     return run_ai(
         job_id, api_key, assets_root, provider=provider, model=model, **fields
     )

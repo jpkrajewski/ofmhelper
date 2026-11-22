@@ -6,9 +6,9 @@ from fastapi.responses import Response
 from ofmhelpers.db.users.schema import ApiKeysForm, SessionUser
 from ofmhelpers.features.account import service
 from ofmhelpers.features.account.service import Notice
-from ofmhelpers.features.drive.space import DriveSpace, drive_space
+from ofmhelpers.features.storage.schema import DriveSpace
 from ofmhelpers.web.access import Action, Area, allowed
-from ofmhelpers.web.dependencies import Access, Can, CurrentUser
+from ofmhelpers.web.dependencies import Access, Can, CurrentUser, Storage
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
@@ -25,7 +25,7 @@ def _chats(me: SessionUser) -> bool:
 def _page(request: Request, me: SessionUser, notice: Notice) -> Response:
     view = service.page_view(me.id, notice, chats=_chats(me))
     response = render(
-        request, "account.html", **dict(iter(view)), status_code=notice.status_code
+        request, "account.html", dict(iter(view)), status_code=notice.status_code
     )
     response.headers.update(NO_STORE)
     return response
@@ -39,8 +39,8 @@ def account_page(
 
 
 @router.get("/drive-space")
-def drive_space_now(me: CurrentUser) -> DriveSpace | None:
-    return drive_space(me.id)
+def drive_space_now(storage: Storage) -> DriveSpace | None:
+    return storage.space.drive_space()
 
 
 @router.post("/password", dependencies=[Can(Action.CHANGE_PASSWORD)])

@@ -17,8 +17,6 @@ from ofmhelpers.features.cookies import service as cookies
 from ofmhelpers.features.distribution import publish as pinterest
 from ofmhelpers.features.downloads import clean as clean_images
 from ofmhelpers.features.downloads import restarts as download_restarts
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.drive import uploads as drive_uploads
 from ofmhelpers.features.edit import service as edit_service
 from ofmhelpers.features.generate import service as generate
 from ofmhelpers.features.handmade import service as handmade
@@ -28,6 +26,9 @@ from ofmhelpers.features.pictures import service as pictures
 from ofmhelpers.features.reels.watch import unlock_gated
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.repurpose import service as repurpose
+from ofmhelpers.features.storage import jobs as storage
+from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.models import BinMove
 from ofmhelpers.features.threads import tasks as threads
 from ofmhelpers.features.uniqify import service as uniqify
 from ofmhelpers.features.viral import page as viral
@@ -98,6 +99,19 @@ def _owner(job: Job) -> RunArgs:
     return RunArgs.model_validate({"user_id": int(job.actor or "")})
 
 
+def _storage_scan(job: Job) -> RunArgs:
+    return RunArgs.model_validate({**_owner(job).model_dump(), "job_id": job.id})
+
+
+def _bin_move(job: Job) -> RunArgs:
+    return RunArgs.model_validate(
+        {
+            **_storage_scan(job).model_dump(),
+            **BinMove.model_validate(job.params).model_dump(mode="json"),
+        }
+    )
+
+
 RESTARTS = frozendict(
     {
         uniqify.TASK: Restart(run=uniqify.run_uniqify, kwargs=_in_its_folder),
@@ -129,13 +143,23 @@ RESTARTS = frozendict(
             queue=QueueName.MEDIA,
             job_timeout=lambda _params: settings.threads.job_timeout_s,
         ),
+        storage_constants().scan_task: Restart(
+            run=storage.run_scan,
+            kwargs=_storage_scan,
+            job_timeout=lambda _params: settings.storage.scan_timeout_s,
+        ),
+        storage_constants().bin_task: Restart(
+            run=storage.run_bin,
+            kwargs=_bin_move,
+            job_timeout=lambda _params: settings.storage.clean_timeout_s,
+        ),
     }
 )
 
 DRAINED = frozenset(
     {
-        drive_uploads.TASK,
-        drive_folders.SYNC_TASK,
+        storage_constants().upload_task,
+        storage_constants().sync_task,
         links.CREATE_TASK,
         links.ADULT_TASK,
         links.DELETE_TASK,

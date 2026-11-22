@@ -22,146 +22,43 @@ lazy from googleapiclient.errors import HttpError
 lazy from googleapiclient.http import HttpRequest, MediaFileUpload
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive.base import (
-    DriveApi,
+from ofmhelpers.db.drive_folders.schema import (
+    FOLDER_MIME,
+    DriveFile,
+)
+from ofmhelpers.integrations.storage.base import (
     DriveAuthError,
     DriveError,
     DriveFullError,
     DriveNotSetUpError,
     FolderGoneError,
     FolderTrashedError,
+    StorageClient,
 )
-from ofmhelpers.integrations.gdrive.models import (
-    FOLDER_MIME,
+from ofmhelpers.integrations.storage.gdrive.models import (
     DriveAbout,
     DriveAck,
-    DriveDownload,
-    DriveFile,
-    DriveFolder,
-    DriveListing,
     DriveRow,
     DriveRowList,
+)
+from ofmhelpers.integrations.storage.gdrive.sheets import XLSX_MIME, read_xlsx
+from ofmhelpers.integrations.storage.models import (
+    DriveDownload,
+    DriveFolder,
+    DriveListing,
     DriveSheet,
     DriveStorage,
     DriveThumb,
     FolderItems,
 )
-from ofmhelpers.integrations.gdrive.sheets import XLSX_MIME, read_xlsx
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.integrations.gdrive.fake import (
+lazy from ofmhelpers.integrations.storage.gdrive.fake import (
     FAKE_BOT_EMAIL,
     fake_drive,
     fake_person,
 )
 
 logger = get_logger(__name__)
-
-
-def read_live_mode() -> bool:
-    return settings.gdrive.read_live and not settings.infra.production
-
-
-_READ_ONLY = "read-live mode (OFM_DRIVE_READ_LIVE): writing to the live Drive is off"
-
-
-class ReadOnlyDrive:
-    def __init__(self, inner: DriveApi) -> None:
-        self._inner = inner
-
-    def folder(self, folder_id: str) -> DriveFolder:
-        return self._inner.folder(folder_id)
-
-    def children(
-        self, parent_id: str, *, folders_only: bool = False
-    ) -> list[DriveFile]:
-        return self._inner.children(parent_id, folders_only=folders_only)
-
-    def children_of(self, parent_ids: list[str]) -> DriveListing:
-        return self._inner.children_of(parent_ids)
-
-    def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
-        return self._inner.find_folder(parent_id, name)
-
-    def file(self, file_id: str) -> DriveFile:
-        return self._inner.file(file_id)
-
-    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
-        return self._inner.find_file(parent_id, name)
-
-    def sheet(self, file_id: str) -> DriveSheet:
-        return self._inner.sheet(file_id)
-
-    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
-        return self._inner.thumbnail(item, px)
-
-    def download(self, file_id: str) -> DriveDownload:
-        return self._inner.download(file_id)
-
-    def storage(self) -> DriveStorage:
-        return self._inner.storage()
-
-    def create_folder(self, *args: object, **kwargs: object) -> DriveFolder:
-        raise DriveError(_READ_ONLY)
-
-    def ensure_folder(self, *args: object, **kwargs: object) -> DriveFolder:
-        raise DriveError(_READ_ONLY)
-
-    def rename(self, *args: object, **kwargs: object) -> DriveFolder:
-        raise DriveError(_READ_ONLY)
-
-    def upload(self, *args: object, **kwargs: object) -> DriveFile:
-        raise DriveError(_READ_ONLY)
-
-    def grant(self, *args: object, **kwargs: object) -> None:
-        raise DriveError(_READ_ONLY)
-
-    def trash_file(self, *args: object, **kwargs: object) -> None:
-        raise DriveError(_READ_ONLY)
-
-
-class ScopedDrive(ReadOnlyDrive):
-    def __init__(self, inner: DriveApi, root_id: str) -> None:
-        super().__init__(inner)
-        self._writable = {root_id}
-
-    def _inside(self, parent_id: str) -> None:
-        if parent_id not in self._writable:
-            raise DriveError(_READ_ONLY)
-
-    def _adopt(self, parents: list[str], folder: DriveFolder) -> DriveFolder:
-        if self._writable.intersection(parents):
-            self._writable.add(folder.id)
-        return folder
-
-    def folder(self, folder_id: str) -> DriveFolder:
-        found = self._inner.folder(folder_id)
-        return self._adopt(found.parents, found)
-
-    def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
-        found = self._inner.find_folder(parent_id, name)
-        return self._adopt([parent_id], found) if found else None
-
-    def create_folder(self, parent_id: str, name: str) -> DriveFolder:  # type: ignore[override]
-        self._inside(parent_id)
-        return self._adopt([parent_id], self._inner.create_folder(parent_id, name))
-
-    def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:  # type: ignore[override]
-        return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
-
-    def upload(  # type: ignore[override]
-        self, parent_id: str, path: Path, name: str, mime_type: str
-    ) -> DriveFile:
-        self._inside(parent_id)
-        return self._inner.upload(parent_id, path, name, mime_type)
-
-    def trash_file(self, item_id: str) -> None:  # type: ignore[override]
-        if not self._writable.intersection(self._inner.file(item_id).parents):
-            raise DriveError(_READ_ONLY)
-        self._inner.trash_file(item_id)
-
-
-def _guard(drive: DriveApi) -> DriveApi:
-    return ReadOnlyDrive(drive) if read_live_mode() else drive
 
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
@@ -547,16 +444,16 @@ class Drive:
 
 class _PerThread(threading.local):
     def __init__(self) -> None:
-        self.drives: dict[tuple, DriveApi] = {}
+        self.drives: dict[tuple, StorageClient] = {}
         self.people: dict[tuple, Drive] = {}
 
 
 _THREAD = _PerThread()
 
 
-def connect(*, interactive: bool = False) -> DriveApi:
+def connect(*, interactive: bool = False) -> StorageClient:
     if settings.infra.fake_externals:
-        return _guard(fake_drive())
+        return fake_drive()
     s = settings.gdrive
     key = _key()
     timeout_s, retries = (
@@ -570,15 +467,12 @@ def connect(*, interactive: bool = False) -> DriveApi:
         drives[cache_key] = Drive(
             _credentials(key), timeout_s=timeout_s, retries=retries
         )
-    return _guard(drives[cache_key])
+    return drives[cache_key]
 
 
-def connect_as(
-    refresh_token: str, *, interactive: bool = False, guard: bool = True
-) -> DriveApi:
+def connect_as(refresh_token: str, *, interactive: bool = False) -> StorageClient:
     if settings.infra.fake_externals:
-        person = fake_person(refresh_token)
-        return _guard(person) if guard else person
+        return fake_person(refresh_token)
     s = settings.gdrive
     timeout_s, retries = (
         (s.interactive_timeout_s, s.interactive_retries)
@@ -591,4 +485,4 @@ def connect_as(
         drives[key] = Drive(
             drive_credentials(refresh_token), timeout_s=timeout_s, retries=retries
         )
-    return _guard(drives[key]) if guard else drives[key]
+    return drives[key]

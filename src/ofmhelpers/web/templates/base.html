@@ -98,6 +98,7 @@
         {% call ui.notice(kind="fail", hook="drive-full-banner", attrs={"hidden": true}) %}
             <span class="drive-full-text">Google Drive is full. Check the folder.</span>
             {{ ui.button("Open folder", href="https://drive.google.com/drive/my-drive", hook="drive-full-folder", attrs={"target": "_blank", "rel": "noopener"}) }}
+            {{ ui.button("Free up space", href="/storage", hook="drive-full-storage") }}
             {{ ui.button("Buy more space", href="https://one.google.com/storage", hook="drive-full-buy", attrs={"target": "_blank", "rel": "noopener"}) }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-full-dismiss") }}
         {% endcall %}

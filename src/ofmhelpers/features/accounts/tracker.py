@@ -144,7 +144,7 @@ def queue_due_scans() -> list[int]:
     if due:
         logger.info("rescanning %d tracked account(s)", len(due))
         for start, batch in enumerate(_batches(due)):
-            enqueue(scan_accounts, batch.platform, batch.ids, start)
+            enqueue(scan_accounts, (batch.platform, batch.ids, start))
     return due
 
 

@@ -1371,6 +1371,24 @@ class GDriveSettings(BaseSettings):
     def sweeping(self, production: bool) -> bool:
         return production if self.sweep_enabled is None else self.sweep_enabled
 
+    def live_read(self, production: bool) -> bool:
+        return self.read_live and not production
+
+
+class StorageSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    scan_stale_s: int = Field(
+        default=600, ge=30, validation_alias="OFM_STORAGE_SCAN_STALE_S"
+    )
+    scan_timeout_s: int = Field(
+        default=1800, ge=60, validation_alias="OFM_STORAGE_SCAN_TIMEOUT_S"
+    )
+    clean_timeout_s: int = Field(
+        default=3600, ge=60, validation_alias="OFM_STORAGE_CLEAN_TIMEOUT_S"
+    )
+    start_lock_s: int = Field(default=10, ge=1, validation_alias="OFM_STORAGE_LOCK_S")
+
 
 class RepurposeSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

@@ -70,9 +70,7 @@ def card(job: Job) -> TaskCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=label,
-        poll_prefix=PREFIX,
-        result_kind="video",
+        {"task_label": label, "poll_prefix": PREFIX, "result_kind": "video"},
     )
 
 

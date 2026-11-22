@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive.client import SCOPES
+from ofmhelpers.integrations.signin.google import DRIVE_SCOPES as SCOPES
 
 UPDATED = "8 November 2026"
 TELEGRAM = "https://t.me/ascendonboard"

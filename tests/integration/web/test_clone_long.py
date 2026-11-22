@@ -788,7 +788,9 @@ def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeyp
     monkeypatch.setattr(
         recovery,
         "enqueue_to",
-        lambda _queue, *args, job_timeout=None: queued.append((args, job_timeout)),
+        lambda _queue, fn, args, job_timeout=None: queued.append(
+            ((fn, *args), job_timeout)
+        ),
     )
 
     assert recovery.run_recovery_once()[job_id] == "rerun"

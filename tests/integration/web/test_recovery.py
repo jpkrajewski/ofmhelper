@@ -69,8 +69,8 @@ class _Reruns(list):
 def reruns(monkeypatch):
     calls = _Reruns()
 
-    def enqueue_to(queue, *args, job_timeout=None):
-        calls.append(args)
+    def enqueue_to(queue, fn, args, job_timeout=None):
+        calls.append((fn, *args))
         calls.queues.append(queue)
         calls.timeouts.append(job_timeout)
 
@@ -354,6 +354,11 @@ _LOCAL_JOBS = {
         },
     ),
     "reels_unlock": ({}, {"user_id": 7}),
+    "storage_scan": ({}, {"user_id": 7, "job_id": "JOB"}),
+    "storage_bin": (
+        {"part": "TRIALS", "folder_id": "F1"},
+        {"user_id": 7, "job_id": "JOB", "part": "TRIALS", "folder_id": "F1"},
+    ),
 }
 
 

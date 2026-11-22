@@ -53,7 +53,7 @@ class UniqifyForm(FormModel):
 @router.get("")
 def form(request: Request, actor: Actor) -> Response:
     view = service.form_view(actor, FILES_PREFIX)
-    return render(request, "uniqify.html", **dict(view))
+    return render(request, "uniqify.html", dict(view))
 
 
 @router.post("/run", status_code=202)

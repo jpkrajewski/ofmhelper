@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel, ConfigDict, model_serializer
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ofmhelpers.features.drive.uploads import UploadRefusedError
 from ofmhelpers.features.generate.service import GenerateRefusedError
 from ofmhelpers.features.refusals import (
     AssetRefusedError,
@@ -40,7 +39,6 @@ REFUSALS: frozendict[type[Exception], int] = frozendict(
         EditRefusedError: 400,
         GenerateRefusedError: 400,
         RefusedError: 400,
-        UploadRefusedError: 400,
         ForbiddenError: 403,
         MissingError: 404,
         NotFoundError: 404,

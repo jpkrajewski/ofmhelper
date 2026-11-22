@@ -67,7 +67,7 @@ class GalleryQuery(LoggedFields):
     def today(self) -> date:
         return datetime.now(ZoneInfo(self._zone)).date()
 
-    def link(self, **changes: object) -> str:
+    def link(self, changes: dict[str, object]) -> str:
         return self.model_copy(update={"offset": 0, **changes}).filters
 
     @property

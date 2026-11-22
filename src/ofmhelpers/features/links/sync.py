@@ -201,7 +201,7 @@ def delete_links(user_id: int, link_ids: list[int]) -> None:
 def _queue(wanted: list[LinkSyncKey]) -> list[LinkSyncKey]:
     due = store.claim_due(wanted)
     for key in due:
-        enqueue(sync_links, key.user_id, key.provider)
+        enqueue(sync_links, (key.user_id, key.provider))
     if due:
         logger.info("syncing links of %d (user, provider) pair(s)", len(due))
     return due

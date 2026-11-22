@@ -189,7 +189,10 @@ def preview_all(
     pool = ThreadPoolExecutor(max_workers=settings.clone_links.preview_parallel)
     futures = {
         pool.submit(
-            in_this_trace(preview), url, user_id, price, thumbs, until=until
+            in_this_trace(
+                lambda link: preview(link, user_id, price, thumbs, until=until)
+            ),
+            url,
         ): url
         for url in urls
     }

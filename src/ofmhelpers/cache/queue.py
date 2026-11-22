@@ -67,13 +67,14 @@ class JobQueue(BaseModel, frozen=True):
     def put(
         self,
         fn: Callable[..., Any],
-        *args: Any,
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
         job_timeout: int | None = None,
         retry: Retry | None = None,
         failure_ttl: int | None = None,
         at_front: bool = False,
-        **kwargs: Any,
     ) -> Job | None:
+        kwargs = kwargs or {}
         if not settings.infra.rq_async:
             fn(*args, **kwargs)
             return None
@@ -225,21 +226,24 @@ def running_job() -> RunningJob | None:
 
 
 def enqueue(
-    fn: Callable[..., Any], *args: Any, job_timeout: int | None = None, **kwargs: Any
+    fn: Callable[..., Any],
+    args: tuple[Any, ...] = (),
+    kwargs: dict[str, Any] | None = None,
+    job_timeout: int | None = None,
 ) -> Job | None:
     return JobQueue(name=QueueName.DEFAULT).put(
-        fn, *args, job_timeout=job_timeout, **kwargs
+        fn, args, kwargs, job_timeout=job_timeout
     )
 
 
 def enqueue_to(
     queue: QueueName,
     fn: Callable[..., Any],
-    *args: Any,
+    args: tuple[Any, ...] = (),
+    kwargs: dict[str, Any] | None = None,
     job_timeout: int | None = None,
     at_front: bool = False,
-    **kwargs: Any,
 ) -> Job | None:
     return JobQueue(name=queue).put(
-        fn, *args, job_timeout=job_timeout, at_front=at_front, **kwargs
+        fn, args, kwargs, job_timeout=job_timeout, at_front=at_front
     )

@@ -14,16 +14,24 @@ from ofmhelpers.background import recovery, sweeps
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
+from ofmhelpers.db.drive_folders.schema import DriveFile
 from ofmhelpers.db.jobs.store import create_job, fail_job, get_job, history
 from ofmhelpers.db.users import store as users
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs import runner
 from ofmhelpers.features.previews.render import write_video_thumb
+from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.trials import cleanup, folder, media, tasks
 from ofmhelpers.features.trials import state as trial_state
 from ofmhelpers.features.trials.captions import ReelNotes
-from ofmhelpers.integrations.gdrive import DriveError, DriveFile, FolderGoneError
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
+from ofmhelpers.integrations.storage import (
+    DriveError,
+    FolderGoneError,
+)
+from ofmhelpers.integrations.storage.gdrive.fake import (
+    FakeDrive,
+    FakePersonDrive,
+    fake_drive,
+)
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.video_tools import trials as trials_router
 
@@ -87,10 +95,10 @@ def _login(drive: FakeDrive, *videos: str) -> int:
         phone, LoginFields(service="instagram", username="ann.ig")
     )
     assert added is not None
-    drive_folders.sync()
+    storage_jobs.sync()
     for name in videos:
         drive.add_file(_posted(drive), name, "video/mp4")
-    drive_folders.sync()
+    storage_jobs.sync()
     return added.id
 
 
@@ -134,7 +142,7 @@ def test_trials_page_is_the_drive_cards_with_generate_trials(drive):
 def test_generate_downloads_and_makes_every_posted_video_once(drive, made):
     login = _login(drive, "a.mp4", "b.mp4")
     drive.add_file(_posted(drive), "cover.jpg", "image/jpeg")
-    drive_folders.sync()
+    storage_jobs.sync()
     client = _client()
 
     r = client.post(f"/trials/{login}/generate")
@@ -534,7 +542,7 @@ def test_drive_refusing_says_connect_again_and_still_makes_what_is_on_disk(drive
     state.reels[0].out = None
     trial_state.save(users.agency_id(), state)
     drive.add_file(_posted(drive), "b.mp4", "video/mp4")
-    drive_folders.sync()
+    storage_jobs.sync()
     client.get(f"/trials/{login}")
     drive.refuse_sign_in(AGENCY)
 
@@ -576,14 +584,14 @@ def test_a_video_gone_from_posted_leaves_unless_its_copy_was_made(drive, made):
     client = _client()
     client.post(f"/trials/{login}/generate")
     later = drive.add_file(_posted(drive), "b.mp4", "video/mp4")
-    drive_folders.sync()
+    storage_jobs.sync()
     client.get(f"/trials/{login}")
     assert len(_state(login).reels) == 2
 
     drive.delete(later)
     (made_one,) = _state(login).ready
     drive.delete(made_one.key)
-    drive_folders.sync()
+    storage_jobs.sync()
     client.get(f"/trials/{login}")
 
     assert [r.name for r in _state(login).reels] == ["a.mp4"]
@@ -792,7 +800,7 @@ def test_made_copies_come_first_then_what_is_being_made_then_what_failed(
     client = _client()
     client.post(f"/trials/{login}/generate")
     drive.add_file(_posted(drive), "fresh.mp4", "video/mp4")
-    drive_folders.sync()
+    storage_jobs.sync()
     client.get(f"/trials/{login}")
     job_id = _running_job()
     trial_state.change(users.agency_id(), login, lambda s: setattr(s, "job_id", job_id))
@@ -981,7 +989,7 @@ def test_a_batch_that_fails_changes_nothing_in_trials(drive, made, monkeypatch):
     (kept,) = drive.names_in(trials)
     next_names = iter(["VID_2001.mp4", "VID_2002.mp4"])
     monkeypatch.setattr(tasks, "_camera_name", lambda *_a: next(next_names))
-    drive.fail_on("VID_2002.mp4")
+    drive.fail_on(["VID_2002.mp4"])
 
     _uploaded(client, login, b.key, c.key)
 
@@ -1159,7 +1167,7 @@ def test_generate_waits_its_turn_and_the_pages_say_so(drive, made, real_queue):
     login = _login(drive, "a.mp4")
     client = _client()
     real_queue()
-    JobQueue(name=QueueName.MEDIA).put(worker_tasks.note_down, "before")
+    JobQueue(name=QueueName.MEDIA).put(worker_tasks.note_down, ("before",))
 
     client.post(f"/trials/{login}/generate")
 
@@ -1745,7 +1753,7 @@ def test_a_copy_whose_source_left_posted_is_never_deleted(drive, made, posters):
     client.post(f"/trials/{login}/generate")
     gone, _kept = _state(login).reels
     drive.delete(gone.key)
-    drive_folders.sync()
+    storage_jobs.sync()
 
     _a_day_later(login)
 
@@ -1804,7 +1812,7 @@ def test_a_requeued_job_waits_at_the_back_of_its_line_and_stays_running(
 ):
     job_id = create_job("trials", {}, actor=str(users.agency_id()))
     real_queue()
-    JobQueue(name=QueueName.DEFAULT).put(worker_tasks.note_down, "before")
+    JobQueue(name=QueueName.DEFAULT).put(worker_tasks.note_down, ("before",))
 
     runner.run_job(job_id, worker_tasks.requeue_once, {"note": "x"})
 
@@ -1823,7 +1831,7 @@ def test_regenerate_and_an_upload_go_before_a_waiting_generate(
     first, second = _state(login).reels
     _a_day_later(login)
     drive.add_file(_posted(drive), "c.mp4", "video/mp4")
-    drive_folders.sync()
+    storage_jobs.sync()
     client.get(f"/trials/{login}")
     real_queue()
     client.post(f"/trials/{login}/generate")
@@ -1852,7 +1860,6 @@ def test_a_trials_job_runs_again_from_its_row_alone(drive, made, posters):
         "user_id": users.agency_id(),
         "login_id": login,
         "keys": [reel.key],
-        "refresh_token": f"fake-refresh:{AGENCY}",
     }
     assert "refresh_token" not in job.params["args"]
     before = len(made)

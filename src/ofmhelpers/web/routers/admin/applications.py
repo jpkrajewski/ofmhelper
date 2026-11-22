@@ -16,7 +16,7 @@ router = APIRouter(
 
 @router.get("")
 def list_page(request: Request) -> Response:
-    return render(request, "applications.html", applications=service.received())
+    return render(request, "applications.html", {"applications": service.received()})
 
 
 @router.post("/{application_id}/delete")

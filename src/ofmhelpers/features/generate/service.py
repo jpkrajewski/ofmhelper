@@ -139,14 +139,16 @@ def start_runs(
         job_id = create_job(TASK, run.params, actor=actor)
         enqueue(
             run_job,
-            job_id,
-            worker,
-            {
-                "job_id": job_id,
-                "api_key": run.api_key,
-                "assets_root": str(assets_root),
-                **run.params,
-            },
+            (
+                job_id,
+                worker,
+                {
+                    "job_id": job_id,
+                    "api_key": run.api_key,
+                    "assets_root": str(assets_root),
+                    **run.params,
+                },
+            ),
         )
         job_ids.append(job_id)
     return JobsQueued(job_ids=job_ids)

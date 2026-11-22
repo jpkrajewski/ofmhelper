@@ -8,9 +8,9 @@ from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.db.users.store import _repository as user_repository
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.integrations.storage.gdrive.fake import fake_drive
 from ofmhelpers.web.main import app
 
 PHONE = {
@@ -42,7 +42,7 @@ def _account_folder(client: TestClient) -> int:
     login = client.post(
         f"/phones/{phone}/logins", json={"service": "instagram", "username": "x.ig"}
     ).json()["id"]
-    drive_folders.sync()
+    storage_jobs.sync()
     return login
 
 

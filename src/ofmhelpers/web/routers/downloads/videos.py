@@ -3,10 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Form
 
 from ofmhelpers.db.downloads.schema import DownloadsQueued
-from ofmhelpers.features.downloads import videos
 from ofmhelpers.features.downloads.videos import run_downloads as _run_downloads
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
+from ofmhelpers.web.dependencies import Access, Downloads
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 
 __all__ = ["_run_downloads", "router"]
@@ -19,13 +18,8 @@ router = APIRouter(
 
 
 @router.post("/run", status_code=202)
-def run(
-    urls: Annotated[str, Form()],
-    actor: Actor,
-    owner_id: OwnerId,
-    assets_root: AssetsRoot,
-) -> DownloadsQueued:
-    return videos.start(urls, actor, owner_id, assets_root)
+def run(urls: Annotated[str, Form()], downloads: Downloads) -> DownloadsQueued:
+    return downloads.videos.start(urls)
 
 
 add_job_routes(

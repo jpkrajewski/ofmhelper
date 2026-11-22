@@ -67,11 +67,13 @@ def page(
     response = render(
         request,
         "clone_long.html",
-        gallery=clone_long.cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        api_keys=api_keys,
-        **dict(clone_long.form_view(actor, assets_root, video or [])),
+        {
+            "gallery": clone_long.cards(first.jobs),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "api_keys": api_keys,
+            **dict(clone_long.form_view(actor, assets_root, video or [])),
+        },
     )
     response.headers.update(NO_STORE)
     return response
@@ -83,8 +85,7 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     return render(
         request,
         "clone_long_gallery_fragment.html",
-        gallery=clone_long.cards(found.jobs),
-        next_offset=found.next_offset,
+        {"gallery": clone_long.cards(found.jobs), "next_offset": found.next_offset},
     )
 
 

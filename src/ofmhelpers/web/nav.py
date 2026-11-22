@@ -137,6 +137,13 @@ NAV = (
         area=Area.HANDMADE,
     ),
     NavItem(
+        href="/storage",
+        label="Storage",
+        icon="archive",
+        place=NavPlace.MORE,
+        area=Area.STORAGE,
+    ),
+    NavItem(
         href="/trials",
         label="Trials",
         icon="flame",

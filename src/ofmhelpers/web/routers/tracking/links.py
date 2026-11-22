@@ -27,7 +27,7 @@ def index(
     request: Request, query: Annotated[LinkQuery, Query()], scope: Scope
 ) -> Response:
     view = page.list_view(query, scope)
-    return render(request, "links.html", query=query, **dict(view))
+    return render(request, "links.html", {"query": query, **dict(view)})
 
 
 @router.post("/generate", status_code=202)

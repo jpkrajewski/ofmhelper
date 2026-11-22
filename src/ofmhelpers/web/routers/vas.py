@@ -21,4 +21,4 @@ def page(
         everyone=viewer.user.is_admin,
         zone=zone,
     )
-    return render(request, "vas.html", **dict(view))
+    return render(request, "vas.html", dict(view))

@@ -137,22 +137,53 @@ def page_session(page: ProfilePageSettings, proxy: str | None) -> requests.Sessi
     return mount(session)
 
 
-def get(url: str, **kwargs: Any) -> requests.Response:
+def get(
+    url: str,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    stream: bool = False,
+    allow_redirects: bool = True,
+) -> requests.Response:
     if settings.infra.fake_externals:
-        return mount(requests.Session()).get(url, **kwargs)
-    return requests.get(url, **kwargs)  # noqa: S113
+        return mount(requests.Session()).get(
+            url,
+            timeout=timeout,
+            headers=headers,
+            stream=stream,
+            allow_redirects=allow_redirects,
+        )
+    return requests.get(
+        url,
+        timeout=timeout,
+        headers=headers,
+        stream=stream,
+        allow_redirects=allow_redirects,
+    )
 
 
-def post(url: str, **kwargs: Any) -> requests.Response:
+def post(
+    url: str,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    data: Mapping[str, str] | None = None,
+) -> requests.Response:
     if settings.infra.fake_externals:
-        return mount(requests.Session()).post(url, **kwargs)
-    return requests.post(url, **kwargs)  # noqa: S113
+        return mount(requests.Session()).post(
+            url, timeout=timeout, headers=headers, data=data
+        )
+    return requests.post(url, timeout=timeout, headers=headers, data=data)
 
 
-def head(url: str, **kwargs: Any) -> requests.Response:
+def head(
+    url: str, *, timeout: float | None = None, allow_redirects: bool = False
+) -> requests.Response:
     if settings.infra.fake_externals:
-        return mount(requests.Session()).head(url, **kwargs)
-    return requests.head(url, **kwargs)  # noqa: S113
+        return mount(requests.Session()).head(
+            url, timeout=timeout, allow_redirects=allow_redirects
+        )
+    return requests.head(url, timeout=timeout, allow_redirects=allow_redirects)
 
 
 class ProxyPool:

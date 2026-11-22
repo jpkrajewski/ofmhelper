@@ -46,7 +46,9 @@ def _say_who_acts(
     conn: sqlalchemy.Connection,
     cursor: Any,
     statement: str,
-    *_args: object,
+    _parameters: object,
+    _context: object,
+    _executemany: object,
 ) -> None:
     if conn.info.get(_STAMPED) or not statement.lstrip()[:6].upper().startswith(
         _WRITES

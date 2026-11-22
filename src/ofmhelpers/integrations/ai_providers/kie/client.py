@@ -1,5 +1,6 @@
 import pathlib
 from typing import Any, NoReturn
+lazy from collections.abc import Mapping
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -73,9 +74,28 @@ class KieAIClient:
         self.OUT_DIR.mkdir(parents=True, exist_ok=True)
         self._http = _session()
 
-    def _call(self, method: str, url: str, **kwargs) -> requests.Response:
+    def _call(
+        self,
+        method: str,
+        url: str,
+        timeout: float | None = None,
+        params: Mapping[str, str] | None = None,
+        json: Any = None,
+        data: Mapping[str, str] | None = None,
+        files: Mapping[str, Any] | None = None,
+    ) -> requests.Response:
         return call(
-            self._http, PROVIDER, _refused, method, url, headers=self.HEADERS, **kwargs
+            self._http,
+            PROVIDER,
+            _refused,
+            method,
+            url,
+            headers=self.HEADERS,
+            timeout=timeout,
+            params=params,
+            json=json,
+            data=data,
+            files=files,
         )
 
     def _log_task(self, task_id: str, model: str, prompt: str, job_id: str) -> None:

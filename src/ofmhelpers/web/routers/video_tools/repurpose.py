@@ -18,8 +18,8 @@ from ofmhelpers.web.dependencies import (
     Access,
     Actor,
     AssetsRoot,
-    CurrentUser,
     OwnerId,
+    Storage,
 )
 from ofmhelpers.web.forms import Files, FormModel, at_most
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
@@ -51,20 +51,20 @@ class RepurposeForm(FormModel):
 def form(
     request: Request,
     actor: Actor,
-    user: CurrentUser,
+    storage: Storage,
     assets_root: AssetsRoot,
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
-    view = service.page_view(actor, user.id, assets_root, video or [])
-    return render(request, "repurpose.html", **dict(view))
+    view = service.page_view(actor, storage.uploads, assets_root, video or [])
+    return render(request, "repurpose.html", dict(view))
 
 
 @router.get("/cards/{job_id}")
-def cards(request: Request, job_id: str, actor: Actor, user: CurrentUser) -> Response:
+def cards(request: Request, job_id: str, actor: Actor, storage: Storage) -> Response:
     return render(
         request,
         "_repurpose_cards.html",
-        **dict(service.cards_view(job_id, actor, user.id)),
+        dict(service.cards_view(job_id, actor, storage.uploads)),
     )
 
 

@@ -4,8 +4,8 @@ import pytest
 from e2e_session import DEV_ROOT, Session, connect_google
 from playwright.sync_api import expect
 
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive
-from ofmhelpers.integrations.gdrive.models import SheetTab
+from ofmhelpers.integrations.storage import SheetTab
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, FakePersonDrive
 lazy from ofmhelpers.features.downloads import sheet
 
 pytestmark = pytest.mark.e2e

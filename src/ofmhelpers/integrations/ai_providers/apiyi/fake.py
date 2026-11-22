@@ -147,16 +147,25 @@ class FakeApiyi:
         return self._read(task_id, "completed", progress="100%", result_url=url)
 
     @staticmethod
-    def _read(task_id: str, state: str, **fields: Any) -> FakeReply:
-        return FakeReply.json_body(
-            {
-                "id": task_id,
-                "status": state,
-                "result_url": None,
-                "error": None,
-                **fields,
-            }
-        )
+    def _read(
+        task_id: str,
+        state: str,
+        progress: str | None = None,
+        result_url: str | None = None,
+        error: dict[str, str] | None = None,
+        fail_reason: str | None = None,
+    ) -> FakeReply:
+        body: dict[str, Any] = {
+            "id": task_id,
+            "status": state,
+            "result_url": result_url,
+            "error": error,
+        }
+        if progress is not None:
+            body["progress"] = progress
+        if fail_reason is not None:
+            body["fail_reason"] = fail_reason
+        return FakeReply.json_body(body)
 
 
 @lru_cache(maxsize=1)

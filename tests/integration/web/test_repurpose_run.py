@@ -30,8 +30,8 @@ def roots(tmp_path, monkeypatch):
 def queued(monkeypatch):
     calls: list[tuple[QueueName, dict]] = []
 
-    def enqueue_to(queue, _run_job, _job_id, _fn, kwargs, **_options):
-        calls.append((queue, kwargs))
+    def enqueue_to(queue, _run_job, args, **_options):
+        calls.append((queue, args[2]))
 
     monkeypatch.setattr(repurpose, "enqueue_to", enqueue_to)
     return calls

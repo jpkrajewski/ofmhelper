@@ -11,9 +11,10 @@ from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import get_job, list_batch
 from ofmhelpers.db.users import store as users
-from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.features.threads import service, tasks
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.media.repurpose.photos.models import Photo
 from ofmhelpers.web.main import app
 
@@ -82,11 +83,11 @@ def _login(drive: FakeDrive, *files: tuple[str, str]) -> int:
         phone, LoginFields(service="instagram", username="ann.ig")
     )
     assert added is not None
-    drive_folders.sync()
+    storage_jobs.sync()
     (posted,) = drive.named("POSTED", _account(drive))
     for name, mime in files:
         drive.add_file(posted, name, mime)
-    drive_folders.sync()
+    storage_jobs.sync()
     return added.id
 
 
@@ -201,7 +202,9 @@ def test_a_set_whose_folder_was_deleted_by_hand_makes_another(drive, photos):
 
 def test_the_index_shows_generated_next_to_posted(drive, photos):
     login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
-    threads = service.Threads(uid=users.agency_id(), scope=None, login_id=login_id)
+    uid = users.agency_id()
+    folders = storage_of(uid, interactive=True).folders
+    threads = service.Threads(uid=uid, folders=folders, login_id=login_id)
     threads.start(_key(drive, "VID_1.mp4"))
 
     page = _client().get("/threads")
@@ -229,7 +232,9 @@ def test_the_index_shows_what_is_generating(drive, photos, real_queue):
 
 def test_a_set_that_ends_is_on_its_persons_open_notifications_at_once(drive, photos):
     login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
-    threads = service.Threads(uid=users.agency_id(), scope=None, login_id=login_id)
+    uid = users.agency_id()
+    folders = storage_of(uid, interactive=True).folders
+    threads = service.Threads(uid=uid, folders=folders, login_id=login_id)
     with _client().websocket_connect(SOCKET) as socket:
         assert next_sent(socket) == []
 

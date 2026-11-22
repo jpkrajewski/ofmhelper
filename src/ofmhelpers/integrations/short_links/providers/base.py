@@ -132,7 +132,13 @@ class LinkProvider(ABC):
             time.sleep(wait)
         self._last_call = time.monotonic()
 
-    def _call(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+    def _call(
+        self,
+        method: str,
+        path: str,
+        json: dict[str, Any] | None = None,
+        params: dict[str, str | int] | None = None,
+    ) -> requests.Response:
         info = self.info()
         self._wait_turn(info.min_interval_s)
         try:
@@ -141,7 +147,8 @@ class LinkProvider(ABC):
                 info.base_url + path,
                 headers=self._headers().model_dump(by_alias=True),
                 timeout=settings.links.request_timeout_s,
-                **kwargs,
+                json=json,
+                params=params,
             )
         except requests.RequestException as exc:
             logger.warning("%s %s %s failed", self.key, method, path, exc_info=True)

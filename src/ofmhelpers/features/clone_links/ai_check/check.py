@@ -135,7 +135,7 @@ def check_clone(video: Path, *, mirrored: bool = False) -> CloneAiCheck:
     with tempfile.TemporaryDirectory(prefix="clone_ai_check-") as work:
         try:
             sheet = sheet_at(video, Path(work) / "sheet.jpg", count)
-            prompt = Prompt.of(text, sheet, system=RULES)
+            prompt = Prompt.of([text, sheet], system=RULES)
         except (*_ERRORS, LLMInputError) as exc:
             logger.warning("AI check: no contact sheet of %s", video, exc_info=True)
             return _failed(found, NO_SHEET, "failed", str(exc))

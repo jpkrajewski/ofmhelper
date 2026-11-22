@@ -1,6 +1,6 @@
 import math
 from collections.abc import Callable
-from typing import Self
+from typing import Any, Self
 lazy from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -15,10 +15,9 @@ from ofmhelpers.db.jobs.store import (
     reopen_job,
     running_jobs,
 )
-from ofmhelpers.db.users.store import refresh_token
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
+from ofmhelpers.features.storage.service import StorageServiceFolders
 from ofmhelpers.features.trials import media, tasks
 from ofmhelpers.features.trials.state import (
     CAPTION_MAX,
@@ -255,8 +254,8 @@ class FolderView(BaseModel):
         )
 
 
-def _card(scope: int | None, viewer: int, login_id: int) -> DriveCard:
-    board = drive_folders.board(owner=scope, viewer=viewer, live=False)
+def _card(folders: StorageServiceFolders, viewer: int, login_id: int) -> DriveCard:
+    board = folders.saved_board(viewer=viewer)
     card = next((c for c in board.cards if c.target.login_id == login_id), None)
     if card is None:
         raise NotFoundError(NO_FOLDER)
@@ -290,8 +289,8 @@ class _Synced(BaseModel):
     state: FolderState
 
 
-def _sync_state(scope: int | None, viewer: int, login_id: int) -> _Synced:
-    card = _card(scope, viewer, login_id)
+def _sync_state(folders: StorageServiceFolders, viewer: int, login_id: int) -> _Synced:
+    card = _card(folders, viewer, login_id)
     state = load(viewer, login_id)
     before = state.model_dump_json()
 
@@ -305,9 +304,9 @@ def _sync_state(scope: int | None, viewer: int, login_id: int) -> _Synced:
     return _Synced(card=card, state=state)
 
 
-def read_posted(uid: int, login_id: int) -> None:
+def read_posted(folders: StorageServiceFolders, uid: int, login_id: int) -> None:
     try:
-        _sync_state(uid, uid, login_id)
+        _sync_state(folders, uid, login_id)
     except NotFoundError:  # silent: a login with no card any more has nothing to read
         logger.info("trials: no folder card for login %s", login_id)
 
@@ -322,8 +321,8 @@ class OpenedFolder(BaseModel):
     view: FolderView
 
 
-def phone_cards(uid: int, scope: int | None) -> PhoneCards:
-    board = drive_folders.board(owner=scope, viewer=uid, live=False)
+def phone_cards(uid: int, folders: StorageServiceFolders) -> PhoneCards:
+    board = folders.saved_board(viewer=uid)
     running = {j.id for j in running_jobs() if j.actor == str(uid)}
     line = JobQueue(name=QueueName.MEDIA).line()
     progress = {
@@ -354,20 +353,22 @@ class _Claim:
         enqueue: Callable[..., object],
         fn: Callable,
         reels: int,
+        task_args: dict[str, Any] | None = None,
         *,
         at_front: bool = False,
-        **kwargs,
     ) -> None:
         trials = settings.trials
         if self.job_id is None:
             return
-        args = {k: v for k, v in kwargs.items() if k != "refresh_token"}
-        merge_params(self.job_id, {"args": args})
+        task_args = task_args or {}
+        merge_params(self.job_id, {"args": task_args})
         enqueue(
             run_job,
-            self.job_id,
-            fn,
-            {"user_id": self.uid, "login_id": self.login_id, **kwargs},
+            (
+                self.job_id,
+                fn,
+                {"user_id": self.uid, "login_id": self.login_id, **task_args},
+            ),
             job_timeout=trials.job_grace_s + trials.per_reel_s * max(1, reels),
             at_front=at_front,
         )
@@ -378,7 +379,6 @@ class TrialsRun(BaseModel):
 
     user_id: int
     login_id: int
-    refresh_token: str = ""
 
 
 class RemakeArgs(BaseModel):
@@ -400,7 +400,6 @@ def replay_run(job: Job) -> TrialsRun | None:
             "user_id": uid,
             "login_id": int(job.params["login"]),
             **args,
-            "refresh_token": refresh_token(uid) or "",
         }
     )
 
@@ -423,14 +422,12 @@ def restart(job: Job) -> bool:
     reopen_job(job.id)
     claim = _Claim(uid, login_id, str(label))
     claim.job_id = job.id
-    token = refresh_token(uid) or ""
     if remake is not None:
         claim.launch(
             JobQueue(name=QueueName.MEDIA).put,
             tasks.generate_reels,
             len(remake.keys),
-            refresh_token=token,
-            keys=remake.keys,
+            {"keys": remake.keys},
         )
         return True
     if upload is None:
@@ -438,7 +435,6 @@ def restart(job: Job) -> bool:
             JobQueue(name=QueueName.MEDIA).put,
             tasks.make_trials,
             len(load(uid, login_id).reels),
-            refresh_token=token,
         )
         return True
     stored = {r.key for r in load(uid, login_id).reels if r.stored}
@@ -447,9 +443,7 @@ def restart(job: Job) -> bool:
         JobQueue(name=QueueName.MEDIA if remade else QueueName.DEFAULT).put,
         tasks.upload_trials,
         len(upload.keys),
-        refresh_token=token,
-        account_folder_id=upload.account_folder_id,
-        keys=upload.keys,
+        {"account_folder_id": upload.account_folder_id, "keys": upload.keys},
     )
     return True
 
@@ -457,6 +451,7 @@ def restart(job: Job) -> bool:
 class Trials(BaseModel, frozen=True):
     uid: int
     scope: int | None
+    folders: StorageServiceFolders
     login_id: int
     encode: Callable[..., object]
     enqueue: Callable[..., object]
@@ -466,7 +461,7 @@ class Trials(BaseModel, frozen=True):
             raise NotFoundError(NO_FOLDER)
 
     def open(self) -> OpenedFolder:
-        synced = _sync_state(self.scope, self.uid, self.login_id)
+        synced = _sync_state(self.folders, self.uid, self.login_id)
         return OpenedFolder(
             card=synced.card, view=FolderView.of(self.uid, synced.state)
         )
@@ -481,14 +476,11 @@ class Trials(BaseModel, frozen=True):
     def claim(self, label: str) -> _Claim:
         return _Claim(self.uid, self.login_id, label)
 
-    def token(self) -> str:
-        return refresh_token(self.uid) or ""
-
     def busy(self, job_id: str | None) -> bool:
         return _at_work(self.uid, job_id)
 
     def generate(self) -> Started:
-        _sync_state(self.scope, self.uid, self.login_id)
+        _sync_state(self.folders, self.uid, self.login_id)
         claim = self.claim(GENERATE)
 
         def take(state: FolderState) -> None:
@@ -500,12 +492,7 @@ class Trials(BaseModel, frozen=True):
 
         state = change(self.uid, self.login_id, take)
         if claim.job_id:
-            claim.launch(
-                self.encode,
-                tasks.make_trials,
-                len(state.reels),
-                refresh_token=self.token(),
-            )
+            claim.launch(self.encode, tasks.make_trials, len(state.reels))
         return Started(started=bool(claim.job_id))
 
     def upload(self, approved: list[str] | None) -> Uploading:
@@ -531,10 +518,8 @@ class Trials(BaseModel, frozen=True):
                 self.encode if remade else self.enqueue,
                 tasks.upload_trials,
                 len(claimed),
+                {"account_folder_id": state.account_folder_id, "keys": claimed},
                 at_front=True,
-                refresh_token=self.token(),
-                account_folder_id=state.account_folder_id,
-                keys=claimed,
             )
         return Uploading(uploading=claimed)
 
@@ -562,9 +547,8 @@ class Reel(BaseModel, frozen=True):
                 self.trials.encode,
                 tasks.generate_reels,
                 1,
+                {"keys": [self.key]},
                 at_front=True,
-                keys=[self.key],
-                refresh_token=self.trials.token(),
             )
         return Started(started=bool(claim.job_id))
 
@@ -581,8 +565,7 @@ class Reel(BaseModel, frozen=True):
                 self.trials.enqueue,
                 tasks.write_captions,
                 1,
-                key=self.key,
-                refresh_token=self.trials.token(),
+                {"key": self.key},
             )
         return Started(started=bool(claim.job_id))
 

@@ -83,7 +83,7 @@ class JobCard(BaseModel):
         job: Job,
         assets: list[AssetCard],
         failed_sources: list[FailedSource],
-        **extra: Any,
+        extra: dict[str, Any] | None = None,
     ) -> Self:
         return cls(
             job_id=job.id,
@@ -96,7 +96,7 @@ class JobCard(BaseModel):
             failed_sources=failed_sources,
             hidden=job.hidden_at is not None,
             made_by=job.made_by,
-            **extra,
+            **(extra or {}),
         )
 
 
@@ -134,12 +134,12 @@ class CloneLinksCard(TaskCard):
         job: Job,
         assets: list[AssetCard],
         failed_sources: list[FailedSource],
-        **extra: Any,
+        extra: dict[str, Any] | None = None,
     ) -> Self:
         paths = job.local_paths()
         saved = bool(paths) and paths[0] is not None
         return super().from_job(
-            job, assets, failed_sources, **{"saved_here": saved, **extra}
+            job, assets, failed_sources, {"saved_here": saved, **(extra or {})}
         )
 
     @property

@@ -15,7 +15,7 @@ The page and its jobs: `web/routers/CLAUDE.md` (/trials).
   - It goes on where it stopped: copies already made are skipped, and it reads POSTED once more.
   - Two Generates take turns, one reel each.
 - **What a person waits for goes to the front** (`_Claim.launch(at_front=True)`): Regenerate, Apply caption, and an upload (one that has to make copies again goes on the media queue). Generate, its restart and its requeue join at the back. `at_front` puts the newest urgent job first among several.
-- **Every job's row holds what it ran with** (`params.args`: the kwargs but the Drive token), so a job runs again from its row: `folder.replay_run(job)` + `folder.RUNS[label]` (`background/replay.py`).
+- **Every job's row holds what it ran with** (`params.args`: the kwargs; no Drive token, each task builds its Drive client from `user_id` through `features/storage/client.py`), so a job runs again from its row: `folder.replay_run(job)` + `folder.RUNS[label]` (`background/replay.py`).
 
 ## One copy, measured (dev 2026-11-15, the media worker's 4 CPUs, a 5.3 s 2160x3840 60 fps H.264 POSTED reel)
 ~159 s total (~28 s per second of video): master (x264 veryfast crf 10, at the source's 60 fps) 55.6, recorder (x265 `fast`, HEVC Main10 HLG 30 fps 24 Mb/s) 76.4, the rest 27.

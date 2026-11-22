@@ -2,16 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.features.drive.folders import _is_root, root_name
-from ofmhelpers.integrations.gdrive import (
+from ofmhelpers.features.storage.client import read_live
+from ofmhelpers.features.storage.models import StorageAccess
+from ofmhelpers.features.storage.service import StorageService
+from ofmhelpers.integrations.storage import (
     DriveError,
+    DriveFolder,
     ReadOnlyDrive,
     ScopedDrive,
-    connect,
-    read_live_mode,
 )
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive
-from ofmhelpers.integrations.gdrive.models import DriveFolder
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, FakePersonDrive
 
 
 class _Reads:
@@ -83,44 +83,75 @@ def test_read_live_mode_is_off_in_production(monkeypatch):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "production")
     monkeypatch.delenv("OFM_FAKE_EXTERNALS", raising=False)
-    assert read_live_mode() is False
+    assert read_live() is False
 
 
 def test_read_live_mode_is_on_in_dev_when_set(monkeypatch):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")
-    assert read_live_mode() is True
+    assert read_live() is True
 
 
 def test_read_live_mode_is_off_by_default(monkeypatch):
     monkeypatch.delenv("OFM_DRIVE_READ_LIVE", raising=False)
     monkeypatch.setenv("OFM_ENV", "development")
-    assert read_live_mode() is False
+    assert read_live() is False
 
 
-@pytest.mark.usefixtures("fake_externals")
-def test_connect_hands_back_a_read_only_drive_in_live_mode(monkeypatch):
+def _service(raw: _Reads) -> StorageService:
+    access = StorageAccess(owner_id=1, client=raw, read_live=read_live())
+    return StorageService.compose(access)
+
+
+def test_live_mode_hands_the_services_a_read_only_drive_and_review_the_raw_one(
+    monkeypatch,
+):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")
-    assert isinstance(connect(), ReadOnlyDrive)
+    raw = _Reads()
+    service = _service(raw)
+    for part in (
+        service.folders,
+        service.va_folders,
+        service.uploads,
+        service.space,
+        service.bin,
+    ):
+        assert isinstance(part.client, ReadOnlyDrive)
+    assert service.review.client is raw
 
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "0")
-    assert not isinstance(connect(), ReadOnlyDrive)
+    plain = _service(raw)
+    for part in (
+        plain.folders,
+        plain.va_folders,
+        plain.uploads,
+        plain.space,
+        plain.bin,
+        plain.review,
+    ):
+        assert part.client is raw
+
+
+def _folders(monkeypatch):
+    return _service(_Reads()).folders
 
 
 def test_live_mode_reads_the_live_root_name_and_accepts_it(monkeypatch):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")
-    assert root_name() == "ALL ACCOUNTS"
-    assert _is_root(DriveFolder(id="x", name="ALL ACCOUNTS")) is True
-    assert _is_root(DriveFolder(id="x", name="something else")) is True
+    folders = _folders(monkeypatch)
+    assert folders.root_name() == "ALL ACCOUNTS"
+    assert folders._is_root(DriveFolder(id="x", name="ALL ACCOUNTS")) is True
+    assert folders._is_root(DriveFolder(id="x", name="something else")) is True
 
 
 def test_dev_without_live_mode_keeps_the_sandbox_root(monkeypatch):
     monkeypatch.delenv("OFM_DRIVE_READ_LIVE", raising=False)
     monkeypatch.setenv("OFM_ENV", "development")
-    assert root_name() == "DEV - ALL ACCOUNTS"
-    assert _is_root(DriveFolder(id="x", name="ALL ACCOUNTS")) is False
+    folders = _folders(monkeypatch)
+    assert folders.root_name() == "DEV - ALL ACCOUNTS"
+    assert folders._is_root(DriveFolder(id="x", name="ALL ACCOUNTS")) is False
 
 
 def _scoped(tmp_path: Path) -> tuple[FakeDrive, FakePersonDrive, str, Path]:

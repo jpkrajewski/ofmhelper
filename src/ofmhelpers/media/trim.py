@@ -21,7 +21,7 @@ _TURNS = {90: "transpose=clock", 180: "hflip,vflip", 270: "transpose=cclock"}
 
 
 def turn_filter(turn: int, mirror: bool) -> str | None:
-    return _filters(_TURNS.get(turn), "hflip" if mirror else None) or None
+    return _filters([_TURNS.get(turn), "hflip" if mirror else None]) or None
 
 
 def crop_filter(ratio: Size | None, x: float, y: float, scale: float = 1.0) -> str:
@@ -37,7 +37,7 @@ def crop_filter(ratio: Size | None, x: float, y: float, scale: float = 1.0) -> s
     )
 
 
-def _filters(*parts: str | None) -> str:
+def _filters(parts: list[str | None]) -> str:
     return ",".join(p for p in parts if p)
 
 
@@ -70,9 +70,11 @@ def cut(
             "0:a:0?",
             "-vf",
             _filters(
-                picture,
-                f"setpts=PTS/{speed:g}" if faster else None,
-                scaled_to(short_side),
+                [
+                    picture,
+                    f"setpts=PTS/{speed:g}" if faster else None,
+                    scaled_to(short_side),
+                ]
             ),
             *(["-af", f"atempo={speed:g}"] if faster else []),
             "-c:v",
@@ -201,7 +203,7 @@ def frame(
             "-map",
             "0:v:0",
             "-vf",
-            _filters(picture, scaled_to(short_side)),
+            _filters([picture, scaled_to(short_side)]),
             "-frames:v",
             "1",
             "-q:v",
@@ -266,10 +268,12 @@ def part(
             "0:a:0" if sound else "1:a:0",
             "-vf",
             _filters(
-                picture,
-                f"setpts=PTS/{speed:g}" if faster else None,
-                fit,
-                f"fps={fps:g}",
+                [
+                    picture,
+                    f"setpts=PTS/{speed:g}" if faster else None,
+                    fit,
+                    f"fps={fps:g}",
+                ]
             ),
             *(["-af", f"atempo={speed:g}"] if faster and sound else []),
             "-c:v",

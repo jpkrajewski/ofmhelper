@@ -21,7 +21,6 @@ from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
 from ofmhelpers.features.distribution import sweep as distribution_sweep
 from ofmhelpers.features.downloads import cleanup as downloads_cleanup
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
 from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.features.idempotency import service as idempotency
@@ -32,6 +31,7 @@ from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
+from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.trials import cleanup as trials_cleanup
 from ofmhelpers.features.users import idle as va_idle
 from ofmhelpers.features.viral import cleanup as viral_cleanup
@@ -98,10 +98,10 @@ def sweeps() -> list[Sweep]:
         ),
         Sweep(
             name="drive",
-            run=drive_folders.sync,
+            run=storage_jobs.sync,
             interval_s=lambda: settings.gdrive.check_interval_s,
             enabled=lambda: (
-                drive_folders.enabled()
+                storage_jobs.enabled()
                 and settings.gdrive.sweeping(settings.infra.production)
             ),
         ),

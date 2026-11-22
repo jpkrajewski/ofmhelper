@@ -27,7 +27,7 @@ from ofmhelpers.media import fake_media
 
 def test_a_prompt_keeps_text_and_media_in_order():
     prompt = Prompt.of(
-        "Subject:", Path("a/face.jpg"), "Video:", Path("b/clip.mp4"), system="role"
+        ["Subject:", Path("a/face.jpg"), "Video:", Path("b/clip.mp4")], system="role"
     )
 
     assert [type(p) for p in prompt.parts] == [TextPart, MediaPart, TextPart, MediaPart]

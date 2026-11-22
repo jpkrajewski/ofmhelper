@@ -15,11 +15,19 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role, UserForm
 from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.assets import store as asset_store
-from ofmhelpers.features.downloads import service, sheet
-from ofmhelpers.features.drive.folders import root_name
-from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive, fake_person
-from ofmhelpers.integrations.gdrive.models import SheetTab
+from ofmhelpers.features.downloads import links, sheet
+from ofmhelpers.features.storage.models import StorageAccess
+from ofmhelpers.features.storage.service import StorageService
+from ofmhelpers.integrations.storage import (
+    RECONNECT,
+    DriveError,
+    SheetTab,
+)
+from ofmhelpers.integrations.storage.gdrive.fake import (
+    FakeDrive,
+    fake_drive,
+    fake_person,
+)
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"
@@ -58,6 +66,11 @@ def _client(email: str = OWNER, *, google: bool = True) -> TestClient:
     if google:
         user_repository().signed_in(c.user.id, "", f"fake-refresh:{email}")  # type: ignore[attr-defined]
     return c
+
+
+def root_name() -> str:
+    access = StorageAccess(owner_id=1, client=None)
+    return StorageService.compose(access).folders.root_name()
 
 
 def _root(email: str) -> str:
@@ -203,7 +216,7 @@ def test_links_queued_stay_new_when_the_queue_failed(downloads, monkeypatch):
         raise ConnectionError(msg)
 
     with monkeypatch.context() as broken:
-        broken.setattr(service, "enqueue", down)
+        broken.setattr(links, "enqueue", down)
         with pytest.raises(ConnectionError, match="queue is down"):
             client.post(URL)
     assert downloads.fetched == []

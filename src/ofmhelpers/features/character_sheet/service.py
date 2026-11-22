@@ -77,8 +77,10 @@ def start(files: Sequence[UploadFile], actor: str, assets_root: Path) -> JobQueu
     job_id = create_job(TASK, {"dir": str(job_dir), "files": saved}, actor=actor)
     enqueue(
         run_job,
-        job_id,
-        run_combine,
-        {"job_dir": str(job_dir), "files": saved, "assets_root": str(assets_root)},
+        (
+            job_id,
+            run_combine,
+            {"job_dir": str(job_dir), "files": saved, "assets_root": str(assets_root)},
+        ),
     )
     return JobQueued(job_id=job_id)

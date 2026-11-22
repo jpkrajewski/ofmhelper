@@ -23,4 +23,4 @@ def _status_url(job: Job) -> str | None:
 @router.get("", response_class=HTMLResponse)
 def dashboard(request: Request, actor: Actor) -> Response:
     view = audit.view(actor, _status_url)
-    return render(request, "action_log.html", **dict(view))
+    return render(request, "action_log.html", dict(view))

@@ -56,27 +56,44 @@ class Knob(BaseModel, frozen=True):
         return [round(lo, 5), round(hi, 5)]
 
 
-def _v(name: str, role: Role, shape: Shape, cap: float, **kw: Any) -> Knob:
+def _v(
+    name: str,
+    role: Role,
+    shape: Shape,
+    cap: float,
+    field: str | None = None,
+    base: float = 0.0,
+    integer: bool = False,
+    extra: dict[str, Any] | None = None,
+) -> Knob:
     return Knob(
         name=name,
-        field=kw.pop("field", name),
+        field=field or name,
         part=Part.VIDEO,
         role=role,
         shape=shape,
         cap=cap,
-        **kw,
+        base=base,
+        integer=integer,
+        extra=extra or {},
     )
 
 
-def _a(name: str, shape: Shape, cap: float, **kw: Any) -> Knob:
+def _a(
+    name: str,
+    shape: Shape,
+    cap: float,
+    field: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> Knob:
     return Knob(
         name=name,
-        field=kw.pop("field", name),
+        field=field or name,
         part=Part.AUDIO,
         role=Role.LOOK,
         shape=shape,
         cap=cap,
-        **kw,
+        extra=extra or {},
     )
 
 

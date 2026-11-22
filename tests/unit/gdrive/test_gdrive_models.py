@@ -1,8 +1,10 @@
 import pytest
 
-from ofmhelpers.integrations.gdrive.models import (
+from ofmhelpers.db.drive_folders.schema import (
     FOLDER_MIME,
     DriveFile,
+)
+from ofmhelpers.integrations.storage import (
     DriveListing,
     FolderItems,
 )

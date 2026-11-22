@@ -1802,3 +1802,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ds-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--gap-grid); }
 .ds-add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
 .ds-add input[type="file"] { flex: 1 1 16rem; min-width: 0; }
+
+.st-table td { vertical-align: middle; white-space: nowrap; }
+.st-table td:first-child { white-space: normal; }
+.st-table .icon-btn { margin-left: var(--gap-inline); vertical-align: middle; }

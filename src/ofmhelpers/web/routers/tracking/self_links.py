@@ -19,7 +19,7 @@ def index(
     request: Request, query: Annotated[SelfRange, Query()], scope: Scope
 ) -> Response:
     view = self_page.page_view(query, scope)
-    return render(request, "self_links.html", query=query, **dict(view))
+    return render(request, "self_links.html", {"query": query, **dict(view)})
 
 
 @router.post("/domains")

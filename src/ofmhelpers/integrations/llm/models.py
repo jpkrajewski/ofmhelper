@@ -2,7 +2,7 @@ import mimetypes
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, Self
-lazy from collections.abc import Iterable
+lazy from collections.abc import Iterable, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -51,7 +51,10 @@ class Prompt(BaseModel):
 
     @classmethod
     def of(
-        cls, *items: str | Path, system: str = "", temperature: float | None = None
+        cls,
+        items: Sequence[str | Path],
+        system: str = "",
+        temperature: float | None = None,
     ) -> Self:
         parts: list[TextPart | MediaPart] = [
             TextPart(text=i) if isinstance(i, str) else MediaPart.of(i) for i in items

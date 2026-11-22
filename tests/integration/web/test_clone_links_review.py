@@ -27,10 +27,11 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links import review
 from ofmhelpers.features.clone_links.ai_check import unanswered
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.drive.space import DRIVE_FULL, drive_space
-from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.features.storage import folders as drive_folders
+from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.space import drive_space
 from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
+from ofmhelpers.integrations.storage.gdrive.fake import fake_drive
 from ofmhelpers.media import fake_media
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
@@ -468,14 +469,14 @@ def test_a_failed_upload_is_tried_again_without_a_second_check(tmp_path):
     drive = fake_drive()
     ann = client(ANN)
     video = _video(tmp_path)
-    drive.fail_on(download_name(video.name))
+    drive.fail_on([download_name(video.name)])
     job_id = _done_run(video)
     review.start_reviews(job_id, _owner(), [str(video)])
     failed = _row(job_id)
     assert failed.status == "failed"
     assert failed.folder_name == GOOD_REELS
     assert "fake outage" not in _card(ann, job_id)["html"]
-    drive.fail_on()
+    drive.fail_on([])
     asked = len(fake_gemini().requests)
 
     outcomes = review.resume_reviews()
@@ -493,7 +494,7 @@ def test_a_failed_upload_is_tried_only_while_attempts_are_left(tmp_path):
     drive = fake_drive()
     client(ANN)
     video = _video(tmp_path)
-    drive.fail_on(download_name(video.name))
+    drive.fail_on([download_name(video.name)])
     job_id = _done_run(video)
     review.start_reviews(job_id, _owner(), [str(video)])
 
@@ -513,7 +514,7 @@ def test_a_full_drive_is_tried_again_only_once_it_has_room(tmp_path):
     video = _video(tmp_path)
     job_id = _done_run(video)
     review.start_reviews(job_id, _owner(), [str(video)])
-    assert _row(job_id).error == DRIVE_FULL
+    assert _row(job_id).error == storage_constants().drive_full
 
     assert review.resume_reviews()[f"review {_row(job_id).id}"] == "waiting for Drive"
     assert _row(job_id).attempts == 1

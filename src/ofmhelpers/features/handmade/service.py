@@ -80,10 +80,12 @@ def _card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=LABEL,
-        poll_prefix=PREFIX,
-        result_kind="video",
-        drive_uploads=uploads,
+        {
+            "task_label": LABEL,
+            "poll_prefix": PREFIX,
+            "result_kind": "video",
+            "drive_uploads": uploads,
+        },
     )
 
 

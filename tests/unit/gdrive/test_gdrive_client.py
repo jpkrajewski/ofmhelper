@@ -8,17 +8,21 @@ from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.http import HttpMockSequence
 lazy import httplib2
 
-from ofmhelpers.integrations.gdrive import (
+from ofmhelpers.db.drive_folders.schema import (
+    FOLDER_MIME,
+    DriveFile,
+)
+from ofmhelpers.integrations.storage import (
     RECONNECT,
-    Drive,
     DriveAuthError,
     DriveError,
     DriveFullError,
     DriveNotSetUpError,
+    DriveThumb,
     FolderGoneError,
 )
-from ofmhelpers.integrations.gdrive import client as drive_client
-from ofmhelpers.integrations.gdrive.models import FOLDER_MIME, DriveFile, DriveThumb
+from ofmhelpers.integrations.storage.gdrive import Drive
+from ofmhelpers.integrations.storage.gdrive import client as drive_client
 
 _OK = {"status": "200"}
 

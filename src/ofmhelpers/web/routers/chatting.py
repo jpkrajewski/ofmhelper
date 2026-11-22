@@ -37,8 +37,7 @@ def platforms(request: Request, owner_id: OwnerId) -> Response:
     return render(
         request,
         "chatting.html",
-        platforms=list(ChatPlatform),
-        recent=recent_models(owner_id),
+        {"platforms": list(ChatPlatform), "recent": recent_models(owner_id)},
     )
 
 
@@ -68,11 +67,13 @@ def models(
     return render(
         request,
         "chatting_models.html",
-        platform=platform,
-        models=models_of(platform),
-        can_connect=is_fanvue and can_connect(),
-        reconnect=accounts_to_reconnect(platform),
-        note=_NOTES.get(note or ""),
+        {
+            "platform": platform,
+            "models": models_of(platform),
+            "can_connect": is_fanvue and can_connect(),
+            "reconnect": accounts_to_reconnect(platform),
+            "note": _NOTES.get(note or ""),
+        },
     )
 
 
@@ -83,8 +84,7 @@ def model(
     return render(
         request,
         "chatting_model.html",
-        platform=platform,
-        report=model_report(platform, username, zone.zone),
+        {"platform": platform, "report": model_report(platform, username, zone.zone)},
     )
 
 

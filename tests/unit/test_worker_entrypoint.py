@@ -42,15 +42,22 @@ def test_work_forwards_its_arguments_to_rq(monkeypatch):
     seen = {}
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
     monkeypatch.setattr(
-        Worker, "work", lambda self, *a, **kw: seen.update(args=a, kwargs=kw) or True
+        Worker,
+        "work",
+        lambda self, burst, logging_level, date_format, log_format, max_jobs, max_idle_time, with_scheduler, dequeue_strategy: (
+            seen.update(
+                burst=burst, with_scheduler=with_scheduler, logging_level=logging_level
+            )
+            or True
+        ),
     )
 
     w = ConfiguredWorker.__new__(ConfiguredWorker)
     w.work(burst=True, with_scheduler=True, logging_level="DEBUG")
 
-    assert seen["kwargs"]["burst"] is True
-    assert seen["kwargs"]["with_scheduler"] is True
-    assert seen["kwargs"]["logging_level"] == "DEBUG"
+    assert seen["burst"] is True
+    assert seen["with_scheduler"] is True
+    assert seen["logging_level"] == "DEBUG"
 
 
 class _Pool:

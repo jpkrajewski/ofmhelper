@@ -45,7 +45,7 @@ def _waiting_job() -> str:
 def test_jobs_run_in_the_order_they_joined():
     media = JobQueue(name=QueueName.MEDIA)
     for name in ("first", "second", "third"):
-        media.put(worker_tasks.note_down, name)
+        media.put(worker_tasks.note_down, (name,))
 
     _drain_media()
 
@@ -54,9 +54,9 @@ def test_jobs_run_in_the_order_they_joined():
 
 def test_a_job_someone_waits_for_joins_the_front_of_the_line():
     media = JobQueue(name=QueueName.MEDIA)
-    media.put(worker_tasks.note_down, "first")
-    media.put(worker_tasks.note_down, "second")
-    media.put(worker_tasks.note_down, "watched", at_front=True)
+    media.put(worker_tasks.note_down, ("first",))
+    media.put(worker_tasks.note_down, ("second",))
+    media.put(worker_tasks.note_down, ("watched",), at_front=True)
 
     _drain_media()
 
@@ -66,8 +66,8 @@ def test_a_job_someone_waits_for_joins_the_front_of_the_line():
 def test_a_waiting_job_dropped_never_runs_and_leaves_nothing_in_redis():
     media = JobQueue(name=QueueName.MEDIA)
     dropped = _waiting_job()
-    rq_job = media.put(worker_tasks.note_down, dropped)
-    media.put(worker_tasks.note_down, "kept")
+    rq_job = media.put(worker_tasks.note_down, (dropped,))
+    media.put(worker_tasks.note_down, ("kept",))
 
     assert media.drop(dropped) is True
     assert media.drop(dropped) is False
@@ -80,8 +80,8 @@ def test_a_waiting_job_dropped_never_runs_and_leaves_nothing_in_redis():
 def test_the_line_says_how_many_are_ahead_of_each_job():
     media = JobQueue(name=QueueName.MEDIA)
     first, second = _waiting_job(), _waiting_job()
-    media.put(run_job, first, worker_tasks.make_result, {"name": "a.mp4"})
-    media.put(run_job, second, worker_tasks.make_result, {"name": "b.mp4"})
+    media.put(run_job, (first, worker_tasks.make_result, {"name": "a.mp4"}))
+    media.put(run_job, (second, worker_tasks.make_result, {"name": "b.mp4"}))
 
     line = media.line()
     assert (line.ahead(first), line.ahead(second)) == (0, 1)
@@ -100,7 +100,7 @@ def test_the_job_being_run_counts_as_ahead():
     media = JobQueue(name=QueueName.MEDIA)
     waiting = _waiting_job()
     media.put(worker_tasks.note_the_line)
-    media.put(run_job, waiting, worker_tasks.make_result, {"name": "a.mp4"})
+    media.put(run_job, (waiting, worker_tasks.make_result, {"name": "a.mp4"}))
 
     _drain_media()
 
@@ -112,7 +112,7 @@ def test_the_job_being_run_counts_as_ahead():
 def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
     job_id = _waiting_job()
     JobQueue(name=QueueName.MEDIA).put(
-        run_job, job_id, worker_tasks.make_result, {"name": "a.mp4"}
+        run_job, (job_id, worker_tasks.make_result, {"name": "a.mp4"})
     )
 
     assert job_id in active_job_ids()
@@ -138,11 +138,12 @@ def test_a_cut_someone_waits_for_gets_the_cpu_before_exports_and_trials():
 
 def test_joining_a_line_is_logged_without_the_jobs_arguments(capfire: CaptureLogfire):
     media = JobQueue(name=QueueName.MEDIA)
-    media.put(worker_tasks.note_down, "before")
+    media.put(worker_tasks.note_down, ("before",))
     job_id = _waiting_job()
 
     media.put(
-        run_job, job_id, worker_tasks.make_result, {"name": "a", "key": "sk-secret"}
+        run_job,
+        (job_id, worker_tasks.make_result, {"name": "a", "key": "sk-secret"}),
     )
 
     spans = capfire.exporter.exported_spans_as_dict()
@@ -159,8 +160,8 @@ def test_a_run_says_its_queue_how_long_it_waited_and_who_still_waits(
     capfire: CaptureLogfire,
 ):
     media = JobQueue(name=QueueName.MEDIA)
-    first = media.put(worker_tasks.note_down, "first")
-    second = media.put(worker_tasks.note_down, "second")
+    first = media.put(worker_tasks.note_down, ("first",))
+    second = media.put(worker_tasks.note_down, ("second",))
 
     _drain_media()
 

@@ -35,7 +35,9 @@ async def _form(request: Request) -> FormData:
 
 @router.get("/fields")
 def fields(request: Request, model: Annotated[str, Query()]) -> Response:
-    return render_polled(request, "_ai_fields.html", spec=service.model_spec(model))
+    return render_polled(
+        request, "_ai_fields.html", {"spec": service.model_spec(model)}
+    )
 
 
 @router.post("/run", status_code=202, dependencies=[Idempotent])

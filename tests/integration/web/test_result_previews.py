@@ -238,7 +238,7 @@ def test_a_finished_job_queues_its_previews_on_the_previews_queue(
     monkeypatch.setattr(
         jobs_store,
         "enqueue_to",
-        lambda queue, fn, *args: queued.append((queue, fn, args)),
+        lambda queue, fn, args: queued.append((queue, fn, args)),
     )
     pic = _picture(tmp_path / "r.png", 8, 8)
 
@@ -373,7 +373,7 @@ def test_backfill_queues_only_jobs_missing_previews(tmp_path, monkeypatch, no_wa
     monkeypatch.setattr(
         preview_backfill,
         "enqueue_to",
-        lambda queue, fn, job_id, sources: queued.append(job_id),
+        lambda queue, fn, args: queued.append(args[0]),
     )
 
     assert preview_backfill.backfill() == 1

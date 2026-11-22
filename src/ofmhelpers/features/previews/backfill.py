@@ -19,7 +19,7 @@ def backfill() -> int:
         sources = job.local_paths()
         if is_warm(job.id, sources):
             continue
-        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, sources)
+        enqueue_to(QueueName.PREVIEWS, warm_previews, (job.id, sources))
         queued += 1
     logger.info("preview backfill: %d jobs queued", queued)
     return queued

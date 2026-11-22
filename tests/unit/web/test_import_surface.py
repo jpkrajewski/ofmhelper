@@ -79,6 +79,10 @@ QUEUED_PATHS = {
     "ofmhelpers.web.routers.video_tools.edit.run_prepare": (
         "ofmhelpers.features.edit.service.run_prepare"
     ),
+    "ofmhelpers.features.drive.uploads.upload_files": (
+        "ofmhelpers.features.storage.jobs.upload_files"
+    ),
+    "ofmhelpers.features.drive.folders.sync": ("ofmhelpers.features.storage.jobs.sync"),
 }
 
 

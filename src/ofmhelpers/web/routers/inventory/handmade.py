@@ -9,7 +9,7 @@ from ofmhelpers.features.handmade import service
 from ofmhelpers.features.handmade.service import TASK, run_handmade
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.web.access import Action, Area
-from ofmhelpers.web.dependencies import Access, Can, Viewing
+from ofmhelpers.web.dependencies import Access, Can, Storage, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
@@ -24,30 +24,38 @@ gallery = Gallery({TASK}, limit=lambda: settings.web.download_gallery_page)
 
 
 @router.get("")
-def page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
+def page(
+    request: Request, viewer: Viewing, storage: Storage, query: GalleryParams
+) -> Response:
     first = gallery.page(viewer, query)
     return render(
         request,
         "handmade.html",
-        gallery=service.cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        dates=query,
-        drive_filter=True,
-        max_files=settings.web.handmade_max_files,
-        **dict(drive_picker(viewer.user.id)),
+        {
+            "gallery": service.cards(first.jobs),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "dates": query,
+            "drive_filter": True,
+            "max_files": settings.web.handmade_max_files,
+            **dict(drive_picker(storage.uploads)),
+        },
     )
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
+def gallery_page(
+    request: Request, viewer: Viewing, storage: Storage, query: GalleryParams
+) -> Response:
     found = gallery.page(viewer, query)
     return render(
         request,
         "handmade_gallery_fragment.html",
-        gallery=service.cards(found.jobs),
-        next_offset=found.next_offset,
-        **dict(drive_picker(viewer.user.id)),
+        {
+            "gallery": service.cards(found.jobs),
+            "next_offset": found.next_offset,
+            **dict(drive_picker(storage.uploads)),
+        },
     )
 
 

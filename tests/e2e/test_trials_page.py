@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, text
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.features.trials.state import FolderState, ReelState
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 
 pytestmark = pytest.mark.e2e
 

@@ -13,7 +13,7 @@ lazy from fastapi import Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.tracked_accounts.schema import ago
-from ofmhelpers.features.drive.posting import window as posting_window
+from ofmhelpers.features.storage.posting import window as posting_window
 from ofmhelpers.features.users.presence import idle_limit_s
 from ofmhelpers.features.users.viewing import makers
 from ofmhelpers.log import get_logger
@@ -137,15 +137,20 @@ def get_templates() -> Jinja2Templates:
 
 
 def render(
-    request: Request, name: str, status_code: int = 200, **context: Any
+    request: Request,
+    name: str,
+    context: dict[str, Any] | None = None,
+    status_code: int = 200,
 ) -> HTMLResponse:
     return get_templates().TemplateResponse(
-        request, name, context, status_code=status_code
+        request, name, context or {}, status_code=status_code
     )
 
 
-def render_polled(request: Request, name: str, **context: Any) -> Response:
-    response = render(request, name, **context)
+def render_polled(
+    request: Request, name: str, context: dict[str, Any] | None = None
+) -> Response:
+    response = render(request, name, context)
     nonce = csp_nonce(request).encode()
     stable = bytes(response.body).replace(nonce, b"NONCE") if nonce else response.body
     etag = f'"{hashlib.sha256(stable).hexdigest()[:20]}"'
@@ -156,5 +161,5 @@ def render_polled(request: Request, name: str, **context: Any) -> Response:
     return response
 
 
-def render_partial(name: str, **context: Any) -> str:
-    return get_templates().get_template(name).render(**context)
+def render_partial(name: str, context: dict[str, Any]) -> str:
+    return get_templates().get_template(name).render(context)

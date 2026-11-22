@@ -164,7 +164,7 @@ class UserRepository(CachedRepository):
             return _user(row) if row else None
 
     @invalidates_cache
-    def update(self, user_id: int, **fields: object) -> User | None:
+    def update(self, user_id: int, fields: dict[str, object]) -> User | None:
         with session_scope() as s:
             row = s.get(UserRow, user_id)
             if row is None:

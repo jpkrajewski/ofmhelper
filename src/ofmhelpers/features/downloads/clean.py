@@ -47,12 +47,14 @@ def start(files: list[UploadFile], actor: str, assets_root: Path) -> JobQueued:
     job_id = create_job(TASK, {"dir": str(job_dir), "files": saved_names}, actor=actor)
     enqueue(
         run_job,
-        job_id,
-        run_clean,
-        {
-            "job_dir": str(job_dir),
-            "assets_root": str(assets_root),
-            "files": saved_names,
-        },
+        (
+            job_id,
+            run_clean,
+            {
+                "job_dir": str(job_dir),
+                "assets_root": str(assets_root),
+                "files": saved_names,
+            },
+        ),
     )
     return JobQueued(job_id=job_id)

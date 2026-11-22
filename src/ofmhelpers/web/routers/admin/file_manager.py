@@ -83,7 +83,7 @@ def files_page(
     request: Request, user: int | None = None, section: str = "aigen", page: int = 0
 ) -> Response:
     view = LIBRARY.view(user, section, page)
-    return render(request, "file_manager.html", **dict(view))
+    return render(request, "file_manager.html", dict(view))
 
 
 @router.get("/assets/{user_id}")
@@ -137,7 +137,7 @@ def disk_upload(form: Annotated[DiskUploadForm, Form()]) -> Response:
 
 @router.get("/disk")
 def browse(request: Request, root: str = DEFAULT_ROOT, path: str = "") -> Response:
-    return render(request, "file_manager_disk.html", **dict(disk.folder(root, path)))
+    return render(request, "file_manager_disk.html", dict(disk.folder(root, path)))
 
 
 @router.get("/view")

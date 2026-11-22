@@ -1,8 +1,9 @@
-from functools import wraps
-lazy from collections.abc import Callable
+from contextlib import contextmanager
+lazy from collections.abc import Iterator
 lazy from pathlib import Path
 
 from fastapi import HTTPException, Request
+lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.features.assets import store
 from ofmhelpers.features.assets.store import (
@@ -59,20 +60,34 @@ def assets_root_for(request: Request) -> Path:
     return assets_root_for_user(AuthMiddleware.user(request).id)
 
 
-def refused_as_400[**P, T](fn: Callable[P, T]) -> Callable[P, T]:
-
-    @wraps(fn)
-    def call(*args: P.args, **kwargs: P.kwargs) -> T:
-        try:
-            return fn(*args, **kwargs)
-        except AssetRefusedError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from None
-
-    return call
+@contextmanager
+def refused_as_400() -> Iterator[None]:
+    try:
+        yield
+    except AssetRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
-require_upload_kind = refused_as_400(store.require_upload_kind)
-convert_heic_upload = refused_as_400(store.convert_heic_upload)
-safe_filename = refused_as_400(store.safe_filename)
-save_asset = refused_as_400(store.save_asset)
-save_upload = refused_as_400(store.save_upload)
+def require_upload_kind(name: str | None, allowed: frozenset[str]) -> str:
+    with refused_as_400():
+        return store.require_upload_kind(name, allowed)
+
+
+def convert_heic_upload(upload: UploadFile) -> UploadFile:
+    with refused_as_400():
+        return store.convert_heic_upload(upload)
+
+
+def safe_filename(name: str | None) -> str:
+    with refused_as_400():
+        return store.safe_filename(name)
+
+
+def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
+    with refused_as_400():
+        return store.save_asset(upload, assets_root)
+
+
+def save_upload(job_dir: Path, upload: UploadFile) -> str:
+    with refused_as_400():
+        return store.save_upload(job_dir, upload)

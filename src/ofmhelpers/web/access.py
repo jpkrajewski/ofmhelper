@@ -27,6 +27,7 @@ class Area(StrEnum):
     SELF_LINKS = "self-links"
     PHONES = "phones"
     DRIVE = "drive"
+    STORAGE = "storage"
     PICTURES = "pictures"
     UNIQIFY = "uniqify"
     REPURPOSE = "repurpose"
@@ -84,6 +85,7 @@ USER = (
     Area.SELF_LINKS,
     Area.PHONES,
     Area.DRIVE,
+    Area.STORAGE,
     Area.PICTURES,
     Area.UNIQIFY,
     Area.REPURPOSE,

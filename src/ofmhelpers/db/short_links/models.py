@@ -131,9 +131,9 @@ class LinkQuery(BaseModel):
 
     def sort_link(self, sort: LinkSort) -> str:
         if sort != self.sort:
-            return self.link(sort=sort, order=None)
+            return self.link(changes={"sort": sort, "order": None})
         flipped = SortOrder.ASC if self.direction == SortOrder.DESC else SortOrder.DESC
-        return self.link(order=flipped)
+        return self.link(changes={"order": flipped})
 
     def ordered(self, links: list[ShortLink], days: int) -> list[ShortLink]:
         keys: dict[LinkSort, Callable[[ShortLink], Any]] = {
@@ -150,8 +150,10 @@ class LinkQuery(BaseModel):
         unknown = [x for x in links if key(x) is None]
         return sorted(known, key=key, reverse=reverse) + unknown
 
-    def link(self, path: str = "/links", **changes: object) -> str:
-        update = {"page": 1, **changes}
+    def link(
+        self, path: str = "/links", changes: dict[str, object] | None = None
+    ) -> str:
+        update = {"page": 1, **(changes or {})}
         data = self.model_copy(update=update).model_dump(mode="json")
         defaults = LinkQuery().model_dump(mode="json")
         params = {

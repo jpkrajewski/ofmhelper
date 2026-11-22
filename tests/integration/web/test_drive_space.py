@@ -4,21 +4,17 @@ from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.users import store as users
-from ofmhelpers.features.drive.space import (
-    DRIVE_FULL,
-    FOLDER_MISSING,
-    NO_ANSWER,
-    drive_space,
-    upload_error,
-)
-from ofmhelpers.integrations.gdrive import (
+from ofmhelpers.features.storage.client import storage_of
+from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.schema import DriveSpace
+from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.storage import (
     RECONNECT,
     DriveError,
     DriveFolder,
-    connect_as,
 )
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.storage.gdrive import connect_as
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 EMAIL = "ann@example.com"
@@ -38,6 +34,18 @@ def _connected(email: str = EMAIL, token: str | None = None) -> int:
     return user.id
 
 
+def _drive_space(user_id: int) -> DriveSpace | None:
+    return storage_of(user_id, interactive=True).space.drive_space()
+
+
+def cached_space(user_id: int) -> DriveSpace | None:
+    return storage_of(user_id, interactive=True).space.cached()
+
+
+def upload_error(user_id: int, exc: Exception) -> str:
+    return storage_of(user_id, interactive=True).space.upload_error(exc)
+
+
 def _asks(drive: FakeDrive) -> int:
     return drive.calls.count("storage")
 
@@ -50,8 +58,8 @@ def _space_ttls() -> list[int]:
 def test_the_space_is_read_once_per_ttl(drive):
     user_id = _connected()
 
-    space = drive_space(user_id)
-    again = drive_space(user_id)
+    space = _drive_space(user_id)
+    again = _drive_space(user_id)
 
     assert space is not None
     assert (space.free_text, space.free_mb, space.low, space.reconnect) == (
@@ -75,8 +83,8 @@ def test_a_drive_that_does_not_answer_is_asked_once_a_minute(drive, monkeypatch)
 
     monkeypatch.setattr(FakeDrive, "storage", down)
 
-    assert drive_space(user_id) is None
-    assert drive_space(user_id) is None
+    assert _drive_space(user_id) is None
+    assert _drive_space(user_id) is None
     assert len(asked) == 1
     (ttl,) = _space_ttls()
     assert 0 < ttl <= 60
@@ -85,7 +93,7 @@ def test_a_drive_that_does_not_answer_is_asked_once_a_minute(drive, monkeypatch)
 def test_without_google_nothing_is_asked_or_cached(drive):
     user_id = make_user(EMAIL).id
 
-    assert drive_space(user_id) is None
+    assert _drive_space(user_id) is None
     assert _asks(drive) == 0
     assert _space_ttls() == []
 
@@ -94,7 +102,7 @@ def test_a_refused_sign_in_says_reconnect_until_a_new_token(drive):
     user_id = _connected()
     drive.refuse_sign_in(EMAIL)
 
-    space = drive_space(user_id)
+    space = _drive_space(user_id)
 
     assert space is not None
     assert (space.reconnect, space.low, space.free_mb, space.free_text) == (
@@ -103,11 +111,11 @@ def test_a_refused_sign_in_says_reconnect_until_a_new_token(drive):
         None,
         "",
     )
-    cached = drive_space(user_id, ask=False)
+    cached = cached_space(user_id)
     assert cached is not None
     assert cached.reconnect is True
     _connected(token="fake-refresh:ann.again@example.com")
-    fresh = drive_space(user_id)
+    fresh = _drive_space(user_id)
     assert fresh is not None
     assert (fresh.reconnect, fresh.free_mb) == (False, 300)
 
@@ -115,10 +123,10 @@ def test_a_refused_sign_in_says_reconnect_until_a_new_token(drive):
 def test_ask_false_answers_only_from_the_cache(drive):
     user_id = _connected()
 
-    assert drive_space(user_id, ask=False) is None
+    assert cached_space(user_id) is None
     assert _asks(drive) == 0
-    asked = drive_space(user_id)
-    assert drive_space(user_id, ask=False) == asked
+    asked = _drive_space(user_id)
+    assert cached_space(user_id) == asked
     assert _asks(drive) == 1
 
 
@@ -167,13 +175,13 @@ def _folder(email: str = EMAIL) -> DriveFolder:
 
 def test_a_full_drive_says_so_and_forgets_the_cached_space(drive, tmp_path):
     user_id = _connected()
-    assert drive_space(user_id) is not None
+    assert _drive_space(user_id) is not None
     drive.set_storage(1000, used=999)
 
     failure = _upload_failure(user_id, _folder().id, _video(tmp_path))
 
-    assert upload_error(user_id, failure) == DRIVE_FULL
-    assert drive_space(user_id, ask=False) is None
+    assert upload_error(user_id, failure) == storage_constants().drive_full
+    assert cached_space(user_id) is None
 
 
 def test_a_refused_sign_in_says_reconnect_on_every_page_at_once(drive, tmp_path):
@@ -184,7 +192,7 @@ def test_a_refused_sign_in_says_reconnect_on_every_page_at_once(drive, tmp_path)
     failure = _upload_failure(user_id, folder.id, _video(tmp_path))
 
     assert upload_error(user_id, failure) == RECONNECT
-    cached = drive_space(user_id, ask=False)
+    cached = cached_space(user_id)
     assert cached is not None
     assert cached.reconnect is True
     assert _asks(drive) == 0
@@ -198,17 +206,17 @@ def test_a_folder_gone_says_drive_folder_missing(drive, tmp_path):
     failure = _upload_failure(user_id, folder.id, _video(tmp_path))
 
     assert "not found" in str(failure)
-    assert upload_error(user_id, failure) == FOLDER_MISSING
+    assert upload_error(user_id, failure) == storage_constants().folder_missing
 
 
 def test_anything_else_says_drive_did_not_answer_never_its_text(drive, tmp_path):
     user_id = _connected()
-    drive.fail_on("clone.mp4")
+    drive.fail_on(["clone.mp4"])
 
     failure = _upload_failure(user_id, _folder().id, _video(tmp_path))
 
     assert "fake outage" in str(failure)
-    assert upload_error(user_id, failure) == NO_ANSWER
+    assert upload_error(user_id, failure) == storage_constants().no_answer
     assert upload_error(user_id, SignInError("Google sign-in is not set up")) == (
-        NO_ANSWER
+        storage_constants().no_answer
     )

@@ -5,14 +5,15 @@ from pydantic import BaseModel, ConfigDict
 from ofmhelpers.config.types import AccountFolder
 from ofmhelpers.db.distribution.schema import NewPost, PostKind, PostSource
 from ofmhelpers.db.tracked_accounts.store import list_accounts
-from ofmhelpers.db.users.store import refresh_token
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.drive.folders import ReviewPlace, review_target
-from ofmhelpers.integrations.gdrive import read_live_mode
+from ofmhelpers.features.storage.service import (
+    StorageServiceFolders,
+    StorageServiceReview,
+)
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.distribution.schema import ModelPreset
 lazy from ofmhelpers.db.drive_folders.models import DriveCard
 lazy from ofmhelpers.db.drive_folders.schema import DriveFile
+lazy from ofmhelpers.features.storage.models import ReviewPlace
 
 logger = get_logger(__name__)
 
@@ -39,9 +40,11 @@ class Sources(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     user_id: int
+    folders: StorageServiceFolders
+    review: StorageServiceReview
 
     def cards(self) -> list[DriveCard]:
-        board = drive_folders.board(owner=self.user_id, viewer=self.user_id, live=False)
+        board = self.folders.saved_board(viewer=self.user_id)
         return board.cards
 
     def of_model(self, model: ModelPreset, cards: list[DriveCard]) -> list[NewPost]:
@@ -74,16 +77,15 @@ class Sources(BaseModel):
         return posted + self._threads(card.account_folder_id, preset)
 
     def _threads(self, account_folder_id: str, preset: str) -> list[NewPost]:
-        token = refresh_token(self.user_id)
-        if not token:
+        if self.review.client is None:
             logger.warning(
                 "distribution: user %s has no Google Drive connected: no THREADS"
                 " pictures are queued (connect it on /account)",
                 self.user_id,
             )
             return []
-        place = review_target(token, self.user_id)
-        threads = _threads_folder(place, account_folder_id)
+        place = self.review.target()
+        threads = _threads_folder(self.review, place, account_folder_id)
         if threads is None:
             return []
         sets = [f.id for f in place.drive.children(threads, folders_only=True)]
@@ -94,10 +96,12 @@ class Sources(BaseModel):
         return _posts(pictures, PostSource.threads, preset)
 
 
-def _threads_folder(place: ReviewPlace, account_folder_id: str) -> str | None:
+def _threads_folder(
+    review: StorageServiceReview, place: ReviewPlace, account_folder_id: str
+) -> str | None:
     drive = place.drive
     parent: str | None = account_folder_id
-    if read_live_mode():
+    if review.read_live:
         account = drive.folder(account_folder_id)
         twin = drive.find_folder(place.folder_id, account.name)
         parent = twin.id if twin is not None else None

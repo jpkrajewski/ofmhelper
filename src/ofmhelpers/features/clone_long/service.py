@@ -329,10 +329,43 @@ class LongClone:
 
 
 def run_long_clone(
-    job_id: str, api_key: str, assets_root: str, **params: Any
+    job_id: str,
+    api_key: str,
+    assets_root: str,
+    provider: str,
+    model: str,
+    prompt: str,
+    resolution: str,
+    image: str,
+    video: str,
+    width: int,
+    height: int,
+    seconds: float,
+    pieces: int,
+    credits: float,  # noqa: A002
+    usd: float,
+    chain: bool = False,
+    colour_match: bool = False,
+    audio: bool = False,
 ) -> list[ResultFile]:
-    run = LongClone(LongCloneParams.model_validate(params))
-    return run.run(job_id, api_key, assets_root)
+    params = LongCloneParams(
+        provider=provider,
+        model=model,
+        prompt=prompt,
+        resolution=resolution,
+        image=image,
+        video=video,
+        width=width,
+        height=height,
+        seconds=seconds,
+        pieces=pieces,
+        credits=credits,
+        usd=usd,
+        chain=chain,
+        colour_match=colour_match,
+        audio=audio,
+    )
+    return LongClone(params).run(job_id, api_key, assets_root)
 
 
 def time_limit(params: dict[str, Any]) -> int:

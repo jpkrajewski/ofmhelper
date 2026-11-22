@@ -136,11 +136,11 @@ def configure_telemetry(service: str) -> None:
     _configured.append(service)
 
 
-def in_this_trace[T](fn: Callable[..., T]) -> Callable[..., T]:
+def in_this_trace[A, T](fn: Callable[[A], T]) -> Callable[[A], T]:
     context = contextvars.copy_context()
 
-    def call(*args: Any, **kwargs: Any) -> T:
-        return context.copy().run(fn, *args, **kwargs)
+    def call(item: A) -> T:
+        return context.copy().run(fn, item)
 
     return call
 

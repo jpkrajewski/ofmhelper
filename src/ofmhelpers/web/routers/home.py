@@ -25,7 +25,9 @@ def home(request: Request) -> Response:
 )
 def server(request: Request) -> Response:
     return render(
-        request, "_server_status.html", server=server_status(), duration=duration
+        request,
+        "_server_status.html",
+        {"server": server_status(), "duration": duration},
     )
 
 

@@ -3,9 +3,10 @@ from urllib.parse import urlencode
 from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
+from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.signin.consent import redirect_uri
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import (
@@ -15,6 +16,8 @@ from ofmhelpers.features.signin.state import (
     take_verifier,
     unseal,
 )
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.constants import storage_constants
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
 from ofmhelpers.log import get_logger
 
@@ -47,8 +50,16 @@ def _identity(provider: Provider, back: Callback) -> _Verified:
 
 
 def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
-    if refresh_token:
-        enqueue(drive_folders.sync, user_id)
+    if not refresh_token:
+        return
+    job_id = create_job(
+        storage_constants().sync_task, {"owner": user_id}, actor=str(user_id)
+    )
+    try:
+        enqueue(run_job, (job_id, storage_jobs.sync, {"owner": user_id}))
+    except Exception:
+        logger.exception("queueing the Drive sync of %s failed", user_id)
+        fail_job(job_id, "Could not queue the Drive sync")
 
 
 def _link(

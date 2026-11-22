@@ -27,7 +27,6 @@ from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.db.tracked_accounts.store import get_account
 from ofmhelpers.features.accounts.removal import logins_leaving
 from ofmhelpers.features.accounts.tracker import track_login
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.phones import workbook
 from ofmhelpers.features.phones.catalog.render import render as draw
@@ -36,12 +35,13 @@ from ofmhelpers.features.refusals import (
     NotFoundError,
     duplicate_refused,
 )
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.service import StorageServiceFolders
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.devices.models import DeviceFields
 
 logger = get_logger(__name__)
-
-DRIVE_SYNC_TASK = drive_folders.SYNC_TASK
 
 
 class SecretsUnreadableError(RuntimeError): ...
@@ -153,14 +153,16 @@ def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
 
 def _make_drive_folder(login_id: int, service: str) -> None:
     found = services().get(service)
-    if found is None or not found.tracked_platform or not drive_folders.enabled():
+    if found is None or not found.tracked_platform or not storage_jobs.enabled():
         return
     owner = store.owner_of_login(login_id)
     if owner is None:
         return
-    job_id = create_job(DRIVE_SYNC_TASK, {"owner": owner}, actor=str(owner))
+    job_id = create_job(
+        storage_constants().sync_task, {"owner": owner}, actor=str(owner)
+    )
     try:
-        enqueue(run_job, job_id, drive_folders.sync, {"owner": owner})
+        enqueue(run_job, (job_id, storage_jobs.sync, {"owner": owner}))
     except Exception:
         logger.exception("queueing the Drive sync for login %s failed", login_id)
         fail_job(job_id, "Could not queue the Drive sync")
@@ -169,6 +171,7 @@ def _make_drive_folder(login_id: int, service: str) -> None:
 class Phone(BaseModel, frozen=True):
     scope: int
     device_id: int
+    folders: StorageServiceFolders
 
     @_vault()
     def edit(self, body: DeviceFields) -> None:
@@ -183,7 +186,7 @@ class Phone(BaseModel, frozen=True):
         _require(store.restore_device(self.device_id, self.scope), "Phone")
 
     def delete(self) -> None:
-        logins_leaving(self.scope, self.device_id)
+        logins_leaving(self.scope, self.folders, self.device_id)
         _require(store.delete_device(self.device_id, self.scope), "Phone")
 
     def add_login(self, body: LoginFields) -> LoginAdded:
@@ -225,7 +228,7 @@ class Phone(BaseModel, frozen=True):
         return added
 
     def remove_login(self, login_id: int) -> None:
-        logins_leaving(self.scope, self.device_id, login_id)
+        logins_leaving(self.scope, self.folders, self.device_id, login_id)
         _require(store.remove_login(self.device_id, login_id, self.scope), "Login")
 
 

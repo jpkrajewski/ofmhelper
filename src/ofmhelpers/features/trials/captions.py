@@ -92,7 +92,7 @@ def _video_chain() -> list[_Step]:
 
 
 def understand(video: Path) -> ReelNotes:
-    prompt = Prompt.of(_NOTES, media.ai_proxy(video), system=_RULES)
+    prompt = Prompt.of([_NOTES, media.ai_proxy(video)], system=_RULES)
     return _ask(prompt, ReelNotes, _video_chain())
 
 
@@ -103,4 +103,4 @@ def captions_for(notes: ReelNotes) -> list[str]:
         choices=CHOICES,
     )
     chain = [_Step(use=LLMUse.CHAT, entry=settings.llm.default_chat), *_video_chain()]
-    return _ask(Prompt.of(prompt, system=_RULES), Captions, chain).captions
+    return _ask(Prompt.of([prompt], system=_RULES), Captions, chain).captions

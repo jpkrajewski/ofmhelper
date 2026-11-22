@@ -45,14 +45,16 @@ def add_job_routes(
         return render(
             request,
             "job_status.html",
-            job=job,
-            assets=found.assets,
-            failed_sources=found.failed_sources,
-            job_inputs=job_inputs(job) if show_inputs else None,
-            title=title,
-            pending_message=_pending_text(pending_message, job),
-            back_url=back_url,
-            back_label=back_label,
+            {
+                "job": job,
+                "assets": found.assets,
+                "failed_sources": found.failed_sources,
+                "job_inputs": job_inputs(job) if show_inputs else None,
+                "title": title,
+                "pending_message": _pending_text(pending_message, job),
+                "back_url": back_url,
+                "back_label": back_label,
+            },
         )
 
     @router.get("/jobs/{job_id}/status")

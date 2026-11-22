@@ -5,11 +5,16 @@ from unittest.mock import MagicMock
 import pytest
 from openpyxl import Workbook
 
-from ofmhelpers.integrations.gdrive import Drive, DriveError, ReadOnlyDrive
-from ofmhelpers.integrations.gdrive import client as drive_client
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
-from ofmhelpers.integrations.gdrive.models import SHEET_MIME, SheetTab
-from ofmhelpers.integrations.gdrive.sheets import read_xlsx
+from ofmhelpers.integrations.storage import (
+    DriveError,
+    ReadOnlyDrive,
+    SheetTab,
+)
+from ofmhelpers.integrations.storage.gdrive import Drive
+from ofmhelpers.integrations.storage.gdrive import client as drive_client
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive.models import SHEET_MIME
+from ofmhelpers.integrations.storage.gdrive.sheets import read_xlsx
 
 LINK = "https://www.instagram.com/reel/abc/?cplk=xyz"
 ROOT = "sheet-root"

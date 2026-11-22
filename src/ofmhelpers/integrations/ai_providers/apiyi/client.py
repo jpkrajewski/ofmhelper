@@ -2,7 +2,7 @@ import base64
 import mimetypes
 from pathlib import Path
 from typing import Any, NoReturn
-lazy from collections.abc import Callable
+lazy from collections.abc import Callable, Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field
@@ -115,7 +115,10 @@ class ApiyiClient:
         path: str,
         refuse: Callable[[requests.Response], NoReturn] = refused,
         timeout: float | None = None,
-        **kwargs: Any,
+        headers: Mapping[str, str] | None = None,
+        json: Any = None,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
     ) -> requests.Response:
         return call(
             self._http,
@@ -124,12 +127,33 @@ class ApiyiClient:
             method,
             f"{self._base}{path}",
             timeout=timeout or settings.apiyi.request_timeout_s,
-            **kwargs,
+            headers=headers,
+            json=json,
+            data=data,
+            files=files,
         )
 
-    def submit(self, path: str, **kwargs: Any) -> requests.Response:
+    def submit(
+        self,
+        path: str,
+        refuse: Callable[[requests.Response], NoReturn] = refused,
+        timeout: float | None = None,
+        headers: Mapping[str, str] | None = None,
+        json: Any = None,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
+    ) -> requests.Response:
         try:
-            return self.call("POST", path, **kwargs)
+            return self.call(
+                "POST",
+                path,
+                refuse=refuse,
+                timeout=timeout,
+                headers=headers,
+                json=json,
+                data=data,
+                files=files,
+            )
         except ProviderUnavailableError as exc:
             raise maybe_paid(exc) from exc
 

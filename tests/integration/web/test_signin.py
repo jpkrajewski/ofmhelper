@@ -19,7 +19,7 @@ from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.account.keys import SAVED_KEY, Keys
-from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import Identity
 from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
@@ -894,7 +894,11 @@ def test_connecting_google_drive_syncs_that_persons_folders_right_away(
     client, monkeypatch
 ):
     synced: list[int | None] = []
-    monkeypatch.setattr(drive_folders, "sync", synced.append)
+
+    def sync(owner: int | None) -> None:
+        synced.append(owner)
+
+    monkeypatch.setattr(storage_jobs, "sync", sync)
     user = make_user("friend@example.com")
     apple = make_user("apple@example.com")
 

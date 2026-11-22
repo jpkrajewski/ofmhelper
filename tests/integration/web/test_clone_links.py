@@ -70,7 +70,7 @@ def queued(monkeypatch) -> list[tuple]:
     monkeypatch.setattr(
         clone_links_service,
         "enqueue_to",
-        lambda queue, fn, *args, **_kw: calls.append((queue, fn, args)),
+        lambda queue, fn, args, **_kw: calls.append((queue, fn, args)),
     )
     return calls
 

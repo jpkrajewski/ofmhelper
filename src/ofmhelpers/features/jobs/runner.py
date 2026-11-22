@@ -168,9 +168,7 @@ def start_job(
     enqueue_to(
         queue or QueueName.DEFAULT,
         run_job,
-        job_id,
-        run,
-        {"job_id": job_id, **kwargs},
+        (job_id, run, {"job_id": job_id, **kwargs}),
         job_timeout=job_timeout,
         at_front=at_front,
     )
@@ -209,7 +207,7 @@ def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
     running = running_job()
     queue = running.queue if running else QueueName.DEFAULT
     timeout = running.timeout if running else None
-    enqueue_to(queue, run_job, job_id, fn, kwargs, job_timeout=timeout)
+    enqueue_to(queue, run_job, (job_id, fn, kwargs), job_timeout=timeout)
     logger.info("job %s back in line on %s", job_id, queue.value)
 
 
@@ -218,7 +216,7 @@ def _queue_previews(job_id: str) -> None:
     if job is None:
         return
     try:
-        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, job.local_paths())
+        enqueue_to(QueueName.PREVIEWS, warm_previews, (job.id, job.local_paths()))
     except RedisError:
         logger.warning("could not queue previews of job %s", job_id, exc_info=True)
 

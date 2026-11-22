@@ -194,5 +194,5 @@ def queue_due_scans() -> list[str]:
     due = claim_due(interval, s.rescan_claim_ttl_s)
     if due:
         logger.info("rescanning %d watched profile(s)", len(due))
-        enqueue(scan_all, due)
+        enqueue(scan_all, (due,))
     return due

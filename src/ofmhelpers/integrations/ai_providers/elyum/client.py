@@ -1,6 +1,7 @@
 import mimetypes
 import re
 from typing import Any, NoReturn
+lazy from collections.abc import Mapping
 lazy from pathlib import Path
 
 lazy import requests
@@ -50,7 +51,14 @@ class ElyumClient:
         self._base = settings.elyum.base_url.rstrip("/") + API
         self._http = bearer_session(api_key)
 
-    def _call(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+    def _call(
+        self,
+        method: str,
+        path: str,
+        headers: Mapping[str, str] | None = None,
+        json: Any = None,
+        files: Mapping[str, Any] | None = None,
+    ) -> requests.Response:
         return call(
             self._http,
             PROVIDER,
@@ -58,7 +66,9 @@ class ElyumClient:
             method,
             f"{self._base}/{path}",
             timeout=settings.elyum.request_timeout_s,
-            **kwargs,
+            headers=headers,
+            json=json,
+            files=files,
         )
 
     def upload(self, path: Path, max_bytes: int | None = None) -> str:

@@ -1,6 +1,6 @@
 import secrets
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 lazy from fastapi import UploadFile
 
@@ -12,20 +12,21 @@ from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_videos
 from ofmhelpers.features.assets.store import make_job_dir, uploads_root
 from ofmhelpers.features.clone.service import DrivePicker, drive_picker
-from ofmhelpers.features.drive.uploads import SPOOFED_TASK
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.repurpose.models import RepurposeCard
+from ofmhelpers.features.storage.constants import storage_constants
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
 logger = get_logger(__name__)
 
-TASK = SPOOFED_TASK
+TASK = storage_constants().spoofed_task
 PREFIX = "/spoof"
 FILES_PREFIX = f"{PREFIX}/files"
 DEVICE_LABEL = "iPhone 16 Pro Max"
@@ -44,13 +45,27 @@ def _copy_name(seed: int) -> str:
 
 
 def run_repurpose(
-    job_dir: str, source: str, seed: int | None = None, **old_params: object
+    job_dir: str,
+    source: str,
+    seed: int | None = None,
+    preset: dict[str, Any] | None = None,
+    device: str | None = None,
+    copies: int | None = None,
+    preset_name: str | None = None,
+    special: bool | None = None,
 ) -> list[RepurposeResult]:
     if seed is None:
         seed = secrets.randbits(32)
+        old_params = {
+            "preset": preset,
+            "device": device,
+            "copies": copies,
+            "preset_name": preset_name,
+            "special": special,
+        }
         logger.warning(
             "repurpose: a job queued before /spoof (params %s) runs as a Spoof copy, seed %s",
-            sorted(old_params),
+            sorted(name for name, value in old_params.items() if value is not None),
             seed,
         )
     copy = Path(job_dir) / _copy_name(seed)
@@ -66,12 +81,14 @@ def _card(job: Job, uploads: list[DriveUpload]) -> RepurposeCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label="Spoof",
-        poll_prefix=PREFIX,
-        result_kind="video",
-        drive_uploads=uploads,
-        mirrored=drawn.mirror if drawn else None,
-        turn=drawn.rotate if drawn else None,
+        {
+            "task_label": "Spoof",
+            "poll_prefix": PREFIX,
+            "result_kind": "video",
+            "drive_uploads": uploads,
+            "mirrored": drawn.mirror if drawn else None,
+            "turn": drawn.rotate if drawn else None,
+        },
     )
 
 
@@ -93,8 +110,8 @@ class CardsView(DrivePicker):
     cards: list[RepurposeCard]
 
 
-def cards_view(job_id: str, actor: str, user_id: int) -> CardsView:
-    return CardsView(cards=cards_of(job_id, actor), **dict(drive_picker(user_id)))
+def cards_view(job_id: str, actor: str, uploads: StorageServiceUploads) -> CardsView:
+    return CardsView(cards=cards_of(job_id, actor), **dict(drive_picker(uploads)))
 
 
 class PageView(CardsView):
@@ -105,12 +122,12 @@ class PageView(CardsView):
 
 
 def page_view(
-    actor: str, user_id: int, assets_root: Path, videos: list[str]
+    actor: str, uploads: StorageServiceUploads, assets_root: Path, videos: list[str]
 ) -> PageView:
     recent = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor).jobs
     return PageView(
         cards=cards(recent),
-        **dict(drive_picker(user_id)),
+        **dict(drive_picker(uploads)),
         prefill_video=keep_videos(videos, assets_root)[:1],
         device_label=DEVICE_LABEL,
         default_copies=DEFAULT_COPIES,
@@ -139,9 +156,7 @@ def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> Jobs
         enqueue_to(
             QueueName.MEDIA,
             run_job,
-            job_id,
-            run_repurpose,
-            {"job_dir": str(job_dir), **params},
+            (job_id, run_repurpose, {"job_dir": str(job_dir), **params}),
             job_timeout=settings.repurpose.job_timeout_s,
         )
         job_ids.append(job_id)

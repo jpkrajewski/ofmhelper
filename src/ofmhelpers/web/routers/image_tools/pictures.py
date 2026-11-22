@@ -92,11 +92,13 @@ def page(
     return render(
         request,
         "pictures.html",
-        api_keys=api_keys,
-        gallery=_cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        **dict(service.form_view(owner_id, actor, preset)),
+        {
+            "api_keys": api_keys,
+            "gallery": _cards(first.jobs),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            **dict(service.form_view(owner_id, actor, preset)),
+        },
     )
 
 
@@ -106,8 +108,7 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     return render(
         request,
         "generate_gallery_fragment.html",
-        gallery=_cards(found.jobs),
-        next_offset=found.next_offset,
+        {"gallery": _cards(found.jobs), "next_offset": found.next_offset},
     )
 
 
@@ -116,8 +117,7 @@ def gallery_latest(request: Request, viewer: Viewing) -> Response:
     return render_polled(
         request,
         "generate_gallery_fragment.html",
-        gallery=_cards(gallery.page(viewer).jobs),
-        next_offset=None,
+        {"gallery": _cards(gallery.page(viewer).jobs), "next_offset": None},
     )
 
 

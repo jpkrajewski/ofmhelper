@@ -93,12 +93,15 @@ class DownloadConfig(BaseModel):
     extractor_args: ExtractorArgs = Field(default_factory=_default_extractor_args)
 
     @classmethod
-    def single_post(cls, **fields: Any) -> DownloadConfig:
+    def single_post(
+        cls, output_dir: Path = Path("downloads"), socket_timeout: float | None = None
+    ) -> DownloadConfig:
         return cls(
             download_playlist=False,
             playlist_items=f"1:{settings.downloaders.single_post_items}",
             allowed_extractors=list(SITE_EXTRACTORS_ONLY),
-            **fields,
+            output_dir=output_dir,
+            socket_timeout=socket_timeout,
         )
 
     def ydl_opts(self, cookiefile: str | None = None) -> YtDlpOptions:

@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from ofmhelpers.features.threads import service
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, CurrentUser, Scope
+from ofmhelpers.web.dependencies import Access, CurrentUser, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
@@ -13,15 +13,15 @@ router = APIRouter(
 )
 
 
-def _threads(login_id: int, user: CurrentUser, scope: Scope) -> service.Threads:
-    return service.Threads(uid=user.id, scope=scope, login_id=login_id)
+def _threads(login_id: int, user: CurrentUser, storage: Storage) -> service.Threads:
+    return service.Threads(uid=user.id, folders=storage.folders, login_id=login_id)
 
 
 Threads = Annotated[service.Threads, Depends(_threads)]
 
 
-def _index_cards(user: CurrentUser, scope: Scope) -> service.PhoneCards:
-    return service.Threads.phone_cards(user.id, scope)
+def _index_cards(user: CurrentUser, storage: Storage) -> service.PhoneCards:
+    return service.Threads.phone_cards(user.id, storage.folders)
 
 
 IndexCards = Annotated[service.PhoneCards, Depends(_index_cards)]
@@ -29,12 +29,14 @@ IndexCards = Annotated[service.PhoneCards, Depends(_index_cards)]
 
 @router.get("")
 def threads_page(request: Request, cards: IndexCards) -> Response:
-    return render(request, "threads.html", board=cards.board, progress=cards.progress)
+    return render(
+        request, "threads.html", {"board": cards.board, "progress": cards.progress}
+    )
 
 
 @router.get("/{login_id}")
 def folder_page(request: Request, threads: Threads) -> Response:
-    return render(request, "threads_folder.html", folder=threads.open())
+    return render(request, "threads_folder.html", {"folder": threads.open()})
 
 
 @router.post("/{login_id}/reels/{key}/pictures")

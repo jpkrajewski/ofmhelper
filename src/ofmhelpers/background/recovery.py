@@ -84,14 +84,16 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
     enqueue_to(
         QUEUES.get(job.task, QueueName.DEFAULT),
         run_job,
-        job.id,
-        run,
-        {
-            **job.params,
-            "job_id": job.id,
-            "api_key": parts[0].api_key,
-            "assets_root": str(assets_root_for_actor(job.actor)),
-        },
+        (
+            job.id,
+            run,
+            {
+                **job.params,
+                "job_id": job.id,
+                "api_key": parts[0].api_key,
+                "assets_root": str(assets_root_for_actor(job.actor)),
+            },
+        ),
         job_timeout=timeout(job.params) if timeout else None,
     )
     logger.info("recovery re-running job %s (%d request(s))", job.id, len(parts))

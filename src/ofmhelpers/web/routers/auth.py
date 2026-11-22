@@ -31,9 +31,7 @@ def _login_page(
     return render(
         request,
         "login.html",
-        next=next_url,
-        error=error,
-        providers=consent.offered(),
+        {"next": next_url, "error": error, "providers": consent.offered()},
         status_code=status_code,
     )
 
@@ -73,7 +71,9 @@ def va_login_form(
 ) -> Response:
     if AuthMiddleware.session_user(request):
         return see_other(safe_next(next_url))
-    return render(request, "va_login.html", next=safe_next(next_url), error=None)
+    return render(
+        request, "va_login.html", {"next": safe_next(next_url), "error": None}
+    )
 
 
 @router.post(VA_LOGIN_PATH)
@@ -88,8 +88,7 @@ def va_login_submit(
         return render(
             request,
             "va_login.html",
-            next=outcome.next_url,
-            error=outcome.error,
+            {"next": outcome.next_url, "error": outcome.error},
             status_code=outcome.status_code,
         )
     if outcome.user is not None:
@@ -175,7 +174,7 @@ def callback_post(
 
 @router.get("/auth/owner/consent")
 def owner_consent(request: Request, state: str = "") -> Response:
-    return render(request, "owner_consent.html", state=state, error=None)
+    return render(request, "owner_consent.html", {"state": state, "error": None})
 
 
 @router.post("/auth/owner/consent")
@@ -189,8 +188,7 @@ def owner_consent_submit(
         return render(
             request,
             "owner_consent.html",
-            state=state,
-            error=outcome.error,
+            {"state": state, "error": outcome.error},
             status_code=outcome.status_code,
         )
     return see_other(outcome.redirect)
@@ -200,7 +198,7 @@ def owner_consent_submit(
 def fake_consent(request: Request, provider: str, state: str) -> Response:
     if not settings.infra.fake_externals:
         raise HTTPException(status_code=404)
-    return render(request, "fake_consent.html", provider=provider, state=state)
+    return render(request, "fake_consent.html", {"provider": provider, "state": state})
 
 
 @router.post("/auth/fake-consent")
@@ -220,9 +218,11 @@ def _password_page(request: Request, page: password_link.LinkPage) -> Response:
     return render(
         request,
         "password_set.html",
-        user=page.owner,
-        error=page.error,
-        min_length=settings.signin.password_min_length,
+        {
+            "user": page.owner,
+            "error": page.error,
+            "min_length": settings.signin.password_min_length,
+        },
         status_code=page.status_code,
     )
 

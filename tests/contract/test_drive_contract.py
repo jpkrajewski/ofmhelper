@@ -5,13 +5,13 @@ lazy from collections.abc import Iterator
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive import (
-    DriveApi,
+from ofmhelpers.integrations.storage import (
     DriveError,
     FolderGoneError,
-    connect,
+    StorageClient,
 )
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive import connect
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 
 FAKE_ROOT = "contract-root"
 
@@ -21,7 +21,7 @@ def _missing_id() -> str:
 
 
 @pytest.fixture
-def drive(backend, monkeypatch) -> DriveApi:
+def drive(backend, monkeypatch) -> StorageClient:
     if backend == "fake":
         fake = FakeDrive()
         fake.seed_folder("ALL ACCOUNTS", item_id=FAKE_ROOT, shared=True)

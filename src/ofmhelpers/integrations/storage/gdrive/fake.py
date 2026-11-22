@@ -11,18 +11,20 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive.base import (
+from ofmhelpers.db.drive_folders.schema import (
+    FOLDER_MIME,
+    DriveFile,
+)
+from ofmhelpers.integrations.storage.base import (
     DriveAuthError,
     DriveError,
     DriveFullError,
     FolderGoneError,
     FolderTrashedError,
 )
-from ofmhelpers.integrations.gdrive.models import (
-    FOLDER_MIME,
-    SHEET_MIME,
+from ofmhelpers.integrations.storage.gdrive.models import SHEET_MIME
+from ofmhelpers.integrations.storage.models import (
     DriveDownload,
-    DriveFile,
     DriveFolder,
     DriveListing,
     DriveSheet,
@@ -104,10 +106,31 @@ class FakeDrive:
                 fh.write(state.model_dump_json())
 
     @staticmethod
-    def _new(state: FakeDriveState, **fields) -> FakeItem:
+    def _new(
+        state: FakeDriveState,
+        name: str,
+        parents: list[str],
+        owner: str,
+        mime_type: str = FOLDER_MIME,
+        has_thumbnail: bool = False,
+        created_time: datetime | None = None,
+        size: int | None = None,
+        sheet: DriveSheet | None = None,
+    ) -> FakeItem:
         number = state.next_id
         state.next_id += 1
-        item = FakeItem(id=f"fake{number:08d}", created=number, **fields)
+        item = FakeItem(
+            id=f"fake{number:08d}",
+            created=number,
+            name=name,
+            parents=parents,
+            owner=owner,
+            mime_type=mime_type,
+            has_thumbnail=has_thumbnail,
+            created_time=created_time or datetime.now(UTC),
+            size=size,
+            sheet=sheet,
+        )
         state.items[item.id] = item
         return item
 
@@ -359,6 +382,7 @@ class FakeDrive:
         owner: str = DEFAULT_OWNER,
         thumbnail: bool = False,
         created: datetime | None = None,
+        size: int | None = None,
     ) -> str:
         with self._state() as state:
             return self._new(
@@ -369,6 +393,7 @@ class FakeDrive:
                 owner=owner,
                 has_thumbnail=thumbnail,
                 created_time=created or datetime.now(UTC),
+                size=size,
             ).id
 
     def add_sheet(
@@ -435,7 +460,7 @@ class FakeDrive:
         with self._state() as state:
             state.shared = [i for i in state.shared if i != item_id]
 
-    def fail_on(self, *names: str) -> None:
+    def fail_on(self, names: list[str]) -> None:
         with self._state() as state:
             state.fail_on = list(names)
 

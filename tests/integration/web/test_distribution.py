@@ -17,11 +17,12 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.distribution import publish, sweep
 from ofmhelpers.features.distribution.report import report
 from ofmhelpers.features.distribution.service import Distribution, Upload
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.pinterest.fake import FakePinterest, fake_pinterest
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -71,7 +72,7 @@ def pinterest(fake_externals, monkeypatch) -> FakePinterest:
 def _instagram(fake: FakeDrive, phone: int, handle: str, creator: str) -> str:
     assert devices.add_login(phone, LoginFields(service="instagram", username=handle))
     tracked_accounts.track("instagram", handle, creator)
-    drive_folders.sync()
+    storage_jobs.sync()
     (account,) = fake.named(f"{handle} - Anna", ROOT)
     return account
 
@@ -100,7 +101,7 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
     bob = _instagram(fake, phone, "bob.ig", "clark")
     (bob_posted,) = fake.named("POSTED", bob)
     fake.add_file(bob_posted, "CLARK_1.jpg", "image/jpeg")
-    drive_folders.sync()
+    storage_jobs.sync()
     self_links.add_domain(DOMAIN, None)
     store.repository().save_preset(users.agency_id(), DANE)
     store.repository().save_preset(users.agency_id(), CLARK)
@@ -120,7 +121,9 @@ def pictures(monkeypatch):
 
 
 def _dist() -> Distribution:
-    return Distribution(uid=users.agency_id(), scope=users.agency_id())
+    uid = users.agency_id()
+    storage = storage_of(uid, interactive=True)
+    return Distribution(uid=uid, scope=uid, storage=storage)
 
 
 def _add(*sessions: str) -> list:

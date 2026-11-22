@@ -5,7 +5,7 @@ from fastapi.responses import Response
 
 from ofmhelpers.features.distribution import service
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, CurrentUser, Scope
+from ofmhelpers.web.dependencies import Access, CurrentUser, Scope, Storage
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.templates_config import render
 
@@ -16,8 +16,10 @@ router = APIRouter(
 )
 
 
-def _distribution(user: CurrentUser, scope: Scope) -> service.Distribution:
-    return service.Distribution(uid=user.id, scope=scope)
+def _distribution(
+    user: CurrentUser, scope: Scope, storage: Storage
+) -> service.Distribution:
+    return service.Distribution(uid=user.id, scope=scope, storage=storage)
 
 
 def _uploads(files: list[UploadFile]) -> list[service.Upload]:
@@ -33,7 +35,9 @@ Uploads = Annotated[list[service.Upload], Depends(_uploads)]
 def _page(
     request: Request, page: service.DistributionPage, status_code: int = 200
 ) -> Response:
-    response = render(request, "distribution.html", page=page, status_code=status_code)
+    response = render(
+        request, "distribution.html", {"page": page}, status_code=status_code
+    )
     response.headers.update(NO_STORE)
     return response
 

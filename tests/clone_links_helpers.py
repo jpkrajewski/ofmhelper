@@ -9,8 +9,8 @@ from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.integrations.downloaders import media as downloader
-from ofmhelpers.integrations.gdrive.fake import fake_drive
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_KEY
+from ofmhelpers.integrations.storage.gdrive.fake import fake_drive
 from ofmhelpers.media import fake_media
 from ofmhelpers.web.main import app
 

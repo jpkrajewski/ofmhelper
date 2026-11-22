@@ -29,8 +29,10 @@ def form(request: Request, actor: Actor) -> Response:
     return render(
         request,
         "character_sheet.html",
-        gallery=service.cards(actor),
-        max_images=settings.web.character_sheet_max_images,
+        {
+            "gallery": service.cards(actor),
+            "max_images": settings.web.character_sheet_max_images,
+        },
     )
 
 

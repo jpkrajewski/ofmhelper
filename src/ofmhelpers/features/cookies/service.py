@@ -38,7 +38,7 @@ def page_view(
 def _after_upload(user_id: int, rescan_limited: Callable[[int], object]) -> None:
     if not retired().has("reels"):
         job_id = create_job(UNLOCK_TASK, {}, actor=str(user_id))
-        enqueue(run_job, job_id, unlock_gated, {"user_id": user_id})
+        enqueue(run_job, (job_id, unlock_gated, {"user_id": user_id}))
     rescan_limited(user_id)
 
 

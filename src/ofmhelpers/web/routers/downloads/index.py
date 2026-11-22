@@ -3,10 +3,9 @@ from fastapi.responses import Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import Job
-from ofmhelpers.features.downloads import sheet
 from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, Viewing
+from ofmhelpers.web.dependencies import Access, Downloads, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, task_card
 from ofmhelpers.web.templates_config import render
@@ -29,16 +28,20 @@ def _cards(jobs: list[Job]) -> list[TaskCard]:
 
 
 @router.get("")
-def form(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
+def form(
+    request: Request, viewer: Viewing, query: GalleryParams, downloads: Downloads
+) -> Response:
     first = gallery.page(viewer, query)
     return render(
         request,
         "download_assets_form.html",
-        gallery=_cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        dates=query,
-        sheet_cooldown_s=sheet.cooldown_left(viewer.user.id),
+        {
+            "gallery": _cards(first.jobs),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "dates": query,
+            "sheet_cooldown_s": downloads.sheet.cooldown_left(),
+        },
     )
 
 
@@ -48,6 +51,5 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     return render(
         request,
         "download_gallery_fragment.html",
-        gallery=_cards(found.jobs),
-        next_offset=found.next_offset,
+        {"gallery": _cards(found.jobs), "next_offset": found.next_offset},
     )

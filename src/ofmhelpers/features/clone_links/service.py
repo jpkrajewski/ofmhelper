@@ -206,14 +206,16 @@ class Generate(BaseModel):
             enqueue_to(
                 QueueName.CLONE_LINKS,
                 run_job,
-                job_id,
-                self.run,
-                {
-                    "job_id": job_id,
-                    "api_key": api_key,
-                    "assets_root": str(self.assets_root),
-                    **params,
-                },
+                (
+                    job_id,
+                    self.run,
+                    {
+                        "job_id": job_id,
+                        "api_key": api_key,
+                        "assets_root": str(self.assets_root),
+                        **params,
+                    },
+                ),
             )
         except Exception:
             logger.warning(
@@ -293,10 +295,12 @@ def card(job: Job, review: CloneFromLink | None) -> CloneLinksCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=export_label(job.params),
-        poll_prefix=PREFIX,
-        result_kind="video",
-        review=review,
+        {
+            "task_label": export_label(job.params),
+            "poll_prefix": PREFIX,
+            "result_kind": "video",
+            "review": review,
+        },
     )
 
 

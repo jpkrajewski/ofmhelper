@@ -13,14 +13,21 @@ SRC = Path(__file__).resolve().parents[3] / "src" / "ofmhelpers"
 
 def _is_task_name(target: ast.expr) -> bool:
     return isinstance(target, ast.Name) and (
-        target.id == "TASK" or target.id.endswith("_TASK")
+        target.id == "TASK" or target.id.lower().endswith("_task")
     )
 
 
 def _task_names() -> set[str]:
     found = set()
     for path in SRC.rglob("*.py"):
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        class_fields = [
+            field
+            for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name.endswith("Constants")
+            for field in node.body
+        ]
+        for node in [*tree.body, *class_fields]:
             value: ast.expr | None
             if isinstance(node, ast.Assign):
                 targets, value = node.targets, node.value

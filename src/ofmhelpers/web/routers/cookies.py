@@ -23,9 +23,7 @@ def _page(
     status_code: int = 200,
 ) -> Response:
     view = service.page_view(owner_id, note, error)
-    response = render(
-        request, "cookies_form.html", **dict(view), status_code=status_code
-    )
+    response = render(request, "cookies_form.html", dict(view), status_code=status_code)
     response.headers.update(NO_STORE)
     return response
 

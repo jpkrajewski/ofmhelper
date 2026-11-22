@@ -29,12 +29,14 @@ def form(
     response = render(
         request,
         "generate_form.html",
-        api_keys=api_keys,
-        gallery=[task_card(j) for j in first.jobs],
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        dates=query,
-        **dict(form_view(actor)),
+        {
+            "api_keys": api_keys,
+            "gallery": [task_card(j) for j in first.jobs],
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "dates": query,
+            **dict(form_view(actor)),
+        },
     )
     response.headers.update(NO_STORE)
     return response
@@ -46,8 +48,10 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     return render(
         request,
         "generate_gallery_fragment.html",
-        gallery=[task_card(j) for j in found.jobs],
-        next_offset=found.next_offset,
+        {
+            "gallery": [task_card(j) for j in found.jobs],
+            "next_offset": found.next_offset,
+        },
     )
 
 
@@ -56,6 +60,10 @@ def gallery_latest(request: Request, viewer: Viewing, query: GalleryParams) -> R
     return render_polled(
         request,
         "generate_gallery_fragment.html",
-        gallery=[task_card(j) for j in gallery.page(viewer, query.newest()).jobs],
-        next_offset=None,
+        {
+            "gallery": [
+                task_card(j) for j in gallery.page(viewer, query.newest()).jobs
+            ],
+            "next_offset": None,
+        },
     )

@@ -10,7 +10,7 @@ from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive.models import folder_url
+from ofmhelpers.db.drive_folders.schema import folder_url
 from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:

@@ -50,7 +50,10 @@ def _card(*, path: str | None = "/v.mp4", review=None, status="done") -> CloneLi
         created_at=NOW,
     )
     return CloneLinksCard.from_job(
-        job, [], [], task_label="", poll_prefix="/clone-links", review=review
+        job,
+        [],
+        [],
+        {"task_label": "", "poll_prefix": "/clone-links", "review": review},
     )
 
 

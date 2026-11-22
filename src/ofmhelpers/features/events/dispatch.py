@@ -74,9 +74,7 @@ def dispatch(event: dict[str, Any]) -> None:
 def deliver_to(sender_name: str, target: str, event: Event) -> None:
     JobQueue(name=QueueName.EVENTS).put(
         deliver,
-        sender_name,
-        target,
-        event.model_dump(mode="json"),
+        (sender_name, target, event.model_dump(mode="json")),
         job_timeout=settings.events.send_timeout_s,
         retry=_retry(),
         failure_ttl=settings.events.failed_keep_s,

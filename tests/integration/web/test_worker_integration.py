@@ -84,7 +84,7 @@ def test_worker_marks_a_raising_job_failed_never_stuck_running():
 def test_worker_log_description_never_carries_the_job_arguments():
     job_id = create_job("seedance", {})
     rq_job = enqueue(
-        run_job, job_id, worker_tasks.make_result, {"name": "secret-api-key"}
+        run_job, (job_id, worker_tasks.make_result, {"name": "secret-api-key"})
     )
 
     assert rq_job.description == "ofmhelpers.features.jobs.runner.run_job"
@@ -95,7 +95,7 @@ def test_worker_log_description_never_carries_the_job_arguments():
 def _queue_run(queue: str) -> tuple[str, str]:
     job_id = create_job("clone_links", {})
     rq_job = enqueue_to(
-        queue, run_job, job_id, worker_tasks.make_result, {"name": "out.mp4"}
+        queue, run_job, (job_id, worker_tasks.make_result, {"name": "out.mp4"})
     )
     return job_id, rq_job.id
 

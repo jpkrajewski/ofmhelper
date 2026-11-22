@@ -295,7 +295,9 @@ def test_a_double_click_queues_the_job_once(client, downloads, monkeypatch):
     _remove_videos()
     queued = []
     monkeypatch.setattr(
-        restart, "enqueue_to", lambda *args, **kwargs: queued.append(args)
+        restart,
+        "enqueue_to",
+        lambda queue, fn, args, **_kwargs: queued.append((queue, fn, *args)),
     )
 
     answers = [client.post(f"/download-media/{job}/replays") for _ in range(2)]

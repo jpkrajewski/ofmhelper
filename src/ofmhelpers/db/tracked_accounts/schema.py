@@ -338,9 +338,9 @@ class AccountQuery(BaseModel):
 
     def sort_link(self, sort: AccountSort) -> str:
         if sort != self.sort:
-            return self.link(sort=sort, order=None)
+            return self.link(changes={"sort": sort, "order": None})
         flipped = SortOrder.ASC if self.direction == SortOrder.DESC else SortOrder.DESC
-        return self.link(order=flipped)
+        return self.link(changes={"order": flipped})
 
     def ordered(
         self, accounts: list[TrackedAccount], days: int
@@ -368,8 +368,10 @@ class AccountQuery(BaseModel):
         unknown = [a for a in accounts if key(a) is None]
         return sorted(known, key=key, reverse=reverse) + unknown
 
-    def link(self, path: str = "/accounts", **changes: object) -> str:
-        update = {"page": 1, **changes}
+    def link(
+        self, path: str = "/accounts", changes: dict[str, object] | None = None
+    ) -> str:
+        update = {"page": 1, **(changes or {})}
         data = self.model_copy(update=update).model_dump(mode="json")
         defaults = AccountQuery().model_dump(mode="json")
         params = {

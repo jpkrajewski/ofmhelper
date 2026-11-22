@@ -89,6 +89,8 @@ def task_card(job: Job) -> TaskCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=tool.describe(job) if tool.describe else tool.label,
-        poll_prefix=tool.prefix,
+        {
+            "task_label": tool.describe(job) if tool.describe else tool.label,
+            "poll_prefix": tool.prefix,
+        },
     )

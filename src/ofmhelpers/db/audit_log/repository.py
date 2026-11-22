@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 
 from ofmhelpers.db.audit_log.schema import AuditEntry
 from ofmhelpers.db.models import AuditLogRow
@@ -23,7 +23,7 @@ def _entry(row: AuditLogRow) -> AuditEntry:
 
 
 class AuditLogRepository:
-    def _newest(self, *where, limit: int) -> list[AuditEntry]:
+    def _newest(self, where: list[ColumnElement[bool]], limit: int) -> list[AuditEntry]:
         log = AuditLogRow
         with session_scope() as s:
             rows = s.execute(
@@ -33,10 +33,12 @@ class AuditLogRepository:
 
     def history(self, table: str, row_id: str, limit: int = 100) -> list[AuditEntry]:
         log = AuditLogRow
-        return self._newest(log.table_name == table, log.row_id == row_id, limit=limit)
+        return self._newest(
+            [log.table_name == table, log.row_id == row_id], limit=limit
+        )
 
     def by_actor(self, actor_id: int, limit: int = 100) -> list[AuditEntry]:
-        return self._newest(AuditLogRow.actor_id == actor_id, limit=limit)
+        return self._newest([AuditLogRow.actor_id == actor_id], limit=limit)
 
     def of_owner(self, owner_id: int, limit: int = 100) -> list[AuditEntry]:
-        return self._newest(AuditLogRow.owner_id == owner_id, limit=limit)
+        return self._newest([AuditLogRow.owner_id == owner_id], limit=limit)

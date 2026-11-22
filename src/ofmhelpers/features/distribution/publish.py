@@ -9,11 +9,10 @@ from pydantic import BaseModel
 from ofmhelpers.config import settings
 from ofmhelpers.db.distribution import store
 from ofmhelpers.db.distribution.schema import Channel, Post, PostKind, PostStatus
-from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.assets.store import uploads_root
 from ofmhelpers.features.distribution.presets import preset_of
-from ofmhelpers.features.drive.folders import review_target
 from ofmhelpers.features.refusals import NotFoundError
+from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.integrations.pinterest import (
     Media,
     PinDraft,
@@ -25,6 +24,7 @@ from ofmhelpers.integrations.pinterest import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim, video_probe
+lazy from ofmhelpers.features.storage.service import StorageServiceReview
 
 logger = get_logger(__name__)
 
@@ -69,12 +69,15 @@ def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: AR
         source=post.source,
         attempt=post.attempts,
     ) as span:
-        pin = _publish(channel, post)
+        review = storage_of(channel.user_id, interactive=False).review
+        pin = _publish(channel, post, review)
         span.set_attribute("pin_id", pin.pin_id)
     return pin
 
 
-def _publish(channel: Channel, post: Post) -> PublishedPin:
+def _publish(
+    channel: Channel, post: Post, review: StorageServiceReview
+) -> PublishedPin:
     repo = store.repository()
     model = preset_of(channel.user_id, post.preset)
     if model is None:
@@ -83,7 +86,7 @@ def _publish(channel: Channel, post: Post) -> PublishedPin:
     here = uploads_root() / "distribution" / str(post.id)
     start = time.monotonic()
     try:
-        path = _download(channel.user_id, post, here)
+        path = _download(review, post, here)
         client = PinterestClient(repo.cookies(channel.id))
         renewed = client
         media = _media(client, path, post.kind, here)
@@ -174,9 +177,8 @@ def _keep_session(channel: Channel, client: PinterestClient) -> None:
         )
 
 
-def _download(user_id: int, post: Post, here: Path) -> Path:
-    place = review_target(refresh_token(user_id), user_id)
-    got = place.drive.download(post.file_id)
+def _download(review: StorageServiceReview, post: Post, here: Path) -> Path:
+    got = review.target().drive.download(post.file_id)
     here.mkdir(parents=True, exist_ok=True)
     path = here / f"media{Path(got.name).suffix.lower() or '.bin'}"
     path.write_bytes(got.content)

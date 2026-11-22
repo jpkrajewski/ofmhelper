@@ -60,12 +60,12 @@ def add_user(form: UserForm) -> User | None:
 
 def set_role(user_id: int, role: Role) -> User | None:
     if role.has_employer:
-        return _repository().update(user_id, role=role)
-    return _repository().update(user_id, role=role, owner_id=None)
+        return _repository().update(user_id, {"role": role})
+    return _repository().update(user_id, {"role": role, "owner_id": None})
 
 
 def set_owner(user_id: int, owner_id: int | None) -> User | None:
-    return _repository().update(user_id, owner_id=owner_id)
+    return _repository().update(user_id, {"owner_id": owner_id})
 
 
 def vas_of(owner_id: int) -> list[User]:
@@ -77,7 +77,7 @@ def vas_of(owner_id: int) -> list[User]:
 
 
 def set_active(user_id: int, *, active: bool) -> User | None:
-    return _repository().update(user_id, active=active)
+    return _repository().update(user_id, {"active": active})
 
 
 def delete_user(user_id: int) -> bool:
@@ -100,7 +100,9 @@ def _claim_password_account(email: str, name: str) -> User | None:
     account = agency_admin()
     if account is None or account.email != PASSWORD_ADMIN:
         return None
-    return _repository().update(account.id, email=normalized_email(email), name=name)
+    return _repository().update(
+        account.id, {"email": normalized_email(email), "name": name}
+    )
 
 
 def env_admin(email: str, name: str) -> User | None:
@@ -193,7 +195,7 @@ def agency_admin() -> User | None:
     if user is None:
         return password_admin()
     if not user.is_admin:
-        return _repository().update(user.id, role=Role.ADMIN)
+        return _repository().update(user.id, {"role": Role.ADMIN})
     return user
 
 
@@ -205,7 +207,7 @@ def password_admin() -> User | None:
         )
         return added or _repository().password_account()
     if not user.is_admin or not user.active:
-        return _repository().update(user.id, role=Role.ADMIN, active=True)
+        return _repository().update(user.id, {"role": Role.ADMIN, "active": True})
     return user
 
 

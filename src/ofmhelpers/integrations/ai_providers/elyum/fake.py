@@ -145,7 +145,12 @@ class FakeElyum:
 
     @staticmethod
     def _generation(
-        generation_id: str, state: str, status: int = 200, **fields: Any
+        generation_id: str,
+        state: str,
+        status: int = 200,
+        outputs: list[dict[str, Any]] | None = None,
+        usage: dict[str, Any] | None = None,
+        error: dict[str, str] | None = None,
     ) -> FakeReply:
         return FakeReply.json_body(
             {
@@ -153,10 +158,9 @@ class FakeElyum:
                 "object": "generation",
                 "status": state,
                 "delivery": "final",
-                "outputs": [],
-                "usage": None,
-                "error": None,
-                **fields,
+                "outputs": outputs or [],
+                "usage": usage,
+                "error": error,
             },
             status=status,
         )

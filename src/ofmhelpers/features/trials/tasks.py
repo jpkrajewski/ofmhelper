@@ -9,13 +9,11 @@ from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config.types import AccountFolder
-from ofmhelpers.features.drive.folders import (
-    ReviewPlace,
-    account_subfolder,
-    review_target,
-)
+from ofmhelpers.db.drive_folders.schema import DriveFile
 from ofmhelpers.features.jobs.runner import Requeued
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
+from ofmhelpers.features.storage.client import storage_of
+from ofmhelpers.features.storage.service import StorageServiceReview
 from ofmhelpers.features.trials import media
 from ofmhelpers.features.trials.captions import captions_for, understand
 from ofmhelpers.features.trials.state import (
@@ -29,16 +27,16 @@ from ofmhelpers.features.trials.state import (
     locked,
     work_dir,
 )
-from ofmhelpers.integrations.gdrive import (
-    DriveApi,
+from ofmhelpers.integrations.storage import (
     DriveError,
-    DriveFile,
     FolderGoneError,
     FolderTrashedError,
+    StorageClient,
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 from ofmhelpers.media.repurpose.transformations.video import VideoSettings
+lazy from ofmhelpers.features.storage.models import ReviewPlace
 lazy from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 
 logger = get_logger(__name__)
@@ -164,7 +162,7 @@ def _camera_name(source: str, taken: set[str], rng: random.Random) -> str:
             return name
 
 
-def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
+def _trash(drive: StorageClient, file_ids: list[str]) -> bool:
     fine = True
     for file_id in file_ids:
         try:
@@ -178,7 +176,7 @@ def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
 
 
 class _Trials(BaseModel, frozen=True, arbitrary_types_allowed=True):
-    drive: SkipValidation[DriveApi]
+    drive: SkipValidation[StorageClient]
     folder_id: str
     files: list[DriveFile]
 
@@ -186,7 +184,7 @@ class _Trials(BaseModel, frozen=True, arbitrary_types_allowed=True):
 class Folder(BaseModel, frozen=True):
     user_id: int
     login_id: int
-    refresh_token: str = ""
+    review: StorageServiceReview
 
     def _on_disk(self, reel: ReelState) -> bool:
         path = at(self.user_id, self.login_id, reel.local)
@@ -203,7 +201,7 @@ class Folder(BaseModel, frozen=True):
 
     def _drive(self) -> ReviewPlace | None:
         try:
-            found = review_target(self.refresh_token, self.user_id)
+            found = self.review.target()
         except DriveError:
             logger.warning(
                 "trials: Drive of user %s unreachable", self.user_id, exc_info=True
@@ -213,7 +211,7 @@ class Folder(BaseModel, frozen=True):
         self._change(lambda s: s.report(None))
         return found
 
-    def _fetch(self, drive: DriveApi, key: str) -> str:
+    def _fetch(self, drive: StorageClient, key: str) -> str:
         got = drive.download(key)
         rel = f"src/{key}-{Path(got.name).name}"
         path = work_dir(self.user_id, self.login_id) / rel
@@ -225,14 +223,14 @@ class Folder(BaseModel, frozen=True):
         root = work_dir(self.user_id, self.login_id)
         if self._on_disk(reel):
             return root / str(reel.local)
-        found = self._drive() if self.refresh_token else None
+        found = self._drive() if self.review.client is not None else None
         if found is None:
             raise FileNotFoundError(reel.key)
         rel = self._fetch(found.drive, reel.key)
         self._change_reel(reel.key, partial(ReelState.source_back, local=rel))
         return root / rel
 
-    def _download(self, drive: DriveApi) -> None:
+    def _download(self, drive: StorageClient) -> None:
         for reel in self._load().reels:
             if reel.out or self._on_disk(reel):
                 continue
@@ -245,7 +243,7 @@ class Folder(BaseModel, frozen=True):
                 continue
             self._change_reel(reel.key, partial(ReelState.mark_downloaded, local=rel))
 
-    def _list_posted(self, drive: DriveApi) -> bool:
+    def _list_posted(self, drive: StorageClient) -> bool:
         posted_id = self._load().posted_folder_id
         if not posted_id:
             return False
@@ -356,7 +354,9 @@ class Folder(BaseModel, frozen=True):
 
     def _trials_folder(self, place: ReviewPlace, account_folder_id: str) -> str:
         with locked(self.user_id, self.login_id, "trials-folder", _FOLDER_LOCK_S):
-            return account_subfolder(place, account_folder_id, AccountFolder.TRIALS)
+            return self.review.account_subfolder(
+                place, account_folder_id, AccountFolder.TRIALS
+            )
 
     def _open_trials(self, account_folder_id: str) -> _Trials | None:
         found = self._drive()
@@ -439,10 +439,18 @@ class Folder(BaseModel, frozen=True):
         return Uploaded(uploaded=len(landed))
 
 
-def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> Made | Requeued:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).make_trials()
+def _folder(user_id: int, login_id: int) -> Folder:
+    review = storage_of(user_id, interactive=False).review
+    return Folder(user_id=user_id, login_id=login_id, review=review)
+
+
+def make_trials(
+    *,
+    user_id: int,
+    login_id: int,
+    refresh_token: str = "",  # noqa: ARG001
+) -> Made | Requeued:
+    return _folder(user_id, login_id).make_trials()
 
 
 def generate_reels(
@@ -450,29 +458,27 @@ def generate_reels(
     user_id: int,
     login_id: int,
     keys: list[str] | None = None,
-    refresh_token: str = "",
+    refresh_token: str = "",  # noqa: ARG001
 ) -> Made:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).generate_reels(keys)
+    return _folder(user_id, login_id).generate_reels(keys)
 
 
 def write_captions(
-    *, user_id: int, login_id: int, key: str, refresh_token: str = ""
+    *,
+    user_id: int,
+    login_id: int,
+    key: str,
+    refresh_token: str = "",  # noqa: ARG001
 ) -> Captioned:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).write_captions(key)
+    return _folder(user_id, login_id).write_captions(key)
 
 
 def upload_trials(
     *,
     user_id: int,
-    refresh_token: str,
     login_id: int,
     account_folder_id: str,
     keys: list[str],
+    refresh_token: str = "",  # noqa: ARG001
 ) -> Uploaded:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).upload_trials(account_folder_id, keys)
+    return _folder(user_id, login_id).upload_trials(account_folder_id, keys)

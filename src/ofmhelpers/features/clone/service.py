@@ -13,7 +13,6 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.drive_folders.models import UploadTarget
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import ParamHistory, Readers, get_job
-from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_files
@@ -25,7 +24,6 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     clone_values,
 )
-from ofmhelpers.features.drive.uploads import targets as drive_targets
 from ofmhelpers.features.jobs.models import CloneCard
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import CloneSource
@@ -36,6 +34,7 @@ from ofmhelpers.media.exports import exports
 from ofmhelpers.monitoring.telemetry import in_this_trace
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
 TASK = "clone"
 PREFIX = "/clone"
@@ -259,11 +258,13 @@ def card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=export_label(job.params),
-        poll_prefix=PREFIX,
-        result_kind="video",
-        drive_uploads=uploads,
-        source=source(job.params),
+        {
+            "task_label": export_label(job.params),
+            "poll_prefix": PREFIX,
+            "result_kind": "video",
+            "drive_uploads": uploads,
+            "source": source(job.params),
+        },
     )
 
 
@@ -280,14 +281,14 @@ def cards_of(job_ids: list[str], actor: str) -> list[CloneCard]:
     )
 
 
-def drive_picker(user_id: int) -> DrivePicker:
-    found = drive_targets(user_id)
+def drive_picker(uploads: StorageServiceUploads) -> DrivePicker:
+    found = uploads.targets()
     return DrivePicker(
         drive_targets=sorted(
             found,
             key=lambda t: (t.waiting is None, t.waiting or 0, -(t.followers or 0)),
         ),
-        drive_ready=bool(refresh_token(user_id)),
+        drive_ready=uploads.connected(),
     )
 
 

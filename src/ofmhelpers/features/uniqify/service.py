@@ -90,7 +90,7 @@ def start(
         "metadata": form.metadata.value,
     }
     job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
-    enqueue(run_job, job_id, run, {"job_dir": str(job_dir), **params})
+    enqueue(run_job, (job_id, run, {"job_dir": str(job_dir), **params}))
     return JobQueued(job_id=job_id)
 
 

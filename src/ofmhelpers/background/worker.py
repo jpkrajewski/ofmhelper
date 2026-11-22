@@ -8,6 +8,7 @@ from multiprocessing.connection import wait
 
 import logfire
 from rq import Worker
+from rq.worker import DequeueStrategy
 from rq.worker_pool import WorkerPool
 lazy from rq import Queue
 lazy from rq.executions import Execution
@@ -27,12 +28,31 @@ logger = get_logger("ofmhelpers.background.worker")
 
 
 class ConfiguredWorker(Worker):
-    def work(self, *args, **kwargs) -> bool:
+    def work(
+        self,
+        burst: bool = False,
+        logging_level: str | None = None,
+        date_format: str = "%H:%M:%S",
+        log_format: str = "%(asctime)s %(message)s",
+        max_jobs: int | None = None,
+        max_idle_time: int | None = None,
+        with_scheduler: bool = False,
+        dequeue_strategy: DequeueStrategy = DequeueStrategy.DEFAULT,
+    ) -> bool:
         configure_telemetry("ascend-worker")
         configure_sentry("ascend-worker")
         configure_logging()
         install_fakes()
-        return super().work(*args, **kwargs)
+        return super().work(
+            burst,
+            logging_level,
+            date_format,
+            log_format,
+            max_jobs,
+            max_idle_time,
+            with_scheduler,
+            dequeue_strategy,
+        )
 
     def perform_job(self, job: Job, queue: Queue, execution: Execution) -> bool:
         taken = QueueJob.taken(job, queue)

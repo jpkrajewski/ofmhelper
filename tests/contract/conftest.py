@@ -25,8 +25,6 @@ from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
 from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
 from ofmhelpers.integrations.apify.fake import fake_apify
 from ofmhelpers.integrations.fanvue.fake import fake_fanvue
-from ofmhelpers.integrations.gdrive import client as drive_client
-from ofmhelpers.integrations.gdrive.fake import _fake_drive
 from ofmhelpers.integrations.instagram.fake import fake_instagram
 from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
 from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
@@ -36,6 +34,8 @@ from ofmhelpers.integrations.senders.telegram.client import _client as _telegram
 from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.integrations.stacked.fake import fake_stacked
+from ofmhelpers.integrations.storage.gdrive import client as drive_client
+from ofmhelpers.integrations.storage.gdrive.fake import _fake_drive
 from ofmhelpers.media import fake_media
 
 FAKE = "fake"

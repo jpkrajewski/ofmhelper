@@ -36,8 +36,8 @@ class Job(BaseModel):
     study_trial: int | None = None
 
 
-def _seed(*parts: str) -> int:
-    return int(hashlib.sha256("|".join(parts).encode()).hexdigest()[:8], 16)
+def _seed(trial: str, clip: str) -> int:
+    return int(hashlib.sha256(f"{trial}|{clip}".encode()).hexdigest()[:8], 16)
 
 
 def _jobs(

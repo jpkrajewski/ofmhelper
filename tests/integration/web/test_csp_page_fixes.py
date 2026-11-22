@@ -94,7 +94,7 @@ def polled_app(monkeypatch) -> TestClient:
 
     fragment = {"text": "same"}
 
-    def render(request, _name, **_context):
+    def render(request, _name, _context=None):
         nonce = templates_config.csp_nonce(request)
         return HTMLResponse(
             f'<script nonce="{nonce}"></script><p>{fragment["text"]}</p>'

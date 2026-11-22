@@ -11,6 +11,7 @@ from ofmhelpers.db.short_links.schema import SelfTotals
 from ofmhelpers.features.distribution import sweep
 from ofmhelpers.features.distribution.presets import presets_of
 from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.features.storage.service import StorageService
 from ofmhelpers.integrations.cookie_jar import CookieFileError
 from ofmhelpers.integrations.pinterest import (
     PinterestClient,
@@ -123,6 +124,7 @@ def _health(channels: list[Channel], counts: dict[int, PostCounts]) -> Health:
 class Distribution(BaseModel, frozen=True):
     uid: int
     scope: int
+    storage: StorageService
 
     def page(
         self, added: list[Added] | None = None, error: str | None = None
@@ -154,7 +156,7 @@ class Distribution(BaseModel, frozen=True):
             if c.account_name in {a.account for a in added}
         ]
         if new:
-            sweep.fill_many(self.scope, new)
+            sweep.fill_many(self.storage, new)
         queued = {c.account_name: repo.counts(c.id).queued for c in new}
         return [
             a.model_copy(update={"queued": queued.get(a.account, 0)}) for a in added

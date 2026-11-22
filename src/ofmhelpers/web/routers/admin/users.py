@@ -25,9 +25,7 @@ RoleField = Annotated[Role, Form()]
 
 def _page(request: Request, me_id: int, shown: Shown) -> Response:
     view = service.page_view(me_id, shown)
-    response = render(
-        request, "users.html", **dict(view), status_code=shown.status_code
-    )
+    response = render(request, "users.html", dict(view), status_code=shown.status_code)
     response.headers.update(_PRIVATE)
     return response
 

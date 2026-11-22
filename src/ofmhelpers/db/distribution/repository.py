@@ -155,17 +155,17 @@ class DistributionRepository:
             )
 
     def set_error(self, channel_id: int, error: str | None) -> None:
-        self._set(channel_id, error=error)
+        self._set(channel_id, {"error": error})
 
     def set_next(self, channel_id: int, at: float) -> None:
-        self._set(channel_id, next_at=_at(at))
+        self._set(channel_id, {"next_at": _at(at)})
 
     def set_resume(self, channel_id: int, at: float | None) -> None:
-        self._set(channel_id, resume_at=_at(at))
+        self._set(channel_id, {"resume_at": _at(at)})
 
-    def _set(self, channel_id: int, **values: object) -> None:
+    def _set(self, channel_id: int, values: dict[str, object]) -> None:
         with session_scope() as s:
-            s.execute(update(_C).where(_C.id == channel_id).values(**values))
+            s.execute(update(_C).where(_C.id == channel_id).values(values))
 
     def presets_of(self, user_id: int) -> list[ModelPreset]:
         with session_scope() as s:

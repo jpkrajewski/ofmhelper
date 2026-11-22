@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
+from ofmhelpers.features.storage.client import saved_storage
 from ofmhelpers.features.trials import folder, media
 from ofmhelpers.features.trials.state import FolderState, ReelState, at, change, load
 from ofmhelpers.log import get_logger
@@ -83,7 +84,7 @@ def _due(
 
 
 def clean(uid: int, login_id: int, now: float) -> int:
-    folder.read_posted(uid, login_id)
+    folder.read_posted(saved_storage(uid).folders, uid, login_id)
     freed = 0
     while True:
         due = _due(uid, login_id, load(uid, login_id), now)

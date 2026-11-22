@@ -36,6 +36,7 @@ from ofmhelpers.web.dependencies import (
     CurrentUser,
     OwnerId,
     Scope,
+    Storage,
     Viewing,
 )
 from ofmhelpers.web.forms import Files, PaidForm
@@ -111,7 +112,7 @@ def thumb(key: str, owner_id: OwnerId) -> FileResponse:
 
 def _queued(sent: Sent, user_id: int) -> CloneQueued:
     html = "".join(
-        render_partial("_clone_links_card.html", job=card)
+        render_partial("_clone_links_card.html", {"job": card})
         for card in service.cards(list(reversed(sent.jobs)), user_id)
     )
     return CloneQueued(job_ids=[j.id for j in sent.jobs], html=html, batch=sent.batch)
@@ -143,16 +144,19 @@ def form(
     viewer: Viewing,
     scope: Scope,
     api_keys: ApiKeys,
+    storage: Storage,
 ) -> Response:
     first = gallery.page(viewer)
     return render(
         request,
         "clone_links.html",
-        gallery=service.cards(first.jobs, scope),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        api_keys=api_keys,
-        **dict(form_view(actor, user.id)),
+        {
+            "gallery": service.cards(first.jobs, scope),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "api_keys": api_keys,
+            **dict(form_view(actor, user.id, storage.space)),
+        },
     )
 
 
@@ -164,8 +168,10 @@ def gallery_page(
     return render(
         request,
         "clone_links_gallery_fragment.html",
-        gallery=service.cards(found.jobs, scope),
-        next_offset=found.next_offset,
+        {
+            "gallery": service.cards(found.jobs, scope),
+            "next_offset": found.next_offset,
+        },
     )
 
 
@@ -174,8 +180,10 @@ def gallery_latest(request: Request, viewer: Viewing, scope: Scope) -> Response:
     return render_polled(
         request,
         "clone_links_gallery_fragment.html",
-        gallery=service.cards(gallery.page(viewer).jobs, scope),
-        next_offset=None,
+        {
+            "gallery": service.cards(gallery.page(viewer).jobs, scope),
+            "next_offset": None,
+        },
     )
 
 
@@ -197,7 +205,7 @@ def reviews(
         ReviewState(
             job_id=card.job_id,
             settled=card.review_settled,
-            html=render_partial("_clone_from_link.html", job=card),
+            html=render_partial("_clone_from_link.html", {"job": card}),
         )
         for card in service.cards_of(job, actor, scope)
     ]

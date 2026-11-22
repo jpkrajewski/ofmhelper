@@ -5,7 +5,10 @@ from typing import Any
 lazy from openpyxl import load_workbook
 lazy from openpyxl.cell.cell import Cell
 
-from ofmhelpers.integrations.gdrive.models import DriveSheet, SheetTab
+from ofmhelpers.integrations.storage.models import (
+    DriveSheet,
+    SheetTab,
+)
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _LINK = ("http://", "https://")

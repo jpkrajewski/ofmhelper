@@ -18,7 +18,7 @@ _THANKS = "/?applied=1"
 def landing(request: Request) -> Response:
     if AuthMiddleware.session_user(request) is not None:
         return see_other(AuthMiddleware.HOME)
-    return render(request, "reachmodel.html", form_token=form_token())
+    return render(request, "reachmodel.html", {"form_token": form_token()})
 
 
 @router.post("/apply")

@@ -30,6 +30,7 @@ from ofmhelpers.db.jobs.schema import (
     JobCount,
     JobPage,
     JobParams,
+    JobStatus,
     Named,
     RecordedJob,
     SessionSpan,
@@ -447,6 +448,18 @@ class JobRepository(CachedRepository):
                 .all()
             )
             return [_job(r) for r in rows]
+
+    def latest(
+        self, task: str, user_id: int, status: JobStatus | None = None
+    ) -> Job | None:
+        query = select(JobRow).where(JobRow.task == task, JobRow.user_id == user_id)
+        if status is not None:
+            query = query.where(JobRow.status == status)
+        with session_scope() as s:
+            row = s.execute(
+                query.order_by(JobRow.created_at.desc()).limit(1)
+            ).scalar_one_or_none()
+            return _job(row) if row else None
 
     def running_with_links(
         self, tasks: Collection[str], user_id: int, links: list[str]

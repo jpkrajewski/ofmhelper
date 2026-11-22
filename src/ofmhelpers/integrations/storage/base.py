@@ -1,9 +1,9 @@
 from typing import Protocol
 lazy from pathlib import Path
 
-lazy from ofmhelpers.integrations.gdrive.models import (
+lazy from ofmhelpers.db.drive_folders.schema import DriveFile
+lazy from ofmhelpers.integrations.storage.models import (
     DriveDownload,
-    DriveFile,
     DriveFolder,
     DriveListing,
     DriveSheet,
@@ -35,7 +35,7 @@ class DriveFullError(DriveError): ...
 class DriveNotSetUpError(DriveError): ...
 
 
-class DriveApi(Protocol):
+class StorageClient(Protocol):
     def folder(self, folder_id: str) -> DriveFolder: ...
 
     def children(

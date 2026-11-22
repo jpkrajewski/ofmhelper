@@ -39,6 +39,7 @@ from ofmhelpers.config.settings import (
     SignInSettings,
     SnapchatSettings,
     StackedSettings,
+    StorageSettings,
     TelegramSettings,
     TelemetrySettings,
     ThreadsSettings,
@@ -197,6 +198,10 @@ class Settings:
     @property
     def gdrive(self) -> GDriveSettings:
         return self._group(GDriveSettings)
+
+    @property
+    def storage(self) -> StorageSettings:
+        return self._group(StorageSettings)
 
     @property
     def llm(self) -> LLMSettings:

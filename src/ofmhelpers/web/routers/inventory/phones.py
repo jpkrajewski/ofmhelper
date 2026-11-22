@@ -18,6 +18,7 @@ from ofmhelpers.web.dependencies import (
     CurrentUser,
     OwnerId,
     Scope,
+    Storage,
     Viewing,
 )
 from ofmhelpers.web.responses import NO_STORE
@@ -50,8 +51,8 @@ router = APIRouter(
 )
 
 
-def _phone(device_id: int, scope: Scope) -> service.Phone:
-    return service.Phone(scope=scope, device_id=device_id)
+def _phone(device_id: int, scope: Scope, storage: Storage) -> service.Phone:
+    return service.Phone(scope=scope, device_id=device_id, folders=storage.folders)
 
 
 def _login(login_id: int, scope: Scope) -> service.SavedLogin:
@@ -75,7 +76,7 @@ def index(
     request: Request, query: Annotated[PhoneQuery, Query()], scope: Scope
 ) -> Response:
     view = service.page_view(query, scope)
-    return render(request, "phones.html", query=query, **dict(view))
+    return render(request, "phones.html", {"query": query, **dict(view)})
 
 
 @router.get("/drawing.svg")
@@ -90,7 +91,9 @@ def drawing(model: str = "", color: str = "") -> Response:
 @router.get("/revisions", summary="History: the phones after each change")
 def revisions(request: Request, scope: Scope) -> Response:
     return render(
-        request, "_phone_revisions.html", revisions=Revisions(scope=scope).listed()
+        request,
+        "_phone_revisions.html",
+        {"revisions": Revisions(scope=scope).listed()},
     )
 
 

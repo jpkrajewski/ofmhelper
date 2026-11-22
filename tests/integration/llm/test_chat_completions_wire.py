@@ -98,7 +98,7 @@ def test_text_and_images_go_inline_with_a_strict_schema(fake, tmp_path):
     Image.new("RGB", (3000, 2000), "teal").save(photo)
     fake.answer_next({"ok": False, "problems": ["face changes"]})
 
-    found = _ask(Prompt.of("Subject:", photo, system="You check reels."))
+    found = _ask(Prompt.of(["Subject:", photo], system="You check reels."))
 
     assert found == Verdict(ok=False, problems=["face changes"])
     [body] = fake.requests
@@ -113,7 +113,7 @@ def test_text_and_images_go_inline_with_a_strict_schema(fake, tmp_path):
 
 
 def test_the_answer_says_the_tokens_the_vendor_counted(fake):
-    found = get_llm(LLMUse.CHAT).answered(Prompt.of("Check"), Verdict)
+    found = get_llm(LLMUse.CHAT).answered(Prompt.of(["Check"]), Verdict)
     assert (found.input_tokens, found.thinking_tokens, found.output_tokens) == (
         USAGE["prompt_tokens"],
         None,
@@ -127,7 +127,7 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(fake, label, cloc
     deadline = clock.monotonic() + 20
 
     with pytest.raises(LLMUnavailableError) as err:
-        get_llm(LLMUse.CHAT).answered(Prompt.of("Check"), Verdict, deadline=deadline)
+        get_llm(LLMUse.CHAT).answered(Prompt.of(["Check"]), Verdict, deadline=deadline)
 
     assert str(err.value) == f"{label} took too long"
     assert f"{label} is unavailable (503)" in err.value.detail
@@ -140,7 +140,7 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(fake, label, cloc
 
 
 def test_the_model_is_shown_the_schema_it_must_answer_in(fake):
-    _ask(Prompt.of("Check", system="You check reels."))
+    _ask(Prompt.of(["Check"], system="You check reels."))
 
     [body] = fake.requests
     system = body["messages"][0]
@@ -156,7 +156,7 @@ def test_a_video_goes_as_a_note_and_one_contact_sheet(fake, tmp_path):
     video = tmp_path / "clip.mp4"
     video.write_bytes(fake_media.mp4())
 
-    _ask(Prompt.of("Check this reel:", video))
+    _ask(Prompt.of(["Check this reel:", video]))
 
     [body] = fake.requests
     lead, note, sheet = _content(body)
@@ -175,7 +175,7 @@ def test_more_images_than_the_vendor_takes_are_refused_before_sending(
         Image.new("RGB", (32, 32), "red").save(photos[-1])
 
     with pytest.raises(LLMInputError, match=f"{label} takes at most {cap} images"):
-        _ask(Prompt.of("Compare", *photos))
+        _ask(Prompt.of(["Compare", *photos]))
     assert fake.requests == []
 
 
@@ -183,32 +183,32 @@ def test_a_rate_limit_waits_the_vendors_hint_then_answers(fake, waits):
     fake.fail_next(429, "Rate limit reached", retry_after_s=4)
     fake.fail_next(503, "Service unavailable")
 
-    assert _ask(Prompt.of("Check")).ok is True
+    assert _ask(Prompt.of(["Check"])).ok is True
     assert waits == [4.0, 10.0]
 
 
 def test_a_wrong_key_is_an_auth_error(vendor, label, waits):
     with pytest.raises(LLMAuthError, match=f"{label}: wrong API key"):
-        get_llm(LLMUse.CHAT, api_key="not-the-key").ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.CHAT, api_key="not-the-key").ask(Prompt.of(["Check"]), Verdict)
     assert waits == []
 
 
 def test_an_unknown_model_is_a_setup_error(vendor, waits):
     with pytest.raises(LLMConfigError, match="does not exist"):
-        get_llm(LLMUse.CHAT, model="no-such-model").ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.CHAT, model="no-such-model").ask(Prompt.of(["Check"]), Verdict)
 
 
 def test_a_content_filter_is_a_refusal(fake, label):
     fake.filter_next()
     with pytest.raises(LLMRefusedError, match=f"{label} refused to answer"):
-        _ask(Prompt.of("Check"))
+        _ask(Prompt.of(["Check"]))
 
 
 def test_an_answer_in_another_shape_is_asked_once_more(fake):
     fake.answer_next({"verdict": "fine"})
     fake.answer_next({"ok": False, "problems": ["face changes"]})
 
-    assert _ask(Prompt.of("Check")) == Verdict(ok=False, problems=["face changes"])
+    assert _ask(Prompt.of(["Check"])) == Verdict(ok=False, problems=["face changes"])
     assert len(fake.requests) == 2
 
 
@@ -216,7 +216,7 @@ def test_an_answer_in_another_shape_twice_is_an_output_error(fake, label):
     fake.answer_next({"verdict": "fine"})
     fake.answer_next({"verdict": "fine"})
     with pytest.raises(LLMOutputError, match=f"{label} answered in the wrong shape"):
-        _ask(Prompt.of("Check"))
+        _ask(Prompt.of(["Check"]))
     assert len(fake.requests) == 2
 
 
@@ -227,13 +227,13 @@ def test_an_outage_that_outlasts_the_retries_is_unavailable(
     fake.fail_next(500, "boom")
     fake.fail_next(502, "boom")
     with pytest.raises(LLMUnavailableError, match=rf"{label} is unavailable \(502\)"):
-        _ask(Prompt.of("Check"))
+        _ask(Prompt.of(["Check"]))
     assert len(fake.requests) == 2
 
 
 def test_an_unreadable_image_is_an_input_error(vendor, fake, tmp_path):
     with pytest.raises(LLMInputError, match="Could not read gone.jpg"):
-        _ask(Prompt.of("Check", Path(tmp_path / "gone.jpg")))
+        _ask(Prompt.of(["Check", Path(tmp_path / "gone.jpg")]))
     assert fake.requests == []
 
 
@@ -243,12 +243,12 @@ def test_an_answer_failing_the_vendors_schema_check_is_an_output_error(fake, lab
     with pytest.raises(
         LLMOutputError, match=f"{label} answered in the wrong shape"
     ) as err:
-        _ask(Prompt.of("Say hi"))
+        _ask(Prompt.of(["Say hi"]))
     assert "generated: Hola" in err.value.detail
 
 
 def test_groq_asks_qwen_not_to_think(fake_externals, monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
-    get_llm(provider="groq").ask(Prompt.of("Check"), Verdict)
+    get_llm(provider="groq").ask(Prompt.of(["Check"]), Verdict)
     [body] = fake_groq().requests
     assert body["reasoning_effort"] == "none"

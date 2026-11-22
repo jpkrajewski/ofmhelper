@@ -1,9 +1,9 @@
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.catalog import services
 from ofmhelpers.db.tracked_accounts.store import untrack
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.devices.models import Device, DeviceLogin
+lazy from ofmhelpers.features.storage.service import StorageServiceFolders
 
 logger = get_logger(__name__)
 
@@ -29,20 +29,27 @@ def _unique(phones: list[Device], wanted) -> list[DeviceLogin]:
     return list(seen.values())
 
 
-def remove_accounts(account_ids: list[int], owner: int) -> int:
+def remove_accounts(
+    account_ids: list[int], owner: int, folders: StorageServiceFolders
+) -> int:
     wanted = set(account_ids)
     logins = _unique(
         devices.list_devices(owner),
         lambda _phone, login: login.tracked_account_id in wanted,
     )
     ids = [x.id for x in logins]
-    drive_folders.trash_folders(owner, ids)
+    folders.trash_folders(ids)
     devices.archive_logins(ids, owner)
     logger.info("removed accounts %s everywhere (logins %s)", sorted(wanted), ids)
     return untrack(account_ids, owner)
 
 
-def logins_leaving(owner: int, device_id: int, login_id: int | None = None) -> None:
+def logins_leaving(
+    owner: int,
+    folders: StorageServiceFolders,
+    device_id: int,
+    login_id: int | None = None,
+) -> None:
     phones = devices.list_devices(owner)
     count: dict[int, int] = {}
     for phone in phones:
@@ -60,6 +67,6 @@ def logins_leaving(owner: int, device_id: int, login_id: int | None = None) -> N
     )
     if not leaving:
         return
-    drive_folders.trash_folders(owner, [x.id for x in leaving])
+    folders.trash_folders([x.id for x in leaving])
     if tracked := _tracked_ids(leaving):
         untrack(tracked, owner)

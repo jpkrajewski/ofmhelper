@@ -1,5 +1,6 @@
 import time
 from typing import Any
+lazy from collections.abc import Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
@@ -97,10 +98,12 @@ class ApifyClient:
             msg = "Apify answered a dataset whose items are not objects"
             raise ApifyError(msg) from exc
 
-    def _read(self, url: str, **kwargs: Any) -> requests.Response:
+    def _read(
+        self, url: str, params: Mapping[str, str | int], timeout: float
+    ) -> requests.Response:
         for attempt in range(1, _READ_TRIES):
             try:
-                r = self._session.get(url, **kwargs)
+                r = self._session.get(url, params=params, timeout=timeout)
             except requests.RequestException:
                 logger.warning("apify read %d failed", attempt, exc_info=True)
             else:
@@ -108,7 +111,7 @@ class ApifyClient:
                     return r
                 logger.warning("apify read %d answered %s", attempt, r.status_code)
             time.sleep(_READ_RETRY_WAIT_S)
-        return self._session.get(url, **kwargs)
+        return self._session.get(url, params=params, timeout=timeout)
 
     @staticmethod
     def _ok(r: requests.Response) -> requests.Response:

@@ -3,7 +3,7 @@ import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 from urllib.parse import urlparse
 lazy from collections.abc import Callable
 
@@ -16,7 +16,6 @@ from ofmhelpers.db.jobs.schema import Job, ResultFile
 from ofmhelpers.db.jobs.store import get_job, merge_params
 from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.clone.export import (
-    EXPORT_FAILURES,
     export_choice,
     export_results,
 )
@@ -96,14 +95,11 @@ def _owner_of(job_id: str) -> int:
     return owner
 
 
-def _batch(params: dict[str, Any]) -> str | None:
-    batch = params.get("batch")
+def _batch(batch: object) -> str | None:
     return batch if isinstance(batch, str) and batch else None
 
 
-def _saved_source(params: dict[str, Any]) -> _Source | None:
-    video = params.pop("source_video", None)
-    seconds = params.pop("source_seconds", None)
+def _saved_source(video: str | None, seconds: float | None) -> _Source | None:
     if video is None or seconds is None:
         return None
     try:
@@ -260,13 +256,16 @@ def _saved_here(
     assets_root: str,
     provider: str,
     results: list[ResultFile],
-    params: dict[str, Any],
+    export_name: str | None,
+    capcut: bool,
+    mirror: bool,
+    export_failures: int,
 ) -> list[ResultFile]:
     if all(r.path is not None or not r.remote_url for r in results):
         return results
     client = get_provider(provider, api_key)
-    export = export_choice(params.get("export"), bool(params.get("capcut")))
-    options = ExportOptions(mirror=bool(params.get("mirror")))
+    export = export_choice(export_name, capcut)
+    options = ExportOptions(mirror=mirror)
     root = Path(assets_root)
     saved = []
     for index, result in enumerate(results):
@@ -283,7 +282,7 @@ def _saved_here(
             export,
             options,
             root,
-            failures=int(params.get(EXPORT_FAILURES) or 0),
+            failures=export_failures,
         )
         logger.info("clone-links %s: hosted result %d saved as %s", job_id, index, path)
         saved.extend(exported)
@@ -300,15 +299,22 @@ def run_clone_link(
     resolution: str,
     reference_images: list[str],
     audio: bool = False,
+    export: str | None = None,
+    mirror: bool = False,
+    capcut: bool = False,
+    model: str | None = None,
+    batch: str | None = None,
+    source_video: str | None = None,
+    source_seconds: float | None = None,
+    export_failures: int = 0,
+    reference_videos: list[str] | None = None,  # noqa: ARG001
+    duration: int | None = None,
     *,
     run_clone: Callable[..., list[ResultFile]],
-    **params: Any,
 ) -> list[ResultFile]:
-    params.pop("reference_videos", None)
-    params.pop("duration", None)
-    saved = _saved_source(params)
+    saved = _saved_source(source_video, source_seconds)
     owner = _owner_of(job_id)
-    batch = _batch(params)
+    batch = _batch(batch)
     _refuse_if_stopped(job_id, batch)
     paid = tasks.recall(job_id) is not None
     if not paid:
@@ -336,11 +342,26 @@ def run_clone_link(
             reference_videos=[video],
             audio=audio,
             link=link,
-            **params,
+            export=export,
+            mirror=mirror,
+            capcut=capcut,
+            model=model,
+            batch=batch,
+            export_failures=export_failures,
         )
     except (ProviderAuthError, ProviderNoCreditsError) as exc:
         _halt(batch, exc)
         raise
-    results = _saved_here(job_id, api_key, assets_root, provider, results, params)
+    results = _saved_here(
+        job_id,
+        api_key,
+        assets_root,
+        provider,
+        results,
+        export,
+        capcut,
+        mirror,
+        export_failures,
+    )
     start_reviews(job_id, owner, [r.path for r in results])
     return results

@@ -7,16 +7,13 @@ from ofmhelpers.config import settings
 from ofmhelpers.config.types import AccountFolder
 from ofmhelpers.db.drive_folders.schema import folder_url
 from ofmhelpers.db.jobs.store import merge_params
-from ofmhelpers.db.users.store import refresh_token
-from ofmhelpers.features.drive.folders import (
-    ReviewPlace,
-    account_subfolder,
-    review_target,
-)
-from ofmhelpers.integrations.gdrive import FolderGoneError
+from ofmhelpers.features.storage.client import storage_of
+from ofmhelpers.integrations.storage import FolderGoneError
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.photos import write_photos
 from ofmhelpers.media.repurpose.photos.models import load_photo_preset
+lazy from ofmhelpers.features.storage.models import ReviewPlace
+lazy from ofmhelpers.features.storage.service import StorageServiceReview
 
 logger = get_logger(__name__)
 
@@ -86,11 +83,12 @@ def make_pictures(
         "threads set {key}", key=key, login_id=login_id, seed=seed, preset=preset
     ):
         here = run.here(user_id)
-        place = review_target(refresh_token(user_id), user_id)
+        review = storage_of(user_id, interactive=False).review
+        place = review.target()
         made = _made(here)
         if made is None:
             made = _make(place, here, run)
-        target = _folder(place, run, job_id)
+        target = _folder(review, place, run, job_id)
         there = {f.name for f in place.drive.children(target)}
         for taken in made.taken:
             if taken.name not in there:
@@ -102,7 +100,9 @@ def make_pictures(
         )
 
 
-def _folder(place: ReviewPlace, run: PicturesRun, job_id: str) -> str:
+def _folder(
+    review: StorageServiceReview, place: ReviewPlace, run: PicturesRun, job_id: str
+) -> str:
     drive = place.drive
     if run.folder_id:
         try:
@@ -113,7 +113,9 @@ def _folder(place: ReviewPlace, run: PicturesRun, job_id: str) -> str:
                 run.folder_id,
                 exc_info=True,
             )
-    threads = account_subfolder(place, run.account_folder_id, AccountFolder.THREADS)
+    threads = review.account_subfolder(
+        place, run.account_folder_id, AccountFolder.THREADS
+    )
     used = {f.name for f in drive.children(threads, folders_only=True)}
     stem = Path(run.reel_name).stem
     name = next(

@@ -33,7 +33,6 @@ lazy from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
 lazy from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
 lazy from ofmhelpers.integrations.apify.fake import fake_apify
 lazy from ofmhelpers.integrations.fanvue.fake import fake_fanvue
-lazy from ofmhelpers.integrations.gdrive.fake import _fake_drive
 lazy from ofmhelpers.integrations.instagram.fake import fake_instagram
 lazy from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
 lazy from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
@@ -44,6 +43,7 @@ lazy from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 lazy from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
 lazy from ofmhelpers.integrations.signin import passwords
 lazy from ofmhelpers.integrations.stacked.fake import fake_stacked
+lazy from ofmhelpers.integrations.storage.gdrive.fake import _fake_drive
 lazy from ofmhelpers.media import fake_media
 
 settings_module = importlib.import_module("ofmhelpers.config.settings")

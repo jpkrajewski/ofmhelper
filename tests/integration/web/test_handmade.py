@@ -6,8 +6,8 @@ from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.db.users.store import _repository as user_repository
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 OWNER = "ann@example.com"
@@ -37,7 +37,7 @@ def _owner() -> TestClient:
     c.login_id = c.post(  # type: ignore[attr-defined]
         f"/phones/{phone}/logins", json={"service": "instagram", "username": "ann.ig"}
     ).json()["id"]
-    drive_folders.sync()
+    storage_jobs.sync()
     return c
 
 
@@ -153,7 +153,7 @@ def test_only_a_va_uploads_here(drive):
 def test_the_owner_can_send_a_reel_into_the_vas_own_folder(drive):
     owner = _owner()
     va = _va()
-    drive_folders.sync()
+    storage_jobs.sync()
     job_id = va.post("/handmade/run", files=_reels("a.mp4")).json()["job_id"]
     va_user = users.by_email(VA)
     assert va_user is not None

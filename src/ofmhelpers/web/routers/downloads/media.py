@@ -5,12 +5,12 @@ from pydantic import Field
 
 from ofmhelpers.db.downloads.schema import DownloadsQueued, SheetQueued
 from ofmhelpers.features.assets import send as sending
-from ofmhelpers.features.downloads import again, media, sheet
+from ofmhelpers.features.downloads import again, media
 from ofmhelpers.features.downloads.media import run_downloads as _run_downloads
 from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.redirect import Redirect
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, Actor, Actors, AssetsRoot, OwnerId
+from ofmhelpers.web.dependencies import Access, Actors, AssetsRoot, Downloads
 from ofmhelpers.web.forms import FormModel
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.routers.task_helpers import add_job_routes
@@ -34,20 +34,13 @@ class SendForm(FormModel):
 
 
 @router.post("/run", status_code=202, dependencies=[Idempotent])
-def run(
-    urls: Annotated[str, Form()],
-    actor: Actor,
-    owner_id: OwnerId,
-    assets_root: AssetsRoot,
-) -> DownloadsQueued:
-    return media.start(urls, actor, owner_id, assets_root)
+def run(urls: Annotated[str, Form()], downloads: Downloads) -> DownloadsQueued:
+    return downloads.media.start(urls)
 
 
 @router.post("/sheet-downloads", summary="Download today's links of the Drive sheet")
-def sheet_downloads(
-    actor: Actor, owner_id: OwnerId, assets_root: AssetsRoot
-) -> SheetQueued:
-    return sheet.start(actor, owner_id, assets_root)
+def sheet_downloads(downloads: Downloads) -> SheetQueued:
+    return downloads.sheet.start()
 
 
 @router.post("/send")
@@ -58,15 +51,15 @@ def send(
 
 
 @router.post("/{job_id}/replays", status_code=202, summary="Download it again")
-def replay(job_id: str, actor: Actor) -> JobQueued:
-    return again.replay(job_id, actor)
+def replay(job_id: str, downloads: Downloads) -> JobQueued:
+    return downloads.again.replay(job_id)
 
 
 @router.get("/{job_id}/files/{index}/stored", summary="Its file in the asset store")
 def stored_file(
-    job_id: str, index: Annotated[int, Path(ge=0)], actor: Actor
+    job_id: str, index: Annotated[int, Path(ge=0)], downloads: Downloads
 ) -> again.StoredFile:
-    return again.stored_file(job_id, index, actor)
+    return downloads.again.stored_file(job_id, index)
 
 
 add_job_routes(

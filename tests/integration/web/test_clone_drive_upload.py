@@ -8,20 +8,21 @@ from fastapi.testclient import TestClient
 from signin import sign_in
 
 from ofmhelpers.db.drive_folders import store as folder_store
+from ofmhelpers.db.drive_folders.schema import DriveFile
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import create_job, history
 from ofmhelpers.db.tracked_accounts.store import list_accounts, record_scan
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.db.users.store import _repository as user_repository
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.drive import uploads as drive_uploads
-from ofmhelpers.features.drive import va_folders
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.integrations.gdrive import DriveError, DriveFile
-from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.features.storage import client as drive_client
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage import uploads as drive_uploads
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import AccountProfile, AccountStats
+from ofmhelpers.integrations.storage import DriveError
+from ofmhelpers.integrations.storage.gdrive.fake import fake_drive
 from ofmhelpers.web.main import app
 
 ROOT = "upload-root-folder"
@@ -54,7 +55,7 @@ def _account_folder(client: TestClient, handle: str = "ann.ig") -> int:
     login = client.post(
         f"/phones/{phone}/logins", json={"service": "instagram", "username": handle}
     ).json()["id"]
-    drive_folders.sync()
+    storage_jobs.sync()
     return login
 
 
@@ -148,13 +149,13 @@ def test_a_failed_upload_says_why_and_can_be_retried(drive, tmp_path, monkeypatc
     login = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path)
 
-    working = drive_uploads.connect_as
+    working = drive_client.connect_as
 
-    def refused(_token):
+    def refused(_token, **_options):
         msg = "Uploading: Drive refused (quota)"
         raise DriveError(msg)
 
-    monkeypatch.setattr(drive_uploads, "connect_as", refused)
+    monkeypatch.setattr(drive_client, "connect_as", refused)
     ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert (state["status"], state["error"]) == (
@@ -163,7 +164,7 @@ def test_a_failed_upload_says_why_and_can_be_retried(drive, tmp_path, monkeypatc
     )
     assert "Drive upload to ann.ig - Anna failed" in ann.get("/clone").text
 
-    monkeypatch.setattr(drive_uploads, "connect_as", working)
+    monkeypatch.setattr(drive_client, "connect_as", working)
     retry = ann.post(
         "/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]}
     )
@@ -394,11 +395,11 @@ def test_a_revoked_google_token_refuses_the_remove_with_a_reason(
     login = _account_folder(ann)
     state = _upload(ann, _finished_run("ann@example.com", tmp_path), login)
 
-    def revoked(_token):
+    def revoked(_token, **_options):
         msg = "Token has been expired or revoked"
         raise SignInError(msg)
 
-    monkeypatch.setattr(drive_uploads, "connect_as", revoked)
+    monkeypatch.setattr(drive_client, "connect_as", revoked)
 
     r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
     assert r.status_code == 400
@@ -428,7 +429,9 @@ def test_drive_failing_the_remove_is_a_502_in_our_words_and_keeps_the_upload(
             msg = "backendError 500: internal-google-detail"
             raise DriveError(msg)
 
-    monkeypatch.setattr(drive_uploads, "connect_as", lambda _token: Failing())
+    monkeypatch.setattr(
+        drive_client, "connect_as", lambda _token, **_options: Failing()
+    )
 
     r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
 
@@ -470,7 +473,7 @@ def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
     drive.trash(file_of[deleted_job])
 
     with time_machine.travel(time.time() + 5):
-        drive_folders.sync()
+        storage_jobs.sync()
 
     states = {
         s["job_id"]: s["status"]
@@ -736,14 +739,17 @@ def test_a_spoofed_copy_for_a_va_lands_in_the_vas_folder_itself(drive, tmp_path)
     ann = _client("ann@example.com")
     _account_folder(ann)
     va = _va_of("ann@example.com")
-    drive_folders.sync()
+    storage_jobs.sync()
     job = _finished_spoof("ann@example.com", tmp_path)
 
     r = ann.post("/clone/drive-upload", json={"job_ids": [job], "va_ids": [va]})
 
     assert r.status_code == 200, r.text
     assert _spoof_state(ann, job) == "done"
-    (vas_folder,) = va_folders.of_owner(users.by_email("ann@example.com").id)
+    owner_id = users.by_email("ann@example.com").id
+    (vas_folder,) = drive_client.storage_of(
+        owner_id, interactive=False
+    ).va_folders.of_owner()
     assert len(drive.names_in(vas_folder.folder_id)) == 1
     assert drive.named("SPOOFED", vas_folder.folder_id) == []
 
@@ -760,7 +766,7 @@ def test_a_spoofed_copy_stays_in_drive_after_a_sync(drive, tmp_path):
     _upload(ann, job, login)
 
     with time_machine.travel(time.time() + 5):
-        drive_folders.sync()
+        storage_jobs.sync()
 
     assert _spoof_state(ann, job) == "done"
 
@@ -773,7 +779,7 @@ def test_an_upload_marked_gone_is_back_once_drive_shows_its_file(drive, tmp_path
     upload_store.remove(upload["id"], "Removed in Drive")
 
     with time_machine.travel(time.time() + 5):
-        drive_folders.sync()
+        storage_jobs.sync()
 
     assert _spoof_state(ann, job) == "done"
 
@@ -786,6 +792,6 @@ def test_an_upload_its_owner_took_out_of_drive_stays_out(drive, tmp_path):
     upload_store.remove(upload["id"])
 
     with time_machine.travel(time.time() + 5):
-        drive_folders.sync()
+        storage_jobs.sync()
 
     assert _spoof_state(ann, job) == "removed"

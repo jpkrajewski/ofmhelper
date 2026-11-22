@@ -18,6 +18,7 @@ from ofmhelpers.db.jobs.schema import (
     JobPage,
     JobParams,
     JobPreview,
+    JobStatus,
     Named,
     RecordedJob,
     ResultFile,
@@ -301,6 +302,11 @@ def _signed(job: Job, reader: int | None) -> Job:
 def list_batch(task: str, batch: str, actor: str) -> list[Job]:
     user_id = _user_id(actor)
     return [] if user_id is None else _repository().list_batch(task, user_id, batch)
+
+
+def latest_job(task: str, actor: str, status: JobStatus | None = None) -> Job | None:
+    user_id = _user_id(actor)
+    return None if user_id is None else _repository().latest(task, user_id, status)
 
 
 def running_with_links(

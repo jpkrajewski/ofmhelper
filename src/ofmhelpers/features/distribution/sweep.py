@@ -13,8 +13,10 @@ from ofmhelpers.features.distribution.publish import TASK, publish_post
 from ofmhelpers.features.distribution.sources import Sources
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.distribution.schema import Channel, ModelPreset
+lazy from ofmhelpers.features.storage.service import StorageService
 
 logger = get_logger(__name__)
 
@@ -37,7 +39,8 @@ def run_round() -> None:
     channels = sorted(store.repository().running(), key=lambda c: c.user_id)
     if settings.gdrive.sweeping(settings.infra.production):
         for user_id, mine in groupby(channels, key=lambda c: c.user_id):
-            _fill(Sources(user_id=user_id), list(mine))
+            storage = storage_of(user_id, interactive=False)
+            _fill(_sources(user_id, storage), list(mine))
     if not s.scheduled(settings.infra.production):
         return
     started = limited = 0
@@ -70,8 +73,12 @@ def _schedule(channel: Channel) -> str:
     return "started" if start_next(fresh) is not None else ""
 
 
-def fill_many(user_id: int, channels: list[Channel]) -> int:
-    return _fill(Sources(user_id=user_id), channels)
+def _sources(user_id: int, storage: StorageService) -> Sources:
+    return Sources(user_id=user_id, folders=storage.folders, review=storage.review)
+
+
+def fill_many(storage: StorageService, channels: list[Channel]) -> int:
+    return _fill(_sources(storage.review.owner_id, storage), channels)
 
 
 def _fill(sources: Sources, channels: list[Channel]) -> int:

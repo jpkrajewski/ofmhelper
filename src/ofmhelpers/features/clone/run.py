@@ -1,8 +1,6 @@
 from pathlib import Path
-from typing import Any
 
 from ofmhelpers.features.clone.export import (
-    EXPORT_FAILURES,
     export_choice,
     export_results,
     exported_file,
@@ -27,7 +25,10 @@ def run_clone(
     export: str | None = None,
     mirror: bool = False,
     capcut: bool = False,
-    **page_keys: Any,
+    export_failures: int = 0,
+    model: str | None = None,  # noqa: ARG001
+    link: str | None = None,  # noqa: ARG001
+    batch: str | None = None,  # noqa: ARG001
 ) -> list[ResultFile]:
     target = clone_targets()[provider]
     values = clone_values(
@@ -53,6 +54,6 @@ def run_clone(
         export_choice(export, capcut),
         ExportOptions(mirror=mirror),
         Path(assets_root),
-        failures=int(page_keys.get(EXPORT_FAILURES) or 0),
+        failures=export_failures,
         exported=exported_file,
     )

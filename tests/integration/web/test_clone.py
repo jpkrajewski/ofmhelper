@@ -274,7 +274,7 @@ def test_a_generated_clone_still_being_exported_says_what_for():
 
 
 def test_a_running_card_is_the_shared_card_with_no_timer():
-    html = render_partial("_clone_card.html", job=clone._card(_job("r1"), []))
+    html = render_partial("_clone_card.html", {"job": clone._card(_job("r1"), [])})
     assert "generating…" in html
     assert 'data-poll-prefix="/clone" data-poll-kind="video"' in html
     assert '<p class="source">CapCut export</p>' in html
@@ -303,7 +303,7 @@ def test_a_running_and_a_failed_card_show_the_video_being_cloned(
     job = _job("s1", status=status, error=error)
     video = _with_video(job, tmp_path)
 
-    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
 
     asked = requests.utils.quote(str(video), safe="")
     picture = (
@@ -325,7 +325,7 @@ def test_a_finished_card_shows_its_result_not_the_video_it_cloned(tmp_path):
     )
     _with_video(job, tmp_path)
 
-    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
 
     assert "data-clone-source" not in html
     assert "<video" in html
@@ -341,13 +341,13 @@ def test_a_video_gone_from_the_store_asks_for_no_picture(tmp_path):
     none.params["reference_videos"] = []
 
     for job in (swept, outside, none):
-        html = render_partial("_clone_card.html", job=clone._card(job, []))
+        html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
         assert "data-clone-source" not in html
 
 
 def test_a_failed_card_offers_recreate_and_only_hide_in_its_menu():
     job = _job("f1", status="failed", error="Generation failed")
-    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
     actions = html.split('class="result-actions"')[1]
     assert "recreate-btn" in actions
     assert "download-btn" not in actions

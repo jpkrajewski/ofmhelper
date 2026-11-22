@@ -1,5 +1,5 @@
 from typing import Any, NoReturn
-lazy from collections.abc import Callable
+lazy from collections.abc import Callable, Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict
@@ -36,10 +36,25 @@ def call(
     refused: Callable[[requests.Response], NoReturn],
     method: str,
     url: str,
-    **kwargs: Any,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    params: Mapping[str, Any] | None = None,
+    json: Any = None,
+    data: Mapping[str, Any] | None = None,
+    files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
 ) -> requests.Response:
     try:
-        response = session.request(method, url, **kwargs)
+        response = session.request(
+            method,
+            url,
+            timeout=timeout,
+            headers=headers,
+            params=params,
+            json=json,
+            data=data,
+            files=files,
+        )
     except requests.RequestException as exc:
         msg = f"{label} unreachable: {exc.__class__.__name__}"
         raise ProviderUnavailableError(msg, maybe_made=not _never_sent(exc)) from exc

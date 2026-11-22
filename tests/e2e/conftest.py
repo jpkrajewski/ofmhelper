@@ -27,9 +27,9 @@ lazy from rq import Queue
 lazy from rq.registry import StartedJobRegistry
 
 from alembic import command
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_FAKE_KEY
 from ofmhelpers.integrations.short_links.fake import BOUNCY_FAKE_KEY, OOPSIE_FAKE_KEY
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 lazy from ofmhelpers.cache import QueueName, get_redis
 lazy from ofmhelpers.db.models import Base
 lazy from ofmhelpers.db.session import get_engine

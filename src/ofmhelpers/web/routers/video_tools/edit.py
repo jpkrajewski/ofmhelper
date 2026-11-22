@@ -62,17 +62,19 @@ def page(
     return render(
         request,
         "edit.html",
-        page=service.Asked(
-            video=video or "", assets_root=assets_root, actor=actor
-        ).page(run_prepare),
-        limit_s=_limit_s(),
-        min_s=settings.web.edit_min_s,
-        max_part_s=settings.web.edit_max_part_s,
-        max_clips=settings.web.edit_max_clips,
-        aspects=list(Aspect),
-        speeds=SPEEDS,
-        sizes=list(Size),
-        default_size=Framing().size,
+        {
+            "page": service.Asked(
+                video=video or "", assets_root=assets_root, actor=actor
+            ).page(run_prepare),
+            "limit_s": _limit_s(),
+            "min_s": settings.web.edit_min_s,
+            "max_part_s": settings.web.edit_max_part_s,
+            "max_clips": settings.web.edit_max_clips,
+            "aspects": list(Aspect),
+            "speeds": SPEEDS,
+            "sizes": list(Size),
+            "default_size": Framing().size,
+        },
     )
 
 

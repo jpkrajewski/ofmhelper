@@ -693,8 +693,11 @@ def test_paging(client, three):
 
 def test_query_links_keep_filters():
     q = AccountQuery(q="yu", creator="Mia", sort=AccountSort.VIEWS, period=30, page=3)
-    assert q.link(page=4) == "/accounts?q=yu&creator=Mia&sort=views&period=30&page=4"
-    assert q.link(per_page=100) == (
+    assert (
+        q.link(changes={"page": 4})
+        == "/accounts?q=yu&creator=Mia&sort=views&period=30&page=4"
+    )
+    assert q.link(changes={"per_page": 100}) == (
         "/accounts?q=yu&creator=Mia&sort=views&period=30&per_page=100"
     )
     assert q.link("/accounts/5") == "/accounts/5?q=yu&creator=Mia&sort=views&period=30"
@@ -996,7 +999,7 @@ def test_sweep_queues_one_job_per_batch_with_staggered_proxies(monkeypatch):
     for h in "abcde":
         track("instagram", h)
     jobs = []
-    monkeypatch.setattr(account_tracker, "enqueue", lambda fn, *args: jobs.append(args))
+    monkeypatch.setattr(account_tracker, "enqueue", lambda _fn, args: jobs.append(args))
     due = account_tracker.queue_due_scans()
     assert len(due) == 5
     assert [(p, len(ids), start) for p, ids, start in jobs] == [

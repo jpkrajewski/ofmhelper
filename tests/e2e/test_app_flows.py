@@ -14,7 +14,7 @@ from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.watched_profiles import store as watched_profiles
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 lazy from ofmhelpers.features.jobs.runner import run_job
 
 pytestmark = pytest.mark.e2e

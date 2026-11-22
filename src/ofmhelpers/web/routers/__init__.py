@@ -32,12 +32,12 @@ from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet, pictures, threads
-from ofmhelpers.web.routers.inventory import drive, handmade, phones
+from ofmhelpers.web.routers.inventory import drive, handmade, phones, storage
 from ofmhelpers.web.routers.tracking import accounts, links, self_links
 from ofmhelpers.web.routers.video_tools import edit, repurpose, trials, uniqify
 
 
-def _live(*modules: ModuleType) -> list[APIRouter]:
+def _live(modules: list[ModuleType]) -> list[APIRouter]:
     gone = retired().routers
     return [m.router for m in modules if m.__name__.rsplit(".", 1)[-1] not in gone]
 
@@ -60,27 +60,28 @@ ROUTERS = [
     ai.router,
     clone.router,
     clone_long.router,
-    *_live(clone_links),
+    *_live([clone_links]),
     *(router for _label, router in LEGACY_TOOLS.values()),
     downloads_index.router,
     download_media.router,
     download_videos.router,
     download_images.router,
     clean_image.router,
-    *_live(reels),
+    *_live([reels]),
     viral.router,
     accounts.router,
     links.router,
     self_links.router,
     phones.router,
     drive.router,
+    storage.router,
     handmade.router,
     character_sheet.router,
-    *_live(pictures),
+    *_live([pictures]),
     threads.router,
     uniqify.router,
     edit.router,
-    *_live(repurpose),
+    *_live([repurpose]),
     trials.router,
     distribution.router,
     admin_users.router,

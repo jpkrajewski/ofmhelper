@@ -34,9 +34,7 @@ class Restart(BaseModel):
         enqueue_to(
             self.queue,
             run_job,
-            job.id,
-            self.run,
-            kwargs,
+            (job.id, self.run, kwargs),
             job_timeout=self.job_timeout(job.params) if self.job_timeout else None,
         )
         return True
@@ -48,9 +46,7 @@ class Restart(BaseModel):
         enqueue_to(
             self.queue,
             run_job,
-            job.id,
-            self.run,
-            kwargs,
+            (job.id, self.run, kwargs),
             job_timeout=self.job_timeout(job.params) if self.job_timeout else None,
         )
         return True

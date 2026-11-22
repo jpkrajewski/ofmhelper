@@ -91,9 +91,11 @@ class StackedClient:
                 ChatsPage,
                 self._get(
                     "chats",
-                    creatorUserId=creator_user_id,
-                    limit=settings.stacked.page_size,
-                    cursor=cursor,
+                    {
+                        "creatorUserId": creator_user_id,
+                        "limit": settings.stacked.page_size,
+                        "cursor": cursor,
+                    },
                 ),
             )
             for raw in page.chats:
@@ -115,9 +117,11 @@ class StackedClient:
             MessagesPage,
             self._get(
                 f"chats/{channel_url}/messages",
-                creatorUserId=creator_user_id,
-                limit=limit or settings.stacked.page_size,
-                beforeMessageId=before_message_id,
+                {
+                    "creatorUserId": creator_user_id,
+                    "limit": limit or settings.stacked.page_size,
+                    "beforeMessageId": before_message_id,
+                },
             ),
         ).messages
 
@@ -128,7 +132,7 @@ class StackedClient:
             EarningsPage,
             self._get(
                 "earnings",
-                **_window(creator_user_id, start, end).model_dump(by_alias=True),
+                _window(creator_user_id, start, end).model_dump(by_alias=True),
             ),
         )
         return page.earnings[0] if page.earnings else None
@@ -140,13 +144,13 @@ class StackedClient:
             SubscriberSummaryPage,
             self._get(
                 "subscribers/summary",
-                **_window(creator_user_id, start, end).model_dump(by_alias=True),
+                _window(creator_user_id, start, end).model_dump(by_alias=True),
             ),
         )
         return page.summaries[0] if page.summaries else None
 
     def webhooks(self, creator_user_id: str) -> list[WebhookDestination]:
-        reply = self._get("webhooks", creatorUserId=creator_user_id)
+        reply = self._get("webhooks", {"creatorUserId": creator_user_id})
         return _parsed(WebhooksPage, reply).webhooks
 
     def create_webhook(
@@ -166,7 +170,11 @@ class StackedClient:
         self._change("DELETE", f"webhooks/{webhook_id}", creator_user_id)
 
     def _change(
-        self, method: str, path: str, creator_user_id: str, **kwargs: Any
+        self,
+        method: str,
+        path: str,
+        creator_user_id: str,
+        json: dict[str, Any] | None = None,
     ) -> requests.Response:
         try:
             r = self._session.request(
@@ -174,14 +182,17 @@ class StackedClient:
                 f"{settings.stacked.api_url}/{path}",
                 params={"creatorUserId": creator_user_id},
                 timeout=settings.stacked.timeout_s,
-                **kwargs,
+                json=json,
             )
         except requests.RequestException as exc:
             msg = "Stacked is not answering"
             raise StackedError(msg) from exc
         return _ok(r)
 
-    def _get(self, path: str, **params: Any) -> requests.Response:
+    def _get(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> requests.Response:
+        params = params or {}
         for attempt in range(1, settings.stacked.tries):
             try:
                 r = self._request(path, params)
