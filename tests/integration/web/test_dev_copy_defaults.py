@@ -9,7 +9,7 @@ def _drive_sweep():
 
 
 def test_the_drive_sweep_runs_on_production_only_unless_asked(monkeypatch):
-    monkeypatch.setattr(sweeps.drive_folders, "enabled", lambda: True)
+    monkeypatch.setattr(sweeps.storage_jobs, "enabled", lambda: True)
     monkeypatch.delenv("OFM_DRIVE_SWEEP")
 
     assert _drive_sweep().enabled() is False
