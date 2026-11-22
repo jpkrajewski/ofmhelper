@@ -6,6 +6,8 @@ from pathlib import Path
 from import_graph import Edge, graph, module_name, targets
 from pydantic import BaseModel
 
+from ofmhelpers.config.retired import retired
+
 ROOT = Path(__file__).resolve().parents[1]
 MAP = ROOT / "tests" / "affected_map.json"
 SRC_PREFIX = "src/ofmhelpers/"
@@ -84,7 +86,11 @@ def affected(changed_files: list[str]) -> list[str]:
         if changed.startswith(SRC_PREFIX) and changed.endswith(".py"):
             for module in dependents(module_name(ROOT / changed), import_graph.edges):
                 picked |= importers.get(module, set())
-    return sorted(p for p in picked if (ROOT / p).is_file())
+    return sorted(p for p in picked if (ROOT / p).is_file() and not parked(p))
+
+
+def parked(path: str) -> bool:
+    return any(fnmatch(path, f"tests/{pattern}") for pattern in retired().tests)
 
 
 def main(arguments: list[str]) -> int:

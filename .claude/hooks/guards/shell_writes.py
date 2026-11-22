@@ -18,12 +18,16 @@ from guards.no_comments import GETATTR_CHECKER, checker
 from guards.skills import loaded, required
 
 NAME = "shell_writes"
+RUFF_WRITE = (
+    r"\bruff(?:\.exe)?\s+(?![^;&|\n#]*--(?:check|diff)\b)"
+    r"(?:(?:-\S+\s+)*format\b|[^;&|\n#]*--fix\b)"
+)
 SCRIPTED_WRITE = re.compile(
     r"\bsed\s+-i|\bpython|\bperl\b|\bawk\b|\bcat\s+>|\btee\b|[^0-9&]>\s*[\w./\"']|"
     r"Set-Content|Out-File|Add-Content|\bcp\s|\bmv\s|\bgit\s+apply\b|\bpatch\b|"
-    r"\bruff\b[^;&|]*(?:--fix|format)|\bprettier\b[^;&|]*--write"
+    rf"{RUFF_WRITE}|\bprettier\b[^;&|]*--write"
 )
-UNNAMED_WRITE = re.compile(r"\bgit\s+apply\b|\bpatch\b|\bruff\b|\bprettier\b")
+UNNAMED_WRITE = re.compile(rf"\bgit\s+apply\b|\bpatch\b|{RUFF_WRITE}|\bprettier\b")
 UNCHECKED = (
     "The files this shell call wrote could not be checked ({error}); git was slow or failed. "
     "Run the CRLF, comment and skill checks by hand on the files you wrote."

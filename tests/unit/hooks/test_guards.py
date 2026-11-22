@@ -1459,6 +1459,8 @@ def test_a_git_that_hangs_leaves_a_visible_note_not_a_silent_pass(
         "patch -p1 < made.patch",
         "ruff format src",
         "ruff check --fix src",
+        "uv run --frozen ruff format src  # not --check",
+        "ruff format --check src && ruff format src",
         "prettier --write src/ofmhelpers/shell_made.py",
     ],
 )
@@ -1471,6 +1473,26 @@ def test_copy_move_patch_and_formatters_get_the_shell_write_checks(
 
     assert answer.decision == "block"
     assert "CRLF written into src/ofmhelpers/shell_made.py" in answer.reason
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ruff check src",
+        "uv run --frozen ruff format --check src",
+        "ruff format --diff src",
+        "ruff check --output-format=json src",
+        "ruff check src/ofmhelpers/format/",
+        "grep -rn ruff docs/format.md",
+    ],
+)
+def test_a_lint_or_format_check_is_no_shell_write(hooks: Hooks, command: str) -> None:
+    (hooks.root / "src" / "ofmhelpers" / "shell_made.py").write_bytes(b"x = 2\r\n")
+
+    answer = shell_wrote(hooks, command)
+
+    assert answer.decision == "allow"
+    assert "CRLF written" not in answer.reason
 
 
 def test_a_name_appended_from_the_shell_to_an_existing_script_needs_research(

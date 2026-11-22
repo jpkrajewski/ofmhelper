@@ -35,6 +35,13 @@ def test_a_changed_test_file_runs_itself_and_an_unknown_file_runs_nothing():
     assert affected_tests.affected(["README.md", "tests/missing/test_x.py"]) == []
 
 
+def test_a_parked_test_of_a_retired_page_is_never_picked():
+    parked = "tests/integration/web/test_reels.py"
+    assert (REPO / parked).is_file()
+
+    assert affected_tests.affected([parked]) == []
+
+
 def test_every_path_in_the_map_exists():
     links = affected_tests.AffectedMap.model_validate_json(
         affected_tests.MAP.read_text(encoding="utf-8")
