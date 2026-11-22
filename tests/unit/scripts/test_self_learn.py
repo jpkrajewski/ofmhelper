@@ -444,3 +444,55 @@ def test_an_attachment_line_without_its_key_is_skipped(tmp_path):
     d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
 
     assert d.test_runs == []
+
+
+def _queued(minute: int, text: str, kind: str) -> dict:
+    return {
+        "type": "attachment",
+        "timestamp": _at(minute),
+        "attachment": {
+            "type": "queued_command",
+            "prompt": text,
+            "origin": {"kind": kind},
+        },
+    }
+
+
+def test_a_message_typed_while_the_agent_works_counts_as_an_owner_prompt(tmp_path):
+    logs = tmp_path / "logs"
+    _write(
+        logs / "aaaa7777-main.jsonl",
+        [
+            _prompt(1, "go"),
+            _queued(2, "no, use D:/ not C:/", "human"),
+            _queued(
+                3, "<task-notification>done</task-notification>", "task-notification"
+            ),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [p.text for p in d.prompts] == ["go", "no, use D:/ not C:/"]
+
+
+def test_a_queued_record_of_a_wrong_shape_is_skipped(tmp_path):
+    logs = tmp_path / "logs"
+    wrong = [
+        {"type": "attachment", "timestamp": _at(2), "attachment": "just text"},
+        _queued(3, ["a", "list"], "human"),
+        {
+            "type": "attachment",
+            "timestamp": _at(4),
+            "attachment": {
+                "type": "queued_command",
+                "prompt": "x",
+                "origin": "human",
+            },
+        },
+    ]
+    _write(logs / "aaaa8888-main.jsonl", [_prompt(1, "go"), *wrong])
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [p.text for p in d.prompts] == ["go"]

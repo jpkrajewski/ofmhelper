@@ -168,10 +168,13 @@ lines — quote them.
 Commit sha, what shipped (one line per feature/fix), test counts, CI and
 deploy run links, /health, Logfire errors since release (or "none"), Sentry
 issues new since release (or "none", or why it could not be read), anything
-not run.
+not run. Then delete the shipped items' lines from `backlog.txt` (CLAUDE.md ONE
+ITEM, SHIP, NEXT), also when the batch stopped at the commit.
 
 ## 10. Reflect
-After the report (CLAUDE.md "SELF-LEARNING"): run the `self-learn` skill. It
+After the report (CLAUDE.md "SELF-LEARNING"), also when the owner's word covered only
+the commit and the batch stops after step 4 (owner 2026-11-22: "self reflect after every
+approved commit or deploy"; the `self_learn_after_deploy` guard holds a commit too): run the `self-learn` skill. It
 reads every saved session log since the last pass (this ship's included):
 owner corrections, failed calls, guard blocks, token waste; lessons become
 checks, `BRAIN.md` lines (critical only, max 40) or `IMPROVEMENTS.md` lines,

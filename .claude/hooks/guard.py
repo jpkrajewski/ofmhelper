@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import time
@@ -28,6 +29,7 @@ class AuditLine(BaseModel):
     target: str
     verdicts: list[str]
     fields: list[str]
+    background: str = ""
 
 
 def target(event: HookEvent) -> str:
@@ -41,6 +43,15 @@ def target(event: HookEvent) -> str:
     return str(raw).replace("\n", " ")[:TARGET_LIMIT]
 
 
+def background_shape(tasks: object) -> object:
+    if isinstance(tasks, list) and all(isinstance(task, dict) for task in tasks):
+        return [
+            {key: type(value).__name__ for key, value in sorted(task.items())}
+            for task in tasks
+        ]
+    return type(tasks).__name__
+
+
 def audit(event: HookEvent, verdicts: list[Verdict]) -> None:
     line = AuditLine(
         at=time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -51,6 +62,9 @@ def audit(event: HookEvent, verdicts: list[Verdict]) -> None:
         target=target(event),
         verdicts=[f"{v.guard}:{v.kind}" for v in verdicts],
         fields=sorted(event.model_extra or {}),
+        background=json.dumps(
+            background_shape((event.model_extra or {}).get("background_tasks"))
+        )[:TARGET_LIMIT],
     )
     STATE.mkdir(parents=True, exist_ok=True)
     rotate_audit()

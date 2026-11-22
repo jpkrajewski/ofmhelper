@@ -15,7 +15,7 @@ MARKER = OUT / "last.txt"
 AUDIT = ROOT / "reports" / "hooks" / "audit.jsonl"
 DEFAULT_DAYS = 7
 METADATA_LINE = '{"type":"'
-KEPT_TYPES = ('{"type":"user"', '{"type":"assistant"')
+KEPT_TYPES = ('{"type":"user"', '{"type":"assistant"', '{"type":"attachment"')
 INTERRUPTED = "[Request interrupted by user"
 REJECTED = "The user doesn't want to proceed with this tool use"
 CONTINUED = "This session is being continued from a previous conversation"
@@ -305,6 +305,20 @@ def _is_owner_prompt(entry: dict[str, Any], text: str) -> bool:
     )
 
 
+def _is_queued_owner_prompt(attached: Any) -> bool:
+    if not isinstance(attached, dict):
+        return False
+    origin = attached.get("origin")
+    prompt = attached.get("prompt")
+    return (
+        attached.get("type") == "queued_command"
+        and isinstance(origin, dict)
+        and origin.get("kind") == "human"
+        and isinstance(prompt, str)
+        and bool(prompt.strip())
+    )
+
+
 def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | None:
     tools: dict[str, tuple[str, str]] = {}
     seen: set[str] = set()
@@ -359,10 +373,17 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
                         reviews[label] += 1
             continue
         if entry.get("type") == "attachment":
-            runs.notified(
-                str((entry.get("attachment") or {}).get("prompt", "")),
-                entry["timestamp"],
-            )
+            attached = entry.get("attachment")
+            if isinstance(attached, dict) and isinstance(attached.get("prompt"), str):
+                runs.notified(attached["prompt"], entry["timestamp"])
+            if owner and _is_queued_owner_prompt(attached):
+                prompts.append(
+                    Correction(
+                        at=entry["timestamp"][:16],
+                        session=path.stem[:8],
+                        text=str(attached["prompt"])[:TEXT_MAX],
+                    )
+                )
             continue
         if entry.get("type") != "user":
             continue

@@ -31,7 +31,7 @@ Every lesson names the check (guard, test or skill) it became; a lesson with no 
 Skip what `CLAUDE.md`, a rule file or a guard already says. Never edit the owner's `CLAUDE.md` sections (they stay word for word). Never copy owner prompts, secrets, hosts or customer data into tracked files.
 
 ## 3b. Who reflects
-After a ship the reflection is a fresh agent that reads all the session's logs (the main transcript, the subagent logs, `reports/hooks/audit.jsonl`, the digest) and plans the hooks and skills that would have prevented each failure. The main session turns that plan into a plan for the owner; it does not write the checks unasked.
+After a ship the reflection is a fresh agent that reads all the session's logs (the main transcript, the subagent logs, `reports/hooks/audit.jsonl`, the digest) and plans the hooks and skills that would have prevented each failure. The plan covers only agent quality of life: guards, hooks, the digest, agent scripts, skills and rules. The main session builds every item of it right away, each with its test, then the review cycle and `scripts/test.sh tests/unit/hooks/test_guards.py` (owner 2026-11-22: "only tackle QOL for agent and you just change them"). A change to the app's own behaviour is not part of the pass: it becomes one `IMPROVEMENTS.md` line.
 
 ## 4. Report and mark
 - Report to the owner: one line per lesson (what happened, count, where it went), the biggest token waste and its fix, what was left for the owner.

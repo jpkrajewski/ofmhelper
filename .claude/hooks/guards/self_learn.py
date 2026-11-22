@@ -9,17 +9,30 @@ DONE = ROOT / "reports" / "self-learn" / "last.txt"
 SHELLS = frozenset({"Bash", "PowerShell"})
 DEPLOY_WORKFLOW = re.compile(r"deploy", re.IGNORECASE)
 LEARN = (
-    "CLAUDE.md SELF-LEARNING: a PR was merged or a deploy was started in this session. "
-    "If that was the production deploy (the promote merge or the Deploy workflow) and it "
-    "is green and reported, run the self-learn skill: it reads every saved session log "
-    "since the last pass and turns owner corrections, failures and token waste into "
-    "checks and BRAIN.md lines, then scripts/self_learn.py --done. If it was only a "
-    "dependency PR into dev, or the deploy failed, say so and stop again."
+    "CLAUDE.md SELF-LEARNING: a commit was made, a PR was merged or a deploy was started "
+    "in this session (owner 2026-11-22: self reflect after every approved commit or "
+    "deploy). Once the commit or the production deploy is done and reported, run the "
+    "self-learn skill: it reads every saved session log since the last pass and turns "
+    "owner corrections, failures and token waste into checks and BRAIN.md lines, then "
+    "scripts/self_learn.py --done. If it was only a dependency PR into dev, or the "
+    "commit or the deploy failed, say so and stop again."
 )
+
+
+def git_subcommand(words: list[str]) -> str:
+    rest = iter(words[1:])
+    for word in rest:
+        if word in ("-C", "-c"):
+            next(rest, None)
+        elif not word.startswith("-"):
+            return word
+    return ""
 
 
 def deploys(statement: Statement) -> bool:
     words = statement.words
+    if statement.program == "git":
+        return git_subcommand(words) == "commit"
     if statement.program != "gh":
         return False
     if words[1:3] == ["pr", "merge"]:

@@ -1759,6 +1759,27 @@ def test_a_deploy_already_learned_from_ends_quietly(hooks: Hooks) -> None:
     assert hooks.send("Stop").decision == "allow"
 
 
+def test_an_approved_commit_is_followed_by_one_self_learn_pass(hooks: Hooks) -> None:
+    commit = {"command": "git commit -q -F msg.txt"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=commit)
+
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "self-learn skill" in stop.reason
+    assert hooks.send("Stop").decision == "allow"
+
+
+@pytest.mark.parametrize(
+    "command", ["git -C . commit -qm x", "git -c user.name=t commit -qm x"]
+)
+def test_a_commit_with_git_options_is_followed_by_a_self_learn_pass(
+    hooks: Hooks, command: str
+) -> None:
+    hooks.send("PostToolUse", tool_name="Bash", tool_input={"command": command})
+
+    assert hooks.send("Stop").decision == "block"
+
+
 def test_no_deploy_no_self_learn_pass(hooks: Hooks) -> None:
     hooks.send("PostToolUse", tool_name="Bash", tool_input={"command": "gh pr list"})
 
@@ -2148,6 +2169,24 @@ def test_the_audit_log_rotates_past_20_mb_keeping_one_generation(
     assert json.loads(lines[0])["target"] == "git status"
 
 
+def test_the_audit_log_keeps_the_shape_of_background_tasks_not_their_values(
+    hooks: Hooks,
+) -> None:
+    tasks = [{"id": "b1", "command": "echo private-words-7", "pid": 7}]
+
+    hooks.send(
+        "PreToolUse",
+        tool_name="Bash",
+        tool_input={"command": "git status"},
+        background_tasks=tasks,
+    )
+
+    audit = (hooks.root / "reports" / "hooks" / "audit.jsonl").read_text()
+    stored = json.loads(audit.splitlines()[-1])["background"]
+    assert "private-words-7" not in audit
+    assert json.loads(stored) == [{"command": "str", "id": "str", "pid": "int"}]
+
+
 def test_a_running_push_suite_blocks_edits_of_tracked_files_only(
     hooks: Hooks,
 ) -> None:
@@ -2330,3 +2369,199 @@ def test_the_reviewer_gets_the_graph_and_other_agents_do_not(hooks: Hooks) -> No
     assert "Import graph" not in other.context
     assert "Import graph" not in launched.context + launched.reason
     assert launched.decision == "allow"
+
+
+def test_a_shell_write_that_grows_the_baseline_is_blocked(hooks: Hooks) -> None:
+    baseline = "tests/unit/architecture/baseline.json"
+    (hooks.root / "tests" / "unit" / "architecture").mkdir(parents=True)
+    (hooks.root / baseline).write_text('[\n"a",\n"b"\n]\n')
+    committed(hooks, baseline)
+
+    (hooks.root / baseline).write_text('[\n"a",\n"b",\n"z"\n]\n')
+    grown = shell_wrote(hooks, f"python - <<'EOF'\nopen('{baseline}','w')\nEOF")
+    assert grown.decision == "block"
+    assert "only shrinks" in grown.reason
+    assert f"git checkout -- {baseline}" in grown.reason
+
+    (hooks.root / baseline).write_text('[\n"a"\n]\n')
+    assert shell_wrote(hooks, "echo done").decision == "allow"
+
+
+def test_a_shell_swap_of_one_baseline_break_for_a_new_one_is_blocked(
+    hooks: Hooks,
+) -> None:
+    baseline = "tests/unit/architecture/baseline.json"
+    (hooks.root / "tests" / "unit" / "architecture").mkdir(parents=True)
+    (hooks.root / baseline).write_text('[\n"a",\n"b"\n]\n')
+    committed(hooks, baseline)
+
+    (hooks.root / baseline).write_text('[\n"a",\n"z"\n]\n')
+    swapped = shell_wrote(hooks, f"python - <<'EOF'\nopen('{baseline}','w')\nEOF")
+
+    assert swapped.decision == "block"
+    assert "only shrinks" in swapped.reason
+
+
+def test_a_shell_shrink_that_empties_a_baseline_list_is_allowed(hooks: Hooks) -> None:
+    baseline = "tests/unit/architecture/baseline.json"
+    (hooks.root / "tests" / "unit" / "architecture").mkdir(parents=True)
+    (hooks.root / baseline).write_text('{\n"layers": [],\n"jobs": [\n"a"\n]\n}\n')
+    committed(hooks, baseline)
+
+    (hooks.root / baseline).write_text('{\n"layers": [],\n"jobs": []\n}\n')
+    emptied = shell_wrote(hooks, f"python - <<'EOF'\nopen('{baseline}','w')\nEOF")
+
+    assert emptied.decision == "allow", emptied.reason
+    assert "only shrinks" not in emptied.context
+
+
+def test_a_baseline_that_cannot_be_compared_with_head_is_reported(
+    hooks: Hooks,
+) -> None:
+    baseline = "tests/unit/architecture/baseline.json"
+    (hooks.root / "tests" / "unit" / "architecture").mkdir(parents=True)
+    (hooks.root / baseline).write_text('[\n"a"\n]\n')
+
+    answer = shell_wrote(hooks, f"python - <<'EOF'\nopen('{baseline}','w')\nEOF")
+
+    assert answer.decision == "allow"
+    assert "could not be compared with HEAD" in answer.context
+
+
+def test_a_prod_host_denial_points_to_the_read_only_sources(hooks: Hooks) -> None:
+    denied = hooks.bash('ssh -i key ubuntu@203.0.113.7 "uptime"')
+
+    assert denied.decision == "deny"
+    assert "Logfire" in denied.reason
+
+
+def write_to(hooks: Hooks, relative: str, content: str) -> Answer:
+    write = {"file_path": str(hooks.root / relative), "content": content}
+    return hooks.send("PreToolUse", tool_name="Write", tool_input=write)
+
+
+def test_a_plain_text_doc_under_scripts_needs_no_research(hooks: Hooks) -> None:
+    hooks.prompt("write the guide")
+
+    assert write_to(hooks, "scripts/guide.txt", "step one\n").decision == "allow"
+    assert write_to(hooks, "scripts/tool.py", "x = 1\n").decision == "deny"
+
+
+def test_moving_a_class_to_a_new_module_needs_no_research(hooks: Hooks) -> None:
+    old = "src/ofmhelpers/features/old/service.py"
+    (hooks.root / old).write_text("class Moved:\n    pass\n")
+    committed(hooks, old)
+    hooks.prompt("move the class")
+    hooks.skill("senior-python-rules")
+    hooks.skill("architecture")
+    hooks.skill("failure-modes")
+    new = "src/ofmhelpers/features/old/moved.py"
+
+    copied = write_to(hooks, new, "class Moved:\n    pass\n")
+    assert copied.decision == "deny"
+
+    (hooks.root / old).write_text("x = 1\n")
+    moved = write_to(hooks, new, "class Moved:\n    pass\n")
+    assert moved.decision == "allow", moved.reason
+    assert write_to(hooks, new, "class Brand:\n    pass\n").decision == "deny"
+
+
+def test_a_safe_statement_does_not_exempt_a_shell_write_next_to_it(
+    hooks: Hooks,
+) -> None:
+    service = "src/ofmhelpers/features/old/service.py"
+
+    for command in (
+        f"git status; echo x > {service}",
+        f"scripts/test.sh tests/unit/test_x.py && cat > {service} <<'EOF'\nx = 2\nEOF",
+    ):
+        assert hooks.bash(command).decision == "deny"
+
+
+def test_reading_an_existing_python_file_from_the_shell_is_allowed(
+    hooks: Hooks,
+) -> None:
+    service = "src/ofmhelpers/features/old/service.py"
+    heredoc = f"python - <<'EOF'\nprint(open('{service}').read())\nEOF"
+
+    for command in (
+        f'grep -n "write_text" {service}',
+        f'rg "open\\(" {service}',
+        heredoc,
+    ):
+        answer = hooks.bash(command)
+        assert answer.decision == "allow", (command, answer.reason)
+
+
+def test_commands_that_only_name_a_python_file_are_not_shell_writes(
+    hooks: Hooks,
+) -> None:
+    service = "src/ofmhelpers/features/old/service.py"
+    body = f"Path('{service}').write_text is gone"
+
+    for command in (
+        f"echo x > {service}.bak",
+        f"ls -l {service} write_text_notes.txt",
+        f"tee /tmp/body.md <<'EOF'\n{body}\nEOF",
+    ):
+        answer = hooks.bash(command)
+        assert answer.decision == "allow", (command, answer.reason)
+
+
+def test_a_long_path_run_in_a_command_is_judged_without_stalling(hooks: Hooks) -> None:
+    long_token = "a/" * 5000
+
+    assert hooks.bash(f"echo {long_token}x > /tmp/out.txt").decision == "allow"
+
+
+def test_a_research_gate_reads_code_suffixes_in_any_case(hooks: Hooks) -> None:
+    hooks.prompt("write it")
+
+    assert write_to(hooks, "scripts/tool.MJS", "x = 1\n").decision == "deny"
+    assert write_to(hooks, "scripts/tool.tsx", "x = 1\n").decision == "deny"
+
+
+def test_an_import_only_router_edit_needs_no_skill(hooks: Hooks) -> None:
+    router = "src/ofmhelpers/web/routers/pages.py"
+    (hooks.root / router).parent.mkdir(parents=True)
+    (hooks.root / router).write_text("from a import b\nx = 1\n")
+
+    imports = hooks.edit(
+        router, old="from a import b", new="from a import b, c\nlazy from d import e"
+    )
+    assert imports.decision == "allow"
+    assert hooks.edit(router, old="x = 1", new="x = 2").decision == "deny"
+
+
+def test_a_statement_after_a_semicolon_on_an_import_line_is_not_import_only(
+    hooks: Hooks,
+) -> None:
+    router = "src/ofmhelpers/web/routers/pages.py"
+    (hooks.root / router).parent.mkdir(parents=True)
+    (hooks.root / router).write_text("import os; x = 1\n")
+
+    swapped = hooks.edit(router, old="import os; x = 1", new="import os; x = 2")
+
+    assert swapped.decision == "deny"
+
+
+def test_a_shell_write_to_an_existing_python_file_is_refused_before_it_runs(
+    hooks: Hooks,
+) -> None:
+    service = "src/ofmhelpers/features/old/service.py"
+    heredoc = f"python - <<'EOF'\nfrom pathlib import Path\nPath('{service}').write_text('x = 2')\nEOF"
+
+    for command in (heredoc, f"sed -i s/1/2/ {service}", f"echo x > {service}"):
+        refused = hooks.bash(command)
+        assert refused.decision == "deny"
+        assert "Edit tool" in refused.reason
+
+    assert (
+        hooks.bash(f"git add {service} && git diff --stat -- {service}").decision
+        == "allow"
+    )
+    scoped = hooks.bash(f"scripts/test.sh tests/unit/test_x.py # {service}")
+    assert scoped.decision == "allow", scoped.reason
+    assert (
+        hooks.bash("cat > src/ofmhelpers/fresh_new.py <<'EOF'\nEOF").decision == "allow"
+    )

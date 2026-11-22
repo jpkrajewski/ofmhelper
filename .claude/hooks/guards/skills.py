@@ -6,6 +6,10 @@ from guards.event import ROOT, Guard, HookEvent, Markers, Verdict, deny
 
 NAME = "skills"
 EDITS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+IMPORT = re.compile(
+    r"^[ \t]*(?:lazy[ \t]+)?(?:from[ \t]+\S+[ \t]+)?import[ \t]+(?:\([^)]*\)|[^\n;]*)",
+    re.MULTILINE,
+)
 LOAD_FIRST = (
     "CLAUDE.md STANDARDS: load the {skills} skill(s) with the Skill tool before editing {path}, "
     "then say in two lines where the new thing goes and which existing file it follows."
@@ -78,13 +82,23 @@ def loaded(event: HookEvent, skill: str) -> bool:
     return Markers.of(event).has(marker) or Markers.main(event).has(marker)
 
 
+def without_imports(text: str) -> list[str]:
+    return [line.strip() for line in IMPORT.sub("", text).splitlines() if line.strip()]
+
+
+def only_imports_change(event: HookEvent) -> bool:
+    if event.tool_name not in {"Edit", "MultiEdit"}:
+        return False
+    return without_imports(event.replaced_text) == without_imports(event.written_text)
+
+
 def check(event: HookEvent) -> Verdict | None:
     if event.hook_event_name == "PostToolUse":
         skill = str(event.tool_input.get("skill") or "")
         if skill:
             Markers.of(event).set(skill_marker(skill))
         return None
-    if not event.relative:
+    if not event.relative or only_imports_change(event):
         return None
     is_new = not (ROOT / event.relative).exists()
     needed = required(event.relative, is_new, bool(event.added_names()))

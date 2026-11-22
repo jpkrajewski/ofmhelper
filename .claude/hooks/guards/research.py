@@ -1,4 +1,5 @@
 import re
+import subprocess
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -11,7 +12,9 @@ from guards.event import (
     Verdict,
     block,
     context,
+    defined_names,
     deny,
+    git_timeout,
     modified_at,
 )
 from guards.shell_writes import SCRIPTED_WRITE, changed_by_this_call
@@ -26,6 +29,21 @@ SHELLS = frozenset({"Bash", "PowerShell"})
 AGENTS = frozenset({"Agent", "Task"})
 STOPS = frozenset({"Stop", "SubagentStop"})
 CODE_ROOTS = ("src/", "scripts/", ".claude/hooks/")
+CODE_SUFFIXES = (
+    ".py",
+    ".pyi",
+    ".js",
+    ".mjs",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".sh",
+    ".ps1",
+    ".css",
+    ".html",
+    ".sql",
+)
+HEAD_HIT = re.compile(r"^HEAD:(.*?):\d+:(.*)$")
 SKILL_DIRS = (".claude/skills/", ".claude/rules/")
 CODEGRAPH_SHELL = re.compile(r"\bcodegraph\s+explore\b")
 KIMI_RESEARCH = re.compile(r"kimi/ask\.py\s+research\b")
@@ -112,7 +130,8 @@ STEPS = (
 )
 DENIED = (
     "Research before new code: {path} adds new code. Missing since this task started: "
-    "{missing}.\n" + HOW
+    "{missing}. Moving code instead? Cut it from its old file first: a name the old file "
+    "no longer defines is not new.\n" + HOW
 )
 SHELL_CODE = (
     "New code was written from the shell ({paths}) before the research: the Write/Edit gate "
@@ -175,16 +194,64 @@ def never_blocked(path: str) -> bool:
 
 
 def is_new_code_file(path: str) -> bool:
-    return path.startswith(CODE_ROOTS) and not never_blocked(path)
+    return (
+        path.startswith(CODE_ROOTS)
+        and path.lower().endswith(CODE_SUFFIXES)
+        and not never_blocked(path)
+    )
+
+
+def still_defines(file: str, name: str) -> bool:
+    target = ROOT / file
+    if not target.is_file():
+        return False
+    return name in defined_names(target.read_text(encoding="utf-8", errors="replace"))
+
+
+def moved_out_names(names: set[str], path: str) -> set[str]:
+    if not names:
+        return set()
+    patterns = [
+        rf"^[[:blank:]]*(async +def|def|class|export +(default +)?(async +)?function|"
+        rf"(async +)?function)[ *]+{re.escape(name)}([^A-Za-z0-9_$]|$)"
+        for name in sorted(names)
+    ]
+    try:
+        found = subprocess.run(
+            ["git", "-C", str(ROOT), "grep", "-n", "-E"]
+            + [arg for pattern in patterns for arg in ("-e", pattern)]
+            + ["HEAD", "--"]
+            + [root.rstrip("/") for root in CODE_ROOTS],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=git_timeout(),
+            check=False,
+        )
+    except subprocess.SubprocessError:  # silent: a slow git keeps the names new
+        return set()
+    moved: set[str] = set()
+    for line in found.stdout.splitlines():
+        spot = HEAD_HIT.match(line)
+        if not spot or spot[1] == path:
+            continue
+        moved |= {
+            name
+            for name in defined_names(spot[2]) & names
+            if not still_defines(spot[1], name)
+        }
+    return moved
 
 
 def adds_new_code(event: HookEvent) -> bool:
     path = event.relative
     if never_blocked(path):
         return False
+    names = event.added_names()
+    fresh = names - moved_out_names(names, path)
     if is_new_code_file(path) and not (ROOT / path).exists():
-        return True
-    return bool(event.added_names())
+        return bool(fresh) or not names
+    return bool(fresh)
 
 
 def names_skill_dir(text: str) -> bool:
@@ -226,7 +293,10 @@ def shell_new_code(event: HookEvent) -> list[str]:
         f.path
         for f in changed_by_this_call(event)
         if not never_blocked(f.path)
-        and ((f.is_new and is_new_code_file(f.path)) or f.added_names())
+        and (
+            (f.is_new and is_new_code_file(f.path))
+            or bool((added := f.added_names()) - moved_out_names(added, f.path))
+        )
     ]
 
 
