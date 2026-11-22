@@ -5,7 +5,7 @@ import requests
 from pydantic import BaseModel, TypeAdapter
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.tracked_accounts.schema import InstagramNames
+from ofmhelpers.db.tracked_accounts.models import InstagramNames
 from ofmhelpers.integrations.instagram import (
     InstagramClient,
     InstagramError,

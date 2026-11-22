@@ -13,7 +13,7 @@ from signin import sign_in, sign_in_agency
 from ofmhelpers.background import recovery, sweeps
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import create_job, fail_job, get_job, history
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive import folders as drive_folders

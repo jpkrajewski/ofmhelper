@@ -3,12 +3,8 @@ from datetime import date, timedelta
 import pytest
 from pydantic import ValidationError
 
-from ofmhelpers.db.short_links.schema import (
-    GenerateLinks,
-    LinkPeriod,
-    LinkSummary,
-    ShortLink,
-)
+from ofmhelpers.db.short_links.models import GenerateLinks, LinkSummary, ShortLink
+from ofmhelpers.db.short_links.schema import LinkPeriod
 from ofmhelpers.integrations.short_links import (
     Usage,
     detect_target,

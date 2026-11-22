@@ -20,8 +20,8 @@ from ofmhelpers.features.clone_long.service import (
 from ofmhelpers.features.clone_long.video import VideoTools
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
+from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.jobs.schema import TaskCard
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice

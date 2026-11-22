@@ -6,7 +6,7 @@ from notifications_socket import first_sent
 from signin import make_user, sign_in, sign_in_admin
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.users import store as user_store
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.notifications import service as notifications

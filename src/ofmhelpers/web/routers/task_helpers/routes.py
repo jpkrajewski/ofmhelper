@@ -6,7 +6,7 @@ from fastapi.responses import Response
 
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.jobs import own
-from ofmhelpers.features.jobs.schema import JobStatusPayload
+from ofmhelpers.features.jobs.models import JobStatusPayload
 from ofmhelpers.web.dependencies import Actors
 from ofmhelpers.web.routers.task_helpers.responses import (
     job_assets,

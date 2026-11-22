@@ -1,9 +1,9 @@
 import pytest
 
 from ofmhelpers.features.clone_links import run as clone_link_run
+from ofmhelpers.features.jobs.models import JobStatusPayload
 from ofmhelpers.features.jobs.schema import (
     FALLBACK,
-    JobStatusPayload,
     download_reason,
     error_reason,
 )

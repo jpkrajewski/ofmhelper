@@ -8,7 +8,7 @@ from spoof_draws import drawn_step
 
 from ofmhelpers.cache import QueueName
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import create_job, list_jobs
 from ofmhelpers.features.assets import store as task_helper_uploads

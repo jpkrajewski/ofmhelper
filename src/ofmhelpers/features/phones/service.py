@@ -14,13 +14,11 @@ from ofmhelpers.db.devices.catalog import (
     tracked_services,
 )
 from ofmhelpers.db.devices.catalog.schema import Catalog, LoginService
+from ofmhelpers.db.devices.models import Device, LoginFields, PhoneQuery
 from ofmhelpers.db.devices.schema import (
     ArchivedLogin,
     AssignAccount,
-    Device,
-    LoginFields,
     LoginSecrets,
-    PhoneQuery,
     PhoneSort,
 )
 from ofmhelpers.db.encrypted import VaultError
@@ -39,7 +37,7 @@ from ofmhelpers.features.refusals import (
     duplicate_refused,
 )
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.devices.schema import DeviceFields
+lazy from ofmhelpers.db.devices.models import DeviceFields
 
 logger = get_logger(__name__)
 

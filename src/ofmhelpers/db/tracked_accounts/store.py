@@ -2,12 +2,9 @@ import time
 from functools import lru_cache
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.tracked_accounts.models import platform_names
 from ofmhelpers.db.tracked_accounts.repository import TrackedAccountRepository
-from ofmhelpers.db.tracked_accounts.schema import (
-    AccountHistory,
-    TrackedAccount,
-    platform_names,
-)
+from ofmhelpers.db.tracked_accounts.schema import AccountHistory, TrackedAccount
 from ofmhelpers.db.users.store import agency_id
 lazy from ofmhelpers.db.tracked_accounts.schema import AccountStats
 

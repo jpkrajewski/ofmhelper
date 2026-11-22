@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.drive_folders import store as drive_folders
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.phone_revisions import store

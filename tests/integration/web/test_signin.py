@@ -15,7 +15,7 @@ from signin import make_user, make_user_with_password, sign_in, sign_in_admin
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.account.keys import SAVED_KEY, Keys

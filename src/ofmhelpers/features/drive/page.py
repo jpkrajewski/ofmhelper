@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 
-from ofmhelpers.db.drive_folders.schema import DriveBoard, UploadPick
+from ofmhelpers.db.drive_folders.models import DriveBoard
+from ofmhelpers.db.drive_folders.schema import UploadPick
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import Readers, get_job
 from ofmhelpers.features.assets.cards import job_assets

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin, sign_in_agency
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.watched_profiles.store import list_watched

@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.downloads import sheet
-from ofmhelpers.features.jobs.schema import TaskCard
+from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams

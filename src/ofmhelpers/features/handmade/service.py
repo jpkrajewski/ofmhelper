@@ -13,8 +13,9 @@ from ofmhelpers.features.assets.store import (
     save_upload,
     uploads_root,
 )
+from ofmhelpers.features.jobs.models import CloneCard
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.jobs.schema import CloneCard, JobsQueued
+from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import RefusedError
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 

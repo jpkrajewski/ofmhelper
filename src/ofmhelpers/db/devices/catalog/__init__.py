@@ -14,6 +14,7 @@ from ofmhelpers.db.devices.catalog.schema import (
     ServiceKind,
     SizeClass,
 )
+from ofmhelpers.db.tracked_accounts.models import names_of, platform_names
 lazy from ofmhelpers.db.cookies.schema import CookieSite
 
 __all__ = [
@@ -27,9 +28,11 @@ __all__ = [
     "ServiceKind",
     "SizeClass",
     "catalog",
+    "cookie_site",
     "cookie_sites",
     "find_model",
     "get_service",
+    "login_username",
     "services",
     "tracked_services",
 ]
@@ -57,8 +60,35 @@ def tracked_services() -> MappingProxyType[str, LoginService]:
     )
 
 
+def cookie_site(service: LoginService) -> CookieSite | None:
+    if service.cookies is None:
+        return None
+    return CookieSite(
+        key=service.key,
+        label=service.label,
+        icon_url=service.icon_url,
+        domains=service.cookies.domains,
+        login=service.cookies.login,
+    )
+
+
 def cookie_sites() -> list[CookieSite]:
-    return [s.cookie_site for s in services().values() if s.cookie_site]
+    return [site for s in services().values() if (site := cookie_site(s))]
+
+
+def login_username(service: LoginService, text: str) -> str:
+    tracked = service.tracked_platform
+    if tracked is not None and tracked in platform_names():
+        return names_of(tracked).handle(text)
+    name = text.strip()
+    if service.kind is not ServiceKind.OTHER:
+        name = name.lower()
+    if service.kind is ServiceKind.SOCIAL:
+        name = name.lstrip("@")
+    if not name:
+        msg = f"Enter the {service.label} login"
+        raise ValueError(msg)
+    return name
 
 
 def get_service(key: str) -> LoginService:

@@ -10,13 +10,8 @@ from sqlalchemy.orm import undefer_group
 lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.cached_repository import CachedRepository, invalidates_cache
-from ofmhelpers.db.devices.schema import (
-    AddedLogin,
-    ArchivedLogin,
-    Device,
-    DeviceLogin,
-    LoginSecrets,
-)
+from ofmhelpers.db.devices.models import Device, DeviceLogin
+from ofmhelpers.db.devices.schema import AddedLogin, ArchivedLogin, LoginSecrets
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.models import DeviceLoginRow, DeviceRow, LoginRow
 from ofmhelpers.db.owner_scope import mine

@@ -45,8 +45,8 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     offered_resolutions,
 )
+from ofmhelpers.features.jobs.models import CloneLinksCard
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.jobs.schema import CloneLinksCard
 from ofmhelpers.features.refusals import (
     NotFoundError,
     RefusedError,

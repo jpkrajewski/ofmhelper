@@ -1,4 +1,4 @@
-from ofmhelpers.db.devices.schema import AccountPhones, Device, PhonesByAccount
+from ofmhelpers.db.devices.models import AccountPhones, Device, PhonesByAccount
 from ofmhelpers.db.drive_folders.schema import StoredFolder, StoredFolders
 
 

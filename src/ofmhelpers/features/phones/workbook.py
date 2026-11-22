@@ -8,7 +8,7 @@ lazy from openpyxl.utils import get_column_letter
 lazy from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
 from ofmhelpers.db.devices.catalog import ServiceKind, services
-lazy from ofmhelpers.db.devices.schema import Device, DeviceLogin
+lazy from ofmhelpers.db.devices.models import Device, DeviceLogin
 
 MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 

@@ -11,7 +11,7 @@ from ofmhelpers.db.chats.schema import ChatPlatform
 from ofmhelpers.db.report_runs import store as report_runs
 from ofmhelpers.db.report_runs.schema import DayCount
 from ofmhelpers.db.short_links import store as link_store
-from ofmhelpers.db.short_links.schema import LinkSyncKey, ShortLink, ctr
+from ofmhelpers.db.short_links.schema import LinkSyncKey, ctr
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.events import Event, emit, listening
@@ -31,6 +31,7 @@ from ofmhelpers.integrations.senders.schema import MAX_TEXT
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.report_runs.schema import ReportRun
+lazy from ofmhelpers.db.short_links.models import ShortLink
 
 logger = get_logger(__name__)
 

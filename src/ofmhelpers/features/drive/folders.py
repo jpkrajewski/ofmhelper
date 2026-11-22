@@ -15,11 +15,9 @@ from ofmhelpers.cache import get_redis, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.drive_folders import store
+from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard, DriveTarget
 from ofmhelpers.db.drive_folders.schema import (
     AccountScan,
-    DriveBoard,
-    DriveCard,
-    DriveTarget,
     StoredFolder,
     SyncReport,
     UploadedToday,

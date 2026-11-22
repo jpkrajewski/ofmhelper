@@ -8,16 +8,14 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.db.self_links import store as self_links
 from ofmhelpers.db.short_links import store as short_links
-from ofmhelpers.db.short_links.schema import (
+from ofmhelpers.db.short_links.models import (
     GenerateLinks,
     LinkPage,
-    LinkPeriod,
     LinkQuery,
-    LinkSort,
-    LinksQueued,
     LinkSummary,
     ProviderState,
 )
+from ofmhelpers.db.short_links.schema import LinkPeriod, LinkSort, LinksQueued
 from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.db.tracked_accounts.store import list_accounts, list_creators
 from ofmhelpers.features.jobs.runner import run_job

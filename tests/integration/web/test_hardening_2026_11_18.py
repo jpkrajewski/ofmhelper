@@ -7,7 +7,7 @@ from signin import make_user, make_user_with_password, sign_in
 from ofmhelpers.cache import get_redis
 from ofmhelpers.cache.rate_limit import clear_failed_user_logins
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.distribution import store as distribution_store
 from ofmhelpers.db.event_targets import store as event_targets
 from ofmhelpers.db.models import DeviceLoginRow, LoginRow

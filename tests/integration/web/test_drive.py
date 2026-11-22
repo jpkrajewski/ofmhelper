@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_agency
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import AddedLogin, DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
+from ofmhelpers.db.devices.schema import AddedLogin
 from ofmhelpers.db.drive_folders import store
 from ofmhelpers.db.drive_folders.schema import VaFolder
 from ofmhelpers.db.drive_uploads import store as upload_store

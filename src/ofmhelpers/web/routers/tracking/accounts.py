@@ -4,9 +4,9 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from ofmhelpers.db.tracked_accounts.models import AddAccounts
 from ofmhelpers.db.tracked_accounts.schema import (
     AccountQuery,
-    AddAccounts,
     AddResult,
     AssignCreator,
     Notes,

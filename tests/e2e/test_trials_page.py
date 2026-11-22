@@ -10,7 +10,7 @@ from playwright.sync_api import expect
 from sqlalchemy import create_engine, text
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.features.trials.state import FolderState, ReelState
 from ofmhelpers.integrations.gdrive.fake import FakeDrive
 

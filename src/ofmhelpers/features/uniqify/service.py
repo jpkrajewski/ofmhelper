@@ -18,8 +18,9 @@ from ofmhelpers.features.assets.store import (
     require_upload_kind,
     safe_filename,
 )
+from ofmhelpers.features.jobs.models import JobCard
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.jobs.schema import JobCard, JobQueued
+from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.media.uniqify import MetadataMode, Strength, generate_variants
 

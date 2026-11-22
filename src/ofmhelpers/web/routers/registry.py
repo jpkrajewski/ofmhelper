@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.db.jobs.schema import Job, JobParams
-from ofmhelpers.features.jobs.schema import TaskCard
+from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.features.threads.tasks import TASK as THREADS_TASK
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long

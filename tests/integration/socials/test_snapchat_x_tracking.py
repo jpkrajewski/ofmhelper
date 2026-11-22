@@ -54,6 +54,24 @@ def test_a_scan_saves_followers_and_views_of_snapchat_and_x(fake_externals):
     assert posted.profile_url == "https://x.com/fake_x"
 
 
+def test_every_account_carries_its_profile_link_and_platform_name(fake_externals):
+    (insta,) = _ids("instagram", "sheep_love33")
+    (snap,) = _ids("snapchat", "fake_snap")
+
+    listed = {a.id: a for a in store.list_accounts()}
+    expected = [
+        ("Instagram", "https://www.instagram.com/sheep_love33/"),
+        ("Snapchat", "https://www.snapchat.com/@fake_snap"),
+    ]
+
+    read = [store.get_account(insta), store.get_account(snap)]
+
+    assert [(a.platform_label, a.profile_url) for a in read] == expected
+    assert [
+        (listed[i].platform_label, listed[i].profile_url) for i in (insta, snap)
+    ] == expected
+
+
 def test_the_page_shows_one_platform_at_a_time_instagram_first(client):
     _ids("instagram", "sheep_love33")
     (snap,) = _ids("snapchat", "fake_snap")

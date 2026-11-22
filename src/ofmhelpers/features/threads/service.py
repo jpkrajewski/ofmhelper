@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.cache.lock import locked
 from ofmhelpers.config import settings
-from ofmhelpers.db.drive_folders.schema import DriveBoard, DriveCard, DriveFile
+from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard
+from ofmhelpers.db.drive_folders.schema import DriveFile
 from ofmhelpers.db.jobs.schema import Job, JobStatus
 from ofmhelpers.db.jobs.store import list_batch
 from ofmhelpers.db.users.store import refresh_token

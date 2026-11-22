@@ -7,7 +7,7 @@ from signin import make_user, sign_in, sign_in_admin
 
 from ofmhelpers.config.retired import retired
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role

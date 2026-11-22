@@ -17,7 +17,7 @@ from ofmhelpers.db.jobs.store import list_jobs_page
 from ofmhelpers.features.notifications.schema import Notification, Notifications, Reader
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.chats.schema import OpenWait
-lazy from ofmhelpers.db.drive_folders.schema import DriveTarget
+lazy from ofmhelpers.db.drive_folders.models import DriveTarget
 lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.trials.folder import GENERATE, REMAKE
 lazy from ofmhelpers.features.trials.tasks import NOTHING_NEW, Made

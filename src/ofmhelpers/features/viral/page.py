@@ -11,7 +11,7 @@ from ofmhelpers.features.assets.store import make_job_dir, uploads_root
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.features.viral.schema import ViralFile, ViralSearch
+from ofmhelpers.features.viral.models import ViralFile, ViralSearch
 from ofmhelpers.features.viral.service import find_viral
 from ofmhelpers.integrations.instagram import ProfileHandle
 lazy from ofmhelpers.db.jobs.schema import Job

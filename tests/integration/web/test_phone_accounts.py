@@ -4,7 +4,8 @@ from repo_paths import SRC
 from signin import sign_in_agency
 
 from ofmhelpers.db.devices import store
-from ofmhelpers.db.devices.schema import DeviceFields, PhoneQuery, _compact
+from ofmhelpers.db.devices.models import DeviceFields, PhoneQuery
+from ofmhelpers.db.devices.schema import _compact
 from ofmhelpers.db.tracked_accounts.store import list_accounts, untrack
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.web.main import app

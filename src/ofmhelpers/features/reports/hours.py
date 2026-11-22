@@ -7,7 +7,7 @@ from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links.errors import LinkError
 from ofmhelpers.integrations.short_links.providers import get_link_provider
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.short_links.schema import ShortLink
+lazy from ofmhelpers.db.short_links.models import ShortLink
 
 logger = get_logger(__name__)
 

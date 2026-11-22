@@ -6,7 +6,7 @@ from ofmhelpers.integrations.short_links.providers import (
     get_link_provider,
     link_providers,
 )
-lazy from ofmhelpers.db.short_links.schema import ProviderState
+lazy from ofmhelpers.db.short_links.models import ProviderState
 lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
 
 

@@ -7,7 +7,7 @@ from playwright.sync_api import expect
 from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST
 lazy from ofmhelpers.db.clone_examples import store as clone_examples
 lazy from ofmhelpers.db.devices import store as devices
-lazy from ofmhelpers.db.devices.schema import DeviceFields
+lazy from ofmhelpers.db.devices.models import DeviceFields
 lazy from ofmhelpers.db.jobs.schema import JobPreview
 lazy from ofmhelpers.db.jobs.store import create_job, set_job_preview
 lazy from ofmhelpers.features.jobs.runner import run_job

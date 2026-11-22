@@ -11,13 +11,13 @@ from ofmhelpers.config.settings import AccountsSettings
 from ofmhelpers.db.models import AccountSnapshotRow, TrackedPostRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts import repository as tracked_accounts_repository
+from ofmhelpers.db.tracked_accounts.models import AddAccounts
 from ofmhelpers.db.tracked_accounts.schema import (
     NO_CREATOR,
     AccountHistory,
     AccountQuery,
     AccountSort,
     AccountSummary,
-    AddAccounts,
     FollowerChart,
     Snapshot,
     ago,

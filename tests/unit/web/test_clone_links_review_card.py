@@ -7,7 +7,7 @@ from ofmhelpers.db.clone_ai_checks.schema import (
     StoredCloneAiCheck,
 )
 from ofmhelpers.db.jobs.schema import Job
-from ofmhelpers.features.jobs.schema import CloneLinksCard
+from ofmhelpers.features.jobs.models import CloneLinksCard
 
 NOW = 1_800_000_000.0
 STALE_S = 1800

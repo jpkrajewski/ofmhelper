@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from ofmhelpers.db.tracked_accounts.schema import platform_names
+from ofmhelpers.db.tracked_accounts.models import platform_names
 from ofmhelpers.integrations.instagram import (
     InstagramError,
     InstagramRateLimitedError,

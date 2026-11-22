@@ -2,10 +2,10 @@ from functools import lru_cache
 lazy from contextlib import AbstractContextManager
 
 from ofmhelpers.db.devices.store import list_devices
+from ofmhelpers.db.drive_folders.models import DriveTarget
 from ofmhelpers.db.drive_folders.repository import DriveFolderRepository
 from ofmhelpers.db.drive_folders.schema import (
     AccountScan,
-    DriveTarget,
     StoredFolder,
     StoredFolders,
     VaFolder,

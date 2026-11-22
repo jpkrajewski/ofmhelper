@@ -3,7 +3,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from ofmhelpers.db.jobs.schema import ResultFile
-from ofmhelpers.features.jobs.schema import TaskCard
+from ofmhelpers.features.jobs.models import TaskCard
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep
 

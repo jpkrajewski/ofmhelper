@@ -12,7 +12,7 @@ from ofmhelpers.background import sweeps
 from ofmhelpers.db import audit
 from ofmhelpers.db.audit_log import store as audit_log
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.db.models import Authored, Base, Timestamps
 from ofmhelpers.db.phone_revisions import store as phone_revisions

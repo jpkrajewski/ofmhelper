@@ -29,7 +29,7 @@ MAX_ROUTE_LINES = 25
 QUEUE_MACHINERY = ("features/jobs/", "features/events/")
 LOOSE = re.compile(r"\b(dict|tuple|Dict|Tuple|Mapping|MutableMapping|NamedTuple)\b")
 DICTS = re.compile(r"\b(dict|Dict|Mapping|MutableMapping)\b")
-SHAPES = re.compile(r"ofmhelpers\.db\.(\w+\.)+schema$")
+SHAPES = re.compile(r"ofmhelpers\.db\.(\w+\.)+(schema|models)$")
 SERVES_A_MAPPING = {
     "__getitem__",
     "__contains__",
@@ -79,6 +79,11 @@ class Baseline(BaseModel):
     loose_returns: set[str]
     repeated_parameters: set[str]
     silent_excepts: set[str]
+    root_imports: set[str]
+
+
+ROOT_MODULES = {"schema.py", "constants.py"}
+ROOT_IMPORTS = "constants and schemas must import nothing from the project"
 
 
 @cache
@@ -615,3 +620,47 @@ def test_functions_sharing_their_parameters_are_one_class():
             if count >= SHARED_PARAMETERS
         }
     check(found, baseline().repeated_parameters)
+
+
+def is_project(name: str) -> bool:
+    return name == "ofmhelpers" or name.startswith("ofmhelpers.")
+
+
+def imports_the_project(node: ast.AST) -> bool:
+    if isinstance(node, ast.ImportFrom):
+        return node.level > 0 or is_project(node.module or "")
+    if isinstance(node, ast.Import):
+        return any(is_project(alias.name) for alias in node.names)
+    return False
+
+
+def test_constants_and_schemas_import_nothing_from_the_project():
+    found = {
+        name
+        for name, tree in trees().items()
+        if Path(name).name in ROOT_MODULES
+        and any(imports_the_project(node) for node in ast.walk(tree))
+    }
+    known = baseline().root_imports
+
+    assert sorted(found - known) == [], ROOT_IMPORTS
+    assert sorted(known - found) == [], "fixed: delete these lines from baseline.json"
+
+
+def test_the_root_check_sees_a_project_import():
+    lines = (
+        "from ofmhelpers.config import settings",
+        "lazy from ofmhelpers.db.jobs.schema import Job",
+        "import ofmhelpers.log",
+        "from . import models",
+    )
+    clean = (
+        "from pydantic import BaseModel",
+        "import ofmhelpers_tools",
+    )
+
+    def found(line: str) -> bool:
+        return any(imports_the_project(node) for node in ast.walk(ast.parse(line)))
+
+    assert [line for line in lines if not found(line)] == []
+    assert [line for line in clean if found(line)] == []

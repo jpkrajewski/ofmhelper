@@ -12,12 +12,11 @@ from ofmhelpers.db.models import SelfLinkClickRow, SelfLinkDomainRow, ShortLinkR
 from ofmhelpers.db.owner_scope import mine
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.short_links.catalog import DayStat, HourStat
+from ofmhelpers.db.short_links.models import SelfLinkDays, SelfLinkHours
 from ofmhelpers.db.short_links.schema import (
     SelfBreakdownRow,
     SelfDomain,
     SelfLinkCount,
-    SelfLinkDays,
-    SelfLinkHours,
     SelfSeriesPoint,
     SelfTotals,
 )

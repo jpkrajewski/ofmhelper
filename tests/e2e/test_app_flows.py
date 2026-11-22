@@ -11,7 +11,7 @@ from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.watched_profiles import store as watched_profiles
 from ofmhelpers.integrations.gdrive.fake import FakeDrive

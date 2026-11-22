@@ -3,7 +3,7 @@ from ofmhelpers.db.devices.catalog import services
 from ofmhelpers.db.tracked_accounts.store import untrack
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.devices.schema import Device, DeviceLogin
+lazy from ofmhelpers.db.devices.models import Device, DeviceLogin
 
 logger = get_logger(__name__)
 

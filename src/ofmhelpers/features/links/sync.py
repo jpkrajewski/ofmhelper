@@ -19,7 +19,7 @@ from ofmhelpers.integrations.short_links import (
 )
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.short_links.schema import ShortLink
+lazy from ofmhelpers.db.short_links.models import ShortLink
 lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
 
 logger = get_logger(__name__)

@@ -7,7 +7,7 @@ from PIL import Image
 from signin import sign_in_agency
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.distribution import store
 from ofmhelpers.db.distribution.schema import ModelPreset, PostStatus
 from ofmhelpers.db.self_links import store as self_links

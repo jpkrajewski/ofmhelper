@@ -6,12 +6,8 @@ from pydantic import BaseModel
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config.types import AccountFolder
 from ofmhelpers.db.drive_folders import store as drive_folders
-from ofmhelpers.db.drive_folders.schema import (
-    DriveUpload,
-    StoredFolder,
-    UploadTarget,
-    VaFolder,
-)
+from ofmhelpers.db.drive_folders.models import UploadTarget
+from ofmhelpers.db.drive_folders.schema import DriveUpload, StoredFolder, VaFolder
 from ofmhelpers.db.drive_uploads import store
 from ofmhelpers.db.jobs.store import Readers, create_job, fail_job, get_job
 from ofmhelpers.db.tracked_accounts.store import list_accounts

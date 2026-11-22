@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer
 lazy from pydantic import SerializerFunctionWrapHandler
 
 from ofmhelpers.db.cookies.schema import CookieJarSummary, CookieSite, SiteCookies
-from ofmhelpers.db.downloads.schema import DownloadResult
+from ofmhelpers.db.jobs.schema import DownloadResult
 
 __all__ = [
     "CookieJarSummary",

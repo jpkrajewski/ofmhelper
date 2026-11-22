@@ -9,17 +9,13 @@ from ofmhelpers.db.short_links.catalog import (
     detect_target,
     provider_infos,
 )
+from ofmhelpers.db.short_links.models import AccountLinks, ProviderState, ShortLink
 from ofmhelpers.db.short_links.repository import ShortLinkRepository
-from ofmhelpers.db.short_links.schema import (
-    AccountLinks,
-    PlannedLink,
-    ProviderState,
-    ShortLink,
-    utc_today,
-)
-from ofmhelpers.db.tracked_accounts.schema import names_of
+from ofmhelpers.db.short_links.schema import PlannedLink, utc_today
+from ofmhelpers.db.tracked_accounts.models import names_of
 lazy from ofmhelpers.db.short_links.catalog import LinkDays
-lazy from ofmhelpers.db.short_links.schema import GenerateLinks, LinkSyncKey
+lazy from ofmhelpers.db.short_links.models import GenerateLinks
+lazy from ofmhelpers.db.short_links.schema import LinkSyncKey
 lazy from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 
 SOURCE_PLATFORM = "instagram"

@@ -8,7 +8,7 @@ from signin import sign_in_agency
 from ofmhelpers.background import registry
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.jobs.store import get_job, list_batch
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive import folders as drive_folders

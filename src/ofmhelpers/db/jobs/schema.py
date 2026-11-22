@@ -1,11 +1,20 @@
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from ofmhelpers.db.downloads.schema import DownloadResult
+
+class DownloadResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    success: bool
+    output_paths: list[Path] = []
+    error: str | None = None
+    again_error: str | None = None
 
 
 class JobStatus(StrEnum):

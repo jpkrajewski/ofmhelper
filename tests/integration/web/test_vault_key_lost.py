@@ -5,7 +5,7 @@ from signin import sign_in_admin
 
 from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.devices import store
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.web.main import app

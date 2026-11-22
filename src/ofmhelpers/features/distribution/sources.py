@@ -11,7 +11,8 @@ from ofmhelpers.features.drive.folders import ReviewPlace, review_target
 from ofmhelpers.integrations.gdrive import read_live_mode
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.distribution.schema import ModelPreset
-lazy from ofmhelpers.db.drive_folders.schema import DriveCard, DriveFile
+lazy from ofmhelpers.db.drive_folders.models import DriveCard
+lazy from ofmhelpers.db.drive_folders.schema import DriveFile
 
 logger = get_logger(__name__)
 

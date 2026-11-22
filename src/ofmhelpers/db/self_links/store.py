@@ -7,12 +7,12 @@ from ofmhelpers.db.short_links.catalog import LinkDays, LinkHours
 from ofmhelpers.db.short_links.repository import ShortLinkRepository
 from ofmhelpers.db.short_links.schema import SelfChart, SelfLinkStat, SelfStats
 lazy from ofmhelpers.db.short_links.catalog import RemoteLink
+lazy from ofmhelpers.db.short_links.models import SelfLinkDays
 lazy from ofmhelpers.db.short_links.schema import (
     BridgeTarget,
     SelfBreakdownRow,
     SelfClick,
     SelfDomain,
-    SelfLinkDays,
     SelfRange,
     SelfTotals,
 )

@@ -16,16 +16,13 @@ from ofmhelpers.db.devices.catalog import (
     catalog,
     find_model,
     get_service,
+    login_username,
     services,
 )
 from ofmhelpers.db.devices.catalog.schema import CameraLayout
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields, PhoneQuery
 from ofmhelpers.db.devices.repository import DuplicateError
-from ofmhelpers.db.devices.schema import (
-    AddedLogin,
-    DeviceFields,
-    LoginFields,
-    PhoneQuery,
-)
+from ofmhelpers.db.devices.schema import AddedLogin
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts.store import list_accounts, track
@@ -215,7 +212,7 @@ def test_services_include_mail_providers_socials_and_custom():
     ):
         assert key in keys
     assert get_service("threads").link("brand") == "https://www.threads.net/@brand"
-    assert get_service("threads").username("@Brand") == "brand"
+    assert login_username(get_service("threads"), "@Brand") == "brand"
     assert get_service("custom").custom
     assert get_service("custom").kind is ServiceKind.OTHER
     with pytest.raises(ValueError, match="Unknown login service"):
@@ -223,11 +220,12 @@ def test_services_include_mail_providers_socials_and_custom():
 
 
 def test_usernames_are_stored_the_way_the_service_writes_them():
-    assert get_service("gmail").username("  Anna.B@Gmail.com ") == "anna.b@gmail.com"
-    assert get_service("x").username("@SomeOne") == "someone"
+    gmail = get_service("gmail")
+    assert login_username(gmail, "  Anna.B@Gmail.com ") == "anna.b@gmail.com"
+    assert login_username(get_service("x"), "@SomeOne") == "someone"
     insta = get_service("instagram")
-    assert insta.username("https://www.instagram.com/Yuki_K/") == "yuki_k"
-    assert get_service("custom").username("  JohnDoe ") == "JohnDoe"
+    assert login_username(insta, "https://www.instagram.com/Yuki_K/") == "yuki_k"
+    assert login_username(get_service("custom"), "  JohnDoe ") == "JohnDoe"
 
 
 def test_custom_service_needs_its_provider_name():

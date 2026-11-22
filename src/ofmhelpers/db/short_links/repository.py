@@ -21,14 +21,8 @@ from ofmhelpers.db.models import (
 from ofmhelpers.db.owner_scope import mine
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.short_links.catalog import DayStat
-from ofmhelpers.db.short_links.schema import (
-    BridgeTarget,
-    LinkAddress,
-    LinkSync,
-    LinkSyncKey,
-    SelfLink,
-    ShortLink,
-)
+from ofmhelpers.db.short_links.models import LinkSync, SelfLink, ShortLink
+from ofmhelpers.db.short_links.schema import BridgeTarget, LinkAddress, LinkSyncKey
 lazy from ofmhelpers.db.short_links.schema import PlannedLink
 
 LIVE = ("active", "inactive")

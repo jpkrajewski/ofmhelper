@@ -1,17 +1,15 @@
 from functools import lru_cache
 
 from ofmhelpers.db.devices.catalog import services
+from ofmhelpers.db.devices.models import AccountPhones, PhonesByAccount
 from ofmhelpers.db.devices.repository import DeviceRepository
-from ofmhelpers.db.devices.schema import AccountPhones, PhonesByAccount
-from ofmhelpers.db.tracked_accounts.schema import names_of
+from ofmhelpers.db.tracked_accounts.models import names_of
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users.store import agency_id
+lazy from ofmhelpers.db.devices.models import Device, DeviceFields, LoginFields
 lazy from ofmhelpers.db.devices.schema import (
     AddedLogin,
     ArchivedLogin,
-    Device,
-    DeviceFields,
-    LoginFields,
     LoginSecrets,
 )
 lazy from ofmhelpers.db.tracked_accounts.schema import TrackedAccount

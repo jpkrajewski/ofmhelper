@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.drive_folders.schema import DriveUpload, UploadTarget
+from ofmhelpers.db.drive_folders.models import UploadTarget
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import ParamHistory, Readers, get_job
 from ofmhelpers.db.users.store import refresh_token
@@ -26,13 +26,15 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_values,
 )
 from ofmhelpers.features.drive.uploads import targets as drive_targets
+from ofmhelpers.features.jobs.models import CloneCard
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.jobs.schema import CloneCard, CloneSource
+from ofmhelpers.features.jobs.schema import CloneSource
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import CloneRefusedError
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.media.exports import exports
 from ofmhelpers.monitoring.telemetry import in_this_trace
+lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
 
 TASK = "clone"

@@ -31,7 +31,7 @@ from ofmhelpers.features.trials.state import (
     load,
 )
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.drive_folders.schema import DriveBoard, DriveCard
+lazy from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard
 lazy from ofmhelpers.db.jobs.schema import Job
 
 logger = get_logger(__name__)

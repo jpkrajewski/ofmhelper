@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.db.picture_presets.schema import PicturePreset
-from ofmhelpers.features.jobs.schema import JobsQueued, TaskCard
+from ofmhelpers.features.jobs.models import TaskCard
+from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.pictures import service
 from ofmhelpers.features.pictures.service import LABEL, TASK, run_picture
 from ofmhelpers.features.pictures.targets import (

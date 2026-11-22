@@ -4,12 +4,8 @@ lazy from collections.abc import Iterator
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
-from ofmhelpers.db.devices.schema import (
-    AssignAccount,
-    DeviceFields,
-    LoginFields,
-    PhoneQuery,
-)
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields, PhoneQuery
+from ofmhelpers.db.devices.schema import AssignAccount
 from ofmhelpers.db.phone_revisions.schema import Restored
 from ofmhelpers.features.phones import service
 from ofmhelpers.features.phones import workbook as phones_workbook

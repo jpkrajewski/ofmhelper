@@ -2,9 +2,10 @@ from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.devices.catalog import tracked_services
-from ofmhelpers.db.devices.schema import PhonesByAccount
+from ofmhelpers.db.devices.models import PhonesByAccount
 from ofmhelpers.db.devices.store import phones_by_account
-from ofmhelpers.db.short_links.schema import LinkPeriod, ShortLink
+from ofmhelpers.db.short_links.models import ShortLink
+from ofmhelpers.db.short_links.schema import LinkPeriod
 from ofmhelpers.db.short_links.store import links_by_account
 from ofmhelpers.db.tracked_accounts import store
 from ofmhelpers.db.tracked_accounts.schema import (
@@ -12,7 +13,6 @@ from ofmhelpers.db.tracked_accounts.schema import (
     AccountQuery,
     AccountSort,
     AccountSummary,
-    AddAccounts,
     AddResult,
     FollowerChart,
     Period,
@@ -24,6 +24,7 @@ from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.integrations.socials import platforms
 from ofmhelpers.integrations.socials.platforms.base import Platform
+lazy from ofmhelpers.db.tracked_accounts.models import AddAccounts
 
 
 class ListView(BaseModel):

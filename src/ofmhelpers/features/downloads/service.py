@@ -8,11 +8,8 @@ from pydantic import BaseModel
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.cookies import store as login_cookies
 from ofmhelpers.db.downloads import store
-from ofmhelpers.db.downloads.schema import (
-    DownloadedFile,
-    DownloadResult,
-    DownloadsQueued,
-)
+from ofmhelpers.db.downloads.schema import DownloadedFile, DownloadsQueued
+from ofmhelpers.db.jobs.schema import DownloadResult
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.store import register_generated_asset

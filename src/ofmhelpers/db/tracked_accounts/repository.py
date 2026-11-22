@@ -18,6 +18,7 @@ from ofmhelpers.db.models import (
 )
 from ofmhelpers.db.owner_scope import mine
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.db.tracked_accounts.models import platform_names
 from ofmhelpers.db.tracked_accounts.schema import (
     AccountMetrics,
     AccountProfile,
@@ -31,11 +32,14 @@ from ofmhelpers.db.tracked_accounts.schema import (
 
 def _account(row: TrackedAccountRow, creator: str | None) -> TrackedAccount:
     profile, metrics = row.profile, row.metrics
+    names = platform_names().get(row.platform)
     return TrackedAccount(
         id=row.id,
         user_id=row.user_id,
         platform=row.platform,
         handle=row.handle,
+        profile_url=names.profile_url(row.handle) if names else "",
+        platform_label=names.label if names else "",
         creator=creator,
         notes=row.notes,
         added_at=row.created_at.timestamp(),
