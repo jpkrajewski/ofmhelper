@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field, JsonValue, PrivateAttr, model_validator
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import Created
@@ -33,7 +33,7 @@ class GalleryQuery(LoggedFields):
 
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_unset(cls, data: object) -> object:
+    def _blank_is_unset(cls, data: JsonValue) -> JsonValue:
         if isinstance(data, Mapping):
             return {k: v for k, v in data.items() if v != ""}
         return data

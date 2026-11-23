@@ -8,10 +8,11 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, cast
 from urllib.parse import urlsplit
-lazy from collections.abc import Mapping
+lazy from collections.abc import Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 lazy import requests
+lazy from _typeshed import SupportsRead
 
 from ofmhelpers.integrations.instagram.fake import CDN, fake_instagram
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
@@ -243,7 +244,12 @@ class FakeApify:
             return FakeReply.json_body(items)
         return _error(404, "page-not-found", f"No fake for {request.method} {path}")
 
-    def _start(self, actor: str, token: str, body: object) -> FakeReply:
+    def _start(
+        self,
+        actor: str,
+        token: str,
+        body: bytes | str | Iterable[bytes | str] | SupportsRead[bytes | str] | None,
+    ) -> FakeReply:
         if actor not in (REEL_SCRAPER, PROFILE_SCRAPER, X_SCRAPER):
             return _error(404, "record-not-found", f"Actor {actor} was not found")
         if token == BROKE_KEY:

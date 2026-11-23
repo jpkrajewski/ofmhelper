@@ -3,7 +3,14 @@
 import re
 from typing import Annotated, NoReturn
 
-from pydantic import AliasChoices, BaseModel, BeforeValidator, Field, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    JsonValue,
+    model_validator,
+)
 
 from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
@@ -149,7 +156,7 @@ def raise_for_read(status: int, text: str) -> NoReturn:
 class Unwrapped(Lenient):
     @model_validator(mode="before")
     @classmethod
-    def _inner(cls, data: object) -> object:
+    def _inner(cls, data: JsonValue) -> JsonValue:
         if (
             isinstance(data, dict)
             and "status" not in data

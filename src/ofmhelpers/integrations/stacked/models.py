@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 
 class _Api(BaseModel):
@@ -55,12 +55,12 @@ class Message(_Api):
 
     @field_validator("user_id", "type", "custom_type", "text", mode="before")
     @classmethod
-    def _null_is_empty(cls, value: object) -> object:
+    def _null_is_empty(cls, value: JsonValue) -> JsonValue:
         return "" if value is None else value
 
     @field_validator("reactions", mode="before")
     @classmethod
-    def _null_is_none_yet(cls, value: object) -> object:
+    def _null_is_none_yet(cls, value: JsonValue) -> JsonValue:
         return [] if value is None else value
 
 

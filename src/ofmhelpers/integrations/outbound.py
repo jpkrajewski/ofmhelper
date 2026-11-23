@@ -3,7 +3,7 @@
 import io
 import json
 from functools import lru_cache
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
@@ -26,7 +26,11 @@ class FakeReply(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def json_body(cls, data: object, status: int = 200) -> FakeReply:
+    def json_body(
+        cls,
+        data: Mapping[str, Any] | list[Any],
+        status: int = 200,
+    ) -> FakeReply:
         return cls(
             status=status,
             body=json.dumps(data).encode(),

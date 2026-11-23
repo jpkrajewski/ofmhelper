@@ -207,7 +207,10 @@ class FakeOopsie(_Fake):
             )
 
     @staticmethod
-    def _ok(data: object, status: int = 200) -> FakeReply:
+    def _ok(
+        data: Mapping[str, Any] | list[Any],
+        status: int = 200,
+    ) -> FakeReply:
         return FakeReply.json_body({"success": True, "data": data}, status)
 
     @staticmethod

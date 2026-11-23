@@ -24,6 +24,7 @@ from sqlalchemy import (
     values,
 )
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array, array_agg
+lazy from pydantic import JsonValue
 lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.config import settings
@@ -218,7 +219,7 @@ class JobRepository(CachedRepository):
         job_id: str,
         status: str,
         *,
-        result: object = _UNSET,
+        result: JsonValue | _UNSET = _UNSET,
         error: str | _UNSET | None = _UNSET,
     ) -> None:
         finished = status in ("done", "failed")
@@ -252,7 +253,7 @@ class JobRepository(CachedRepository):
             s.execute(update(JobRow).where(JobRow.id == job_id).values(preview=preview))
 
     @invalidates_cache
-    def update_result(self, job_id: str, result: object) -> None:
+    def update_result(self, job_id: str, result: JsonValue) -> None:
         with session_scope() as s:
             s.execute(update(JobRow).where(JobRow.id == job_id).values(result=result))
 

@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 lazy from collections.abc import Iterator
 
+lazy from pydantic import JsonValue
+
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import files_naming
 from ofmhelpers.features.kinds import classify_kind
@@ -15,7 +17,7 @@ logger = get_logger(__name__)
 _MEDIA = {"image", "video", "audio"}
 
 
-def _strings(value: object) -> Iterator[str]:
+def _strings(value: JsonValue) -> Iterator[str]:
     if isinstance(value, str):
         yield value
     elif isinstance(value, list):

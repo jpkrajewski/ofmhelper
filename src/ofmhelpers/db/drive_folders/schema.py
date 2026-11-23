@@ -3,7 +3,7 @@
 import mimetypes
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
@@ -29,7 +29,7 @@ class DriveFile(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _folder_from_mime_type(cls, data: object) -> object:
+    def _folder_from_mime_type(cls, data: JsonValue) -> JsonValue:
         if isinstance(data, dict) and "is_folder" not in data:
             mime_type = data.get("mimeType", data.get("mime_type", ""))
             return {**data, "is_folder": mime_type == FOLDER_MIME}

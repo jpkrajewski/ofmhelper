@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 lazy import requests
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
@@ -141,7 +141,7 @@ def _chat(chat_id: str) -> FakeChat:
     return FakeChat(id=int(chat_id), type=kind)
 
 
-def _ok(result: object) -> FakeReply:
+def _ok(result: JsonValue | Mapping[str, Any] | list[Any]) -> FakeReply:
     return FakeReply.json_body({"ok": True, "result": result})
 
 

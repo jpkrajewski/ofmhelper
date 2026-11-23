@@ -36,7 +36,7 @@ class RunningHubClient:
     def _post(
         self,
         path: str,
-        json: object = None,
+        json: Mapping[str, Any] | None = None,
         files: Mapping[str, Any] | None = None,
     ) -> requests.Response:
         return call(

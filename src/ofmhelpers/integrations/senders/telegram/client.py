@@ -4,6 +4,7 @@ import os
 from functools import lru_cache
 from http import HTTPStatus
 from typing import Any
+lazy from collections.abc import Mapping
 
 import requests
 from pydantic import ValidationError
@@ -97,7 +98,7 @@ class TelegramClient:
         return reply
 
 
-def _update(raw: object) -> Update | None:
+def _update(raw: Mapping[str, Any]) -> Update | None:
     try:
         return Update.model_validate(raw)
     except ValidationError:  # silent: the error quotes someone's words

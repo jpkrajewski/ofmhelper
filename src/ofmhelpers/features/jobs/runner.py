@@ -5,7 +5,7 @@ lazy from collections.abc import Callable
 
 import logfire
 from opentelemetry import trace
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from redis.exceptions import RedisError
 from rq.timeouts import JobTimeoutException
 
@@ -179,7 +179,11 @@ def start_job(  # noqa: PLR0913
     return job_id
 
 
-def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: object) -> None:
+def _record_outcome(
+    span: logfire.LogfireSpan,
+    job_id: str,
+    result: JsonValue | BaseModel | list[BaseModel],
+) -> None:
     items = result if isinstance(result, list) else []
     failed = [
         item for item in items if isinstance(item, DownloadResult) and not item.success

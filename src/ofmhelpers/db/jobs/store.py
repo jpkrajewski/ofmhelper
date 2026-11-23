@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable, Collection
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from pydantic import BaseModel, JsonValue
 
@@ -102,7 +102,10 @@ def task_of(job_id: str) -> JobHeader | None:
     return JobHeader(task=job.task, actor=job.actor) if job else None
 
 
-def finish_job(job_id: str, result: object) -> None:
+def finish_job(
+    job_id: str,
+    result: JsonValue | BaseModel | list[BaseModel],
+) -> None:
     _repository().update_status(job_id, "done", result=_stored(result))
 
 
@@ -155,20 +158,20 @@ def spend(user_ids: Collection[int], periods: list[SpendPeriod]) -> list[Spend]:
     return _repository().spend(tuple(sorted(user_ids)), tuple(periods))
 
 
-def _stored(result: object) -> JsonValue:
+def _stored(result: JsonValue | BaseModel | list[BaseModel]) -> JsonValue:
     if isinstance(result, BaseModel):
         return result.model_dump(mode="json")
     if not isinstance(result, list):
-        return cast("JsonValue", result)
+        return result
     return [_stored_entry(item) for item in result]
 
 
-def _stored_entry(item: object) -> JsonValue:
+def _stored_entry(item: JsonValue | BaseModel) -> JsonValue:
     if isinstance(item, ResultFile):
         return item.model_dump(mode="json", exclude_unset=True)
     if isinstance(item, BaseModel):
         return item.model_dump(mode="json")
-    return cast("JsonValue", item)
+    return item
 
 
 def running_jobs() -> list[Job]:

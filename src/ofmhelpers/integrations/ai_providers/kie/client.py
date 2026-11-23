@@ -81,7 +81,7 @@ class KieAIClient:
         url: str,
         timeout: float | None = None,
         params: Mapping[str, str] | None = None,
-        json: object = None,
+        json: Mapping[str, Any] | None = None,
         data: Mapping[str, str] | None = None,
         files: Mapping[str, Any] | None = None,
     ) -> requests.Response:

@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
+lazy from collections.abc import Mapping
 
 from pydantic import BaseModel, Field
 lazy import requests
@@ -49,7 +50,7 @@ def _code(response: requests.Response) -> str | None:
     return body.get("code") if isinstance(body, dict) else None
 
 
-def _timestamp(value: object) -> float | None:
+def _timestamp(value: Mapping[str, Any] | str | None) -> float | None:
     if isinstance(value, dict) and "_seconds" in value:
         return float(value["_seconds"])
     if isinstance(value, str):

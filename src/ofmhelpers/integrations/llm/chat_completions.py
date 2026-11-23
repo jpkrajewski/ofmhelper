@@ -63,7 +63,7 @@ def strict_schema(answer: type[BaseModel]) -> StrictSchema:  # noqa: C901
     schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 
-    def walk(node: object) -> None:
+    def walk(node: dict[str, Any] | list[Any]) -> None:
         if isinstance(node, list):
             for item in node:
                 walk(item)

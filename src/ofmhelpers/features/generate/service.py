@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 lazy from collections.abc import Callable
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, JsonValue, ValidationError
 from starlette.datastructures import FormData, UploadFile
 
 from ofmhelpers.cache import enqueue
@@ -195,7 +195,7 @@ def run_ai(  # noqa: PLR0913, PLR0917
     provider: str,
     model: str,
     part: int = 0,
-    **values: object,
+    **values: JsonValue,
 ) -> list[ResultFile]:
     spec = get_spec(model)
     client = get_provider(provider, api_key)

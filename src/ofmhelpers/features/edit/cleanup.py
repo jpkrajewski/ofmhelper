@@ -5,6 +5,8 @@ import time
 from pathlib import Path
 lazy from collections.abc import Iterator
 
+lazy from pydantic import JsonValue
+
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import params_naming
 from ofmhelpers.features.assets.store import assets_root_for_actor
@@ -20,7 +22,7 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 
-def _strings(value: object) -> Iterator[str]:
+def _strings(value: JsonValue) -> Iterator[str]:
     if isinstance(value, str):
         yield value
     elif isinstance(value, list):

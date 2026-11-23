@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import UploadFile
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, JsonValue, StringConstraints, model_validator
 
 from ofmhelpers.config import settings
 from ofmhelpers.monitoring.telemetry import LoggedFields
@@ -23,7 +23,7 @@ def at_most[N: (int, float)](value: N, limit: N) -> N:
 class FormModel(LoggedFields):
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_not_sent(cls, data: object) -> object:
+    def _blank_is_not_sent(cls, data: JsonValue) -> JsonValue:
         if not isinstance(data, dict):
             return data
         return {name: value for name, value in data.items() if value != ""}

@@ -2,6 +2,8 @@
 import re
 import time
 from http import HTTPStatus
+from typing import Any
+lazy from collections.abc import Mapping
 
 import httpx
 lazy from google import genai
@@ -220,7 +222,7 @@ def _usage(response: types.GenerateContentResponse) -> Usage:
     )
 
 
-def _retry_delay(body: object) -> float | None:
+def _retry_delay(body: Mapping[str, Any]) -> float | None:
     error = body.get("error", {}) if isinstance(body, dict) else {}
     for item in error.get("details", []) or []:
         found = _DURATION.match(str(item.get("retryDelay", "")))
