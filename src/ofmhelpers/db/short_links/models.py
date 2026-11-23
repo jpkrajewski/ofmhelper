@@ -1,9 +1,9 @@
 # Copyright (C) 2026 jpkrajewski
 
 from collections.abc import Callable, Mapping
-from datetime import date
 from typing import Any, Self
 from urllib.parse import urlencode
+lazy from datetime import date
 
 from pydantic import BaseModel, Field, HttpUrl, model_validator
 

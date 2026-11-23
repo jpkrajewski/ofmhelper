@@ -1,8 +1,8 @@
 # Copyright (C) 2026 jpkrajewski
 
 import importlib.util
-from pathlib import Path
-from types import ModuleType
+lazy from pathlib import Path
+lazy from types import ModuleType
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, block
 

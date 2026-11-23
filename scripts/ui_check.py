@@ -8,11 +8,11 @@ import subprocess
 import sys
 import tempfile
 import traceback
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
+lazy from collections.abc import Callable
 
 import requests
 from PIL import Image

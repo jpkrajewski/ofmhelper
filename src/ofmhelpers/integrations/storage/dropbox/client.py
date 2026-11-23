@@ -2,13 +2,13 @@
 
 import mimetypes
 import zipfile
-from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC
 from functools import lru_cache
-from pathlib import Path
 from types import MappingProxyType
 from urllib.parse import quote
+lazy from collections.abc import Iterator
+lazy from pathlib import Path
 
 import requests
 from dropbox import Dropbox, create_session

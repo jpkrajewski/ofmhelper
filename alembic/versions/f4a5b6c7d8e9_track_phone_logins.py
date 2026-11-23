@@ -2,8 +2,8 @@
 
 import re
 import time
-from collections.abc import Sequence
 from urllib.parse import urlsplit
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 

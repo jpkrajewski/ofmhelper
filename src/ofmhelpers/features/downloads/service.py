@@ -1,8 +1,8 @@
 # Copyright (C) 2026 jpkrajewski
 
-from collections.abc import Callable
-from pathlib import Path
 from typing import Any
+lazy from collections.abc import Callable
+lazy from pathlib import Path
 
 from pydantic import BaseModel
 

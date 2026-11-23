@@ -1,9 +1,9 @@
 # Copyright (C) 2026 jpkrajewski
 
-from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
+lazy from collections.abc import Iterator
 
 import pytest
 from signin import make_user

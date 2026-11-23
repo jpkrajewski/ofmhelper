@@ -1,8 +1,8 @@
 # Copyright (C) 2026 jpkrajewski
 
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+lazy from collections.abc import Callable
 
 from ofmhelpers.db.cookies import store as login_cookies
 from ofmhelpers.db.downloads import store

@@ -1,7 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
-from datetime import date
 from typing import Literal, get_args
+lazy from datetime import date
 
 from pydantic import BaseModel, Field, SkipValidation
 

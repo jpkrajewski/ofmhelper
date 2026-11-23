@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-from collections.abc import Sequence
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB

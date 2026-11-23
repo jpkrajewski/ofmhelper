@@ -4,7 +4,7 @@ import asyncio
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from download_files import fake_downloads, fake_posters

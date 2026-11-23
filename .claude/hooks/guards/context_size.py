@@ -1,8 +1,8 @@
 # Copyright (C) 2026 jpkrajewski
 
 import os
-from collections.abc import Iterator
 from pathlib import Path
+lazy from collections.abc import Iterator
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 

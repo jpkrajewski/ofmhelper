@@ -1,7 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
-from collections.abc import Callable
 from typing import BinaryIO
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 

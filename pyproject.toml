@@ -149,10 +149,6 @@ select = ["ALL"]
 ignore = [
     # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    # An import only annotations use: `lazy import` saves nothing for the stdlib,
-    # which is loaded anyway (TC001/TC002 stay on: first- and third-party ones
-    # really do not load until used).
-    "TC003",
 ]
 
 # Annotations these classes read when the class is created: an import they use

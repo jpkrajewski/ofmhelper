@@ -1,7 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
-from collections.abc import Sequence
 from pathlib import Path
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 

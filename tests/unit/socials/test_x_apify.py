@@ -1,11 +1,11 @@
 # Copyright (C) 2026 jpkrajewski
 
 import time
-from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
+lazy from collections.abc import Iterator
 
 import pytest
 from pydantic import BaseModel

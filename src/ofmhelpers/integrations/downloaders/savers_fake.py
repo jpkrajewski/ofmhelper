@@ -1,9 +1,9 @@
 # Copyright (C) 2026 jpkrajewski
 
 import urllib.parse
-from collections.abc import Mapping
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
+lazy from collections.abc import Mapping
 
 if TYPE_CHECKING:
     import requests

@@ -2,8 +2,8 @@
 
 import importlib.util
 import sys
-from collections.abc import Callable
-from pathlib import Path
+lazy from collections.abc import Callable
+lazy from pathlib import Path
 
 import pytest
 import requests

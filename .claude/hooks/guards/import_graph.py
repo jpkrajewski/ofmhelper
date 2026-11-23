@@ -2,8 +2,8 @@
 
 import importlib.util
 import re
-from types import ModuleType
 from typing import Any
+lazy from types import ModuleType
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, context, deny
 from guards.review import AGENTS, REVIEWER_AGENT, SHELLS, is_review_agent
