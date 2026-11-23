@@ -55,7 +55,7 @@ class _Pen:
     def __init__(self, finish: str) -> None:
         self.finish = finish
         self.parts: list[str] = []
-        self.raised = _mix(finish, "#000000" if _light(finish) else "#fff", 0.1)
+        self.raised = _mix(finish, "#000000" if _light(finish) else "#ffffff", 0.1)
         self.edge = _mix(finish, "#000000", 0.35)
 
     def add(self, element: str) -> None:
@@ -76,7 +76,7 @@ class _Pen:
             f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.58:.2f}" fill="#07070a"/>'
             f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.3:.2f}" fill="#1c2a44"/>'
             f'<circle cx="{cx - r * 0.25:.2f}" cy="{cy - r * 0.28:.2f}" '
-            f'r="{r * 0.13:.2f}" fill="#fff" fill-opacity="0.55"/>',
+            f'r="{r * 0.13:.2f}" fill="#ffffff" fill-opacity="0.55"/>',
         )
 
     def flash(self, cx: float, cy: float, r: float = 2.2) -> None:
@@ -217,7 +217,7 @@ def render(model: PhoneModel | None, finish: Finish | None) -> str:
     cw, ch = _CANVAS
     x, y = (cw - w) / 2, (ch - h) / 2
     pen = _Pen(color)
-    shine = _mix(color, "#fff", 0.22)
+    shine = _mix(color, "#ffffff", 0.22)
     pen.add(
         '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
         f'<stop offset="0" stop-color="{shine}"/><stop offset="0.55" '
