@@ -179,7 +179,7 @@ def start_job(
     return job_id
 
 
-def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None:
+def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: object) -> None:
     items = result if isinstance(result, list) else []
     failed = [
         item for item in items if isinstance(item, DownloadResult) and not item.success

@@ -1,5 +1,4 @@
 # Copyright (C) 2026 jpkrajewski
-
 import json
 import threading
 from typing import Any
@@ -27,7 +26,7 @@ def _error(
     return httpx.Response(code, json={"error": error}, headers=headers)
 
 
-def _not_strict(node: Any) -> str | None:
+def _not_strict(node: object) -> str | None:
     if isinstance(node, list):
         return next((r for r in map(_not_strict, node) if r), None)
     if not isinstance(node, dict):

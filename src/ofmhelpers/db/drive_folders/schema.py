@@ -2,7 +2,6 @@
 
 import mimetypes
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -30,7 +29,7 @@ class DriveFile(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _folder_from_mime_type(cls, data: Any) -> Any:
+    def _folder_from_mime_type(cls, data: object) -> object:
         if isinstance(data, dict) and "is_folder" not in data:
             mime_type = data.get("mimeType", data.get("mime_type", ""))
             return {**data, "is_folder": mime_type == FOLDER_MIME}

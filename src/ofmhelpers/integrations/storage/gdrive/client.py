@@ -7,7 +7,6 @@ import threading
 import zipfile
 from functools import lru_cache
 from http import HTTPStatus
-from typing import Any
 lazy from pathlib import Path
 
 import logfire
@@ -174,7 +173,7 @@ class Drive:
     def __init__(
         self,
         credentials: Credentials,
-        http: Any = None,
+        http: httplib2.Http | None = None,
         *,
         timeout_s: float | None = None,
         retries: int | None = None,

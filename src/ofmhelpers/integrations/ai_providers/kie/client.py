@@ -1,5 +1,4 @@
 # Copyright (C) 2026 jpkrajewski
-
 import pathlib
 from typing import Any, NoReturn
 lazy from collections.abc import Mapping
@@ -82,7 +81,7 @@ class KieAIClient:
         url: str,
         timeout: float | None = None,
         params: Mapping[str, str] | None = None,
-        json: Any = None,
+        json: object = None,
         data: Mapping[str, str] | None = None,
         files: Mapping[str, Any] | None = None,
     ) -> requests.Response:

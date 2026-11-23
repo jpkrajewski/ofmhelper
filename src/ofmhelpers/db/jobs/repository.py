@@ -218,7 +218,7 @@ class JobRepository(CachedRepository):
         job_id: str,
         status: str,
         *,
-        result: Any = _UNSET,
+        result: object = _UNSET,
         error: str | _UNSET | None = _UNSET,
     ) -> None:
         finished = status in ("done", "failed")
@@ -252,7 +252,7 @@ class JobRepository(CachedRepository):
             s.execute(update(JobRow).where(JobRow.id == job_id).values(preview=preview))
 
     @invalidates_cache
-    def update_result(self, job_id: str, result: Any) -> None:
+    def update_result(self, job_id: str, result: object) -> None:
         with session_scope() as s:
             s.execute(update(JobRow).where(JobRow.id == job_id).values(result=result))
 

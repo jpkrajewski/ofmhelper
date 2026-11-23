@@ -141,7 +141,7 @@ def _chat(chat_id: str) -> FakeChat:
     return FakeChat(id=int(chat_id), type=kind)
 
 
-def _ok(result: Any) -> FakeReply:
+def _ok(result: object) -> FakeReply:
     return FakeReply.json_body({"ok": True, "result": result})
 
 

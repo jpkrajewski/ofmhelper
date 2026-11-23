@@ -3,7 +3,7 @@
 import io
 import json
 from functools import lru_cache
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
@@ -26,7 +26,7 @@ class FakeReply(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def json_body(cls, data: Any, status: int = 200) -> FakeReply:
+    def json_body(cls, data: object, status: int = 200) -> FakeReply:
         return cls(
             status=status,
             body=json.dumps(data).encode(),
@@ -79,9 +79,9 @@ class FakeAdapter(BaseAdapter):
         self,
         request: requests.PreparedRequest,
         stream: bool = False,  # noqa: ARG002
-        timeout: Any = None,  # noqa: ARG002
-        verify: Any = True,  # noqa: ARG002
-        cert: Any = None,  # noqa: ARG002
+        timeout: float | tuple[float | None, float | None] | None = None,  # noqa: ARG002
+        verify: bool | str = True,  # noqa: ARG002
+        cert: str | tuple[str, str] | None = None,  # noqa: ARG002
         proxies: Mapping[str, str] | None = None,
     ) -> requests.Response:
         host = urlsplit(request.url or "").hostname or ""

@@ -97,7 +97,7 @@ class TelegramClient:
         return reply
 
 
-def _update(raw: Any) -> Update | None:
+def _update(raw: object) -> Update | None:
     try:
         return Update.model_validate(raw)
     except ValidationError:  # silent: the error quotes someone's words

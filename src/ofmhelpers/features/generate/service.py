@@ -195,7 +195,7 @@ def run_ai(
     provider: str,
     model: str,
     part: int = 0,
-    **values: Any,
+    **values: object,
 ) -> list[ResultFile]:
     spec = get_spec(model)
     client = get_provider(provider, api_key)

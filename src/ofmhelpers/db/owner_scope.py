@@ -1,7 +1,11 @@
 # Copyright (C) 2026 jpkrajewski
 
-from typing import Any
+lazy from sqlalchemy import ColumnElement
+lazy from sqlalchemy.orm import InstrumentedAttribute
 
 
-def mine(column: Any, owner: int | None) -> list:
+def mine(
+    column: ColumnElement[bool] | InstrumentedAttribute,
+    owner: int | None,
+) -> list:
     return [] if owner is None else [column == owner]

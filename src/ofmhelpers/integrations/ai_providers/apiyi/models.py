@@ -1,7 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import re
-from typing import Annotated, Any, NoReturn
+from typing import Annotated, NoReturn
 
 from pydantic import AliasChoices, BaseModel, BeforeValidator, Field, model_validator
 
@@ -149,7 +149,7 @@ def raise_for_read(status: int, text: str) -> NoReturn:
 class Unwrapped(Lenient):
     @model_validator(mode="before")
     @classmethod
-    def _inner(cls, data: Any) -> Any:
+    def _inner(cls, data: object) -> object:
         if (
             isinstance(data, dict)
             and "status" not in data

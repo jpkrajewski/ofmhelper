@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
@@ -243,7 +243,7 @@ class FakeApify:
             return FakeReply.json_body(items)
         return _error(404, "page-not-found", f"No fake for {request.method} {path}")
 
-    def _start(self, actor: str, token: str, body: Any) -> FakeReply:
+    def _start(self, actor: str, token: str, body: object) -> FakeReply:
         if actor not in (REEL_SCRAPER, PROFILE_SCRAPER, X_SCRAPER):
             return _error(404, "record-not-found", f"Actor {actor} was not found")
         if token == BROKE_KEY:
@@ -252,7 +252,7 @@ class FakeApify:
                 "not-enough-usage-to-run-paid-actor",
                 "You have reached your monthly usage limit",
             )
-        run_input = json.loads(body or b"{}")
+        run_input = json.loads(cast("bytes | str", body) or b"{}")
         with self._lock:
             self.inputs.append({"actor": actor, **run_input})
         if actor == X_SCRAPER:

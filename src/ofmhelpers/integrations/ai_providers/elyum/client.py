@@ -1,5 +1,4 @@
 # Copyright (C) 2026 jpkrajewski
-
 import mimetypes
 import re
 from typing import Any, NoReturn
@@ -58,7 +57,7 @@ class ElyumClient:
         method: str,
         path: str,
         headers: Mapping[str, str] | None = None,
-        json: Any = None,
+        json: object = None,
         files: Mapping[str, Any] | None = None,
     ) -> requests.Response:
         return call(

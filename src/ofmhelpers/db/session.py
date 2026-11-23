@@ -1,12 +1,12 @@
 # Copyright (C) 2026 jpkrajewski
 
 from contextlib import contextmanager
-from typing import Any
 lazy from collections.abc import Iterator
 
 import sqlalchemy
 from sqlalchemy import Engine, event
 from sqlalchemy.orm import Session, sessionmaker
+lazy from sqlalchemy.engine.interfaces import DBAPICursor
 
 from ofmhelpers import acting
 from ofmhelpers.config import settings
@@ -49,7 +49,7 @@ def _new_transaction(conn: sqlalchemy.Connection) -> None:
 
 def _say_who_acts(
     conn: sqlalchemy.Connection,
-    cursor: Any,
+    cursor: DBAPICursor,
     statement: str,
     _parameters: object,
     _context: object,

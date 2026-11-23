@@ -118,7 +118,7 @@ class ApiyiClient:
         refuse: Callable[[requests.Response], NoReturn] = refused,
         timeout: float | None = None,
         headers: Mapping[str, str] | None = None,
-        json: Any = None,
+        json: object = None,
         data: Mapping[str, Any] | None = None,
         files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
     ) -> requests.Response:
@@ -141,7 +141,7 @@ class ApiyiClient:
         refuse: Callable[[requests.Response], NoReturn] = refused,
         timeout: float | None = None,
         headers: Mapping[str, str] | None = None,
-        json: Any = None,
+        json: object = None,
         data: Mapping[str, Any] | None = None,
         files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
     ) -> requests.Response:

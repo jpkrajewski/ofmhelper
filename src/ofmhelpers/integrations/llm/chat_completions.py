@@ -63,7 +63,7 @@ def strict_schema(answer: type[BaseModel]) -> StrictSchema:
     schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 
-    def walk(node: Any) -> None:
+    def walk(node: object) -> None:
         if isinstance(node, list):
             for item in node:
                 walk(item)

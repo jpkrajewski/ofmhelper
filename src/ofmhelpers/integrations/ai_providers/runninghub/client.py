@@ -1,5 +1,4 @@
 # Copyright (C) 2026 jpkrajewski
-
 from pathlib import Path
 from typing import Any, NoReturn
 lazy from collections.abc import Mapping
@@ -37,7 +36,7 @@ class RunningHubClient:
     def _post(
         self,
         path: str,
-        json: Any = None,
+        json: object = None,
         files: Mapping[str, Any] | None = None,
     ) -> requests.Response:
         return call(

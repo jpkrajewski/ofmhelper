@@ -149,7 +149,6 @@ select = ["ALL"]
 ignore = [
     # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    "ANN401",
     # stdout IS the log here (Docker captures it). Note ruff's T201 fix
     # DELETES the print rather than converting it -- never autofix this.
     "T201",

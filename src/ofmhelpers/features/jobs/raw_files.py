@@ -2,7 +2,6 @@
 
 import time
 from pathlib import Path
-from typing import Any
 lazy from collections.abc import Iterator
 
 from ofmhelpers.config import settings
@@ -16,7 +15,7 @@ logger = get_logger(__name__)
 _MEDIA = {"image", "video", "audio"}
 
 
-def _strings(value: Any) -> Iterator[str]:
+def _strings(value: object) -> Iterator[str]:
     if isinstance(value, str):
         yield value
     elif isinstance(value, list):

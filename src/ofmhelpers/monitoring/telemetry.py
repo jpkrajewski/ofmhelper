@@ -229,7 +229,7 @@ def _logged_arguments(values: Mapping[str, Any]) -> SpanAttributes:
     return SpanAttributes(values=logged)
 
 
-def _is_plain(value: Any) -> bool:
+def _is_plain(value: object) -> bool:
     if isinstance(value, list | tuple):
         return all(_is_plain(item) for item in value)
     return value is None or isinstance(value, str | int | float | date)

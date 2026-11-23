@@ -1,7 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
-
 import re
 from typing import Any
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, Field, model_serializer
 
@@ -96,7 +96,7 @@ class Body(BaseModel):
         return {"model": self.model, "content": content, **self.settings}
 
 
-def wire_body(spec: ModelSpec, payload: Payload, link: Any) -> Body:
+def wire_body(spec: ModelSpec, payload: Payload, link: Callable[[str], str]) -> Body:
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     media_fields = {f.name for f in spec.media_fields}

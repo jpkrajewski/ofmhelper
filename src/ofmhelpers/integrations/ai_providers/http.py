@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 lazy from collections.abc import Callable, Mapping
 
 import requests
@@ -43,7 +43,7 @@ def call(
     timeout: float | None = None,
     headers: Mapping[str, str] | None = None,
     params: Mapping[str, Any] | None = None,
-    json: Any = None,
+    json: object = None,
     data: Mapping[str, Any] | None = None,
     files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
 ) -> requests.Response:
@@ -54,7 +54,7 @@ def call(
             timeout=timeout,
             headers=headers,
             params=params,
-            json=json,
+            json=cast("Any", json),
             data=data,
             files=files,
         )

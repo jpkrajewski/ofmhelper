@@ -103,7 +103,7 @@ class LinkQuery(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_unset(cls, data: Any) -> Any:
+    def _blank_is_unset(cls, data: object) -> object:
         if isinstance(data, Mapping):
             return {k: v for k, v in data.items() if v != ""}
         return data

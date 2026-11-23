@@ -49,7 +49,7 @@ def _code(response: requests.Response) -> str | None:
     return body.get("code") if isinstance(body, dict) else None
 
 
-def _timestamp(value: Any) -> float | None:
+def _timestamp(value: object) -> float | None:
     if isinstance(value, dict) and "_seconds" in value:
         return float(value["_seconds"])
     if isinstance(value, str):

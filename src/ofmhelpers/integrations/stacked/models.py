@@ -55,12 +55,12 @@ class Message(_Api):
 
     @field_validator("user_id", "type", "custom_type", "text", mode="before")
     @classmethod
-    def _null_is_empty(cls, value: Any) -> Any:
+    def _null_is_empty(cls, value: object) -> object:
         return "" if value is None else value
 
     @field_validator("reactions", mode="before")
     @classmethod
-    def _null_is_none_yet(cls, value: Any) -> Any:
+    def _null_is_none_yet(cls, value: object) -> object:
         return [] if value is None else value
 
 

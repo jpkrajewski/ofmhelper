@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Collection, Mapping
 from datetime import date, datetime, time, timedelta
-from typing import Annotated, Any, Self
+from typing import Annotated, Self
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -33,7 +33,7 @@ class GalleryQuery(LoggedFields):
 
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_unset(cls, data: Any) -> Any:
+    def _blank_is_unset(cls, data: object) -> object:
         if isinstance(data, Mapping):
             return {k: v for k, v in data.items() if v != ""}
         return data
