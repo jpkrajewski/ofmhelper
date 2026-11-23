@@ -121,7 +121,7 @@ def vmaf(copy: Path, ref: Path, work: Path) -> float:
     if tool:
         log = work / "vmaf.json"
         graph += f"[d][r]libvmaf=log_fmt=json:log_path={log}:n_threads=2:n_subsample=2:shortest=1"  # noqa: E501
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             [
                 tool,
                 "-v",
@@ -142,7 +142,7 @@ def vmaf(copy: Path, ref: Path, work: Path) -> float:
         )
         return round(json.loads(log.read_text())["pooled_metrics"]["vmaf"]["mean"], 2)
     graph += "[d][r]ssim=shortest=1"
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: S603
         [
             binary("ffmpeg"),
             "-i",
@@ -170,7 +170,7 @@ def _pcm(path: Path, start: float | None, seconds: float | None) -> np.ndarray:
     if seconds:
         argv += ["-t", f"{seconds:.3f}"]
     argv += ["-i", str(path), "-vn", "-ac", "1", "-ar", str(_RATE), "-f", "f32le", "-"]
-    raw = subprocess.run(
+    raw = subprocess.run(  # noqa: S603
         argv,
         check=True,
         capture_output=True,

@@ -48,7 +48,7 @@ def _video(frame: Path, out: Path) -> None:
         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
     ]  # fmt: skip
     try:
-        subprocess.run(command, capture_output=True, check=True)
+        subprocess.run(command, capture_output=True, check=True)  # noqa: S603
     except FileNotFoundError as exc:
         msg = "Fake AI: ffmpeg isn't installed/on PATH, can't fake a video"
         raise ProviderInputError(msg) from exc

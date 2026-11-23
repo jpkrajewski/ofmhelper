@@ -75,7 +75,7 @@ def download(
     cmd = config.gallery_dl_cmd(url, cookiefile)
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,

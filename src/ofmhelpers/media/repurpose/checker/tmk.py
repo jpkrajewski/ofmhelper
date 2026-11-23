@@ -24,7 +24,7 @@ def available() -> bool:
 
 
 def _hash(video: Path, dst: Path, timeout_s: int) -> Path:
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [
             str(_tool("tmk-hash-video")),
             "-f",
@@ -69,7 +69,7 @@ def compare(source: Path, copy: Path, timeout_s: int) -> TmkScore:
     stored = _source(str(source), source.stat().st_mtime, timeout_s)
     with tempfile.TemporaryDirectory(prefix="tmk_") as tmp:
         query = _hash(copy, Path(tmp) / "copy.tmk", timeout_s)
-        out = subprocess.run(
+        out = subprocess.run(  # noqa: S603
             [
                 str(_tool("tmk-two-level-score")),
                 "--c1",

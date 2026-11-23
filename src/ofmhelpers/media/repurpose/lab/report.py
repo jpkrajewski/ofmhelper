@@ -184,7 +184,7 @@ def _validate(job: tuple[str, dict[str, float], str, int, str]) -> Measurement:
 
 
 def _side_by_side(source: Path, copy: Path, dst: Path) -> None:
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [
             binary("ffmpeg"),
             "-y",

@@ -149,9 +149,6 @@ select = ["ALL"]
 ignore = [
     # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    # ffmpeg/ffprobe/yt-dlp run with fixed argv lists, never shell=True.
-    "S603",
-    "S607",
     # Arity/complexity metrics. Route handlers and generation wrappers mirror
     # their API contracts one-parameter-per-field; collapsing them into config
     # objects is a refactor with no correctness payoff.
@@ -253,10 +250,22 @@ ignore-variadic-names = true
 "src/ofmhelpers/media/repurpose/lab/report.py" = ["E501", "T201"]
 "src/ofmhelpers/media/repurpose/lab/search.py" = ["T201"]
 # Standalone scripts and migrations aren't importable packages.
-"scripts/**" = ["INP001", "ANN", "T201"]  # CLI tools print their output
+"scripts/**" = [
+    "INP001",
+    "ANN",
+    "T201",  # CLI tools print their output
+    "S603",
+    "S607",  # fixed-argv subprocess, never shell
+]
 "alembic/**" = ["INP001", "ANN"]
 # Claude Code hooks: standalone scripts the harness runs.
-".claude/**" = ["INP001", "ANN", "T201"]  # stdout is the harness protocol
+".claude/**" = [
+    "INP001",
+    "ANN",
+    "T201",  # stdout is the harness protocol
+    "S603",
+    "S607",  # fixed-argv git subprocess
+]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
