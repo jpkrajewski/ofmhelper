@@ -7,8 +7,7 @@ from ofmhelpers.features.assets.store import assets_root_for_actor
 from ofmhelpers.features.character_sheet import service as character_sheet
 from ofmhelpers.features.clone import service as clone
 from ofmhelpers.features.clone.run import run_clone
-from ofmhelpers.features.clone_links import review as clone_links_review
-from ofmhelpers.features.clone_links import service as clone_links
+from ofmhelpers.features.clone_links.constants import CloneLinksTask
 from ofmhelpers.features.clone_links.job import run_clone_link
 from ofmhelpers.features.clone_long import page as clone_long_page
 from ofmhelpers.features.clone_long import run_long_clone
@@ -27,7 +26,7 @@ from ofmhelpers.features.reels.watch import unlock_gated
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.repurpose import service as repurpose
 from ofmhelpers.features.storage import jobs as storage
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageTask
 from ofmhelpers.features.storage.models import BinMove
 from ofmhelpers.features.threads import tasks as threads
 from ofmhelpers.features.uniqify import service as uniqify
@@ -38,7 +37,7 @@ RESUMABLE: frozendict[str, Callable[..., Any]] = frozendict(
     {
         generate.TASK: generate.run_ai,
         clone.TASK: run_clone,
-        clone_links.TASK: run_clone_link,
+        CloneLinksTask.RUN: run_clone_link,
         clone_long_page.TASK: run_long_clone,
         pictures.TASK: pictures.run_picture,
     }
@@ -46,7 +45,9 @@ RESUMABLE: frozendict[str, Callable[..., Any]] = frozendict(
 JOB_TIMEOUTS: frozendict[str, Callable[[dict[str, Any]], int]] = frozendict(
     {clone_long_page.TASK: clone_long_time_limit}
 )
-QUEUES = frozendict({clone_links.TASK: QueueName.CLONE_LINKS})
+QUEUES: frozendict[str, QueueName] = frozendict(
+    {CloneLinksTask.RUN: QueueName.CLONE_LINKS}
+)
 
 
 def _stored(job: Job) -> RunArgs:
@@ -143,12 +144,12 @@ RESTARTS = frozendict(
             queue=QueueName.MEDIA,
             job_timeout=lambda _params: settings.threads.job_timeout_s,
         ),
-        storage_constants().scan_task: Restart(
+        StorageTask.SCAN: Restart(
             run=storage.run_scan,
             kwargs=_storage_scan,
             job_timeout=lambda _params: settings.storage.scan_timeout_s,
         ),
-        storage_constants().bin_task: Restart(
+        StorageTask.BIN: Restart(
             run=storage.run_bin,
             kwargs=_bin_move,
             job_timeout=lambda _params: settings.storage.clean_timeout_s,
@@ -158,8 +159,8 @@ RESTARTS = frozendict(
 
 DRAINED = frozenset(
     {
-        storage_constants().upload_task,
-        storage_constants().sync_task,
+        StorageTask.UPLOAD,
+        StorageTask.SYNC,
         links.CREATE_TASK,
         links.ADULT_TASK,
         links.DELETE_TASK,
@@ -168,4 +169,4 @@ DRAINED = frozenset(
         clean_images.TASK,
     }
 )
-RECOVERED_BY_THEIR_SWEEP = frozenset({pinterest.TASK, clone_links_review.TASK})
+RECOVERED_BY_THEIR_SWEEP = frozenset({pinterest.TASK, CloneLinksTask.REVIEW})

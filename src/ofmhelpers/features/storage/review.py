@@ -6,7 +6,7 @@ from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache import get_redis, get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.features.storage.folders import StorageServiceFolders
 from ofmhelpers.features.storage.models import ReviewPlace
 from ofmhelpers.integrations.storage import (
@@ -87,6 +87,7 @@ class StorageServiceReview(BaseModel, frozen=True, arbitrary_types_allowed=True)
     client: SkipValidation[StorageClient] | None
     owner_id: int
     read_live: bool
+    constants: StorageConstants
     folders: StorageServiceFolders
 
     def _drive(self) -> StorageClient:
@@ -108,7 +109,7 @@ class StorageServiceReview(BaseModel, frozen=True, arbitrary_types_allowed=True)
         drive = self._drive()
         if not self.read_live:
             return ReviewPlace(drive=drive, folder_id=self.folders.ensure_root())
-        c = storage_constants()
+        c = self.constants
         name = f"{c.dev_prefix}{c.root_name}"
         named = [
             f

@@ -61,6 +61,12 @@ class ReviewReason(StrEnum):
     TIMED_OUT = "Took too long"
     UNEXPECTED = "Could not finish: use Download"
 
+    @classmethod
+    def final(cls) -> frozenset[ReviewReason]:
+        return frozenset(
+            {cls.NOT_CONNECTED, cls.NOT_SAVED, cls.VIDEO_GONE, cls.CUT_OFF}
+        )
+
 
 CHECK_FAILED = "AI check failed"
 

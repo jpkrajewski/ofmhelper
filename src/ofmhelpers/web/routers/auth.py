@@ -59,7 +59,7 @@ def login_form(
 def login_submit(
     request: Request,
     password: Annotated[str, Form()],
-    email: Annotated[str, Form()] = passwords.PASSWORD_ADMIN,
+    email: Annotated[str | None, Form()] = None,
     next_url: Annotated[str, Form(alias="next")] = HOME,
 ) -> Response:
     return _respond(request, passwords.login(request, email, password, next_url))

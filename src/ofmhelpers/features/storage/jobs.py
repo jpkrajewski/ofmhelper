@@ -6,7 +6,7 @@ from ofmhelpers.db.drive_folders.schema import SyncReport
 from ofmhelpers.db.drive_uploads import store as uploads
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.storage.client import read_live, storage_of
+from ofmhelpers.features.storage.client import read_live, saved_storage, storage_of
 from ofmhelpers.features.storage.folders import enabled
 from ofmhelpers.features.storage.models import (
     BinMove,
@@ -19,7 +19,7 @@ from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.drive_folders.models import DriveTarget
 lazy from ofmhelpers.features.storage.uploads import Folder
 
-__all__ = ["enabled", "run_bin", "run_scan", "sync", "upload_files"]
+__all__ = ["enabled", "queue_sync", "run_bin", "run_scan", "sync", "upload_files"]
 
 logger = get_logger(__name__)
 
@@ -83,6 +83,10 @@ def sync(owner: int | None = None) -> SyncReport:
     return _synced(each_owner)
 
 
+def queue_sync(owner: int) -> None:
+    saved_storage(owner).folders.queue_sync()
+
+
 def run_scan(user_id: int, job_id: str) -> StorageUsage:
     usage = storage_of(user_id, interactive=False).bin.scan()
     logger.info(
@@ -127,6 +131,11 @@ def upload_files(upload_ids: list[int]) -> None:
         if found is None or found.status != "queued":
             continue
         upload = found
+        uploader = uploads.uploader(upload_id)
+        if uploader is None:
+            logger.warning("drive upload %s has no uploader: skipped", upload_id)
+            continue
+        constants = saved_storage(uploader).constants
         owner_id: int | None = None
         folder: Folder | None = None
         if upload.va_id is not None:
@@ -136,10 +145,13 @@ def upload_files(upload_ids: list[int]) -> None:
             owner_id = _folder_owner(upload.login_id)
             folder = folders.get(upload.login_id)
         if folder is None or owner_id is None:
-            uploads.finish(upload_id, error="The Drive folder is gone: Sync on /drive")
+            uploads.finish(
+                upload_id,
+                error=constants.upload_folder_gone.format(page=constants.drive_page),
+            )
             continue
         try:
             storage_of(owner_id, interactive=False).uploads.upload(upload, folder)
         except Exception as exc:
             logger.warning("drive upload %s failed", upload_id, exc_info=True)
-            uploads.finish(upload_id, error=f"Upload failed: {exc}")
+            uploads.finish(upload_id, error=constants.upload_failed.format(reason=exc))

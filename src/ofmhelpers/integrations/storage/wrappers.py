@@ -42,6 +42,12 @@ class ReadOnlyDrive:
     def sheet(self, file_id: str) -> DriveSheet:
         return self._inner.sheet(file_id)
 
+    def find_sheet(self, parent_id: str, name: str) -> DriveFile | None:
+        return self._inner.find_sheet(parent_id, name)
+
+    def create_sheet(self, parent_id: str, name: str, content: bytes) -> DriveFile:  # noqa: ARG002
+        raise DriveError(client_constants().read_only)
+
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._inner.thumbnail(item, px)
 
@@ -50,6 +56,9 @@ class ReadOnlyDrive:
 
     def storage(self) -> DriveStorage:
         return self._inner.storage()
+
+    def web_url(self, item_id: str) -> str:
+        return self._inner.web_url(item_id)
 
     def create_folder(self, parent_id: str, name: str) -> DriveFolder:  # noqa: ARG002
         raise DriveError(client_constants().read_only)
@@ -67,9 +76,6 @@ class ReadOnlyDrive:
         name: str,  # noqa: ARG002
         mime_type: str,  # noqa: ARG002
     ) -> DriveFile:
-        raise DriveError(client_constants().read_only)
-
-    def grant(self, item_id: str, email: str) -> None:  # noqa: ARG002
         raise DriveError(client_constants().read_only)
 
     def trash_file(self, item_id: str) -> None:  # noqa: ARG002
@@ -110,6 +116,10 @@ class ScopedDrive(ReadOnlyDrive):
     ) -> DriveFile:
         self._inside(parent_id)
         return self._inner.upload(parent_id, path, name, mime_type)
+
+    def create_sheet(self, parent_id: str, name: str, content: bytes) -> DriveFile:
+        self._inside(parent_id)
+        return self._inner.create_sheet(parent_id, name, content)
 
     def trash_file(self, item_id: str) -> None:
         if not self._writable.intersection(self._inner.file(item_id).parents):
@@ -164,6 +174,12 @@ class PerThreadDrive:
     def sheet(self, file_id: str) -> DriveSheet:
         return self._drive().sheet(file_id)
 
+    def find_sheet(self, parent_id: str, name: str) -> DriveFile | None:
+        return self._drive().find_sheet(parent_id, name)
+
+    def create_sheet(self, parent_id: str, name: str, content: bytes) -> DriveFile:
+        return self._drive().create_sheet(parent_id, name, content)
+
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._drive().thumbnail(item, px)
 
@@ -175,11 +191,11 @@ class PerThreadDrive:
     ) -> DriveFile:
         return self._drive().upload(parent_id, path, name, mime_type)
 
-    def grant(self, item_id: str, email: str) -> None:
-        self._drive().grant(item_id, email)
-
     def trash_file(self, item_id: str) -> None:
         self._drive().trash_file(item_id)
 
     def storage(self) -> DriveStorage:
         return self._drive().storage()
+
+    def web_url(self, item_id: str) -> str:
+        return self._drive().web_url(item_id)

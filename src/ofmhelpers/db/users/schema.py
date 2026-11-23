@@ -3,8 +3,6 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-_EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
-
 
 class Role(StrEnum):
     ADMIN = "admin"
@@ -15,6 +13,11 @@ class Role(StrEnum):
     @property
     def has_employer(self) -> bool:
         return self in (Role.VA, Role.MANAGER)
+
+
+class StorageProvider(StrEnum):
+    GDRIVE = "gdrive"
+    DROPBOX = "dropbox"
 
 
 class User(BaseModel):
@@ -28,6 +31,7 @@ class User(BaseModel):
     drive_connected: bool = False
     has_password: bool = False
     drive_root_id: str | None = None
+    storage_provider: StorageProvider = StorageProvider.GDRIVE
     is_password_account: bool = False
     owner_id: int | None = None
     credential_stamp: str = ""
@@ -109,7 +113,7 @@ def _email(value: str) -> str:
 
 
 class UserForm(BaseModel):
-    email: str = Field(pattern=_EMAIL, max_length=320)
+    email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=320)
     role: Role = Role.USER
     name: str = Field(default="", max_length=255)
     owner_id: int | None = None

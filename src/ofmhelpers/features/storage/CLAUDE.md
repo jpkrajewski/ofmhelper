@@ -17,3 +17,8 @@
 - Other code imports only `service`, `jobs`, `client` (composition roots), `constants`, `schema`, `models`, `posting`: `tests/unit/architecture/test_storage_di.py` (no baseline) also fails on a provider import outside the factory and on a `StorageService*(` built outside `compose`.
 - A factory client is a `PerThreadDrive` (`integrations/storage/wrappers.py`): it opens the provider on its first call, one per thread, so the thread pools (`_tally`, `_list_each`, the root check) share the one client, and a refused sign-in raises at the first call inside the caller's try, never while a dependency builds it.
 - Trials tasks still take the `refresh_token` kwarg of jobs queued before 2026-11-22 and ignore it; new jobs carry no token.
+
+## Dropbox and deleting
+- Dropbox's `trash_file` calls `files_delete_v2`, which Dropbox keeps as a Deleted file, restorable for 30 days on Basic (https://help.dropbox.com/delete-restore/restore-deleted-files). That is the one exempt call: `tests/unit/storage/test_never_deletes.py` fails on every other `files_delete*` call and on `.delete(`.
+- `/drive/folders/{id}` (`db/drive_folders/schema.py` `folder_url`) is the app's own link and is what a threads job result keeps (`features/threads/tasks.py` `folder_url`): it only has to open inside the app, which redirects to the provider's page. It is not a provider web url.
+- Switching provider with stored folder rows loses nothing: `db/drive_folders/store.py` `account_folders()` returns only rows whose root is the owner's current `drive_root_id`, every switch clears it and the sync sets the new root before reading rows (`tests/integration/web/test_storage_provider_switch.py`).

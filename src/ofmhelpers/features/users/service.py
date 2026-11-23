@@ -1,20 +1,13 @@
 from pydantic import BaseModel, ConfigDict, SkipValidation, ValidationError
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.repository import OwnsDataError
 from ofmhelpers.db.users.schema import Role, User, UserForm
-from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.storage import jobs as storage_jobs
-from ofmhelpers.features.storage.constants import storage_constants
 from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import Provider, configured
-from ofmhelpers.log import get_logger
-
-logger = get_logger(__name__)
 
 NO_USER = "No such user"
 
@@ -106,15 +99,7 @@ def _va_signs_in(va: User) -> str:
 def _make_va_folder(va: User) -> None:
     if va.owner_id is None or not storage_jobs.enabled():
         return
-    owner = va.owner_id
-    job_id = create_job(
-        storage_constants().sync_task, {"owner": owner}, actor=str(owner)
-    )
-    try:
-        enqueue(run_job, (job_id, storage_jobs.sync, {"owner": owner}))
-    except Exception:
-        logger.exception("queueing the Drive sync for VA %s failed", va.id)
-        fail_job(job_id, "Could not queue the Drive sync")
+    storage_jobs.queue_sync(va.owner_id)
 
 
 def add(

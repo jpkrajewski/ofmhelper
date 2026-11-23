@@ -5,6 +5,7 @@ from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import Readers, get_job
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.refusals import NotFoundError
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.features.storage.folders import StorageServiceFolders
 from ofmhelpers.features.storage.models import PageView
 from ofmhelpers.integrations.signin import SignInError
@@ -41,6 +42,7 @@ def _upload_pick(
 
 
 class StorageServicePage(BaseModel, frozen=True):
+    constants: StorageConstants
     folders: StorageServiceFolders
 
     def view(
@@ -58,9 +60,9 @@ class StorageServicePage(BaseModel, frozen=True):
             logger.warning(
                 "drive: preview of %s failed: %s", file_id, exc, exc_info=True
             )
-            msg = "No preview"
+            msg = self.constants.no_preview
             raise NotFoundError(msg) from exc
         if found is None:
-            msg = "No preview yet"
+            msg = self.constants.no_preview_yet
             raise NotFoundError(msg)
         return found

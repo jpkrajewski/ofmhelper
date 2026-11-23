@@ -22,7 +22,9 @@ from ofmhelpers.integrations.storage.base import (
     FolderGoneError,
     FolderTrashedError,
 )
+from ofmhelpers.integrations.storage.gdrive.constants import gdrive_constants
 from ofmhelpers.integrations.storage.gdrive.models import SHEET_MIME
+from ofmhelpers.integrations.storage.gdrive.sheets import read_xlsx
 from ofmhelpers.integrations.storage.models import (
     DriveDownload,
     DriveFolder,
@@ -281,6 +283,24 @@ class FakeDrive:
                 return None
             return self._as_file(min(found, key=lambda i: i.created))
 
+    def find_sheet(self, parent_id: str, name: str) -> DriveFile | None:
+        return self.find_file(parent_id, name)
+
+    def create_sheet(
+        self, parent_id: str, name: str, content: bytes, *, owner: str = UPLOADER
+    ) -> DriveFile:
+        with self._state("create_sheet") as state:
+            self._live(state, parent_id, f"Making the sheet {name!r}")
+            made = self._new(
+                state,
+                name=name,
+                mime_type=SHEET_MIME,
+                parents=[parent_id],
+                owner=owner,
+                sheet=read_xlsx(content),
+            )
+            return self._as_file(made)
+
     def sheet(self, file_id: str) -> DriveSheet:
         with self._state("sheet") as state:
             item = self._live(state, file_id, f"Sheet {file_id}")
@@ -344,11 +364,8 @@ class FakeDrive:
             )
             return self._as_file(made)
 
-    def grant(self, item_id: str, email: str) -> None:
-        with self._state("grant") as state:
-            item = self._live(state, item_id, f"Sharing {item_id} with {email}")
-            if email not in item.editors:
-                item.editors.append(email)
+    def web_url(self, item_id: str) -> str:
+        return gdrive_constants().folder_url.format(item_id)
 
     def seed_folder(
         self,
@@ -572,6 +589,14 @@ class FakePersonDrive:
     def sheet(self, file_id: str) -> DriveSheet:
         return self._me().sheet(file_id)
 
+    def find_sheet(self, parent_id: str, name: str) -> DriveFile | None:
+        return self._me().find_sheet(self._id(parent_id), name)
+
+    def create_sheet(self, parent_id: str, name: str, content: bytes) -> DriveFile:
+        return self._me().create_sheet(
+            self._id(parent_id), name, content, owner=self.email
+        )
+
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._me().thumbnail(item, px)
 
@@ -588,8 +613,8 @@ class FakePersonDrive:
             self._id(parent_id), path, name, mime_type, owner=self.email
         )
 
-    def grant(self, item_id: str, email: str) -> None:
-        self._me().grant(item_id, email)
+    def web_url(self, item_id: str) -> str:
+        return self._me().web_url(item_id)
 
     def trash_file(self, item_id: str) -> None:
         self._me().trash_file(item_id)

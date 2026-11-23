@@ -27,6 +27,15 @@ def _task_names() -> set[str]:
             if isinstance(node, ast.ClassDef) and node.name.endswith("Constants")
             for field in node.body
         ]
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name.endswith("Task"):
+                for member in node.body:
+                    if (
+                        isinstance(member, ast.Assign)
+                        and isinstance(member.value, ast.Constant)
+                        and isinstance(member.value.value, str)
+                    ):
+                        found.add(member.value.value)
         for node in [*tree.body, *class_fields]:
             value: ast.expr | None
             if isinstance(node, ast.Assign):

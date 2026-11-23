@@ -7,14 +7,13 @@ from PIL import Image
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links.ai_check import (
-    RULES,
     Verdict,
     check_clone,
     sheet_at,
     still_count,
 )
 from ofmhelpers.features.clone_links.ai_check import check as check_module
-from ofmhelpers.features.clone_links.ai_check.check import NO_ANSWER, NO_MODEL, TOO_LONG
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.clone_links.folders import folder_for
 from ofmhelpers.integrations.llm.base import Answered
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY, FAKE_KEY_2, fake_gemini
@@ -63,7 +62,7 @@ def test_a_clean_reel_is_good_with_everything_kept_to_debug_it(video):
     assert found.glitch_percent == 0
     assert found.provider == "Gemini"
     assert found.model == "gemini-3.6-flash"
-    assert found.prompt_system == RULES
+    assert found.prompt_system == clone_links_constants().rules
     assert "Contact sheet of reel.mp4 (2.0 s, 3 stills)" in found.prompt_text
     assert "mirrored" not in found.prompt_text
     assert found.raw_answer.startswith("{")
@@ -162,7 +161,7 @@ def test_a_model_failure_is_the_checks_error_not_an_exception(video, monkeypatch
     found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER
+    assert found.error == clone_links_constants().no_answer
     assert found.error_kind == "quota"
     assert "Quota exceeded" in found.error_detail
     assert (found.provider, found.model) == ("Gemini", "gemini-3.6-flash")
@@ -224,7 +223,7 @@ def test_every_gemini_out_of_quota_is_an_error_and_groq_never_judges(
         found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER
+    assert found.error == clone_links_constants().no_answer
     assert found.error_kind == "quota"
     chain = settings.llm.video_chain
     assert len(chain) == 4
@@ -251,7 +250,7 @@ def test_an_image_only_provider_in_the_chain_is_skipped(video, monkeypatch):
     found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER
+    assert found.error == clone_links_constants().no_answer
     assert found.error_kind == "quota"
     assert "groq: reads no video, skipped" in found.error_detail
     assert fake_groq().requests == []
@@ -266,7 +265,10 @@ def test_a_chain_of_image_only_providers_is_a_setup_error(video, monkeypatch):
     found = check_clone(video)
 
     assert found.verdict is None
-    assert (found.error, found.error_kind) == (NO_MODEL, "setup")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().no_model,
+        "setup",
+    )
     assert fake_groq().requests == []
     assert fake_gemini().requests == []
 
@@ -279,7 +281,10 @@ def test_no_key_is_a_setup_error_logged_as_one(video, monkeypatch, caplog):
         found = check_clone(video)
 
     assert found.verdict is None
-    assert (found.error, found.error_kind) == (NO_ANSWER, "setup")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().no_answer,
+        "setup",
+    )
     assert found.error_detail.count("no API key configured") == 2
     assert fake_gemini().requests == []
     hops = [r for r in caplog.records if "not set up" in r.getMessage()]
@@ -328,7 +333,10 @@ def test_no_model_is_asked_once_the_deadline_passed(video, monkeypatch):
 
     assert fake.models == ["gemini-3.6-flash"]
     assert found.verdict is None
-    assert (found.error, found.error_kind) == (TOO_LONG, "quota")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().too_long,
+        "quota",
+    )
     assert "The model is overloaded" in found.error_detail
     assert found.llm_s > settings.clone_ai_check.deadline_s
     assert (found.provider, found.model) == ("Gemini", "gemini-3.6-flash")
@@ -340,7 +348,10 @@ def test_a_deadline_gone_before_the_sheet_was_ready_asks_nobody(video, monkeypat
 
     found = check_clone(video)
 
-    assert (found.error, found.error_kind) == (TOO_LONG, "quota")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().too_long,
+        "quota",
+    )
     assert fake_gemini().requests == []
 
 

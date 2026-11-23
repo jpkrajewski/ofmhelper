@@ -1,3 +1,4 @@
+import io
 import json
 import re
 import threading
@@ -19,7 +20,7 @@ lazy from google_auth_httplib2 import AuthorizedHttp
 lazy from googleapiclient.discovery import build
 lazy from googleapiclient.errors import Error as GoogleApiError
 lazy from googleapiclient.errors import HttpError
-lazy from googleapiclient.http import HttpRequest, MediaFileUpload
+lazy from googleapiclient.http import HttpRequest, MediaFileUpload, MediaIoBaseUpload
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.drive_folders.schema import (
@@ -35,6 +36,7 @@ from ofmhelpers.integrations.storage.base import (
     FolderTrashedError,
     StorageClient,
 )
+from ofmhelpers.integrations.storage.gdrive.constants import gdrive_constants
 from ofmhelpers.integrations.storage.gdrive.models import (
     DriveAbout,
     DriveAck,
@@ -179,13 +181,21 @@ class Drive:
             http = AuthorizedHttp(credentials, http=_transport(timeout_s))
         service = build("drive", "v3", cache_discovery=False, http=http)
         self._files = service.files()
-        self._permissions = service.permissions()
         self._about = service.about()
         self._retries = settings.gdrive.retries if retries is None else retries
 
-    def _run[M: BaseModel](self, request: HttpRequest, what: str, shape: type[M]) -> M:
+    def _run[M: BaseModel](
+        self,
+        request: HttpRequest,
+        what: str,
+        shape: type[M],
+        *,
+        retries: int | None = None,
+    ) -> M:
         try:
-            raw = request.execute(num_retries=self._retries)
+            raw = request.execute(
+                num_retries=self._retries if retries is None else retries
+            )
         except (
             GoogleApiError,
             GoogleAuthError,
@@ -352,6 +362,29 @@ class Drive:
             msg = f"{what}: Drive's export could not be read"
             raise DriveError(msg) from exc
 
+    def find_sheet(self, parent_id: str, name: str) -> DriveFile | None:
+        return self.find_file(parent_id, name)
+
+    def create_sheet(self, parent_id: str, name: str, content: bytes) -> DriveFile:
+        media = MediaIoBaseUpload(io.BytesIO(content), mimetype=XLSX_MIME)
+        made = self._run(
+            self._files.create(
+                body={
+                    "name": name,
+                    "parents": [parent_id],
+                    "mimeType": gdrive_constants().sheet_mime,
+                },
+                media_body=media,
+                fields=f"{_FILE_FIELDS}, parents",
+                supportsAllDrives=True,
+            ),
+            f"Making the sheet {name!r}",
+            DriveRow,
+            retries=0,
+        )
+        logger.info("drive: made the sheet %r (%s)", name, made.id)
+        return made.as_file()
+
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         if not item.thumbnail_link:
             return None
@@ -410,18 +443,8 @@ class Drive:
         logger.info("drive: uploaded %r (%s)", name, made.id)
         return made.as_file()
 
-    def grant(self, item_id: str, email: str) -> None:
-        self._run(
-            self._permissions.create(
-                fileId=item_id,
-                body={"type": "user", "role": "writer", "emailAddress": email},
-                sendNotificationEmail=False,
-                supportsAllDrives=True,
-                fields="id",
-            ),
-            f"Sharing {item_id} with {email}",
-            DriveAck,
-        )
+    def web_url(self, item_id: str) -> str:
+        return gdrive_constants().folder_url.format(item_id)
 
     def trash_file(self, item_id: str) -> None:
         self._run(

@@ -63,6 +63,7 @@ dependencies = [
     # Meta's PDQ (256-bit, dihedral) for repurpose.checker; sdist only on
     # Linux, built with the g++ of the Dockerfile's build/test stages.
     "pdqhash>=0.2.8",
+    "dropbox>=12.2.4",
 ]
 
 [dependency-groups]

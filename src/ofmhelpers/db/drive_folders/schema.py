@@ -1,16 +1,14 @@
 import mimetypes
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
-_FOLDER_URL = "https://drive.google.com/drive/folders/{}"
-
-
 def folder_url(folder_id: str) -> str:
-    return _FOLDER_URL.format(folder_id)
+    return f"/drive/folders/{folder_id}"
 
 
 class DriveFile(BaseModel):
@@ -18,7 +16,8 @@ class DriveFile(BaseModel):
 
     id: str
     name: str
-    mime_type: str = Field(alias="mimeType")
+    mime_type: str = Field(default="", alias="mimeType")
+    is_folder: bool = False
     web_view_link: str = Field(default="", alias="webViewLink")
     has_thumbnail: bool = Field(default=False, alias="hasThumbnail")
     created_time: datetime | None = Field(default=None, alias="createdTime")
@@ -27,9 +26,13 @@ class DriveFile(BaseModel):
     thumbnail_link: str = Field(default="", alias="thumbnailLink")
     owned_by_me: bool = Field(default=False, alias="ownedByMe")
 
-    @property
-    def is_folder(self) -> bool:
-        return self.mime_type == FOLDER_MIME
+    @model_validator(mode="before")
+    @classmethod
+    def _folder_from_mime_type(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "is_folder" not in data:
+            mime_type = data.get("mimeType", data.get("mime_type", ""))
+            return {**data, "is_folder": mime_type == FOLDER_MIME}
+        return data
 
     @property
     def kind(self) -> str:

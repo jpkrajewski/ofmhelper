@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
+from ofmhelpers.features.clone_links.constants import CloneLinksTask
 from ofmhelpers.features.files import disk, library
 from ofmhelpers.features.files.disk import DEFAULT_ROOT
 from ofmhelpers.features.files.library import UPLOADS, Library, Section
@@ -26,7 +27,7 @@ router = APIRouter(
 _NAMED = {
     "aigen": Section(label="AI GEN", tasks=frozenset(GENERATE_TOOLS)),
     "clone": Section(
-        label="CLONE", tasks=frozenset({"clone", "clone_long", "clone_links"})
+        label="CLONE", tasks=frozenset({"clone", "clone_long", CloneLinksTask.RUN})
     ),
     "downloads": Section(label="DOWNLOADS", tasks=frozenset(DOWNLOAD_TOOLS)),
 }

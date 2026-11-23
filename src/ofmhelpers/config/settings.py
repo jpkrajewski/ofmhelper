@@ -892,6 +892,8 @@ class SignInSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     admin_emails_raw: str = Field(default="", validation_alias="OFM_ADMIN_EMAILS")
+    password_admin: str = Field(default="admin", validation_alias="OFM_PASSWORD_ADMIN")
+    owner_provider: str = Field(default="owner", validation_alias="OFM_OWNER_PROVIDER")
 
     google_client_id: str = Field(default="", validation_alias="OFM_GOOGLE_CLIENT_ID")
     google_client_secret: SecretStr | None = Field(
@@ -1586,6 +1588,26 @@ class FanvueSettings(BaseSettings):
     )
     connect_ttl_s: int = Field(
         default=600, ge=1, validation_alias="OFM_FANVUE_CONNECT_TTL_S"
+    )
+
+
+class DropboxSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    app_key: str = Field(default="", validation_alias="DROPBOX_APP_KEY")
+    app_secret: SecretStr | None = Field(
+        default=None, validation_alias="DROPBOX_APP_SECRET"
+    )
+    test_refresh_token: SecretStr | None = Field(
+        default=None, validation_alias="OFM_DROPBOX_TEST_REFRESH_TOKEN"
+    )
+    timeout_s: float = Field(default=60, gt=0, validation_alias="OFM_DROPBOX_TIMEOUT_S")
+    interactive_timeout_s: float = Field(
+        default=15, gt=0, validation_alias="OFM_DROPBOX_INTERACTIVE_TIMEOUT_S"
+    )
+    tries: int = Field(default=4, ge=1, validation_alias="OFM_DROPBOX_TRIES")
+    connect_ttl_s: int = Field(
+        default=600, ge=60, validation_alias="OFM_DROPBOX_CONNECT_TTL_S"
     )
 
 

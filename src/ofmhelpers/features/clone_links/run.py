@@ -1,5 +1,4 @@
 import math
-import re
 import subprocess
 import time
 from pathlib import Path
@@ -19,6 +18,7 @@ from ofmhelpers.features.clone.export import (
     export_choice,
     export_results,
 )
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.clone_links.review import start_reviews
 from ofmhelpers.features.clone_links.stop import stopped
 from ofmhelpers.features.clone_pricing.pricing import clip_duration
@@ -47,20 +47,6 @@ from ofmhelpers.media.exports import ExportOptions
 from ofmhelpers.media.video_probe import duration_s
 
 logger = get_logger(__name__)
-
-TARGET_LABEL = "Wan 3.0"
-
-STOPPED = "Stopped"
-GONE = "This run no longer exists"
-COULD_NOT_DOWNLOAD = "Could not download this reel"
-NEEDS_LOGIN = "Needs login: upload your cookies on the Cookies page"
-NO_VIDEO = "No video at this link"
-NOT_KEPT = "The video could not be kept"
-UNREADABLE = "The video cannot be read"
-REFETCH = "Still generating: this reel is downloaded again on the next try"
-NOT_SAVED = "Still generating: the video is saved on the next try"
-
-_LOGIN_WALL = re.compile(r"\blog ?in\b|\bsign in\b|cookies", re.IGNORECASE)
 
 
 def _owner(job: Job | None) -> int | None:
@@ -91,7 +77,7 @@ def _owner_of(job_id: str) -> int:
     owner = _owner(get_job(job_id))
     if owner is None:
         logger.warning("clone-links %s: no job row or no owner: not run", job_id)
-        raise RunGoneError(GONE)
+        raise RunGoneError(clone_links_constants().run_gone)
     return owner
 
 
@@ -112,11 +98,11 @@ def _saved_source(video: str | None, seconds: float | None) -> _Source | None:
 def _refuse_if_stopped(job_id: str, batch: str | None) -> None:
     if tasks.recall(job_id) is None and stopped(batch):
         logger.info("clone-links %s: batch %s stopped: not run", job_id, batch)
-        raise LinkStoppedError(STOPPED)
+        raise LinkStoppedError(clone_links_constants().stopped)
 
 
 def _halt_key(batch: str) -> str:
-    return f"clone-links:halt:{batch}"
+    return clone_links_constants().halt_key.format(batch=batch)
 
 
 def _halt(batch: str | None, exc: ProviderAuthError | ProviderNoCreditsError) -> None:
@@ -148,9 +134,10 @@ def _refuse_if_halted(job_id: str, batch: str | None, provider: str) -> None:
 
 
 def _why_not(error: str, *, has_cookies: bool) -> str:
-    if not has_cookies and _LOGIN_WALL.search(error):
-        return NEEDS_LOGIN
-    return COULD_NOT_DOWNLOAD
+    constants = clone_links_constants()
+    if not has_cookies and constants.login_wall.search(error):
+        return constants.needs_login
+    return constants.could_not_download
 
 
 def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
@@ -170,15 +157,15 @@ def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
             logger.info(
                 "clone-links: %s has no video (%d files)", url, len(result.output_paths)
             )
-            raise LinkFetchError(NO_VIDEO)
+            raise LinkFetchError(clone_links_constants().no_video)
         kept = register_generated_asset(video, Path(assets_root))
         if kept is None:
-            raise LinkFetchError(NOT_KEPT)
+            raise LinkFetchError(clone_links_constants().not_kept)
         try:
             seconds = duration_s(kept, settings.web.ffmpeg_timeout_s)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             logger.warning("clone-links: %s unreadable", kept, exc_info=True)
-            raise LinkFetchError(UNREADABLE) from exc
+            raise LinkFetchError(clone_links_constants().run_unreadable) from exc
     logger.info("clone-links: %s -> %s (%.1f s)", url, kept.name, seconds)
     return _Source(source_video=str(kept.resolve()), source_seconds=seconds)
 
@@ -188,7 +175,7 @@ def _refuse_too_long(seconds: float, target: CloneTarget) -> None:
         return
     shown = math.ceil(round(seconds * 10, 6)) / 10
     msg = (
-        f"Too long for {TARGET_LABEL}: {shown:.1f} s "
+        f"Too long for {clone_links_constants().target_label}: {shown:.1f} s "
         f"(the most is {target.max_reference_s} s)"
     )
     raise InvalidInputError(msg)
@@ -219,7 +206,7 @@ def _source(
             link,
             exc_info=True,
         )
-        raise ProviderUnavailableError(REFETCH) from exc
+        raise ProviderUnavailableError(clone_links_constants().refetch) from exc
     merge_params(job_id, found.model_dump())
     return found
 
@@ -247,7 +234,7 @@ def _fetched(client: Provider, url: str, dest: Path) -> Path:
             )
         if wait is not None:
             time.sleep(wait)
-    raise ProviderUnavailableError(NOT_SAVED) from last
+    raise ProviderUnavailableError(clone_links_constants().run_not_saved) from last
 
 
 def _saved_here(

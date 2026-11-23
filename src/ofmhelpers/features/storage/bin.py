@@ -15,7 +15,7 @@ from ofmhelpers.features.refusals import (
     RefusedError,
     TryAgainError,
 )
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageConstants, StorageTask
 from ofmhelpers.features.storage.folders import StorageServiceFolders
 from ofmhelpers.features.storage.models import (
     BinMove,
@@ -47,6 +47,7 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
     user_id: int
     client: SkipValidation[StorageClient] | None
     read_live: bool
+    constants: StorageConstants
     folders: StorageServiceFolders
 
     @property
@@ -58,7 +59,7 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
 
     def _drive(self) -> StorageClient:
         if self.client is None:
-            raise RefusedError(storage_constants().no_drive)
+            raise RefusedError(self.constants.no_drive)
         return self.client
 
     def owner_folders(self) -> list[FolderUsage]:
@@ -87,7 +88,7 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
         return time.time() - scan.created_at > settings.storage.scan_stale_s
 
     def _start_scan(self) -> None:
-        task = storage_constants().scan_task
+        task = StorageTask.SCAN
         with locked(f"storage:scan:{self.user_id}", settings.storage.start_lock_s):
             if _running(latest_job(task, self.actor)):
                 return
@@ -104,15 +105,14 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
         done = (
             scan
             if _ended(scan, JobStatus.done)
-            else latest_job(storage_constants().scan_task, self.actor, JobStatus.done)
+            else latest_job(StorageTask.SCAN, self.actor, JobStatus.done)
         )
         return StorageUsage.model_validate(done.result) if done else None
 
     def page(self) -> StoragePage:
-        c = storage_constants()
         connected = self.connected()
-        scan = latest_job(c.scan_task, self.actor)
-        move = latest_job(c.bin_task, self.actor)
+        scan = latest_job(StorageTask.SCAN, self.actor)
+        move = latest_job(StorageTask.BIN, self.actor)
         if connected and self._stale(scan, move):
             try:
                 self._start_scan()
@@ -120,7 +120,7 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
                 logger.warning(
                     "storage: scan of %s not queued", self.user_id, exc_info=True
                 )
-            scan = latest_job(c.scan_task, self.actor)
+            scan = latest_job(StorageTask.SCAN, self.actor)
         return StoragePage(
             connected=connected,
             usage=self._usage(scan),
@@ -133,29 +133,28 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
             if move and _ended(move, JobStatus.done)
             else None,
             move_failed=_ended(move, JobStatus.failed),
-            bin_url=c.bin_url,
+            bin_url=self.constants.bin_url,
         )
 
     def start_move(self, part: BinPart, folder_id: str | None) -> MoveStarted:
-        c = storage_constants()
         if not self.connected():
-            raise RefusedError(c.no_drive)
+            raise RefusedError(self.constants.no_drive)
         if self.read_live:
-            raise RefusedError(c.read_only)
+            raise RefusedError(self.constants.read_only)
         if folder_id is not None and folder_id not in {
             folder.folder_id for folder in self.owner_folders()
         }:
-            raise NotFoundError(c.no_folder)
+            raise NotFoundError(self.constants.no_folder)
         params = BinMove(part=part, folder_id=folder_id).model_dump(mode="json")
         with lock_held(
             f"storage:bin:{self.user_id}", settings.storage.start_lock_s
         ) as held:
             if not held:
-                raise TryAgainError(c.try_again)
-            if _running(latest_job(c.bin_task, self.actor)):
-                raise ConflictError(c.busy)
+                raise TryAgainError(self.constants.try_again)
+            if _running(latest_job(StorageTask.BIN, self.actor)):
+                raise ConflictError(self.constants.busy)
             job_id = start_job(
-                c.bin_task,
+                StorageTask.BIN,
                 params,
                 run_bin,
                 {"user_id": self.user_id, **params},

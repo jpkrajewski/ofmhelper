@@ -18,6 +18,10 @@ from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.clone import run as clone_run
 from ofmhelpers.features.clone_links import job as clone_links_job
 from ofmhelpers.features.clone_links import run as run_module
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.stop import stop_batch, stopped
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.jobs.schema import error_reason
@@ -33,7 +37,6 @@ from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.media import exports as exports_module
 from ofmhelpers.media import fake_media
 from ofmhelpers.web.routers.generation import clone, clone_links
-from ofmhelpers.web.routers.generation.clone_links import TASK
 from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
@@ -110,7 +113,7 @@ def _job_like(job: Job, **changes) -> str:
         for k, v in job.params.items()
         if k not in {"source_video", "source_seconds"}
     }
-    return create_job(TASK, {**params, **changes}, actor=job.actor)
+    return create_job(CloneLinksTask.RUN, {**params, **changes}, actor=job.actor)
 
 
 def _remember_paid(job: Job) -> None:
@@ -156,7 +159,7 @@ def test_a_paid_rerun_that_cannot_download_its_reel_again_keeps_its_request(
     again = _rerun(job.id)
 
     assert again.status == "failed"
-    assert again.error == run_module.REFETCH
+    assert again.error == clone_links_constants().refetch
     assert tasks.recall(job.id) is not None, "kept for recovery's next sweep"
     assert len(fake_kie().created) == 1
 
@@ -290,8 +293,8 @@ def test_a_failed_download_gives_a_short_fixed_reason(
 
     assert failed.status == "failed"
     expected = {
-        "Could not download": run_module.COULD_NOT_DOWNLOAD,
-        "Needs login": run_module.NEEDS_LOGIN,
+        "Could not download": clone_links_constants().could_not_download,
+        "Needs login": clone_links_constants().needs_login,
     }[reason]
     assert failed.error == expected
     page = ann.get("/clone-links").text
@@ -357,7 +360,7 @@ def test_a_result_that_cannot_be_saved_keeps_its_paid_request(ann, monkeypatch):
 
     job = get_job(job_id)
     assert job.status == "failed"
-    assert job.error == run_module.NOT_SAVED
+    assert job.error == clone_links_constants().run_not_saved
     assert len(tries) == 3
     assert tasks.recall(job_id) is not None, "recovery fetches it on its next sweep"
     assert clone_from_links.for_jobs([job_id]) == []

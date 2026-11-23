@@ -27,6 +27,7 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links import review
 from ofmhelpers.features.clone_links.ai_check import unanswered
+from ofmhelpers.features.clone_links.constants import CloneLinksTask
 from ofmhelpers.features.storage import folders as drive_folders
 from ofmhelpers.features.storage.constants import storage_constants
 from ofmhelpers.features.storage.space import drive_space
@@ -56,7 +57,7 @@ def _video(tmp_path: Path, name: str = "clone.mp4") -> Path:
 
 def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> str:
     job_id = create_job(
-        review.RUN_TASK, {"link": REEL, "mirror": mirror}, actor=str(_owner(email))
+        CloneLinksTask.RUN, {"link": REEL, "mirror": mirror}, actor=str(_owner(email))
     )
     entry = (
         ResultFile(name=video.name, path=str(video))
@@ -126,7 +127,7 @@ def test_a_review_leaves_a_job_row_naming_the_clone_it_checked(tmp_path):
 
     job_id, _video = _reviewed(tmp_path)
 
-    [row] = [job for job in history() if job.task == "clone_links_review"]
+    [row] = [job for job in history() if job.task == CloneLinksTask.REVIEW]
     assert row.status == "done"
     assert (row.params["clone_job"], row.params["file_index"]) == (job_id, 0)
     assert row.params["review_id"] == _row(job_id).id

@@ -28,7 +28,7 @@ def _is_admin_password(password: str) -> bool:
 
 def password_sign_in(email: str, password: str) -> User | None:
     email = normalized_email(email)
-    if email == users.PASSWORD_ADMIN or users.is_env_admin(email):
+    if email == settings.signin.password_admin or users.is_env_admin(email):
         account = users.password_account()
         stored = users.password_hash(account.id) if account else ""
         own = verify_password(password, stored)

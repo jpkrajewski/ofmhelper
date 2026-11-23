@@ -21,6 +21,7 @@ from ofmhelpers.db.users.schema import (
     SavedKey,
     SavedKeys,
     Standing,
+    StorageProvider,
     User,
 )
 
@@ -43,6 +44,7 @@ def _user(row: UserRow) -> User:
         drive_connected=row.drive_connected,
         has_password=bool(row.password_hash),
         drive_root_id=row.drive_root_id,
+        storage_provider=StorageProvider(row.storage_provider),
         is_password_account=row.is_password_account,
         owner_id=row.owner_id,
         credential_stamp=_credential_stamp(row.password_hash),
@@ -134,6 +136,13 @@ class UserRepository(CachedRepository):
             row = s.get(UserRow, user_id)
             if row is not None:
                 row.drive_root_id = folder_id
+
+    @invalidates_cache
+    def set_storage_provider(self, user_id: int, provider: StorageProvider) -> None:
+        with session_scope() as s:
+            row = s.get(UserRow, user_id)
+            if row is not None:
+                row.storage_provider = provider.value
 
     @invalidates_cache
     def add(

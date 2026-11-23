@@ -1,6 +1,6 @@
 import pytest
 
-from ofmhelpers.features.clone_links import run as clone_link_run
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.jobs.models import JobStatusPayload
 from ofmhelpers.features.jobs.schema import (
     FALLBACK,
@@ -122,14 +122,14 @@ def test_a_run_that_never_reached_the_provider_says_so(error, reason):
 @pytest.mark.parametrize(
     ("error", "reason"),
     [
-        (clone_link_run.COULD_NOT_DOWNLOAD, "Could not download"),
-        (clone_link_run.NO_VIDEO, "Could not download"),
-        (clone_link_run.NOT_KEPT, "Could not download"),
-        (clone_link_run.UNREADABLE, "Could not download"),
-        (clone_link_run.NEEDS_LOGIN, "Needs login"),
-        (clone_link_run.STOPPED, "Stopped"),
-        (clone_link_run.REFETCH, "Still generating"),
-        (clone_link_run.NOT_SAVED, "Still generating"),
+        (clone_links_constants().could_not_download, "Could not download"),
+        (clone_links_constants().no_video, "Could not download"),
+        (clone_links_constants().not_kept, "Could not download"),
+        (clone_links_constants().run_unreadable, "Could not download"),
+        (clone_links_constants().needs_login, "Needs login"),
+        (clone_links_constants().stopped, "Stopped"),
+        (clone_links_constants().refetch, "Still generating"),
+        (clone_links_constants().run_not_saved, "Still generating"),
     ],
 )
 def test_every_fixed_message_of_a_clone_links_run_has_its_label(error, reason):

@@ -19,7 +19,7 @@ from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import RefusedError, UnavailableError
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageConstants, StorageTask
 from ofmhelpers.features.storage.folders import StorageServiceFolders
 from ofmhelpers.features.storage.models import ReviewPlace
 from ofmhelpers.features.storage.review import StorageServiceReview
@@ -41,23 +41,6 @@ type Folder = StoredFolder | VaFolder
 logger = get_logger(__name__)
 
 
-def _creators(owner: int | None) -> _Creators:
-    return _Creators(
-        by_handle={
-            a.handle: a.creator
-            for a in list_accounts(owner)
-            if a.platform == storage_constants().upload_platform and a.creator
-        }
-    )
-
-
-def _handle(username: str) -> str:
-    try:
-        return get_platform(storage_constants().upload_platform).handle(username)
-    except KeyError, ValueError:  # silent: not a handle: kept as typed
-        return username
-
-
 def _files(job_id: str, readers: Readers) -> list[_UploadFile]:
     job = get_job(job_id, readers)
     if job is None or job.status != "done":
@@ -69,22 +52,10 @@ def _files(job_id: str, readers: Readers) -> list[_UploadFile]:
     ]
 
 
-def _enqueue(upload_ids: list[int], actor: str) -> None:
-    job_id = create_job(
-        storage_constants().upload_task, {"upload_ids": upload_ids}, actor=actor
-    )
-    try:
-        enqueue(run_job, (job_id, upload_files, {"upload_ids": upload_ids}))
-    except Exception as exc:
-        logger.warning("drive uploads %s not queued", upload_ids, exc_info=True)
-        fail_job(job_id, "Could not queue the upload")
-        for upload_id in upload_ids:
-            store.finish(upload_id, error=f"Could not queue the upload: {exc}")
-
-
 class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True):
     client: SkipValidation[StorageClient] | None
     user_id: int
+    constants: StorageConstants
     folders: StorageServiceFolders
     review: StorageServiceReview
     va_folders: StorageServiceVaFolders
@@ -96,9 +67,41 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
     def connected(self) -> bool:
         return self.client is not None
 
+    def _creators(self) -> _Creators:
+        return _Creators(
+            by_handle={
+                a.handle: a.creator
+                for a in list_accounts(self.user_id)
+                if a.platform == self.constants.upload_platform and a.creator
+            }
+        )
+
+    def _handle(self, username: str) -> str:
+        try:
+            return get_platform(self.constants.upload_platform).handle(username)
+        except KeyError, ValueError:  # silent: not a handle: kept as typed
+            return username
+
+    def _enqueue(self, upload_ids: list[int]) -> None:
+        job_id = create_job(
+            StorageTask.UPLOAD,
+            {"upload_ids": upload_ids},
+            actor=self.actor,
+        )
+        try:
+            enqueue(run_job, (job_id, upload_files, {"upload_ids": upload_ids}))
+        except Exception as exc:
+            logger.warning("drive uploads %s not queued", upload_ids, exc_info=True)
+            fail_job(job_id, self.constants.upload_not_queued)
+            for upload_id in upload_ids:
+                store.finish(
+                    upload_id,
+                    error=self.constants.upload_not_queued_why.format(reason=exc),
+                )
+
     def targets(self) -> list[UploadTarget]:
         folders = drive_folders.account_folders()
-        creators = _creators(self.user_id)
+        creators = self._creators()
         found = []
         for t in drive_folders.targets(self.user_id):
             folder = folders.get(t.login_id)
@@ -110,7 +113,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
                     folder_name=t.folder_name,
                     handle=t.handle,
                     owner=t.owner,
-                    creator=creators.of(_handle(t.handle)),
+                    creator=creators.of(self._handle(t.handle)),
                     waiting=len(folder.scan.waiting) if folder.scan else None,
                     followers=t.followers,
                 )
@@ -120,7 +123,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
     def _va_targets(self, va_ids: list[int]) -> list[VaFolder]:
         theirs = {f.user_id: f for f in self.va_folders.of_owner()}
         if not set(va_ids) <= set(theirs):
-            msg = "That VA has no Drive folder you can upload into: Sync on /drive"
+            msg = self.constants.va_no_folder.format(page=self.constants.drive_page)
             raise RefusedError(msg)
         return [theirs[va] for va in dict.fromkeys(va_ids)]
 
@@ -132,15 +135,17 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
         va_ids: list[int],
     ) -> list[DriveUpload]:
         if not login_ids and not va_ids:
-            msg = "Pick a folder"
+            msg = self.constants.pick_folder
             raise RefusedError(msg)
         mine = {t.login_id for t in drive_folders.targets(self.user_id)}
         if (va_ids or mine & set(login_ids)) and self.client is None:
-            msg = storage_constants().connect_first
+            msg = self.constants.connect_first
             raise RefusedError(msg)
         usable = {t.login_id: t for t in self.targets()}
         if not set(login_ids) <= mine or not set(login_ids) <= set(usable):
-            msg = "That account has no Drive folder you can upload into: Sync on /drive"
+            msg = self.constants.account_no_folder.format(
+                page=self.constants.drive_page
+            )
             raise RefusedError(msg)
         vas = self._va_targets(va_ids)
         files = [
@@ -170,7 +175,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             is not None
         ]
         if ids:
-            _enqueue(ids, self.actor)
+            self._enqueue(ids)
         return store.for_jobs(
             [j for j in job_ids if get_job(j, readers) is not None],
             frozenset({self.user_id}),
@@ -197,14 +202,14 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             or store.uploader(upload_id) != self.user_id
             or get_job(found.job_id, readers) is None
         ):
-            msg = "No such upload"
+            msg = self.constants.no_such_upload
             raise RefusedError(msg)
         if found.status != "done":
-            msg = "Only an uploaded video can be removed"
+            msg = self.constants.only_done_removable
             raise RefusedError(msg)
         file_id = store.file_id(upload_id)
         if not file_id or self.client is None:
-            msg = storage_constants().connect_first
+            msg = self.constants.connect_first
             raise RefusedError(msg)
         try:
             self.client.trash_file(file_id)
@@ -214,11 +219,11 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             logger.warning(
                 "drive upload %s: sign-in refused: %s", upload_id, exc, exc_info=True
             )
-            msg = storage_constants().connect_first
+            msg = self.constants.connect_first
             raise RefusedError(msg) from exc
         except DriveError as exc:
             logger.warning("drive upload %s: not removed", upload_id, exc_info=True)
-            msg = "Google Drive did not remove it. Try again."
+            msg = self.constants.remove_failed
             raise UnavailableError(msg) from exc
         store.remove(upload_id)
         logger.info("drive upload %s removed from %s", upload_id, found.folder_name)
@@ -230,7 +235,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
         job = get_job(upload.job_id, None)
         if (
             job is None
-            or job.task != storage_constants().spoofed_task
+            or job.task != StorageTask.SPOOFED
             or isinstance(folder, VaFolder)
         ):
             return ReviewPlace(drive=drive, folder_id=folder.folder_id)
@@ -244,13 +249,11 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
         files = {f.index: f.path for f in _files(upload.job_id, None)}
         path = files.get(upload.file_index)
         if path is None:
-            store.finish(upload.id, error="The file is no longer on the server")
+            store.finish(upload.id, error=self.constants.file_missing)
             return
         drive = self.client
         if drive is None:
-            store.finish(
-                upload.id, error="The folder owner's Google Drive was disconnected"
-            )
+            store.finish(upload.id, error=self.constants.owner_disconnected)
             return
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         try:
@@ -265,9 +268,9 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
                 )
                 store.finish(
                     upload.id,
-                    error="The account's folder is not in its owner's"
-                    f" {self.folders.root_name()}"
-                    " folder: Sync on /drive, then upload again",
+                    error=self.constants.folder_outside_root.format(
+                        root=self.folders.root_name(), page=self.constants.drive_page
+                    ),
                 )
                 return
             target = self._destination(upload, folder, drive)

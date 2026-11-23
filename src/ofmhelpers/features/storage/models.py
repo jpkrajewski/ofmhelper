@@ -11,6 +11,7 @@ from ofmhelpers.db.drive_folders.schema import (
     UploadPick,
     VaFolder,
 )
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.integrations.downloaders.urls import NotALinkError, read_links
 from ofmhelpers.integrations.storage import DriveSheet, DriveStorage, StorageClient
 
@@ -101,8 +102,10 @@ class BotRoot(BaseModel, frozen=True):
 class StorageAccess(BaseModel, frozen=True, arbitrary_types_allowed=True):
     owner_id: int
     client: SkipValidation[StorageClient] | None
+    constants: StorageConstants
     bot: BotRoot | None = None
     read_live: bool = False
+    session: str = ""
 
 
 class ReviewPlace(BaseModel, frozen=True, arbitrary_types_allowed=True):

@@ -5,7 +5,6 @@ lazy from collections.abc import Iterator
 
 from pydantic import BaseModel, ConfigDict
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.db.devices import store
 from ofmhelpers.db.devices.catalog import (
     catalog,
@@ -22,12 +21,10 @@ from ofmhelpers.db.devices.schema import (
     PhoneSort,
 )
 from ofmhelpers.db.encrypted import VaultError
-from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.db.tracked_accounts.store import get_account
 from ofmhelpers.features.accounts.removal import logins_leaving
 from ofmhelpers.features.accounts.tracker import track_login
-from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.phones import workbook
 from ofmhelpers.features.phones.catalog.render import render as draw
 from ofmhelpers.features.refusals import (
@@ -36,12 +33,8 @@ from ofmhelpers.features.refusals import (
     duplicate_refused,
 )
 from ofmhelpers.features.storage import jobs as storage_jobs
-from ofmhelpers.features.storage.constants import storage_constants
 from ofmhelpers.features.storage.service import StorageServiceFolders
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.devices.models import DeviceFields
-
-logger = get_logger(__name__)
 
 
 class SecretsUnreadableError(RuntimeError): ...
@@ -151,27 +144,18 @@ def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
         track_login(body.service, body.username, user_id=owner, revive=revive)
 
 
-def _make_drive_folder(login_id: int, service: str) -> None:
-    found = services().get(service)
-    if found is None or not found.tracked_platform or not storage_jobs.enabled():
-        return
-    owner = store.owner_of_login(login_id)
-    if owner is None:
-        return
-    job_id = create_job(
-        storage_constants().sync_task, {"owner": owner}, actor=str(owner)
-    )
-    try:
-        enqueue(run_job, (job_id, storage_jobs.sync, {"owner": owner}))
-    except Exception:
-        logger.exception("queueing the Drive sync for login %s failed", login_id)
-        fail_job(job_id, "Could not queue the Drive sync")
-
-
 class Phone(BaseModel, frozen=True):
     scope: int
     device_id: int
     folders: StorageServiceFolders
+
+    def _make_drive_folder(self, login_id: int, service: str) -> None:
+        found = services().get(service)
+        if found is None or not found.tracked_platform or not storage_jobs.enabled():
+            return
+        if store.owner_of_login(login_id) != self.folders.owner_id:
+            return
+        self.folders.queue_sync()
 
     @_vault()
     def edit(self, body: DeviceFields) -> None:
@@ -191,7 +175,7 @@ class Phone(BaseModel, frozen=True):
 
     def add_login(self, body: LoginFields) -> LoginAdded:
         added = self._saved(body)
-        _make_drive_folder(added.id, body.service)
+        self._make_drive_folder(added.id, body.service)
         return added
 
     @_vault()
@@ -224,7 +208,7 @@ class Phone(BaseModel, frozen=True):
         added = LoginAdded(id=already.id, linked=True) if already else self._saved(new)
         for name in others:
             self.remove_login(on_phone[name].id)
-        _make_drive_folder(added.id, found.service)
+        self._make_drive_folder(added.id, found.service)
         return added
 
     def remove_login(self, login_id: int) -> None:

@@ -1,5 +1,4 @@
 from ofmhelpers.features.clone_links.ai_check.check import (
-    RULES,
     check_clone,
     sheet_at,
     still_count,
@@ -13,7 +12,6 @@ from ofmhelpers.features.clone_links.ai_check.models import (
 )
 
 __all__ = [
-    "RULES",
     "CloneAiCheck",
     "CloneAiVerdict",
     "Glitch",

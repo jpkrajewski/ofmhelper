@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from ofmhelpers.features.storage.client import read_live
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.features.storage.models import StorageAccess
 from ofmhelpers.features.storage.service import StorageService
 from ofmhelpers.integrations.storage import (
@@ -74,8 +75,6 @@ def test_read_only_drive_blocks_every_write():
     with pytest.raises(DriveError):
         ro.upload("root", Path("x.mp4"), "x.mp4", "video/mp4")
     with pytest.raises(DriveError):
-        ro.grant("id", "a@b.com")
-    with pytest.raises(DriveError):
         ro.trash_file("id")
 
 
@@ -99,7 +98,9 @@ def test_read_live_mode_is_off_by_default(monkeypatch):
 
 
 def _service(raw: _Reads) -> StorageService:
-    access = StorageAccess(owner_id=1, client=raw, read_live=read_live())
+    access = StorageAccess(
+        owner_id=1, client=raw, constants=StorageConstants(), read_live=read_live()
+    )
     return StorageService.compose(access)
 
 

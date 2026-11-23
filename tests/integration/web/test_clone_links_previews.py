@@ -12,7 +12,8 @@ from clone_links_helpers import (
 
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.clone_links import preview as preview_module
-from ofmhelpers.features.clone_links.preview import CANNOT_OPEN, TOO_SLOW, Price
+from ofmhelpers.features.clone_links.constants import clone_links_constants
+from ofmhelpers.features.clone_links.preview import Price
 from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.integrations.downloaders.models import VideoInfo
 from ofmhelpers.integrations.instagram.fake import CDN
@@ -159,7 +160,7 @@ def test_a_failed_read_is_not_cached():
         first = _one(c, FAILING)
         second = _one(c, FAILING)
 
-    assert first["error"] == second["error"] == CANNOT_OPEN
+    assert first["error"] == second["error"] == clone_links_constants().cannot_open
     assert first["ready"] is False
     assert calls == [FAILING, FAILING]
 
@@ -207,7 +208,13 @@ def test_the_cache_is_per_user_so_a_login_only_read_stays_its_readers(reads):
             None,
             "YouTube wants a login",
         ),
-        (False, REEL, "ERROR: Video unavailable", None, CANNOT_OPEN),
+        (
+            False,
+            REEL,
+            "ERROR: Video unavailable",
+            None,
+            clone_links_constants().cannot_open,
+        ),
         (False, REEL, "Read timed out. (read timeout=10)", None, "Instagram is busy"),
         (
             True,
@@ -216,7 +223,13 @@ def test_the_cache_is_per_user_so_a_login_only_read_stays_its_readers(reads):
             LOGIN_WALL,
             "Instagram wants a login",
         ),
-        (True, REEL, "ERROR: HTTP Error 404: Not Found", LOGIN_WALL, CANNOT_OPEN),
+        (
+            True,
+            REEL,
+            "ERROR: HTTP Error 404: Not Found",
+            LOGIN_WALL,
+            clone_links_constants().cannot_open,
+        ),
         (
             True,
             REEL,
@@ -309,7 +322,7 @@ def test_every_link_is_answered_by_the_deadline(reads, monkeypatch):
 
     assert time.monotonic() - started < 15
     assert lines[REEL]["ready"] is True
-    assert lines[OTHER]["error"] == TOO_SLOW
+    assert lines[OTHER]["error"] == clone_links_constants().too_slow
     assert lines[OTHER]["ready"] is False
 
 
@@ -335,7 +348,7 @@ def test_a_read_waits_for_a_free_slot_and_gives_up_at_its_deadline(reads, monkey
         REEL, user.id, price, "/t", until=time.monotonic() + 5
     )
 
-    assert waited.error == TOO_SLOW
+    assert waited.error == clone_links_constants().too_slow
     assert asked_while_full == []
     assert read.ready is True
     assert [url for url, *_ in reads.asked] == [REEL]

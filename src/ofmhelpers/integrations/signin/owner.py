@@ -28,12 +28,15 @@ def owner_code(nonce: str) -> str:
 
 
 class Owner:
-    name = "owner"
     label = "Big G Login"
     callback_method = "GET"
     local_consent = True
     linkable = False
     connects_drive = False
+
+    @property
+    def name(self) -> str:
+        return settings.signin.owner_provider
 
     def configured(self) -> bool:
         return bool(settings.web.app_password_admin)

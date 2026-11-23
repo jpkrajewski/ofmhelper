@@ -4,6 +4,7 @@ AUDITED: frozenset[str] = frozenset(
         "user_identities",
         "user_api_keys",
         "user_cookies",
+        "storage_accounts",
         "devices",
         "logins",
         "device_logins",

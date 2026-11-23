@@ -2,11 +2,8 @@ from urllib.parse import urlencode
 
 from pydantic import BaseModel
 
-from ofmhelpers.cache import enqueue
-from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.users import store as users
-from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.db.users.schema import Role, StorageProvider
 from ofmhelpers.features.signin.consent import redirect_uri
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import (
@@ -17,7 +14,7 @@ from ofmhelpers.features.signin.state import (
     unseal,
 )
 from ofmhelpers.features.storage import jobs as storage_jobs
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage import storage_choice
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
 from ofmhelpers.log import get_logger
 
@@ -52,14 +49,13 @@ def _identity(provider: Provider, back: Callback) -> _Verified:
 def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
     if not refresh_token:
         return
-    job_id = create_job(
-        storage_constants().sync_task, {"owner": user_id}, actor=str(user_id)
-    )
-    try:
-        enqueue(run_job, (job_id, storage_jobs.sync, {"owner": user_id}))
-    except Exception:
-        logger.exception("queueing the Drive sync of %s failed", user_id)
-        fail_job(job_id, "Could not queue the Drive sync")
+    storage_jobs.queue_sync(user_id)
+
+
+def _use_google_drive(user_id: int, refresh_token: str | None) -> None:
+    if not refresh_token:
+        return
+    storage_choice.use(user_id, StorageProvider.GDRIVE)
 
 
 def _link(
@@ -70,7 +66,7 @@ def _link(
     linked = may_link and users.link_identity(user_id, identity)
     note = "linked" if linked else "taken"
     if linked:
-        _sync_new_drive(user_id, identity.refresh_token)
+        _use_google_drive(user_id, identity.refresh_token)
     back = carried.next if linked and carried.next not in (HOME, "/account") else None
     return Outcome(redirect=back or f"/account?{provider.name}={note}")
 

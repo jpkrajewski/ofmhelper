@@ -52,6 +52,12 @@ class Authored:
 
 class UserRow(Timestamps, Authored, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "storage_provider IN ('gdrive', 'dropbox')",
+            name="ck_users_storage_provider",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
@@ -67,6 +73,9 @@ class UserRow(Timestamps, Authored, Base):
     )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False, default="")
     drive_root_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    storage_provider: Mapped[str] = mapped_column(
+        Text, nullable=False, default="gdrive", server_default="gdrive"
+    )
     is_password_account: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
@@ -110,6 +119,28 @@ class UserApiKeyRow(Timestamps, Authored, Base):
     )
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
     api_key: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+
+
+class StorageAccountRow(Timestamps, Authored, Base):
+    __tablename__ = "storage_accounts"
+    __table_args__ = (
+        CheckConstraint("provider IN ('dropbox')", name="ck_storage_accounts_provider"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    provider: Mapped[str] = mapped_column(Text, primary_key=True)
+    refresh_token: Mapped[str] = mapped_column(
+        EncryptedText, nullable=False, deferred=True
+    )
+    account_id: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    connected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class UserCookiesRow(Timestamps, Authored, Base):

@@ -16,7 +16,7 @@ from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.repurpose.models import RepurposeCard
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageTask
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
@@ -26,7 +26,7 @@ lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
 logger = get_logger(__name__)
 
-TASK = storage_constants().spoofed_task
+TASK = StorageTask.SPOOFED
 PREFIX = "/spoof"
 FILES_PREFIX = f"{PREFIX}/files"
 DEVICE_LABEL = "iPhone 16 Pro Max"

@@ -1,9 +1,7 @@
 import pytest
 
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.clone_links.links import (
-    NOT_A_VIDEO_SITE,
-    NOT_ONE_POST,
-    SHARE_LINK,
     SourceLink,
     read_links,
     read_pasted,
@@ -121,7 +119,9 @@ def test_a_share_link_is_refused_never_made_a_reel(pasted):
     found = read_pasted(pasted)
 
     assert found.links == []
-    assert [(b.number, b.reason) for b in found.bad_lines] == [(1, SHARE_LINK)]
+    assert [(b.number, b.reason) for b in found.bad_lines] == [
+        (1, clone_links_constants().share_link)
+    ]
     assert "/share/" in SourceLink(url=pasted).url
 
 
@@ -169,12 +169,16 @@ def test_a_profile_playlist_or_redirector_is_refused(pasted):
     found = read_pasted(pasted)
 
     assert found.links == []
-    assert [(b.number, b.reason) for b in found.bad_lines] == [(1, NOT_ONE_POST)]
+    assert [(b.number, b.reason) for b in found.bad_lines] == [
+        (1, clone_links_constants().not_one_post)
+    ]
 
 
 def test_a_link_of_no_site_says_which_sites():
     found = read_pasted("https://abc-8077.proxy.runpod.net/docs")
-    assert [b.reason for b in found.bad_lines] == [NOT_A_VIDEO_SITE]
+    assert [b.reason for b in found.bad_lines] == [
+        clone_links_constants().not_a_video_site
+    ]
 
 
 def test_the_extractors_taken_are_the_settings(monkeypatch):
@@ -183,7 +187,9 @@ def test_the_extractors_taken_are_the_settings(monkeypatch):
     found = read_pasted(f"{REEL}\nhttps://www.tiktok.com/@a/video/1")
 
     assert found.links == [REEL]
-    assert [(b.number, b.reason) for b in found.bad_lines] == [(2, NOT_ONE_POST)]
+    assert [(b.number, b.reason) for b in found.bad_lines] == [
+        (2, clone_links_constants().not_one_post)
+    ]
 
 
 @pytest.mark.parametrize(

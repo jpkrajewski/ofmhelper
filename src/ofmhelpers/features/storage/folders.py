@@ -7,6 +7,7 @@ lazy from pathlib import Path
 
 from pydantic import BaseModel, SkipValidation
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.drive_folders import store
@@ -20,10 +21,13 @@ from ofmhelpers.db.drive_folders.schema import (
     UploadedToday,
 )
 from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.jobs.schema import JobStatus
+from ofmhelpers.db.jobs.store import create_job, fail_job, latest_job
 from ofmhelpers.db.tracked_accounts.store import untrack
 from ofmhelpers.db.users import store as users
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews.render import previews_dir, write_atomic
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageConstants, StorageTask
 from ofmhelpers.features.storage.models import BotRoot, _Scanned
 from ofmhelpers.features.storage.schema import _AccountFolder, _RootListing
 from ofmhelpers.features.storage.va_folders import StorageServiceVaFolders
@@ -42,17 +46,13 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.telemetry import in_this_trace
 lazy from ofmhelpers.config.types import AccountFolder
 lazy from ofmhelpers.db.drive_folders.schema import StoredFolders
+lazy from ofmhelpers.features.storage import jobs
 
 logger = get_logger(__name__)
 
 
 def enabled() -> bool:
     return settings.signin.google_configured or settings.infra.fake_externals
-
-
-def _owner_label(user_id: int) -> str:
-    user = users.get_user(user_id)
-    return user.email if user else f"user {user_id}"
 
 
 def now() -> datetime.datetime:
@@ -240,6 +240,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
     client: SkipValidation[StorageClient] | None
     owner_id: int
     read_live: bool
+    constants: StorageConstants
     bot: BotRoot | None
     va_folders: StorageServiceVaFolders
 
@@ -248,15 +249,50 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             raise DriveAuthError
         return self.client
 
+    def web_url(self, item_id: str) -> str:
+        return self._drive().web_url(item_id)
+
+    def open_url(self, item_id: str) -> str:
+        try:
+            return self.web_url(item_id)
+        except DriveAuthError, SignInError:
+            logger.warning(
+                "drive: no sign-in to open %s for %s",
+                item_id,
+                self.owner_id,
+                exc_info=True,
+            )
+            return self.constants.account_page
+        except DriveError:
+            logger.warning(
+                "drive: folder %s of %s not opened",
+                item_id,
+                self.owner_id,
+                exc_info=True,
+            )
+            return self.constants.drive_page
+
     def root_name(self) -> str:
         live = settings.infra.production or self.read_live
-        c = storage_constants()
+        c = self.constants
         return c.root_name if live else f"{c.dev_prefix}{c.root_name}"
+
+    def owner_label(self) -> str:
+        user = users.get_user(self.owner_id)
+        if user:
+            return user.email
+        return self.constants.unknown_owner.format(user_id=self.owner_id)
 
     def _is_root(self, folder: DriveFolder) -> bool:
         if settings.infra.production or self.read_live:
             return True
         return folder.name.strip().casefold() == self.root_name().casefold()
+
+    def _syncing_job_id(self, viewer: int | None) -> str | None:
+        if viewer is None:
+            return None
+        job = latest_job(StorageTask.SYNC, str(self.owner_id))
+        return job.id if job is not None and job.status is JobStatus.running else None
 
     def _board_head(self, at: datetime.datetime, viewer: int | None) -> DriveBoard:
         me = users.get_user(viewer) if viewer is not None else None
@@ -266,19 +302,13 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             root_name=self.root_name(),
             connected=bool(me and me.drive_connected),
             posted_folder_name=settings.gdrive.posted_folder_name,
+            syncing_job_id=self._syncing_job_id(viewer),
         )
         if not enabled():
-            result.problem = (
-                "Google Drive works through each person's Google sign-in, which is"
-                " not set up: OFM_GOOGLE_CLIENT_ID and OFM_GOOGLE_CLIENT_SECRET are"
-                " empty in .env."
-            )
+            result.problem = self.constants.not_set_up
             return result
         if me is not None and not me.drive_connected and self.bot is None:
-            result.problem = (
-                "Your phones' folders live in your own Google Drive"
-                f" ({self.root_name()}). Connect it once and they are made for you."
-            )
+            result.problem = self.constants.connect_once.format(root=self.root_name())
             result.connect_drive = True
         return result
 
@@ -353,11 +383,12 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             return stored
         if self.bot is not None:
             named = (
-                "" if settings.infra.production else f" and name it {self.root_name()}"
+                ""
+                if settings.infra.production
+                else self.constants.bot_root_name_it.format(root=self.root_name())
             )
-            msg = (
-                "The Drive bot cannot use OFM_GDRIVE_ROOT_FOLDER: share it with"
-                f" {self.bot.email}{named}"
+            msg = self.constants.bot_root_unusable.format(
+                email=self.bot.email, named=named
             )
             raise DriveError(msg)
         found = (
@@ -367,7 +398,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         users.set_drive_root(self.owner_id, found)
         logger.info(
             "drive: root of %s is %s (%s)",
-            _owner_label(self.owner_id),
+            self.owner_label(),
             found,
             self.root_name(),
         )
@@ -575,7 +606,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
 
     def sync_owner(self, targets: list[DriveTarget], report: SyncReport) -> None:
         if self.client is None:
-            report.not_connected.append(_owner_label(self.owner_id))
+            report.not_connected.append(self.owner_label())
             return
         try:
             root = self.ensure_root()
@@ -583,7 +614,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             logger.warning(
                 "drive: root of %s failed: %s", self.owner_id, exc, exc_info=True
             )
-            report.failed.append(f"{_owner_label(self.owner_id)}: {exc}")
+            report.failed.append(f"{self.owner_label()}: {exc}")
             return
         folders = store.account_folders()
         for target in _missing(targets, folders):
@@ -606,13 +637,13 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         except FolderGoneError:  # silent: deleted by hand: the account is removed
             _deleted_by_hand(card.target)
             card.account_folder_id = card.posted_folder_id = None
-            card.error = "The account's folder was deleted: the account was removed"
+            card.error = self.constants.account_folder_deleted
             return
         except (DriveError, SignInError) as exc:
             logger.warning(
                 "drive: listing %s failed: %s", card.target.handle, exc, exc_info=True
             )
-            card.error = "Drive could not be read"
+            card.error = self.constants.drive_unreadable
             return
         _record_posted(
             [
@@ -629,7 +660,9 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
     def _check_root(self, root: str) -> None:
         current = self._drive().folder(root)
         if not self._is_root(current):
-            msg = f"Root {root} is {current.name!r}, not {self.root_name()!r}"
+            msg = self.constants.root_mismatch.format(
+                root_id=root, found=current.name, expected=self.root_name()
+            )
             raise FolderGoneError(msg)
 
     def _root_folders(self, root: str) -> list[DriveFile]:
@@ -685,7 +718,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                     future.result()
                 except Exception:
                     logger.exception("drive: card of %s failed", card.target.handle)
-                    card.error = "Could not read this folder from Drive"
+                    card.error = self.constants.folder_unreadable
 
     def _list_root(
         self,
@@ -740,9 +773,8 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
     ) -> None:
         if self.client is None:
             for card in cards:
-                card.error = (
-                    f"{_owner_label(self.owner_id)} has not connected Google Drive:"
-                    " their Account page, Connect Google Drive"
+                card.error = self.constants.owner_not_connected.format(
+                    owner=self.owner_label()
                 )
             return
         user = users.get_user(self.owner_id)
@@ -810,3 +842,12 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             return None
         _keep_thumb(file_id, px, found.content, found.media_type)
         return found
+
+    def queue_sync(self) -> None:
+        params = {"owner": self.owner_id}
+        job_id = create_job(StorageTask.SYNC, params, actor=str(self.owner_id))
+        try:
+            enqueue(run_job, (job_id, jobs.sync, params))
+        except Exception:
+            logger.exception("queueing the Drive sync of %s failed", self.owner_id)
+            fail_job(job_id, self.constants.sync_not_queued)

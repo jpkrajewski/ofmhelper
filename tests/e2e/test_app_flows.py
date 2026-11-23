@@ -12,7 +12,8 @@ from playwright.sync_api import expect
 
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
-from ofmhelpers.db.jobs.store import create_job, fail_job
+from ofmhelpers.db.jobs.store import create_job, fail_job, finish_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.db.watched_profiles import store as watched_profiles
 from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 lazy from ofmhelpers.features.jobs.runner import run_job
@@ -888,6 +889,45 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     )
 
     assert fake_drive.writes == ["create"] * 5
+    assert admin.js_errors == []
+
+
+def test_drive_page_sets_up_folders_by_itself_when_the_sync_job_ends(
+    admin: Session, fake_drive: FakeDrive, jobs_idle
+):
+    connect_google(admin, "agency.google@example.com")
+    jobs_idle()
+    _seed_phone("Phone 01", "Anna", ("instagram", "ann.ig"))
+    owner = users.agency_id()
+    job_id = create_job("drive_sync", {"owner": owner}, actor=str(owner))
+
+    admin.goto("/drive")
+    notice = admin.page.locator(".dr-syncing")
+    expect(notice).to_have_text("Setting up your folders…")
+    expect(admin.page.locator(".dr-card .dr-note")).to_have_count(0)
+
+    finish_job(job_id, {})
+    expect(notice).to_have_count(0, timeout=15000)
+    expect(
+        admin.page.locator(".dr-card").filter(has_text="No folder yet")
+    ).to_have_count(1)
+    assert admin.js_errors == []
+
+
+def test_drive_page_shows_the_error_of_a_failed_sync_in_the_notice(
+    admin: Session, fake_drive: FakeDrive, jobs_idle
+):
+    connect_google(admin, "agency.google@example.com")
+    jobs_idle()
+    _seed_phone("Phone 01", "Anna", ("instagram", "ann.ig"))
+    owner = users.agency_id()
+    job_id = create_job("drive_sync", {"owner": owner}, actor=str(owner))
+
+    admin.goto("/drive")
+    fail_job(job_id, "Drive refused")
+    expect(admin.page.locator(".dr-syncing")).to_have_text(
+        "Drive refused", timeout=15000
+    )
     assert admin.js_errors == []
 
 

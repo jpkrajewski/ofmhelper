@@ -1,13 +1,13 @@
 import datetime
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import posting_constants
 from ofmhelpers.features.storage.schema import PostingWindow
 
 
 def posting_day_start(at: datetime.datetime) -> datetime.datetime:
     s = settings.gdrive
-    day = storage_constants().day
+    day = posting_constants().day
     posting = datetime.datetime.combine(
         at.astimezone(datetime.UTC).date(), s.posting_time_utc, datetime.UTC
     )
@@ -27,7 +27,7 @@ def window(at: datetime.datetime | None = None) -> PostingWindow:
     )
     start = posting_day_start(at)
     if at >= start + length:
-        start += storage_constants().day
+        start += posting_constants().day
     return PostingWindow(
         start=start.timestamp(),
         end=(start + length).timestamp(),

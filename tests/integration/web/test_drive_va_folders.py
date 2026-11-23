@@ -7,6 +7,7 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.storage.client import storage_of
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.features.storage.models import StorageAccess
 from ofmhelpers.features.storage.service import StorageService
 from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
@@ -99,7 +100,9 @@ def test_a_renamed_va_renames_their_folder(drive):
     assert va is not None
     renamed = va.model_copy(update={"name": "Noelyn R."})
 
-    access = StorageAccess(owner_id=users.agency_id(), client=drive)
+    access = StorageAccess(
+        owner_id=users.agency_id(), client=drive, constants=StorageConstants()
+    )
     vas = StorageService.compose(access).va_folders
     folder = vas.ensure(ROOT, renamed, old)
 

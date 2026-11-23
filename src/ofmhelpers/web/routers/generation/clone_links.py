@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links import service
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.job import run_clone_link
 from ofmhelpers.features.clone_links.models import (
     CheckedLinks,
@@ -13,18 +17,7 @@ from ofmhelpers.features.clone_links.models import (
     RecreateLinks,
 )
 from ofmhelpers.features.clone_links.page import form_view
-from ofmhelpers.features.clone_links.service import (
-    BATCH,
-    FILES_PREFIX,
-    LABEL,
-    NOT_QUEUED,
-    PREFIX,
-    TASK,
-    THUMBS_PREFIX,
-    BatchStopped,
-    Generate,
-    Sent,
-)
+from ofmhelpers.features.clone_links.service import BatchStopped, Generate, Sent
 from ofmhelpers.features.clone_pricing.targets import DEFAULT_RESOLUTION
 from ofmhelpers.features.jobs.schema import CloneQueued
 from ofmhelpers.web.access import Area
@@ -46,24 +39,17 @@ from ofmhelpers.web.routers.generation.clone import default_prompt
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
-__all__ = [
-    "BATCH",
-    "FILES_PREFIX",
-    "LABEL",
-    "NOT_QUEUED",
-    "TASK",
-    "THUMBS_PREFIX",
-    "router",
-    "run_clone_link",
-]
+__all__ = ["router", "run_clone_link"]
 
 router = APIRouter(
-    prefix=PREFIX, tags=["clone-links"], dependencies=[Access(Area.CLONE_LINKS)]
+    prefix=clone_links_constants().prefix,
+    tags=["clone-links"],
+    dependencies=[Access(Area.CLONE_LINKS)],
 )
 
 _UNBUFFERED = {"X-Accel-Buffering": "no"}
 
-gallery = Gallery({TASK})
+gallery = Gallery({CloneLinksTask.RUN})
 
 
 class CloneLinksForm(PaidForm):
@@ -75,7 +61,7 @@ class CloneLinksForm(PaidForm):
     image: Files
     image_manifest: str = "[]"
     links: list[str] = Field(default_factory=list)
-    batch: str | None = Field(None, pattern=BATCH)
+    batch: str | None = Field(None, pattern=clone_links_constants().batch_pattern)
 
 
 class ReviewState(BaseModel):
@@ -213,7 +199,7 @@ def reviews(
 
 add_job_routes(
     router,
-    LABEL,
+    clone_links_constants().label,
     lambda _job: "Generating video… this can take a few minutes.",
     back_url="/clone-links",
     back_label="clone more",

@@ -89,6 +89,7 @@ class DriveBoard(BaseModel):
     root_folder_id: str = ""
     root_name: str = ""
     connected: bool = False
+    syncing_job_id: str | None = None
     posted_folder_name: str = AccountFolder.POSTED
 
     @property

@@ -7,6 +7,7 @@ from ofmhelpers.db.users.schema import (
     LinkedAccount,
     Role,
     Standing,
+    StorageProvider,
     User,
     UserForm,
     normalized_email,
@@ -15,9 +16,6 @@ from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.users.schema import Identity, SavedKeys
 
 logger = get_logger(__name__)
-
-PASSWORD_ADMIN = "admin"  # noqa: S105
-OWNER_PROVIDER = "owner"
 
 
 @lru_cache(maxsize=1)
@@ -98,7 +96,7 @@ def _claim_password_account(email: str, name: str) -> User | None:
     if not admins or normalized_email(email) != admins[0]:
         return None
     account = agency_admin()
-    if account is None or account.email != PASSWORD_ADMIN:
+    if account is None or account.email != settings.signin.password_admin:
         return None
     return _repository().update(
         account.id, {"email": normalized_email(email), "name": name}
@@ -113,7 +111,7 @@ def env_admin(email: str, name: str) -> User | None:
 
 def sign_in_identity(identity: Identity) -> User | None:
     repo = _repository()
-    if identity.provider == OWNER_PROVIDER:
+    if identity.provider == settings.signin.owner_provider:
         return admit(password_admin())
     if identity.email_verified and is_env_admin(identity.email):
         user = env_admin(identity.email, identity.name)
@@ -136,7 +134,7 @@ def sign_in_identity(identity: Identity) -> User | None:
 
 
 def link_identity(user_id: int, identity: Identity) -> bool:
-    if identity.provider == OWNER_PROVIDER:
+    if identity.provider == settings.signin.owner_provider:
         return False
     if not _repository().link_identity(
         user_id, identity.provider, identity.subject, identity.email
@@ -203,7 +201,10 @@ def password_admin() -> User | None:
     user = _repository().password_account()
     if user is None:
         added = _repository().add(
-            PASSWORD_ADMIN, Role.ADMIN, "Admin (password)", password_account=True
+            settings.signin.password_admin,
+            Role.ADMIN,
+            "Admin (password)",
+            password_account=True,
         )
         return added or _repository().password_account()
     if not user.is_admin or not user.active:
@@ -213,6 +214,10 @@ def password_admin() -> User | None:
 
 def set_drive_root(user_id: int, folder_id: str | None) -> None:
     _repository().set_drive_root(user_id, folder_id)
+
+
+def set_storage_provider(user_id: int, provider: StorageProvider) -> None:
+    _repository().set_storage_provider(user_id, provider)
 
 
 def refresh_token(user_id: int) -> str:

@@ -3,7 +3,11 @@ import ast
 from test_architecture import check, trees
 
 STORAGE = "ofmhelpers.features.storage"
-PROVIDERS = ("ofmhelpers.integrations.storage.gdrive",)
+PROVIDERS = (
+    "ofmhelpers.integrations.storage.gdrive",
+    "ofmhelpers.integrations.storage.dropbox",
+)
+CONNECT_FLOWS = frozenset({"features/storage/dropbox_connect.py"})
 FACTORY = f"{STORAGE}.client"
 COMPOSER = "features/storage/service.py"
 COMPOSITION_ROOTS = frozenset(
@@ -19,7 +23,17 @@ COMPOSITION_ROOTS = frozenset(
     }
 )
 PUBLIC = frozenset(
-    {"service", "jobs", "client", "constants", "schema", "models", "posting"}
+    {
+        "service",
+        "jobs",
+        "client",
+        "constants",
+        "schema",
+        "models",
+        "posting",
+        "storage_choice",
+        "dropbox_connect",
+    }
 )
 SECRETLESS_ROOTS = frozenset({"features/trials/cleanup.py"})
 SECRETLESS_FACTORY = frozenset({f"{FACTORY}.saved_storage"})
@@ -52,6 +66,8 @@ NOT_MOVED_YET = frozenset(
         "features/accounts/removal.py",
     }
 )
+CONSTANTS_CLASS = "StorageConstants"
+CONSTANTS_BUILDER = "features/storage/client.py"
 
 
 def imported(tree: ast.Module) -> set[str]:
@@ -123,6 +139,13 @@ def functions_taking_storage(tree: ast.Module) -> set[str]:
     }
 
 
+def builds_storage_constants(tree: ast.Module) -> bool:
+    return any(
+        isinstance(node, ast.Call) and CONSTANTS_CLASS in names_in(node.func)
+        for node in ast.walk(tree)
+    )
+
+
 def raw_client_imports(tree: ast.Module) -> set[str]:
     return {
         alias.name
@@ -164,12 +187,22 @@ def test_files_not_moved_yet_still_need_the_move():
     check(done, set())
 
 
+def test_only_the_factory_builds_storage_constants():
+    found = {
+        name
+        for name, tree in trees().items()
+        if name != CONSTANTS_BUILDER and builds_storage_constants(tree)
+    }
+    check(found, set())
+
+
 def test_only_the_factory_imports_a_storage_provider():
     found = {
         name
         for name, tree in trees().items()
         if not name.startswith("integrations/")
         and name != "features/storage/client.py"
+        and name not in CONNECT_FLOWS
         and any(m.startswith(PROVIDERS) for m in imported(tree))
     }
     check(found, set())
@@ -241,3 +274,12 @@ def test_the_rules_see_what_they_look_for():
     )
     assert functions_taking_storage(taking) == {"read", "page", "compose"}
     assert raw_client_imports(taking) == {"DriveSheet"}
+    assert builds_storage_constants(ast.parse("c = StorageConstants()\n"))
+    assert builds_storage_constants(ast.parse("c = constants.StorageConstants()\n"))
+    assert builds_storage_constants(
+        ast.parse("c = StorageConstants.model_validate({})\n")
+    )
+    assert not builds_storage_constants(ast.parse("c = self.constants\n"))
+    assert not builds_storage_constants(
+        ast.parse("from m import StorageConstants\nx: StorageConstants\n")
+    )

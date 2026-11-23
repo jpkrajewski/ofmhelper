@@ -6,6 +6,7 @@ from fastapi.responses import Response
 from ofmhelpers.db.users.schema import ApiKeysForm, SessionUser
 from ofmhelpers.features.account import service
 from ofmhelpers.features.account.service import Notice
+from ofmhelpers.features.storage.dropbox_connect import connect_url, finish
 from ofmhelpers.features.storage.schema import DriveSpace
 from ofmhelpers.web.access import Action, Area, allowed
 from ofmhelpers.web.dependencies import Access, Can, CurrentUser, Storage
@@ -33,9 +34,26 @@ def _page(request: Request, me: SessionUser, notice: Notice) -> Response:
 
 @router.get("")
 def account_page(
-    request: Request, me: CurrentUser, google: str = "", apple: str = ""
+    request: Request,
+    me: CurrentUser,
+    google: str = "",
+    apple: str = "",
+    dropbox: str = "",
 ) -> Response:
-    return _page(request, me, service.link_notice(google, apple))
+    return _page(request, me, service.link_notice(google, apple, dropbox))
+
+
+@router.get("/dropbox/connect")
+def dropbox_connect(me: CurrentUser) -> Response:
+    return see_other(connect_url(me.id) or "/account?dropbox=failed")
+
+
+@router.get("/dropbox/callback")
+def dropbox_callback(
+    me: CurrentUser, code: str | None = None, state: str | None = None
+) -> Response:
+    connected = bool(code and state) and finish(me.id, code or "", state or "")
+    return see_other("/drive" if connected else "/account?dropbox=failed")
 
 
 @router.get("/drive-space")

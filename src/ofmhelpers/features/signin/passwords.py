@@ -11,7 +11,7 @@ from ofmhelpers.cache.rate_limit import (
     record_failed_user_login,
     user_login_blocked,
 )
-from ofmhelpers.db.users import store as users
+from ofmhelpers.config import settings
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import STATE_COOKIE, unseal
 from ofmhelpers.features.users import credentials
@@ -22,13 +22,14 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 _TOO_MANY = "Too many failed attempts. Try again later."
-PASSWORD_ADMIN = users.PASSWORD_ADMIN
 
 
-def login(request: Request, email: str, password: str, next_url: str) -> Outcome:
+def login(request: Request, email: str | None, password: str, next_url: str) -> Outcome:
     if login_blocked(request):
         logger.warning("login rate limit hit from %s", client_id(request))
         return Outcome(next_url=next_url, error=_TOO_MANY, status_code=429)
+    if email is None:
+        email = settings.signin.password_admin
     user = credentials.password_sign_in(email, password)
     if user is None:
         record_failed_login(request)

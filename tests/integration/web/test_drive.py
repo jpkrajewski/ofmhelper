@@ -17,16 +17,16 @@ from ofmhelpers.db.drive_folders import store
 from ofmhelpers.db.drive_folders.models import DriveBoard
 from ofmhelpers.db.drive_folders.schema import VaFolder
 from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.jobs.store import create_job, fail_job, finish_job
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts import store as tracked_accounts
 from ofmhelpers.db.tracked_accounts.store import list_accounts, track
 from ofmhelpers.db.users import store as users
-from ofmhelpers.db.users.schema import UserForm
+from ofmhelpers.db.users.schema import Role, UserForm
 from ofmhelpers.features.storage import client as drive_client
-from ofmhelpers.features.storage import folders as drive_folders
 from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.storage import posting
-from ofmhelpers.features.storage.constants import StorageConstants
+from ofmhelpers.features.storage.constants import StorageConstants, StorageTask
 from ofmhelpers.integrations.socials.models import AccountProfile, AccountStats
 from ofmhelpers.integrations.storage import DriveError, FolderGoneError
 from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
@@ -885,7 +885,7 @@ def test_the_agencys_hand_made_root_is_adopted_in_any_case(
     fake_externals, tmp_path, monkeypatch
 ):
     monkeypatch.setattr(
-        drive_folders, "storage_constants", lambda: StorageConstants(dev_prefix="")
+        drive_client, "StorageConstants", lambda: StorageConstants(dev_prefix="")
     )
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
@@ -1358,3 +1358,68 @@ def test_a_login_gone_during_a_live_read_loses_only_its_own_posted_files(
     scans = {f.login_id: f.scan for f in store.account_folders().folders}
     assert gone.login_id not in scans
     assert [len(scan.posted) for scan in scans.values() if scan] == [1, 1]
+
+
+def _start_sync() -> str:
+    owner = users.agency_id()
+    return create_job(StorageTask.SYNC, {"owner": owner}, actor=str(owner))
+
+
+def _syncing() -> str | None:
+    owner = users.agency_id()
+    storage = drive_client.storage_of(owner, interactive=True)
+    return storage.folders.saved_board(viewer=owner).syncing_job_id
+
+
+def test_the_board_names_the_running_sync_and_forgets_it_when_it_ends(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    assert _syncing() is None
+
+    job_id = _start_sync()
+    assert _syncing() == job_id
+
+    finish_job(job_id, {})
+    assert _syncing() is None
+
+
+def test_a_vas_board_names_the_owners_running_sync(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    owner = users.agency_id()
+    va = make_user("va-banner@example.com", Role.VA)
+    users.set_owner(va.id, owner)
+    job_id = _start_sync()
+
+    storage = drive_client.storage_of(
+        drive_client.storage_owner(va.id), interactive=True
+    )
+
+    assert storage.folders.saved_board(viewer=va.id).syncing_job_id == job_id
+    finish_job(job_id, {})
+    assert storage.folders.saved_board(viewer=va.id).syncing_job_id is None
+
+
+def test_a_failed_sync_is_not_shown_as_running(drive):
+    fail_job(_start_sync(), "Drive refused")
+    assert _syncing() is None
+
+
+def test_the_page_shows_the_setting_up_notice_in_place_of_no_folder_yet(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    client = _client()
+    assert "No folder yet" in client.get("/drive").text
+
+    job_id = _start_sync()
+    html = client.get("/drive").text
+    assert "Setting up your folders" in html
+    assert f'data-sync-poll="/drive/sync/{job_id}"' in html
+    assert "No folder yet" not in html
+
+    status = client.get(f"/drive/sync/{job_id}")
+    assert status.status_code == 200
+    assert status.json()["status"] == "running"
+    fail_job(job_id, "Drive refused")
+    assert client.get(f"/drive/sync/{job_id}").json()["error"] == "Drive refused"
+
+
+def test_the_sync_status_of_an_unknown_job_is_404(drive):
+    assert _client().get("/drive/sync/not-a-job").status_code == 404

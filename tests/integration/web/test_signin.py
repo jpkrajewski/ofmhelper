@@ -77,6 +77,16 @@ def test_the_admin_password_signs_in_as_the_password_account(client):
     assert client.get("/users").status_code == 200
 
 
+def test_a_missing_email_field_with_the_admin_password_signs_the_admin_in(client):
+    r = client.post(
+        "/login",
+        data={"password": "test-admin", "next": "/"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert client.get("/users").status_code == 200
+
+
 def test_the_admin_password_opens_an_admin_email_as_that_admin(client, monkeypatch):
     monkeypatch.setenv("OFM_ADMIN_EMAILS", "Owner@Example.com")
     r = _password_login(client, " owner@example.com ", "test-admin")

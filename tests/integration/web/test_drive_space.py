@@ -5,11 +5,12 @@ from signin import make_user, sign_in
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.storage.client import storage_of
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.features.storage.schema import DriveSpace
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.storage import (
     RECONNECT,
+    DriveAuthError,
     DriveError,
     DriveFolder,
 )
@@ -180,7 +181,7 @@ def test_a_full_drive_says_so_and_forgets_the_cached_space(drive, tmp_path):
 
     failure = _upload_failure(user_id, _folder().id, _video(tmp_path))
 
-    assert upload_error(user_id, failure) == storage_constants().drive_full
+    assert upload_error(user_id, failure) == StorageConstants().drive_full
     assert cached_space(user_id) is None
 
 
@@ -206,7 +207,14 @@ def test_a_folder_gone_says_drive_folder_missing(drive, tmp_path):
     failure = _upload_failure(user_id, folder.id, _video(tmp_path))
 
     assert "not found" in str(failure)
-    assert upload_error(user_id, failure) == storage_constants().folder_missing
+    assert upload_error(user_id, failure) == StorageConstants().folder_missing
+
+
+def test_a_dropbox_worded_refused_sign_in_comes_back_as_dropbox_text(drive):
+    user_id = _connected()
+    dropbox_text = "Reconnect Dropbox on your Account page"
+
+    assert upload_error(user_id, DriveAuthError(dropbox_text)) == dropbox_text
 
 
 def test_anything_else_says_drive_did_not_answer_never_its_text(drive, tmp_path):
@@ -216,7 +224,7 @@ def test_anything_else_says_drive_did_not_answer_never_its_text(drive, tmp_path)
     failure = _upload_failure(user_id, _folder().id, _video(tmp_path))
 
     assert "fake outage" in str(failure)
-    assert upload_error(user_id, failure) == storage_constants().no_answer
+    assert upload_error(user_id, failure) == StorageConstants().no_answer
     assert upload_error(user_id, SignInError("Google sign-in is not set up")) == (
-        storage_constants().no_answer
+        StorageConstants().no_answer
     )

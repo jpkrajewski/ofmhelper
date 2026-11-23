@@ -15,6 +15,7 @@ from ofmhelpers.config.settings import (
     CloneLongSettings,
     DistributionSettings,
     DownloadersSettings,
+    DropboxSettings,
     ElyumSettings,
     EventsSettings,
     ExportSettings,
@@ -202,6 +203,10 @@ class Settings:
     @property
     def storage(self) -> StorageSettings:
         return self._group(StorageSettings)
+
+    @property
+    def dropbox(self) -> DropboxSettings:
+        return self._group(DropboxSettings)
 
     @property
     def llm(self) -> LLMSettings:

@@ -17,7 +17,7 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.storage import bin as storage_bin
 from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.storage.client import storage_of
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.constants import StorageConstants, StorageTask
 from ofmhelpers.features.storage.jobs import run_bin
 from ofmhelpers.features.storage.models import Moved, StorageUsage
 from ofmhelpers.features.storage.service import StorageServiceBin
@@ -104,11 +104,11 @@ def _job(task: str, status: JobStatus | None = None) -> Job:
 
 
 def _scan(status: JobStatus | None = None) -> Job:
-    return _job(storage_constants().scan_task, status)
+    return _job(StorageTask.SCAN, status)
 
 
 def _move() -> Job:
-    return _job(storage_constants().bin_task)
+    return _job(StorageTask.BIN)
 
 
 def _laid_out(drive: FakeDrive) -> dict[str, str]:
@@ -206,7 +206,7 @@ def test_a_folder_that_is_not_one_of_the_owners_is_refused(drive):
     junk = _client().post("/storage/bin-moves", data={"part": "POSTED"})
 
     assert (answer.status_code, junk.status_code) == (404, 422)
-    assert latest_job(storage_constants().bin_task, _actor()) is None
+    assert latest_job(StorageTask.BIN, _actor()) is None
 
 
 def test_twenty_clicks_at_once_start_one_move(drive, real_queue):
@@ -237,7 +237,7 @@ def test_without_google_drive_the_page_asks_to_connect_and_nothing_runs(drive):
 
     assert "Connect Google Drive" in page.text
     assert answer.status_code == 400
-    assert latest_job(storage_constants().scan_task, _actor()) is None
+    assert latest_job(StorageTask.SCAN, _actor()) is None
 
 
 def test_drive_failing_keeps_the_reason_on_the_job_and_the_page_says_so(
@@ -268,8 +268,8 @@ def test_a_server_that_only_reads_the_live_drive_refuses_to_move(drive, monkeypa
     )
 
     assert answer.status_code == 400
-    assert answer.json() == {"detail": storage_constants().read_only}
-    assert latest_job(storage_constants().bin_task, _actor()) is None
+    assert answer.json() == {"detail": StorageConstants().read_only}
+    assert latest_job(StorageTask.BIN, _actor()) is None
 
 
 def test_with_the_queue_down_the_page_still_shows_the_last_scan(drive, monkeypatch):
@@ -314,8 +314,8 @@ def test_with_redis_down_a_move_is_refused_and_no_job_is_made(drive, monkeypatch
     answer = _client().post("/storage/bin-moves", data={"part": "TRIALS"})
 
     assert answer.status_code == 503
-    assert answer.json() == {"detail": storage_constants().try_again}
-    assert latest_job(storage_constants().bin_task, _actor()) is None
+    assert answer.json() == {"detail": StorageConstants().try_again}
+    assert latest_job(StorageTask.BIN, _actor()) is None
 
 
 def test_a_fresh_scan_is_not_started_again_until_it_is_stale(drive):

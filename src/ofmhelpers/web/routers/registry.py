@@ -5,6 +5,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.db.jobs.schema import Job, JobParams
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.features.threads.tasks import TASK as THREADS_TASK
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
@@ -58,8 +62,8 @@ TOOLS = frozendict(
         **GENERATE_TOOLS,
         **DOWNLOAD_TOOLS,
         "clone": Tool(label="Clone", router=clone.router),
-        clone_links.TASK: Tool(
-            label=clone_links.LABEL,
+        CloneLinksTask.RUN: Tool(
+            label=clone_links_constants().label,
             router=clone_links.router,
         ),
         clone_long.TASK: Tool(

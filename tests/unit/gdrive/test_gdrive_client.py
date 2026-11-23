@@ -318,7 +318,7 @@ def test_file_kinds_and_links():
     folder = DriveFile.model_validate({"id": "f", "name": "x", "mimeType": FOLDER_MIME})
     assert (video.kind, doc.kind, folder.kind) == ("video", "file", "folder")
     assert video.url == "https://drive.google.com/file/d/v/view"
-    assert folder.url == "https://drive.google.com/drive/folders/f"
+    assert folder.url == "/drive/folders/f"
 
 
 class _NoNetwork:

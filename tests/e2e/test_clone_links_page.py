@@ -9,9 +9,8 @@ from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import Locator, Request, Response, expect
 from sqlalchemy import create_engine, text
 
-from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
-from ofmhelpers.features.clone_links.preview import CANNOT_OPEN
-from ofmhelpers.features.clone_links.review import NOT_CONNECTED
+from ofmhelpers.db.clone_ai_checks.schema import ReviewReason
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_FAKE_KEY
 from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 
@@ -111,7 +110,7 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
         [f"{dead}{reel}", junk]
     )
     expect(refused.locator(".cost-line-detail")).to_have_text(
-        ["2 links on one line", NOT_A_VIDEO_SITE]
+        ["2 links on one line", clone_links_constants().not_a_video_site]
     )
     expect(va.page.locator("#clone-links-refused-note")).to_be_visible()
     refused.get_by_role("button", name="OK").click()
@@ -139,7 +138,9 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
     expect(ready.locator(".pick-cover .spinner")).to_have_count(0)
     expect(left_out.locator(".pick-cover")).to_have_attribute("href", dead)
     expect(left_out).to_have_attribute("data-problem", "", timeout=RESULT_TIMEOUT_MS)
-    expect(left_out.locator(".pick-why")).to_have_text(CANNOT_OPEN)
+    expect(left_out.locator(".pick-why")).to_have_text(
+        clone_links_constants().cannot_open
+    )
     expect(left_out.locator(".pick-price")).to_have_text("")
     expect(va.page.locator("#clone-links-confirm-title")).to_have_text(
         "Generate 1 clone?"
@@ -222,7 +223,7 @@ def test_generate_without_google_drive_asks_the_server_nothing(
     va.page.click('#clone-links-form button[type="submit"]')
 
     expect(va.page.locator("#clone-links-form .generation-error")).to_have_text(
-        NOT_CONNECTED
+        ReviewReason.NOT_CONNECTED
     )
     expect(va.page.locator("#clone-links-confirm")).to_be_hidden()
     assert asked == []

@@ -19,10 +19,13 @@ from ofmhelpers.db.clone_from_links import store
 from ofmhelpers.db.jobs.store import create_job, fail_job, get_job
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links.ai_check import check_clone, unanswered
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.folders import folder_for
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.storage.client import storage_of
-from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.client import saved_storage, storage_of
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.storage import (
     RECONNECT,
@@ -36,19 +39,6 @@ lazy from ofmhelpers.features.storage.service import StorageService
 lazy from ofmhelpers.integrations.storage import StorageClient
 
 logger = get_logger(__name__)
-
-NOT_CONNECTED: str = ReviewReason.NOT_CONNECTED.value
-RUN_TASK = "clone_links"
-TASK = "clone_links_review"
-_FINAL = frozenset(
-    {
-        ReviewReason.NOT_CONNECTED,
-        ReviewReason.NOT_SAVED,
-        ReviewReason.VIDEO_GONE,
-        ReviewReason.CUT_OFF,
-    }
-)
-_WAIT_FOR_DRIVE = frozenset({storage_constants().drive_full, RECONNECT})
 
 
 def start_reviews(job_id: str, user_id: int, paths: list[str | None]) -> list[int]:
@@ -89,13 +79,13 @@ def _queue(review_id: int) -> None:
         logger.warning("AI check %s not queued", review_id, exc_info=True)
         store.finish(review_id, claimed=None, error=ReviewReason.QUEUE_FAILED)
         if job_id is not None:
-            fail_job(job_id, "Could not queue the AI check")
+            fail_job(job_id, clone_links_constants().queue_failed_job)
 
 
 def _job(review_id: int) -> str:
     review = store.get(review_id)
     return create_job(
-        TASK,
+        CloneLinksTask.REVIEW,
         {
             "review_id": review_id,
             "clone_job": review.job_id if review else None,
@@ -249,7 +239,7 @@ def _upload(
         _gone(review, span)
         return
     if storage.review.client is None:
-        _finish(review, error=NOT_CONNECTED)
+        _finish(review, error=ReviewReason.NOT_CONNECTED)
         return
     name = download_name(video.name)
     mime = mimetypes.guess_type(video.name)[0] or "application/octet-stream"
@@ -317,7 +307,7 @@ def resume_reviews() -> MappingProxyType[str, str]:
     for review in store.failed_since(since):
         if _retryable(review):
             outcomes[f"review {review.id}"] = _guarded(_resume_failed, review)
-    for job in store.unreviewed_jobs(RUN_TASK, since):
+    for job in store.unreviewed_jobs(CloneLinksTask.RUN, since):
         owner = int(job.actor) if job.actor and job.actor.isdigit() else None
         if owner is None:
             continue
@@ -358,7 +348,8 @@ def _resume_lost(review: CloneFromLink) -> str:
         logger.warning("recovery: review %s never started: failed", review.id)
         return "gave up"
     ttl = settings.clone_links.review_lost_s
-    if not get_redis().set(f"clone-links:requeued:{review.id}", "1", nx=True, ex=ttl):
+    requeued_key = clone_links_constants().requeued_key.format(review_id=review.id)
+    if not get_redis().set(requeued_key, "1", nx=True, ex=ttl):
         return "waiting"
     _queue(review.id)
     logger.warning("recovery: review %s never started: queued again", review.id)
@@ -370,11 +361,12 @@ def _retryable(review: CloneFromLink) -> bool:
         return False
     if review.error == ReviewReason.QUEUE_FAILED:
         return True
-    return review.folder_name is not None and review.error not in _FINAL
+    return review.folder_name is not None and review.error not in ReviewReason.final()
 
 
 def _resume_failed(review: CloneFromLink) -> str:
-    if review.error in _WAIT_FOR_DRIVE:
+    drive_full = saved_storage(review.user_id).constants.drive_full
+    if review.error in {drive_full, RECONNECT}:
         space = storage_of(review.user_id, interactive=False).space.cached()
         if space is None or space.low or space.reconnect:
             return "waiting for Drive"

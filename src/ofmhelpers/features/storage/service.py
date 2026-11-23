@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 
 from ofmhelpers.features.storage.bin import StorageServiceBin
+from ofmhelpers.features.storage.constants import StorageConstants
 from ofmhelpers.features.storage.folders import StorageServiceFolders
 from ofmhelpers.features.storage.page import StorageServicePage
 from ofmhelpers.features.storage.review import StorageServiceReview
@@ -25,6 +26,7 @@ __all__ = [
 
 
 class StorageService(BaseModel, frozen=True):
+    constants: StorageConstants
     folders: StorageServiceFolders
     va_folders: StorageServiceVaFolders
     review: StorageServiceReview
@@ -47,29 +49,49 @@ class StorageService(BaseModel, frozen=True):
             client=reader,
             owner_id=owner,
             read_live=live,
+            constants=access.constants,
             bot=access.bot,
             va_folders=va_folders,
         )
         review = StorageServiceReview(
-            client=person, owner_id=owner, read_live=live, folders=folders
+            client=person,
+            owner_id=owner,
+            read_live=live,
+            constants=access.constants,
+            folders=folders,
         )
         return cls(
+            constants=access.constants,
             folders=folders,
             va_folders=va_folders,
             review=review,
             uploads=StorageServiceUploads(
                 client=person_reader,
                 user_id=owner,
+                constants=access.constants,
                 folders=folders,
                 review=review,
                 va_folders=va_folders,
             ),
             space=StorageServiceSpace(
-                client=person_reader, user_id=owner, read_live=live
+                client=person_reader,
+                user_id=owner,
+                read_live=live,
+                constants=access.constants,
+                session=access.session,
             ),
-            page=StorageServicePage(folders=folders),
+            page=StorageServicePage(constants=access.constants, folders=folders),
             bin=StorageServiceBin(
-                user_id=owner, client=reader, read_live=live, folders=folders
+                user_id=owner,
+                client=reader,
+                read_live=live,
+                constants=access.constants,
+                folders=folders,
             ),
-            sheet=StorageServiceSheet(client=reader, owner_id=owner, folders=folders),
+            sheet=StorageServiceSheet(
+                client=reader,
+                owner_id=owner,
+                constants=access.constants,
+                folders=folders,
+            ),
         )
