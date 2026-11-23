@@ -69,7 +69,7 @@ def distances(kind: HashKind, kept: np.ndarray, copy: list[Image.Image]) -> np.n
     return np.stack(rows)
 
 
-def score(
+def score(  # noqa: PLR0913, PLR0917
     kind: HashKind,
     kept: np.ndarray,
     source_t: np.ndarray,

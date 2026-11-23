@@ -161,7 +161,7 @@ def test_another_users_search_is_neither_shown_nor_zipped(client):
 
 
 def test_the_most_played_ignores_reels_without_video_and_repeats():
-    def reel(code: str, plays: int, video: bool = True) -> ApifyReel:
+    def reel(code: str, plays: int, video: bool = True) -> ApifyReel:  # noqa: FBT001
         return ApifyReel(
             shortCode=code,
             url=f"https://www.instagram.com/p/{code}/",

@@ -72,7 +72,7 @@ class PicturePresetRepository:
             s.flush()
             return _preset(row)
 
-    def update(
+    def update(  # noqa: PLR0913, PLR0917
         self,
         preset_id: int,
         owner: int,

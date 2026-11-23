@@ -102,12 +102,12 @@ class CloneValues(BaseModel):
         return values
 
 
-def clone_values(
+def clone_values(  # noqa: PLR0913, PLR0917
     target: CloneTarget,
     prompt: str,
     resolution: str,
     duration: int,
-    audio: bool,
+    audio: bool,  # noqa: FBT001
     images: list[str],
     video: str,
 ) -> CloneValues:

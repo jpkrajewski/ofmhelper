@@ -96,7 +96,7 @@ def _fan(platform: ChatPlatform, username: str) -> _Fan:
     return _Fan(platform=platform, username=username.casefold())
 
 
-def _model_rows(
+def _model_rows(  # noqa: C901
     links: list[ShortLink],
     gained: Callable[[ShortLink], DayCount],
     since: float,

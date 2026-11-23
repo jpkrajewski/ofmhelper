@@ -5,7 +5,7 @@ from ofmhelpers.features.clone_links import run as clone_link_run
 lazy from ofmhelpers.db.jobs.schema import ResultFile
 
 
-def run_clone_link(
+def run_clone_link(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
@@ -14,10 +14,10 @@ def run_clone_link(
     prompt: str,
     resolution: str,
     reference_images: list[str],
-    audio: bool = False,
+    audio: bool = False,  # noqa: FBT001, FBT002
     export: str | None = None,
-    mirror: bool = False,
-    capcut: bool = False,
+    mirror: bool = False,  # noqa: FBT001, FBT002
+    capcut: bool = False,  # noqa: FBT001, FBT002
     model: str | None = None,
     batch: str | None = None,
     source_video: str | None = None,

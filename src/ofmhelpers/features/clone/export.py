@@ -23,7 +23,7 @@ class ExportFailedError(ResumableError):
         super().__init__(f"Export failed ({export}): run it again")
 
 
-def export_choice(export: str | None, capcut: bool = False) -> str:
+def export_choice(export: str | None, capcut: bool = False) -> str:  # noqa: FBT001, FBT002
     return export or ("capcut" if capcut else "original")
 
 
@@ -64,7 +64,7 @@ def exported_file(
     return ResultFile(name=dst.name, path=str(dst), remote_url=None)
 
 
-def export_results(
+def export_results(  # noqa: PLR0913
     job_id: str,
     results: list[ResultFile],
     export: str,

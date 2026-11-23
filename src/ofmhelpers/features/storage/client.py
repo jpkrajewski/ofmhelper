@@ -105,7 +105,7 @@ def _bot_root(user_id: int) -> BotRoot | None:
     return BotRoot(folder_id=s.root_folder_id, email=email)
 
 
-def access(user_id: int, interactive: bool) -> StorageAccess:
+def access(user_id: int, interactive: bool) -> StorageAccess:  # noqa: FBT001
     provider = _provider_of(user_id)
     entry = _providers[provider]
     live, constants = read_live(), entry.constants()
@@ -139,7 +139,7 @@ def access(user_id: int, interactive: bool) -> StorageAccess:
     )
 
 
-def storage_of(user_id: int, interactive: bool) -> StorageService:
+def storage_of(user_id: int, interactive: bool) -> StorageService:  # noqa: FBT001
     return StorageService.compose(access(user_id, interactive=interactive))
 
 

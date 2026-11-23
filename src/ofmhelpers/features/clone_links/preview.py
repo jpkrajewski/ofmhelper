@@ -55,7 +55,7 @@ def _says(error: str | None, words: tuple[str, ...]) -> bool:
     return any(word in lowered for word in words)
 
 
-def _why(info: VideoInfo, has_cookies: bool, url: str) -> str:
+def _why(info: VideoInfo, has_cookies: bool, url: str) -> str:  # noqa: FBT001
     constants = clone_links_constants()
     last = info.error
     if not has_cookies:
@@ -124,7 +124,7 @@ def _too_long(seconds: float, max_s: int) -> bool:
     return seconds > max_s
 
 
-def _shown(seconds: float, too_long: bool, max_s: int) -> float | None:
+def _shown(seconds: float, too_long: bool, max_s: int) -> float | None:  # noqa: FBT001
     shown = math.ceil(round(seconds * 10, 6)) / 10
     return None if too_long and shown <= max_s else shown
 

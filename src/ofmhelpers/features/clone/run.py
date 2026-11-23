@@ -13,7 +13,7 @@ from ofmhelpers.media.exports import ExportOptions
 lazy from ofmhelpers.db.jobs.schema import ResultFile
 
 
-def run_clone(
+def run_clone(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
@@ -23,10 +23,10 @@ def run_clone(
     duration: int,
     reference_images: list[str],
     reference_videos: list[str],
-    audio: bool = False,
+    audio: bool = False,  # noqa: FBT001, FBT002
     export: str | None = None,
-    mirror: bool = False,
-    capcut: bool = False,
+    mirror: bool = False,  # noqa: FBT001, FBT002
+    capcut: bool = False,  # noqa: FBT001, FBT002
     export_failures: int = 0,
     model: str | None = None,  # noqa: ARG001
     link: str | None = None,  # noqa: ARG001

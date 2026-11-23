@@ -313,7 +313,7 @@ DASHSCOPE = [
 SEEDANCE_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
 
 
-def seedance(
+def seedance(  # noqa: PLR0913, PLR0917
     model_id: str,
     label: str,
     resolutions: list[str],

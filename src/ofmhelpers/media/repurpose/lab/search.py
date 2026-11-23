@@ -42,7 +42,7 @@ def _seed(trial: str, clip: str) -> int:
     return int(hashlib.sha256(f"{trial}|{clip}".encode()).hexdigest()[:8], 16)
 
 
-def _jobs(
+def _jobs(  # noqa: PLR0913, PLR0917
     trial: str,
     phase: str,
     part: Part,
@@ -232,7 +232,7 @@ class Runner:
         )
         self.inflight[future] = job
 
-    def collect(self, on_done: Callable[[Job, Measurement], None], block: bool) -> None:
+    def collect(self, on_done: Callable[[Job, Measurement], None], block: bool) -> None:  # noqa: FBT001
         if not self.inflight:
             return
         finished, _ = wait(

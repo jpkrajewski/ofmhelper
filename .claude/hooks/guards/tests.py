@@ -119,7 +119,7 @@ def needs_owner(args: list[str]) -> bool:
     return not args or args[0] in OWNER_PRESETS or args == ["e2e"]
 
 
-def judge(statement: Statement, event: HookEvent) -> Verdict | None:
+def judge(statement: Statement, event: HookEvent) -> Verdict | None:  # noqa: PLR0911
     args = test_sh_args(statement)
     if args is None:
         return deny(NAME, ONLY_TEST_SH) if runs_pytest(statement) else None

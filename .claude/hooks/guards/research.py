@@ -172,7 +172,7 @@ class ResearchNote(BaseModel):
                 fields[current] += " " + line.strip()
         return cls(path=path, **fields)
 
-    def problems(self, searched_web: bool) -> list[str]:
+    def problems(self, searched_web: bool) -> list[str]:  # noqa: FBT001
         values = self.model_dump(exclude={"path"})
         found = [
             f"the line `{label}:`" for label, name in LABELS if not filled(values[name])
@@ -334,7 +334,7 @@ def fresh_notes(started: float) -> list[ResearchNote]:
     ]
 
 
-def note_problems(started: float, searched: bool) -> list[str]:
+def note_problems(started: float, searched: bool) -> list[str]:  # noqa: FBT001
     notes = fresh_notes(started)
     if not notes:
         return ["a note reports/research/<slug>.md written since this task started"]

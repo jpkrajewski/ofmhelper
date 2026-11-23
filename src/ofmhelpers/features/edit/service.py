@@ -479,7 +479,7 @@ def _grab(path: Path, at: float, framing: Framing) -> FrameGrab:
     return FrameGrab(data=data, name=_frame_name(path, at))
 
 
-def queue_cut(
+def queue_cut(  # noqa: PLR0913, PLR0917
     clips: list[Clip],
     framing: Framing,
     speed: float,
@@ -531,7 +531,7 @@ def cut_timeout_s(params: dict[str, Any]) -> int:
     return settings.web.edit_cut_timeout_s * clips + 60
 
 
-def _make_cut(
+def _make_cut(  # noqa: PLR0913, PLR0917
     path: Path,
     start: float,
     end: float,
@@ -599,13 +599,13 @@ def _make_join(clips: list[Clip], framing: Framing, speed: float, root: Path) ->
     return stored
 
 
-def run_cut(
+def run_cut(  # noqa: PLR0913, PLR0917
     video: str,
     start: float,
     end: float,
     assets_root: str,
     turn: int = 0,
-    mirror: bool = False,
+    mirror: bool = False,  # noqa: FBT001, FBT002
     aspect: str = "original",
     size: str = "1080",
     scale: float = 1.0,

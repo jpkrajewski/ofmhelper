@@ -90,7 +90,7 @@ def _spans(start: date, end: date, size: int) -> list[Span]:
     return spans
 
 
-def _remote(link: dict[str, Any], adult: bool | None = None) -> RemoteLink:
+def _remote(link: dict[str, Any], adult: bool | None = None) -> RemoteLink:  # noqa: FBT001
     return RemoteLink(
         remote_id=link["id"],
         slug=link.get("slug") or link["id"],

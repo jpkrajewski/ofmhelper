@@ -64,7 +64,7 @@ SHELL_REWRITE = (
 )
 
 
-def py_targets(command: str, redirects_only: bool = False) -> set[str]:
+def py_targets(command: str, redirects_only: bool = False) -> set[str]:  # noqa: FBT001, FBT002
     spots = [] if redirects_only else [f[0] for f in WRITE_LINE.finditer(command)]
     spots += [found.group(1) for found in REDIRECT_TO_PY.finditer(command)]
     return {token for spot in spots for token in PY_TOKEN.findall(spot)}

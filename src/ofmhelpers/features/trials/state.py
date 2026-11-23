@@ -82,7 +82,7 @@ class ReelState(BaseModel):
     def claim_captions(self, job_id: str) -> None:
         self.job_id, self.error = job_id, None
 
-    def select(self, selected: bool) -> None:
+    def select(self, selected: bool) -> None:  # noqa: FBT001
         self.approved = selected
 
     def mark_downloaded(self, local: str) -> None:

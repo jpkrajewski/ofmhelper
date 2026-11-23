@@ -75,7 +75,7 @@ class KieAIClient:
         self.OUT_DIR.mkdir(parents=True, exist_ok=True)
         self._http = _session()
 
-    def _call(
+    def _call(  # noqa: PLR0913, PLR0917
         self,
         method: str,
         url: str,

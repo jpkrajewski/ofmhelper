@@ -118,7 +118,7 @@ class FakeGemini:
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._answer)
 
-    def _answer(self, request: httpx.Request) -> httpx.Response:
+    def _answer(self, request: httpx.Request) -> httpx.Response:  # noqa: PLR0911
         url = request.url
         if url.host != HOST:
             return _error(404, "NOT_FOUND", f"Unknown host {url.host}")

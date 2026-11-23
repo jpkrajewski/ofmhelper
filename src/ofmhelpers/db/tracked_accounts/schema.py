@@ -531,7 +531,7 @@ class FollowerChart(BaseModel):
         return pct_change(self.end.followers, self.start.followers)
 
     @classmethod
-    def of(cls, snaps: list[Snapshot], daily: bool, gap_s: float) -> Self:
+    def of(cls, snaps: list[Snapshot], daily: bool, gap_s: float) -> Self:  # noqa: FBT001
         if len(snaps) < 2:  # noqa: PLR2004
             return cls(
                 daily=daily,

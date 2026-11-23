@@ -75,12 +75,12 @@ def register_fakes(routes: list[FakeRoute]) -> None:
 
 
 class FakeAdapter(BaseAdapter):
-    def send(
+    def send(  # noqa: PLR0913, PLR0917
         self,
         request: requests.PreparedRequest,
-        stream: bool = False,  # noqa: ARG002
+        stream: bool = False,  # noqa: ARG002, FBT001, FBT002
         timeout: float | tuple[float | None, float | None] | None = None,  # noqa: ARG002
-        verify: bool | str = True,  # noqa: ARG002
+        verify: bool | str = True,  # noqa: ARG002, FBT001, FBT002
         cert: str | tuple[str, str] | None = None,  # noqa: ARG002
         proxies: Mapping[str, str] | None = None,
     ) -> requests.Response:

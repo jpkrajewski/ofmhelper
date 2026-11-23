@@ -22,7 +22,7 @@ def scaled_to(side: int) -> str:
 _TURNS = {90: "transpose=clock", 180: "hflip,vflip", 270: "transpose=cclock"}
 
 
-def turn_filter(turn: int, mirror: bool) -> str | None:
+def turn_filter(turn: int, mirror: bool) -> str | None:  # noqa: FBT001
     return _filters([_TURNS.get(turn), "hflip" if mirror else None]) or None
 
 
@@ -43,7 +43,7 @@ def _filters(parts: list[str | None]) -> str:
     return ",".join(p for p in parts if p)
 
 
-def cut(
+def cut(  # noqa: PLR0913
     src: Path,
     start: float,
     end: float,
@@ -99,7 +99,7 @@ def cut(
     )
 
 
-def proxy(
+def proxy(  # noqa: PLR0913
     src: Path,
     dest: Path,
     *,
@@ -151,7 +151,7 @@ def proxy(
     )
 
 
-def filmstrip(
+def filmstrip(  # noqa: PLR0913
     src: Path,
     seconds: float,
     dest: Path,
@@ -182,7 +182,7 @@ def filmstrip(
     )
 
 
-def frame(
+def frame(  # noqa: PLR0913
     src: Path,
     at: float,
     *,
@@ -223,7 +223,7 @@ def frame(
 _JOIN_AUDIO = ("-c:a", "aac", "-ar", "48000", "-ac", "2")
 
 
-def part(
+def part(  # noqa: PLR0913
     src: Path,
     start: float,
     end: float,

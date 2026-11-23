@@ -152,7 +152,7 @@ def imported_from(name: str, node: ast.ImportFrom) -> str:
 
 
 @cache
-def scope(name: str) -> Scope:
+def scope(name: str) -> Scope:  # noqa: C901, PLR0912
     found = Scope()
     for node in trees()[name].body:
         match node:

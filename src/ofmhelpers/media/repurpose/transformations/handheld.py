@@ -56,7 +56,7 @@ class Handheld(BaseModel, frozen=True):
     aspect: float = 1.0
 
     @classmethod
-    def sample(
+    def sample(  # noqa: PLR0913
         cls,
         rng: random.Random,
         *,

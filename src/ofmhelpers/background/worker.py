@@ -30,15 +30,15 @@ logger = get_logger("ofmhelpers.background.worker")
 
 
 class ConfiguredWorker(Worker):
-    def work(
+    def work(  # noqa: PLR0913, PLR0917
         self,
-        burst: bool = False,
+        burst: bool = False,  # noqa: FBT001, FBT002
         logging_level: str | None = None,
         date_format: str = "%H:%M:%S",
         log_format: str = "%(asctime)s %(message)s",
         max_jobs: int | None = None,
         max_idle_time: int | None = None,
-        with_scheduler: bool = False,
+        with_scheduler: bool = False,  # noqa: FBT001, FBT002
         dequeue_strategy: DequeueStrategy = DequeueStrategy.DEFAULT,
     ) -> bool:
         configure_telemetry("ascend-worker")

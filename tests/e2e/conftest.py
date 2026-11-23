@@ -370,7 +370,7 @@ def _finish(
     )
 
 
-def _session(
+def _session(  # noqa: PLR0913, PLR0917
     role: str,
     name: str,
     browser,
@@ -386,7 +386,7 @@ def _session(
 
 
 @pytest.fixture
-def admin(
+def admin(  # noqa: PLR0913, PLR0917
     browser,
     base_url,
     auth_states,
@@ -407,7 +407,7 @@ def admin(
 
 
 @pytest.fixture
-def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[Session]:
+def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[Session]:  # noqa: PLR0913, PLR0917
     yield from _session(
         "VA",
         "va",
@@ -421,7 +421,7 @@ def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[S
 
 
 @pytest.fixture
-def coworker(
+def coworker(  # noqa: PLR0913, PLR0917
     browser,
     base_url,
     auth_states,

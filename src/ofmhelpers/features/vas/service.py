@@ -41,7 +41,7 @@ def periods(now: datetime) -> list[SpendPeriod]:
     ]
 
 
-def _vas(reader: int, user_ids: Collection[int], everyone: bool) -> list[User]:
+def _vas(reader: int, user_ids: Collection[int], everyone: bool) -> list[User]:  # noqa: FBT001
     found = [
         user
         for user in users.list_users()

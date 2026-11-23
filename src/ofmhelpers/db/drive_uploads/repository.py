@@ -30,7 +30,7 @@ def _upload(row: DriveUploadRow) -> DriveUpload:
 class DriveUploadRepository(CachedRepository):
     cache_namespace = "drive_upload"
 
-    def queue(
+    def queue(  # noqa: PLR0913, PLR0917
         self,
         job_id: str,
         file_index: int,

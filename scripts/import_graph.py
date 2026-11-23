@@ -106,7 +106,7 @@ class Graph(BaseModel):
         return [e for e in self.edges if module in (e.source, e.target)]
 
 
-def strongly_connected(follows: dict[str, list[str]]) -> list[list[str]]:
+def strongly_connected(follows: dict[str, list[str]]) -> list[list[str]]:  # noqa: C901
     index: dict[str, int] = {}
     low: dict[str, int] = {}
     stack: list[str] = []

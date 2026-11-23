@@ -41,7 +41,7 @@ SCP_ENV = (
 )
 
 
-def problem(statement: Statement) -> str:
+def problem(statement: Statement) -> str:  # noqa: PLR0911
     words, program = statement.words, statement.program
     if program == UNREADABLE:
         return UNREADABLE_COMMAND

@@ -31,7 +31,7 @@ def _without_jfif(jpeg: bytes) -> bytes:
     return jpeg[:2] + jpeg[4 + int.from_bytes(jpeg[4:6], "big") :]
 
 
-def exif_for(
+def exif_for(  # noqa: PLR0915
     device: Device,
     lens: Lens,
     shot: Shot,

@@ -144,7 +144,7 @@ def check_clone(video: Path, *, mirrored: bool = False) -> CloneAiCheck:
     )
 
 
-def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswer:
+def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswer:  # noqa: C901, PLR0911, PLR0912
     constants = clone_links_constants()
     said: list[str] = []
     provider = model = ""

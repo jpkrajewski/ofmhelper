@@ -214,7 +214,7 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
     return tmp_dst
 
 
-def download(
+def download(  # noqa: PLR0911
     url: str,
     config: DownloadConfig | None = None,
     cookiefile: str | None = None,
@@ -277,7 +277,7 @@ def download(
         return DownloadResult(url=url, success=False, error=str(exc))
 
 
-def video_info(
+def video_info(  # noqa: C901, PLR0911
     url: str,
     cookiefile: str | None = None,
     *,

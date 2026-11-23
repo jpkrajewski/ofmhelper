@@ -58,14 +58,14 @@ class Knob(BaseModel, frozen=True):
         return [round(lo, 5), round(hi, 5)]
 
 
-def _v(
+def _v(  # noqa: PLR0913, PLR0917
     name: str,
     role: Role,
     shape: Shape,
     cap: float,
     field: str | None = None,
     base: float = 0.0,
-    integer: bool = False,
+    integer: bool = False,  # noqa: FBT001, FBT002
     extra: dict[str, Any] | None = None,
 ) -> Knob:
     return Knob(

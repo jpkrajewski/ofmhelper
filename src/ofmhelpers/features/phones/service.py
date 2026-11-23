@@ -134,7 +134,7 @@ def add(body: DeviceFields, owner_id: int) -> int:
         return store.add_device(body, owner_id)
 
 
-def _require(found: bool, what: str) -> None:
+def _require(found: bool, what: str) -> None:  # noqa: FBT001
     if not found:
         msg = f"{what} not found"
         raise NotFoundError(msg)

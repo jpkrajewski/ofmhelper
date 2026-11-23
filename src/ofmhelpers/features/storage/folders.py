@@ -814,7 +814,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         cards: list[DriveCard],
         known: set[str],
         seen_at: float,
-        others: bool,
+        others: bool,  # noqa: FBT001
     ) -> None:
         if self.client is None:
             for card in cards:

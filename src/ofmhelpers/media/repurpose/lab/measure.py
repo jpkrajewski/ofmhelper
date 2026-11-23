@@ -221,7 +221,7 @@ def _require_step(result: RunResult) -> EncodeStep:
     return result.step
 
 
-def measure(
+def measure(  # noqa: PLR0913
     trial: str,
     strengths: dict[str, float],
     part: Part,

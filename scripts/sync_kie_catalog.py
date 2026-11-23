@@ -212,7 +212,7 @@ def _resolve(node: Any, components: dict[str, Any]) -> Any:
     return node
 
 
-def _clean(node: Any, components: dict[str, Any]) -> Any:
+def _clean(node: Any, components: dict[str, Any]) -> Any:  # noqa: C901
     """One OpenAPI 3.0 schema node as JSON schema 2020-12, trimmed to what
     validation and the form use."""
     node = _resolve(node, components)
@@ -338,7 +338,7 @@ def _mark_media(schema: dict[str, Any]) -> None:
             prop["format"] = "uri"
 
 
-def _pin(schema: dict[str, Any], fixed: dict[str, Any]) -> dict[str, Any]:
+def _pin(schema: dict[str, Any], fixed: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
     """Fields sent fixed, out of the schema: reserved names at their default,
     `ALWAYS_FIXED`, and whatever the existing entry already fixes."""
     props = schema["properties"]

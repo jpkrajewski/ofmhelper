@@ -47,7 +47,7 @@ def _cut_off(job: Job, active: set[str] | None) -> bool:
     )
 
 
-def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
+def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:  # noqa: C901, PLR0911
     job_id = parts[0].job_id
     job = get_job(job_id)
     if job is None or job.status == JobStatus.done:

@@ -579,7 +579,7 @@ class Reel(BaseModel, frozen=True):
             return Started(started=False)
         return self.remake(text)
 
-    def select(self, selected: bool) -> Selected:
+    def select(self, selected: bool) -> Selected:  # noqa: FBT001
         self._change(lambda r: r.select(selected))
         return Selected(selected=selected)
 

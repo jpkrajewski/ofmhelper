@@ -88,7 +88,7 @@ def _kept_thumbnail(job: Job | None, index: int, kind: str) -> FileResponse | No
 def serve_job_file(
     job: Job | None,
     index: int,
-    as_attachment: bool = True,
+    as_attachment: bool = True,  # noqa: FBT001, FBT002
 ) -> FileResponse:
     path = job_file_path(job, index)
     if as_attachment:

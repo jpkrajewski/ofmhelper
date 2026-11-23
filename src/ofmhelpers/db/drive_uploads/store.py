@@ -13,7 +13,7 @@ def _repository() -> DriveUploadRepository:
     return DriveUploadRepository()
 
 
-def queue(
+def queue(  # noqa: PLR0913, PLR0917
     job_id: str,
     file_index: int,
     login_id: int | None,

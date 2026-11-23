@@ -327,7 +327,7 @@ class TrackedAccountRepository(CachedRepository):
         handle: str,
         creator: str | None,
         user_id: int,
-        revive: bool = True,
+        revive: bool = True,  # noqa: FBT001, FBT002
     ) -> bool:
         acc = TrackedAccountRow
         same = (acc.user_id == user_id, acc.platform == platform, acc.handle == handle)
@@ -541,7 +541,7 @@ class TrackedAccountRepository(CachedRepository):
             return sorted(claimed.scalars().all())
 
     @invalidates_cache
-    def record_scan(
+    def record_scan(  # noqa: PLR0913, PLR0917
         self,
         account_id: int,
         profile: dict[str, Any] | None,

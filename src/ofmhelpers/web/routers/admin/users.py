@@ -45,7 +45,7 @@ def users_page(request: Request, me: CurrentUser) -> Response:
 
 
 @router.post("")
-def add(
+def add(  # noqa: PLR0913, PLR0917
     request: Request,
     me: CurrentUser,
     email: Annotated[str, Form()],

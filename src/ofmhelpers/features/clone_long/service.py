@@ -157,7 +157,7 @@ class LongClone:
         self.tools = VideoTools(settings.clone_long.ffmpeg_timeout_s)
 
     @classmethod
-    def prepare(
+    def prepare(  # noqa: PLR0913
         cls,
         *,
         provider: str,
@@ -335,7 +335,7 @@ class LongClone:
         return saved
 
 
-def run_long_clone(
+def run_long_clone(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
@@ -351,9 +351,9 @@ def run_long_clone(
     pieces: int,
     credits: float,  # noqa: A002
     usd: float,
-    chain: bool = False,
-    colour_match: bool = False,
-    audio: bool = False,
+    chain: bool = False,  # noqa: FBT001, FBT002
+    colour_match: bool = False,  # noqa: FBT001, FBT002
+    audio: bool = False,  # noqa: FBT001, FBT002
 ) -> list[ResultFile]:
     params = LongCloneParams(
         provider=provider,

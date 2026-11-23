@@ -84,7 +84,7 @@ def wait(provider: Provider, task_id: str, kind: OutputKind) -> TaskState:
     raise ProviderTimeoutError(msg)
 
 
-def _result_path(
+def _result_path(  # noqa: PLR0913, PLR0917
     task_id: str,
     provider: str,
     url: str,
@@ -100,7 +100,7 @@ def _result_path(
     return out_dir / f"{provider}_{safe_id}{suffix}.{ext}"
 
 
-def generate(
+def generate(  # noqa: PLR0913, PLR0917
     provider: Provider,
     spec: ModelSpec,
     payload: Payload | Callable[[], Payload],

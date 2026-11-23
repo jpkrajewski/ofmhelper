@@ -229,16 +229,16 @@ def list_finished_jobs() -> list[Job]:
     return [job for job in history() if job.status == "done"]
 
 
-def list_jobs_page(
+def list_jobs_page(  # noqa: PLR0913, PLR0917
     tasks: set[str],
     offset: int,
     limit: int,
     actor: Readers = None,
     status: str | None = None,
-    hidden: bool | None = None,
-    by_use: bool = False,
+    hidden: bool | None = None,  # noqa: FBT001
+    by_use: bool = False,  # noqa: FBT001, FBT002
     created: Created | None = None,
-    not_uploaded: bool = False,
+    not_uploaded: bool = False,  # noqa: FBT001, FBT002
 ) -> JobPage:
     span = created or Created()
     if not_uploaded:
@@ -275,16 +275,16 @@ def list_jobs_page(
     return JobPage(jobs=_visible(page.jobs), total=page.total)
 
 
-def gallery_page(
+def gallery_page(  # noqa: PLR0913, PLR0917
     tasks: set[str],
     offset: int,
     limit: int,
     actor: Readers,
-    hidden: bool | None,
+    hidden: bool | None,  # noqa: FBT001
     reader: int | None = None,
-    by_use: bool = False,
+    by_use: bool = False,  # noqa: FBT001, FBT002
     created: Created | None = None,
-    not_uploaded: bool = False,
+    not_uploaded: bool = False,  # noqa: FBT001, FBT002
 ) -> GalleryJobs:
     page = list_jobs_page(
         tasks,
@@ -390,7 +390,7 @@ def count_hidden_jobs(tasks: set[str], actor: str | Collection[str]) -> int:
     return _repository().count_hidden(tuple(sorted(tasks)), _user_ids(actor) or [])
 
 
-def hide_job(job_id: str, actor: Readers, hidden: bool) -> Job | None:
+def hide_job(job_id: str, actor: Readers, hidden: bool) -> Job | None:  # noqa: FBT001
     job = get_job(job_id, actor)
     if job is None or hidden == (job.hidden_at is not None):
         return job

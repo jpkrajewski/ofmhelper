@@ -34,8 +34,8 @@ class SkillRule(BaseModel):
     def needed(
         self,
         relative: str,
-        is_new: bool,
-        adds_names: bool,
+        is_new: bool,  # noqa: FBT001
+        adds_names: bool,  # noqa: FBT001
         written: str,
     ) -> bool:
         if not self.path.search(relative):
@@ -94,8 +94,8 @@ def skill_marker(name: str) -> str:
 
 def required(
     relative: str,
-    is_new: bool,
-    adds_names: bool,
+    is_new: bool,  # noqa: FBT001
+    adds_names: bool,  # noqa: FBT001
     written: str = "",
 ) -> list[str]:
     return [

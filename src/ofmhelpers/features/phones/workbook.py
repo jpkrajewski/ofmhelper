@@ -49,7 +49,7 @@ def _name(login: DeviceLogin) -> str:
     return login.username
 
 
-def _row(sheet: WriteOnlyWorksheet, values: list[str], header: bool = False) -> None:
+def _row(sheet: WriteOnlyWorksheet, values: list[str], header: bool = False) -> None:  # noqa: FBT001, FBT002
     cells = []
     for value in values:
         cell = WriteOnlyCell(sheet, value=value)

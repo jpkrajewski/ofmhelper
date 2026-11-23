@@ -236,7 +236,7 @@ class FakeOopsie(_Fake):
         with self._state() as state:
             state.links[slug] = self._page(slug, theme).model_dump()
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         if request.headers.get("x-api-key") != OOPSIE_FAKE_KEY:
             return self._no("Unauthorized", 401)
         method, path = request.method or "GET", _path(request)
@@ -370,7 +370,7 @@ class FakeBouncy(_Fake):
         with self._state() as state:
             return self._new(state, slug, destination, domain).id
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         if request.headers.get("Authorization") != f"Bearer {BOUNCY_FAKE_KEY}":
             return FakeReply.json_body(
                 {"error": "Unauthorized", "message": "Invalid API key"},

@@ -152,7 +152,7 @@ class FakeElyum:
         )
 
     @staticmethod
-    def _generation(
+    def _generation(  # noqa: PLR0913, PLR0917
         generation_id: str,
         state: str,
         status: int = 200,

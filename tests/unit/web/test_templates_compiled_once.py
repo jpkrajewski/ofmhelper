@@ -22,7 +22,7 @@ def stats(monkeypatch) -> list[str]:
     return seen
 
 
-def _env(directory, auto_reload: bool = True) -> jinja2.Environment:
+def _env(directory, auto_reload: bool = True) -> jinja2.Environment:  # noqa: FBT001
     return jinja2.Environment(
         loader=TemplateFiles(directory),
         auto_reload=auto_reload,

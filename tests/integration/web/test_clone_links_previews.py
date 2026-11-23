@@ -251,7 +251,7 @@ def test_the_cache_is_per_user_so_a_login_only_read_stays_its_readers(reads):
         ),
     ],
 )
-def test_a_failed_read_says_what_the_va_can_do(
+def test_a_failed_read_says_what_the_va_can_do(  # noqa: PLR0913, PLR0917
     reads,
     cookies,
     url,

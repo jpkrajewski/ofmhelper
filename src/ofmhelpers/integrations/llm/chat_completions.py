@@ -59,7 +59,7 @@ class StrictSchema(BaseModel):
     json_schema: dict[str, Any] = Field(serialization_alias="schema")
 
 
-def strict_schema(answer: type[BaseModel]) -> StrictSchema:
+def strict_schema(answer: type[BaseModel]) -> StrictSchema:  # noqa: C901
     schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 

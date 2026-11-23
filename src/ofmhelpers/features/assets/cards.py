@@ -15,15 +15,15 @@ class JobAssets(BaseModel):
     failed_sources: list[FailedSource] = []
 
 
-def asset_card(
+def asset_card(  # noqa: PLR0913, PLR0917
     name: str,
     index: int,
     files_prefix: str,
     source: str | None = None,
     remote_url: str | None = None,
-    local: bool = True,
+    local: bool = True,  # noqa: FBT001, FBT002
     job_id: str = "",
-    removed: bool = False,
+    removed: bool = False,  # noqa: FBT001, FBT002
     again_error: str | None = None,
 ) -> AssetCard:
     local_url = f"{files_prefix}/{index}"

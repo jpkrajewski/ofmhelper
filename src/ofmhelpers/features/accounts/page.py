@@ -68,7 +68,7 @@ def _periods() -> list[Period]:
     return [Period(days=d) for d in settings.accounts.periods_days]
 
 
-def _ask_for_cookies(limited: bool, user_id: int) -> bool:
+def _ask_for_cookies(limited: bool, user_id: int) -> bool:  # noqa: FBT001
     return limited and cookie_jar.saved(user_id) is None
 
 

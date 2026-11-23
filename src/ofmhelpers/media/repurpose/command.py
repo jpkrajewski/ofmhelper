@@ -64,7 +64,7 @@ def input_args(src: Path, video: VideoTransformer) -> list[str]:
     return [*args, "-t", f"{t.duration_s:.3f}", "-i", str(src)]
 
 
-def build(
+def build(  # noqa: PLR0913
     *,
     src: Path,
     dst: Path,
@@ -116,7 +116,7 @@ def _audio_encode(device: Device, encode: EncodeDraws) -> list[str]:
     return [*args, "-flags:a", "+bitexact"] if a.bitexact else args
 
 
-def _video_encode(device: Device, encode: EncodeDraws) -> list[str]:
+def _video_encode(device: Device, encode: EncodeDraws) -> list[str]:  # noqa: C901
     v = device.video
     args = ["-c:v", v.codec, "-profile:v", v.profile]
     if v.level:

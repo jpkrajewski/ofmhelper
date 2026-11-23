@@ -133,7 +133,7 @@ def run(
 
 
 @router.get("")
-def form(
+def form(  # noqa: PLR0913, PLR0917
     request: Request,
     user: CurrentUser,
     actor: Actor,

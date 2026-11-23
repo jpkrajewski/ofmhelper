@@ -318,7 +318,7 @@ class ShortLinkRepository(CachedRepository):
         with session_scope() as s:
             s.execute(delete(ShortLinkRow).where(ShortLinkRow.id.in_(ids)))
 
-    def record_sync(
+    def record_sync(  # noqa: C901, PLR0913, PLR0917
         self,
         user_id: int,
         provider: str,

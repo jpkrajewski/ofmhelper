@@ -304,7 +304,7 @@ QUEUE_FULL = {
     ],
     ids=["header", "body", "neither", "bad-header"],
 )
-def test_a_rate_limited_submit_is_sent_once_with_the_wait(
+def test_a_rate_limited_submit_is_sent_once_with_the_wait(  # noqa: PLR0913, PLR0917
     wire,
     provider,
     no_backoff,
@@ -406,7 +406,7 @@ def test_a_webp_subject_goes_up_as_webp(wire, provider, tmp_path, name):
 
 
 @pytest.mark.parametrize(("suffix", "fmt"), [(".tiff", "TIFF"), (".bmp", "BMP")])
-def test_a_bmp_or_tiff_subject_goes_up_as_a_jpeg_copy(
+def test_a_bmp_or_tiff_subject_goes_up_as_a_jpeg_copy(  # noqa: PLR0913, PLR0917
     wire,
     provider,
     tmp_path,

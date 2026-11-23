@@ -57,7 +57,7 @@ def outside_this_repo(statement: Statement, event: HookEvent) -> bool:
     return not target.resolve().is_relative_to(ROOT.resolve())
 
 
-def judge(statement: Statement, event: HookEvent) -> Verdict | None:
+def judge(statement: Statement, event: HookEvent) -> Verdict | None:  # noqa: PLR0911
     if outside_this_repo(statement, event):
         return None
     if statement.program == "gh" and statement.words[1:3] in (

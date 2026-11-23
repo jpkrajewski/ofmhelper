@@ -96,7 +96,7 @@ def start(
     return JobQueued(job_id=job_id)
 
 
-def run_uniqify(
+def run_uniqify(  # noqa: PLR0913, PLR0917
     job_dir: str,
     source: str,
     stem: str,

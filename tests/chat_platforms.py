@@ -200,7 +200,7 @@ class StackedDriver:
         fan: str,
         message_id: str,
         at: float,
-        by_model: bool = True,
+        by_model: bool = True,  # noqa: FBT001
     ) -> None:
         who = self.model_id if by_model else fan
         self.fake.add_reaction(self.channel(fan), int(message_id), who, int(at * 1000))
@@ -370,7 +370,7 @@ class FanvueDriver:
         fan: str,
         message_id: str,
         at: float,
-        by_model: bool = True,
+        by_model: bool = True,  # noqa: FBT001
     ) -> None:
         del fan, at
         self._reactions[message_id] = by_model

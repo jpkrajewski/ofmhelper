@@ -77,7 +77,7 @@ def _failed(task: str, actor: str) -> str:
     return job_id
 
 
-def _hide(client: TestClient, job_id: str, hidden: bool = True):
+def _hide(client: TestClient, job_id: str, hidden: bool = True):  # noqa: FBT001
     return client.post(f"/jobs/{job_id}/hidden", json={"hidden": hidden})
 
 

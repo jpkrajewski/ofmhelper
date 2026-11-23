@@ -110,13 +110,13 @@ class FakeDrive:
                 fh.write(state.model_dump_json())
 
     @staticmethod
-    def _new(
+    def _new(  # noqa: PLR0913, PLR0917
         state: FakeDriveState,
         name: str,
         parents: list[str],
         owner: str,
         mime_type: str = FOLDER_MIME,
-        has_thumbnail: bool = False,
+        has_thumbnail: bool = False,  # noqa: FBT001, FBT002
         created_time: datetime | None = None,
         size: int | None = None,
         sheet: DriveSheet | None = None,
@@ -410,7 +410,7 @@ class FakeDrive:
                 state.shared.append(made.id)
             return made.id
 
-    def add_file(
+    def add_file(  # noqa: PLR0913
         self,
         parent: str,
         name: str,

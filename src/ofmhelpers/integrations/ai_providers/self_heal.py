@@ -226,7 +226,7 @@ def _ours(cls: type[Provider], api_key: str, task_id: str, key: str) -> bool:
     return True
 
 
-def heard(provider: str, key: str, raw: bytes, headers: Mapping[str, str]) -> Heard:
+def heard(provider: str, key: str, raw: bytes, headers: Mapping[str, str]) -> Heard:  # noqa: PLR0911
     cls = provider_classes().get(provider)
     if cls is None:
         return Heard.UNKNOWN

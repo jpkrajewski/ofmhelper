@@ -16,5 +16,5 @@ def last_run(name: str) -> ReportRun | None:
     return _repository().last(name)
 
 
-def claim(name: str, day: date, ran_at: float, sent: bool, marks: ReportMarks) -> bool:
+def claim(name: str, day: date, ran_at: float, sent: bool, marks: ReportMarks) -> bool:  # noqa: FBT001
     return _repository().claim(name, day, ran_at, sent, marks.model_dump(mode="json"))

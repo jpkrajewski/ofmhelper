@@ -137,7 +137,7 @@ class VideoTools:
             )
         return dests
 
-    def join(
+    def join(  # noqa: PLR0913
         self,
         parts: list[Path],
         dest: Path,

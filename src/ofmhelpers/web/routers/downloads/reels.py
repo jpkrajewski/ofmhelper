@@ -49,7 +49,7 @@ def form(
 
 
 @router.get("/feed")
-def feed_page(
+def feed_page(  # noqa: PLR0913, PLR0917
     request: Request,
     scope: Scope,
     group: GroupQuery = None,

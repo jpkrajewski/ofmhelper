@@ -76,7 +76,7 @@ PAGES = [
 
 
 @pytest.mark.parametrize(("page", "fragment", "latest", "task"), PAGES)
-def test_an_owner_sees_their_vas_card_with_the_vas_name(
+def test_an_owner_sees_their_vas_card_with_the_vas_name(  # noqa: PLR0913, PLR0917
     team,
     tmp_path,
     page,

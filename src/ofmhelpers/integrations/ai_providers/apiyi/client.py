@@ -111,7 +111,7 @@ class ApiyiClient:
         self._base = settings.apiyi.base_url.rstrip("/")
         self._http = bearer_session(api_key)
 
-    def call(
+    def call(  # noqa: PLR0913, PLR0917
         self,
         method: str,
         path: str,
@@ -135,7 +135,7 @@ class ApiyiClient:
             files=files,
         )
 
-    def submit(
+    def submit(  # noqa: PLR0913, PLR0917
         self,
         path: str,
         refuse: Callable[[requests.Response], NoReturn] = refused,

@@ -234,7 +234,7 @@ class ChatRepository:
             )
             return [OpenWait.model_validate(dict(row)) for row in rows.mappings()]
 
-    def save_notification(
+    def save_notification(  # noqa: PLR0913, PLR0917
         self,
         platform: str,
         event_id: str,
@@ -261,7 +261,7 @@ class ChatRepository:
                 .on_conflict_do_nothing(),
             )
 
-    def save_sale(
+    def save_sale(  # noqa: PLR0913, PLR0917
         self,
         platform: str,
         event_id: str,

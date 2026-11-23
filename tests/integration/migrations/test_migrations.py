@@ -111,7 +111,7 @@ def test_downloads_are_read_from_the_jobs_that_made_them(db):
             ),
         ).scalar_one()
 
-        def job(job_id, task, status, result, *, owner=user, at=1000.5):
+        def job(job_id, task, status, result, *, owner=user, at=1000.5):  # noqa: PLR0913
             conn.execute(
                 text(
                     "INSERT INTO jobs (id, task, user_id, status, created_at, params,"

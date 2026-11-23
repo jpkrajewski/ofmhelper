@@ -46,7 +46,7 @@ def _copy_name(seed: int) -> str:
     return f"IMG_{1000 + seed % 9000}.mov"
 
 
-def run_repurpose(
+def run_repurpose(  # noqa: PLR0913, PLR0917
     job_dir: str,
     source: str,
     seed: int | None = None,
@@ -54,7 +54,7 @@ def run_repurpose(
     device: str | None = None,
     copies: int | None = None,
     preset_name: str | None = None,
-    special: bool | None = None,
+    special: bool | None = None,  # noqa: FBT001
 ) -> list[RepurposeResult]:
     if seed is None:
         seed = secrets.randbits(32)

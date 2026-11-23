@@ -57,7 +57,7 @@ class LongCloneQueued(BaseModel):
 
 
 @router.get("")
-def page(
+def page(  # noqa: PLR0913, PLR0917
     request: Request,
     actor: Actor,
     viewer: Viewing,

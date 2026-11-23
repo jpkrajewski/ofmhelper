@@ -186,7 +186,7 @@ def _refuse_too_long(seconds: float, target: CloneTarget) -> None:
     raise InvalidInputError(msg)
 
 
-def _source(
+def _source(  # noqa: PLR0913, PLR0917
     job_id: str,
     link: str,
     assets_root: str,
@@ -246,15 +246,15 @@ def _fetched(client: Provider, url: str, dest: Path) -> Path:
     raise ProviderUnavailableError(clone_links_constants().run_not_saved) from last
 
 
-def _saved_here(
+def _saved_here(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
     provider: str,
     results: list[ResultFile],
     export_name: str | None,
-    capcut: bool,
-    mirror: bool,
+    capcut: bool,  # noqa: FBT001
+    mirror: bool,  # noqa: FBT001
     export_failures: int,
 ) -> list[ResultFile]:
     if all(r.path is not None or not r.remote_url for r in results):
@@ -285,7 +285,7 @@ def _saved_here(
     return saved
 
 
-def run_clone_link(
+def run_clone_link(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
@@ -294,10 +294,10 @@ def run_clone_link(
     prompt: str,
     resolution: str,
     reference_images: list[str],
-    audio: bool = False,
+    audio: bool = False,  # noqa: FBT001, FBT002
     export: str | None = None,
-    mirror: bool = False,
-    capcut: bool = False,
+    mirror: bool = False,  # noqa: FBT001, FBT002
+    capcut: bool = False,  # noqa: FBT001, FBT002
     model: str | None = None,
     batch: str | None = None,
     source_video: str | None = None,

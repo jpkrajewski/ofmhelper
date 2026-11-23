@@ -54,7 +54,7 @@ def _reels(
     username: str,
     user_id: str,
     cap: int,
-    logged_in: bool,
+    logged_in: bool,  # noqa: FBT001
 ) -> _Reels:
     if logged_in:
         try:

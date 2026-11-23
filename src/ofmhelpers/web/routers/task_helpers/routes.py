@@ -30,13 +30,13 @@ def _pending_text(pending_message: Callable[[Job], str], job: Job) -> str:
         return "Working…"
 
 
-def add_job_routes(
+def add_job_routes(  # noqa: PLR0913, PLR0917
     router: APIRouter,
     title: str,
     pending_message: Callable[[Job], str],
     back_url: str,
     back_label: str,
-    show_inputs: bool = False,
+    show_inputs: bool = False,  # noqa: FBT001, FBT002
 ) -> None:
     files_prefix = f"{router.prefix}/files"
 

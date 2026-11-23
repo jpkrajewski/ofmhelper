@@ -104,7 +104,7 @@ def _make_va_folder(va: User) -> None:
     storage_jobs.queue_sync(va.owner_id)
 
 
-def add(
+def add(  # noqa: PLR0911, PLR0913, PLR0917
     email: str,
     role: Role,
     name: str,
@@ -173,7 +173,7 @@ def set_owner(user: User, owner_id: int | None) -> None:
         _make_va_folder(moved)
 
 
-def set_active(user: User, active: bool) -> None:
+def set_active(user: User, active: bool) -> None:  # noqa: FBT001
     users.set_active(user.id, active=active)
 
 

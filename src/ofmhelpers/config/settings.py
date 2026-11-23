@@ -421,7 +421,7 @@ class WebSettings(BaseSettings):
         validation_alias="OFM_CLONE_APIYI_USD_PER_VIDEO_S",
     )
 
-    def restarting(self, production: bool) -> bool:
+    def restarting(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.recovery_restarts is None else self.recovery_restarts
 
 
@@ -811,7 +811,7 @@ class DownloadersSettings(BaseSettings):
         validation_alias="OFM_DOWNLOADS_SHEET_CLAIM_S",
     )
 
-    def sweeping(self, production: bool) -> bool:
+    def sweeping(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.sweep_enabled is None else self.sweep_enabled
 
 
@@ -986,7 +986,7 @@ class AccountsSettings(BaseSettings):
         validation_alias="OFM_ACCOUNTS_SCHEDULED_SCANS",
     )
 
-    def scheduled(self, production: bool) -> bool:
+    def scheduled(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.scheduled_scans is None else self.scheduled_scans
 
     @field_validator("scan_times")
@@ -1248,7 +1248,7 @@ class LinksSettings(BaseSettings):
     def _blank_is_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
 
-    def syncing_in_background(self, production: bool) -> bool:
+    def syncing_in_background(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.background_sync is None else self.background_sync
 
     claim_ttl_s: int = Field(
@@ -1755,10 +1755,10 @@ class GDriveSettings(BaseSettings):
         validation_alias="OFM_GDRIVE_REVIEW_FOLDER_TTL_S",
     )
 
-    def sweeping(self, production: bool) -> bool:
+    def sweeping(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.sweep_enabled is None else self.sweep_enabled
 
-    def live_read(self, production: bool) -> bool:
+    def live_read(self, production: bool) -> bool:  # noqa: FBT001
         return self.read_live and not production
 
 
@@ -2241,7 +2241,7 @@ class EventsSettings(BaseSettings):
     def senders_off_list(self) -> list[str]:
         return _names(self.senders_off or "")
 
-    def sending(self, production: bool) -> bool:
+    def sending(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.senders_off is None else True
 
 
@@ -2428,7 +2428,7 @@ class DistributionSettings(BaseSettings):
         validation_alias="OFM_DISTRIBUTION_SCHEDULED",
     )
 
-    def scheduled(self, production: bool) -> bool:
+    def scheduled(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.scheduled_pins is None else self.scheduled_pins
 
 

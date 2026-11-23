@@ -35,7 +35,7 @@ class ReportRunRepository:
         name: str,
         day: date,
         ran_at: float,
-        sent: bool,
+        sent: bool,  # noqa: FBT001
         marks: dict[str, Any],
     ) -> bool:
         with session_scope() as s:

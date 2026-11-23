@@ -74,7 +74,7 @@ def _reel(summary: ReelSummary, media: ReelMedia | None, profile: Profile) -> Re
     )
 
 
-def scan_profile(
+def scan_profile(  # noqa: PLR0913, PLR0917
     client: InstagramClient,
     username: str,
     min_views: int,

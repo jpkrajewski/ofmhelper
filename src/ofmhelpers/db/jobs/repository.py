@@ -72,11 +72,11 @@ _MIN_DELETE_PREFIX = 4
 _SESSION_REACH_S = 86400
 
 
-def _page_filter(
+def _page_filter(  # noqa: PLR0913, PLR0917
     tasks: Sequence[str],
     user_ids: Sequence[int] | None,
     status: str | None,
-    hidden: bool | None,
+    hidden: bool | None,  # noqa: FBT001
     since: float | None = None,
     until: float | None = None,
 ) -> list[ColumnElement[bool]]:
@@ -377,27 +377,27 @@ class JobRepository(CachedRepository):
         ]
 
     @cached
-    def list_page(
+    def list_page(  # noqa: PLR0913, PLR0917
         self,
         tasks: Sequence[str],
         user_ids: Sequence[int] | None,
         offset: int,
         limit: int,
         status: str | None = None,
-        hidden: bool | None = None,
+        hidden: bool | None = None,  # noqa: FBT001
         since: float | None = None,
         until: float | None = None,
     ) -> JobPage:
         where = _page_filter(tasks, user_ids, status, hidden, since, until)
         return _page(where, [JobRow.created_at.desc()], offset, limit)
 
-    def page_by_use(
+    def page_by_use(  # noqa: PLR0913, PLR0917
         self,
         tasks: Sequence[str],
         user_ids: Sequence[int] | None,
         offset: int,
         limit: int,
-        hidden: bool | None = None,
+        hidden: bool | None = None,  # noqa: FBT001
         since: float | None = None,
         until: float | None = None,
     ) -> JobPage:
@@ -414,13 +414,13 @@ class JobRepository(CachedRepository):
         ]
         return _page(where, order, offset, limit)
 
-    def page_not_uploaded(
+    def page_not_uploaded(  # noqa: PLR0913, PLR0917
         self,
         tasks: Sequence[str],
         user_ids: Sequence[int] | None,
         offset: int,
         limit: int,
-        hidden: bool | None = None,
+        hidden: bool | None = None,  # noqa: FBT001
         since: float | None = None,
         until: float | None = None,
     ) -> JobPage:
@@ -506,7 +506,7 @@ class JobRepository(CachedRepository):
         job_id: str,
         meta: dict[str, Any],
         cost_usd: Decimal | None,
-        cost_estimated: bool,
+        cost_estimated: bool,  # noqa: FBT001
     ) -> None:
         with session_scope() as s:
             s.execute(

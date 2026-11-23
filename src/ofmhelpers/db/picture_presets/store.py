@@ -41,7 +41,7 @@ def create(
     return _preset(row, owner)
 
 
-def update(
+def update(  # noqa: PLR0913, PLR0917
     preset_id: int,
     owner: int,
     name: str,

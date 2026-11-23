@@ -176,7 +176,7 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
         listed = {f.id for f in drive.children(root, folders_only=True)}
         return [f for f in self.owner_folders() if f.folder_id in listed]
 
-    def _measure(self, tops: dict[str, Sizes], split: bool) -> None:
+    def _measure(self, tops: dict[str, Sizes], split: bool) -> None:  # noqa: FBT001
         drive = self._drive()
         places = {key: _Place(sizes=sizes, top=split) for key, sizes in tops.items()}
         seen = set(places)

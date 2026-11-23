@@ -157,7 +157,7 @@ def _actor_deactivated(actor: str | None) -> bool:
     return user is not None and not user.active
 
 
-def start_job(
+def start_job(  # noqa: PLR0913
     task: str,
     params: dict,
     run: Callable[..., Any],

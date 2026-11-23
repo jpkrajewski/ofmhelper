@@ -67,7 +67,7 @@ class FakeApiyi:
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         key = str(request.headers.get("Authorization", "")).removeprefix("Bearer ")
         if key != FAKE_KEY and key not in self.key_models:
             return error(401, "invalid_api_key", "无效的令牌 (invalid token)")
@@ -150,7 +150,7 @@ class FakeApiyi:
         return self._read(task_id, "completed", progress="100%", result_url=url)
 
     @staticmethod
-    def _read(
+    def _read(  # noqa: PLR0913, PLR0917
         task_id: str,
         state: str,
         progress: str | None = None,

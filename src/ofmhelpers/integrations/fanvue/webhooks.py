@@ -125,7 +125,7 @@ def _reaction_replies(event: ReactionEvent) -> list[ChatDelivery]:
     ]
 
 
-def deliveries(raw: bytes) -> list[ChatDelivery]:
+def deliveries(raw: bytes) -> list[ChatDelivery]:  # noqa: PLR0911
     envelope = WebhookEnvelope.model_validate_json(raw)
     if envelope.type == REACTION:
         return _reaction_replies(ReactionEvent.model_validate(envelope.data))

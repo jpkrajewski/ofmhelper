@@ -324,7 +324,7 @@ def _is_queued_owner_prompt(attached: Any) -> bool:
     )
 
 
-def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | None:
+def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | None:  # noqa: C901, PLR0912, PLR0915
     tools: dict[str, tuple[str, str]] = {}
     seen: set[str] = set()
     usage = Counter[str]()

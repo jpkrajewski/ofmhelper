@@ -137,7 +137,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return PlainTextResponse(detail, status_code=403)
 
     @staticmethod
-    def _refused(
+    def _refused(  # noqa: PLR0911
         request: HTTPConnection,
         current: SessionUser | None,
         seated: Seated | None,

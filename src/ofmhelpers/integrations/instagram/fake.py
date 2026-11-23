@@ -411,7 +411,7 @@ class FakeInstagram:
             return FakeReply.text(_SLOW_DOWN, 429)
         return None
 
-    def handle(
+    def handle(  # noqa: PLR0911
         self,
         request: requests.PreparedRequest,
         proxies: Mapping[str, str],

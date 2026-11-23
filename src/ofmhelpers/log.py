@@ -101,7 +101,7 @@ class LoggingConfig(BaseModel):
 def _config(
     level: str,
     fmt: str,
-    access_log: bool,
+    access_log: bool,  # noqa: FBT001
     *,
     logfire: bool = False,
 ) -> LoggingConfig:

@@ -149,19 +149,6 @@ select = ["ALL"]
 ignore = [
     # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    # Arity/complexity metrics. Route handlers and generation wrappers mirror
-    # their API contracts one-parameter-per-field; collapsing them into config
-    # objects is a refactor with no correctness payoff.
-    "PLR0911",
-    "PLR0912",
-    "PLR0913",
-    "PLR0915",
-    "PLR0917",
-    "C901",
-    # Boolean flags here are form/query fields and provider knobs, not
-    # call-site readability traps.
-    "FBT001",
-    "FBT002",
     # ruff 0.17's default conventions want `import datetime as dt`: churn in 15
     # files for no gain, and the module name reads better here.
     "ICN001",

@@ -211,7 +211,7 @@ class FakeApify:
             for row in rows
         ]
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         url = urlsplit(request.url or "")
         path = url.path
         with self._lock:

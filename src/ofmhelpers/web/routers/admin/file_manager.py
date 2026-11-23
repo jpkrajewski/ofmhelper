@@ -96,7 +96,7 @@ def files_page(
 
 
 @router.get("/assets/{user_id}")
-def asset_file(found: Asset, download: bool = False) -> Response:
+def asset_file(found: Asset, download: bool = False) -> Response:  # noqa: FBT001, FBT002
     name = strip_asset_hash_prefix(found.name)
     return _attachment(found, name) if download else media_response(found, name)
 
@@ -119,7 +119,7 @@ def asset_upload(user_id: int, files: Annotated[list[UploadFile], File()]) -> Re
 
 
 @router.get("/runs/{job_id}/{index}")
-def run_file(job_id: str, index: int, download: bool = False) -> Response:
+def run_file(job_id: str, index: int, download: bool = False) -> Response:  # noqa: FBT001, FBT002
     found = library.run_file(job_id, index)
     return _attachment(found, found.name) if download else media_response(found)
 

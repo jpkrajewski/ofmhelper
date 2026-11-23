@@ -531,7 +531,7 @@ class Mock:
 
 
 class Check:
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         browser: Browser,
         base_url: str,
@@ -923,7 +923,7 @@ def guarded(name: str, run: Callable[[], Step]) -> Step:
     return step.model_copy(update={"name": name})
 
 
-def run_all(check: Check, real: bool) -> list[Step]:
+def run_all(check: Check, real: bool) -> list[Step]:  # noqa: FBT001
     planned: dict[str, Callable[[], Step]] = {"load": check.load}
     if check.form.can_submit:
         planned |= {

@@ -54,7 +54,7 @@ class FakeFanvue:
         self._last_id = 0
         self._lock = threading.Lock()
 
-    def add_message(
+    def add_message(  # noqa: PLR0913
         self,
         creator: str,
         fan: str,
@@ -115,7 +115,7 @@ class FakeFanvue:
                 return _invalid_grant("The refresh chain is broken")
             return FakeReply.json_body(self.new_tokens().model_dump())
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         url = urlsplit(request.url or "")
         query = {k: v[0] for k, v in parse_qs(url.query).items()}
         with self._lock:

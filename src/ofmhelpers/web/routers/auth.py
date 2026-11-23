@@ -137,7 +137,7 @@ def start(
     request: Request,
     name: str,
     next_url: Annotated[str, Query(alias="next")] = HOME,
-    link: bool = False,
+    link: bool = False,  # noqa: FBT001, FBT002
 ) -> Response:
     provider = consent.provider(name)
     linking = AuthMiddleware.valid_user(request) if link else None

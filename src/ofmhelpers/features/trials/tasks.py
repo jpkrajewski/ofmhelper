@@ -105,7 +105,7 @@ def forget_posted_folder(state: FolderState, gone_id: str) -> None:
         state.posted_folder_id = ""
 
 
-def _why(exc: Exception, had_source: bool) -> str:
+def _why(exc: Exception, had_source: bool) -> str:  # noqa: FBT001
     if isinstance(exc, FolderGoneError):
         return SOURCE_GONE
     if isinstance(exc, DriveError) or not had_source:

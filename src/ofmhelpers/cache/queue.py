@@ -66,7 +66,7 @@ class Line(BaseModel, frozen=True):
 class JobQueue(BaseModel, frozen=True):
     name: QueueName
 
-    def put(
+    def put(  # noqa: PLR0913, PLR0917
         self,
         fn: Callable[..., Any],
         args: tuple[Any, ...] = (),
@@ -74,7 +74,7 @@ class JobQueue(BaseModel, frozen=True):
         job_timeout: int | None = None,
         retry: Retry | None = None,
         failure_ttl: int | None = None,
-        at_front: bool = False,
+        at_front: bool = False,  # noqa: FBT001, FBT002
     ) -> Job | None:
         kwargs = kwargs or {}
         if not settings.infra.rq_async:
@@ -250,13 +250,13 @@ def enqueue(
     )
 
 
-def enqueue_to(
+def enqueue_to(  # noqa: PLR0913, PLR0917
     queue: QueueName,
     fn: Callable[..., Any],
     args: tuple[Any, ...] = (),
     kwargs: dict[str, Any] | None = None,
     job_timeout: int | None = None,
-    at_front: bool = False,
+    at_front: bool = False,  # noqa: FBT001, FBT002
 ) -> Job | None:
     return JobQueue(name=queue).put(
         fn,

@@ -58,7 +58,7 @@ class _Client:
         self,
         items: dict[str, list[dict[str, Any]]],
         fail: frozenset[str] = frozenset(),
-        broke: bool = False,
+        broke: bool = False,  # noqa: FBT001
         status: RunStatus = RunStatus.SUCCEEDED,
     ):
         self.inputs: list[dict[str, Any]] = []

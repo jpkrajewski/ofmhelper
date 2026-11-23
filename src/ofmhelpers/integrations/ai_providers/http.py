@@ -33,7 +33,7 @@ def _never_sent(exc: requests.RequestException) -> bool:
     )
 
 
-def call(
+def call(  # noqa: PLR0913
     session: requests.Session,
     label: str,
     refused: Callable[[requests.Response], NoReturn],

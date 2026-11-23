@@ -205,7 +205,7 @@ def _device_metadata_args(now: datetime.datetime, rng: random.Random) -> list[st
     ]
 
 
-def encode_variant(
+def encode_variant(  # noqa: PLR0913
     src: Path,
     dst: Path,
     params: VariantParams,
@@ -258,7 +258,7 @@ def encode_variant(
     run(args, timeout_s)
 
 
-def generate_variants(
+def generate_variants(  # noqa: PLR0913, PLR0917
     src: Path,
     out_dir: Path,
     stem: str,

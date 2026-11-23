@@ -143,11 +143,11 @@ def _require_max_length(paths: list[str], seconds: list[float], limit: int) -> N
             raise CloneRefusedError(msg)
 
 
-def plan_runs(
+def plan_runs(  # noqa: PLR0913, PLR0917
     choices: RunChoices,
     prompt: str,
-    audio: bool,
-    mirror: bool,
+    audio: bool,  # noqa: FBT001
+    mirror: bool,  # noqa: FBT001
     images: list[str],
     videos: list[str],
     probe: Callable[[str], float],

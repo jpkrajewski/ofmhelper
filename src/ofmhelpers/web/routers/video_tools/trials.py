@@ -117,7 +117,7 @@ def write_captions(reel: Reel) -> folder.Started:
 
 
 @router.post("/{login_id}/reel/{key}/select")
-def select(reel: Reel, selected: Annotated[bool, Form()] = False) -> folder.Selected:
+def select(reel: Reel, selected: Annotated[bool, Form()] = False) -> folder.Selected:  # noqa: FBT002
     return reel.select(selected)
 
 

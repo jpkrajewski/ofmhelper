@@ -78,7 +78,7 @@ class Hooks:
             stderr=done.stderr,
         )
 
-    def bash(self, command: str, background: bool = False) -> Answer:
+    def bash(self, command: str, background: bool = False) -> Answer:  # noqa: FBT001
         tool_input = {"command": command, "run_in_background": background}
         return self.send("PreToolUse", tool_name="Bash", tool_input=tool_input)
 
@@ -442,7 +442,7 @@ def test_the_push_log_path_is_the_one_the_ship_skill_names(hooks: Hooks) -> None
 def test_only_the_owners_bare_word_gate_opens_a_gate_rerun(
     hooks: Hooks,
     prompt: str,
-    opens: bool,
+    opens: bool,  # noqa: FBT001
 ) -> None:
     hooks.prompt(prompt)
 
@@ -507,8 +507,8 @@ def guard_count() -> str:
 def graphql_answer(
     threads: list[bool],
     reviews: list[str],
-    more_threads: bool = False,
-    more_reviews: bool = False,
+    more_threads: bool = False,  # noqa: FBT001
+    more_reviews: bool = False,  # noqa: FBT001
 ) -> str:
     pull_request = {
         "reviewThreads": {

@@ -149,7 +149,7 @@ def _save(url: str, dest: Path, headers: dict[str, str], timeout: int) -> Path |
 _ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"
 
 
-def _unpack(data: str) -> str:
+def _unpack(data: str) -> str:  # noqa: C901, PLR0912
     match = re.search(r"\}\((.*)\)\);?\s*$", data, re.DOTALL)
     if match is None:
         return data

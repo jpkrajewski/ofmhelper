@@ -72,7 +72,7 @@ def _reaction_reply(messages: list[Message], creator_user_id: str) -> ChatEvent 
     )
 
 
-def new_reads(
+def new_reads(  # noqa: PLR0913, PLR0917
     client: StackedClient,
     creator_user_id: str,
     username: str,

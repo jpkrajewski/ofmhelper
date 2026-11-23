@@ -84,7 +84,7 @@ def _cards(jobs: list[Job]) -> list[TaskCard]:
 
 
 @router.get("")
-def page(
+def page(  # noqa: PLR0913, PLR0917
     request: Request,
     owner_id: OwnerId,
     actor: Actor,

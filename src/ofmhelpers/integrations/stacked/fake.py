@@ -137,7 +137,7 @@ class FakeStacked:
     def subscribed(self, creator: str, at: float) -> None:
         self.subscribers.setdefault(creator, []).append((at, 1))
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: C901, PLR0911
         url = urlsplit(request.url or "")
         with self._lock:
             self.calls.append((request.method or "", url.path))

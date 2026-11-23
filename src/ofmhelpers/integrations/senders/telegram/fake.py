@@ -82,7 +82,7 @@ class FakeTelegram:
                 self.deleted.append(found)
         return _delete_reply(found)
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         if self.fail_next:
             return self.fail_next.pop(0)
         bot, _, method = urlsplit(request.url or "").path.strip("/").partition("/")

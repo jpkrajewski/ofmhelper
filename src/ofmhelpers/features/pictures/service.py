@@ -305,7 +305,7 @@ def describe_preset(params: dict[str, Any]) -> str:
     return f"{LABEL} · {name}" if name else LABEL
 
 
-def run_picture(
+def run_picture(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,

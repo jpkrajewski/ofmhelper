@@ -19,7 +19,7 @@ def own(job_id: str, actors: Readers) -> Job:
     return job
 
 
-def set_hidden(job_id: str, actors: Readers, hidden: bool) -> JobVisibility:
+def set_hidden(job_id: str, actors: Readers, hidden: bool) -> JobVisibility:  # noqa: FBT001
     job = hide_job(job_id, actors, hidden)
     if job is None:
         raise NotFoundError(NO_JOB)

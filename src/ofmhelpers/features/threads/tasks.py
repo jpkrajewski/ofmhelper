@@ -60,7 +60,7 @@ class PicturesRun(BaseModel):
         return [f"IMG_{first + i:04d}.JPG" for i in range(count)]
 
 
-def make_pictures(
+def make_pictures(  # noqa: PLR0913
     *,
     user_id: int,
     login_id: int,

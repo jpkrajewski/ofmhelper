@@ -188,7 +188,7 @@ def _saved_results(
     ]
 
 
-def run_ai(
+def run_ai(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
