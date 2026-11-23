@@ -149,9 +149,6 @@ select = ["ALL"]
 ignore = [
     # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    # stdout IS the log here (Docker captures it). Note ruff's T201 fix
-    # DELETES the print rather than converting it -- never autofix this.
-    "T201",
     # ffmpeg/ffprobe/yt-dlp run with fixed argv lists, never shell=True.
     "S603",
     "S607",
@@ -245,11 +242,21 @@ ignore-variadic-names = true
 "src/ofmhelpers/web/main.py" = ["ARG001"]
 # DSP helpers share one (audio, sr, ...) positional shape by design.
 "src/ofmhelpers/media/radio_comms_fx.py" = ["ARG001"]
+# Operator CLIs run with python -m: stdout is their output (piped JSON,
+# progress lines), not logging.
+"src/ofmhelpers/__main__.py" = ["T201"]
+"src/ofmhelpers/backup.py" = ["T201"]
+"src/ofmhelpers/cleanup.py" = ["T201"]
+"src/ofmhelpers/examples.py" = ["T201"]
+"src/ofmhelpers/replay.py" = ["T201"]
+"src/ofmhelpers/report.py" = ["T201"]
+"src/ofmhelpers/search.py" = ["T201"]
+"src/ofmhelpers/seed.py" = ["T201"]
 # Standalone scripts and migrations aren't importable packages.
-"scripts/**" = ["INP001", "ANN"]
+"scripts/**" = ["INP001", "ANN", "T201"]  # CLI tools print their output
 "alembic/**" = ["INP001", "ANN"]
 # Claude Code hooks: standalone scripts the harness runs.
-".claude/**" = ["INP001", "ANN"]
+".claude/**" = ["INP001", "ANN", "T201"]  # stdout is the harness protocol
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
