@@ -351,7 +351,7 @@ def test_private_status():
 
 @pytest.fixture
 def three(fetches):
-    for handle, followers, views in (("aa", 10, 5), ("b", 30, 1), ("cc", 20, 9)):
+    for handle, followers, views in (("aa", 10, 5), ("bb", 30, 1), ("cc", 20, 9)):
         track("instagram", handle, "Yuki" if handle != "cc" else None)
         record_scan(_id(handle), _stats(handle, followers=followers, views=views))
     _snapshot("cc", 1, 2 * DAY)
@@ -462,16 +462,16 @@ def test_a_kept_post_ages_out_on_the_next_successful_scan(clock):
 
 def test_one_accounts_scan_never_touches_anothers_posts(clock):
     track("instagram", "aa")
-    track("instagram", "b")
+    track("instagram", "bb")
     now = clock.now
     _scan("aa", now, _post("same", DAY, now, views=1))
-    _scan("b", now, _post("same", DAY, now, views=2))
+    _scan("bb", now, _post("same", DAY, now, views=2))
     clock.now += RETENTION
     _scan("aa", clock.now)
     with session_scope() as s:
         rows = s.query(TrackedPostRow.account_id, TrackedPostRow.views).all()
-    assert rows == [(_id("b"), 2)]
-    assert _kept("b") == {"same": 2}
+    assert rows == [(_id("bb"), 2)]
+    assert _kept("bb") == {"same": 2}
 
 
 def test_concurrent_scans_of_one_account_do_not_duplicate(clock):
@@ -604,16 +604,16 @@ def test_failing_accounts_back_off_and_recover(clock):
 
 def _handles(client, **params) -> list[str]:
     html = client.get("/accounts", params=params).text
-    shown = [h for h in ("aa", "b", "cc") if f">@{h}<" in html]
+    shown = [h for h in ("aa", "bb", "cc") if f">@{h}<" in html]
     return sorted(shown, key=lambda h: html.index(f">@{h}<"))
 
 
 def test_sort(client, three):
-    assert _handles(client, sort="followers") == ["b", "cc", "aa"]
-    assert _handles(client, sort="views") == ["cc", "aa", "b"]
+    assert _handles(client, sort="followers") == ["bb", "cc", "aa"]
+    assert _handles(client, sort="views") == ["cc", "aa", "bb"]
     assert _handles(client, sort="growth")[0] == "cc"
-    assert _handles(client, sort="newest") == ["cc", "b", "aa"]
-    assert _handles(client, sort="handle") == ["aa", "b", "cc"]
+    assert _handles(client, sort="newest") == ["cc", "bb", "aa"]
+    assert _handles(client, sort="handle") == ["aa", "bb", "cc"]
 
 
 def test_problem_rows_are_marked_and_counted(client, three):
@@ -667,19 +667,19 @@ def test_clicking_the_current_sort_flips_its_order(client, three):
     assert q.sort_link(AccountSort.VIEWS) == "/accounts?sort=views"
     flipped = AccountQuery(order="asc")
     assert flipped.sort_link(AccountSort.FOLLOWERS) == "/accounts?order=desc"
-    assert _handles(client, order="asc") == ["aa", "cc", "b"]
-    assert _handles(client, sort="handle", order="desc") == ["cc", "b", "aa"]
+    assert _handles(client, order="asc") == ["aa", "cc", "bb"]
+    assert _handles(client, sort="handle", order="desc") == ["cc", "bb", "aa"]
     html = client.get("/accounts", params={"order": "asc"}).text
     assert 'aria-sort="ascending"' in html
 
 
 def test_filters(client, three):
-    assert _handles(client, q="b") == ["b"]
-    assert _handles(client, creator="Yuki") == ["b", "aa"]
+    assert _handles(client, q="b") == ["bb"]
+    assert _handles(client, creator="Yuki") == ["bb", "aa"]
     assert _handles(client, creator=NO_CREATOR) == ["cc"]
-    assert _handles(client, status="active") == ["b", "cc", "aa"]
+    assert _handles(client, status="active") == ["bb", "cc", "aa"]
     assert _handles(client, status="private") == []
-    assert _handles(client, platform="instagram") == ["b", "cc", "aa"]
+    assert _handles(client, platform="instagram") == ["bb", "cc", "aa"]
 
 
 def test_blank_filter_fields_mean_unset(client, three):
@@ -687,7 +687,7 @@ def test_blank_filter_fields_mean_unset(client, three):
         "/accounts?q=&sort=&platform=instagram&creator=&status=&page=&per_page=",
     )
     assert r.status_code == 200
-    assert _handles(client, q="", status="", sort="") == ["b", "cc", "aa"]
+    assert _handles(client, q="", status="", sort="") == ["bb", "cc", "aa"]
 
 
 def test_paging(client, three):

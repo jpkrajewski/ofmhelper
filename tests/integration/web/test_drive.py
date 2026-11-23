@@ -482,7 +482,7 @@ def test_uploaded_today_tells_clone_uploads_from_files_put_there_by_hand(drive):
     drive.add_file(account, "hand.mp4", "video/mp4")
     moved = drive.add_file(account, "posted.mp4", "video/mp4")
     drive.move(moved, _posted(drive, "ann.ig"))
-    before = dt.dt.now(dt.UTC) - dt.timedelta(days=2)
+    before = dt.datetime.now(dt.UTC) - dt.timedelta(days=2)
     drive.add_file(account, "old.mp4", "video/mp4", created=before)
     upload = upload_store.queue("job1", 0, login, users.agency_id(), "ann.ig - Anna")
     assert upload is not None
@@ -548,8 +548,8 @@ def test_uploaded_today_turns_at_local_midnight_in_the_drive_timezone(drive):
     ],
 )
 def test_a_posting_day_starts_at_18_45_utc_all_year(at, start):
-    found = posting.posting_day_start(dt.dt.fromisoformat(at))
-    assert found == dt.dt.fromisoformat(start)
+    found = posting.posting_day_start(dt.datetime.fromisoformat(at))
+    assert found == dt.datetime.fromisoformat(start)
 
 
 def test_the_posting_time_is_a_setting(monkeypatch):
@@ -560,7 +560,7 @@ def test_the_posting_time_is_a_setting(monkeypatch):
 
 
 def _utc(text: str) -> dt.datetime:
-    return dt.dt.fromisoformat(text)
+    return dt.datetime.fromisoformat(text)
 
 
 @pytest.mark.parametrize(

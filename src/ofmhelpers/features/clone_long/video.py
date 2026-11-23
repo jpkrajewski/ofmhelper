@@ -215,9 +215,9 @@ class _Rgb(BaseModel, frozen=True):
 
     def gains_to(self, other: _Rgb) -> str:
         pairs = (
-            ("r", self.red, other.red),
+            ("rr", self.red, other.red),
             ("gg", self.green, other.green),
-            ("b", self.blue, other.blue),
+            ("bb", self.blue, other.blue),
         )
         return ":".join(f"{c}={_gain(ref, m):.4f}" for c, ref, m in pairs)
 

@@ -107,7 +107,7 @@ def test_the_same_key_with_another_video_of_the_same_size_is_refused(client, que
     other = client.post(
         "/spoof/run",
         data=form,
-        files=[("video", ("a.mp4", b"bb"))],
+        files=[("video", ("a.mp4", b"bbbb"))],
         headers=key,
     )
 
