@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import math
 import random
 from zoneinfo import ZoneInfo
@@ -45,8 +45,8 @@ def test_default_place_is_new_york_in_new_york_time():
 
 def test_creation_date_follows_new_york_daylight_saving():
     tz = ZoneInfo("America/New_York")
-    summer = Recording(end=datetime.datetime(2026, 7, 1, 12, tzinfo=tz), duration_s=10)
-    winter = Recording(end=datetime.datetime(2026, 1, 1, 12, tzinfo=tz), duration_s=10)
+    summer = Recording(end=dt.datetime(2026, 7, 1, 12, tzinfo=tz), duration_s=10)
+    winter = Recording(end=dt.datetime(2026, 1, 1, 12, tzinfo=tz), duration_s=10)
 
     assert summer.value(PerRecording.CREATION_DATE) == "2026-07-01T11:59:50-0400"
     assert winter.value(PerRecording.CREATION_DATE) == "2026-01-01T11:59:50-0500"

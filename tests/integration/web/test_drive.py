@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from zoneinfo import ZoneInfo
@@ -482,7 +482,7 @@ def test_uploaded_today_tells_clone_uploads_from_files_put_there_by_hand(drive):
     drive.add_file(account, "hand.mp4", "video/mp4")
     moved = drive.add_file(account, "posted.mp4", "video/mp4")
     drive.move(moved, _posted(drive, "ann.ig"))
-    before = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=2)
+    before = dt.dt.now(dt.UTC) - dt.timedelta(days=2)
     drive.add_file(account, "old.mp4", "video/mp4", created=before)
     upload = upload_store.queue("job1", 0, login, users.agency_id(), "ann.ig - Anna")
     assert upload is not None
@@ -525,9 +525,9 @@ def test_uploaded_today_turns_at_local_midnight_in_the_drive_timezone(drive):
     posted = _posted(drive, "ann.ig")
     tz = ZoneInfo("Europe/Warsaw")
     for at, name in (
-        (datetime.datetime(2026, 10, 21, 21, 0, tzinfo=tz), "y1.mp4"),
-        (datetime.datetime(2026, 10, 21, 23, 30, tzinfo=tz), "y2.mp4"),
-        (datetime.datetime(2026, 10, 22, 9, 0, tzinfo=tz), "today.mp4"),
+        (dt.datetime(2026, 10, 21, 21, 0, tzinfo=tz), "y1.mp4"),
+        (dt.datetime(2026, 10, 21, 23, 30, tzinfo=tz), "y2.mp4"),
+        (dt.datetime(2026, 10, 22, 9, 0, tzinfo=tz), "today.mp4"),
     ):
         with time_machine.travel(at, tick=False):
             drive.add_file(posted, name, "video/mp4")
@@ -548,19 +548,19 @@ def test_uploaded_today_turns_at_local_midnight_in_the_drive_timezone(drive):
     ],
 )
 def test_a_posting_day_starts_at_18_45_utc_all_year(at, start):
-    found = posting.posting_day_start(datetime.datetime.fromisoformat(at))
-    assert found == datetime.datetime.fromisoformat(start)
+    found = posting.posting_day_start(dt.dt.fromisoformat(at))
+    assert found == dt.dt.fromisoformat(start)
 
 
 def test_the_posting_time_is_a_setting(monkeypatch):
     monkeypatch.setenv("OFM_GDRIVE_POSTING_TIME_UTC", "16:00")
     monkeypatch.setenv("OFM_GDRIVE_POSTING_BEFORE_H", "2")
-    at = datetime.datetime(2026, 12, 1, 15, 0, tzinfo=datetime.UTC)
+    at = dt.datetime(2026, 12, 1, 15, 0, tzinfo=dt.UTC)
     assert posting.posting_day_start(at).hour == 14
 
 
-def _utc(text: str) -> datetime.datetime:
-    return datetime.datetime.fromisoformat(text)
+def _utc(text: str) -> dt.datetime:
+    return dt.dt.fromisoformat(text)
 
 
 @pytest.mark.parametrize(

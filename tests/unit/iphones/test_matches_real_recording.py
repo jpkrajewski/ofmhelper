@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import json
 import re
 import subprocess
@@ -92,7 +92,7 @@ def _compared(tag: str) -> bool:
 @pytest.mark.heavy
 def test_recording_matches_a_real_iphone17_file_tag_for_tag(tmp_path: Path):
     real = ExifDump.model_validate_json(FIXTURE.read_text(encoding="utf-8")).tags
-    end = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3)))
+    end = dt.dt.now(dt.timezone(dt.timedelta(hours=-3)))
     dst = tmp_path / "out.mov"
 
     record(
@@ -133,7 +133,7 @@ REAL_HVCC_LEVEL = 0x78
 @pytest.mark.heavy
 def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
     dst = tmp_path / "out.mov"
-    end = datetime.datetime.now(datetime.UTC)
+    end = dt.dt.now(dt.UTC)
     record(
         _sample(tmp_path / "in.mp4"),
         dst,
@@ -173,7 +173,7 @@ def test_every_track_ends_with_the_movie_like_an_iphone(tmp_path: Path):
         capture_output=True,
     )  # fmt: skip
     dst = tmp_path / "out.mov"
-    end = datetime.datetime.now(datetime.UTC)
+    end = dt.dt.now(dt.UTC)
     record(src, dst, load_profile("iphone17"), Recording(end=end, duration_s=0), 120)
 
     tags = _exif(dst).tags

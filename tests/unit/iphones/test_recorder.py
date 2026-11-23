@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import json
 import subprocess
 lazy from pathlib import Path
@@ -52,14 +52,14 @@ def _clip(dest: Path) -> Path:
 @pytest.mark.heavy
 def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
     profile = load_profile("iphone17")
-    end = datetime.datetime(
+    end = dt.datetime(
         2026,
         10,
         19,
         15,
         0,
         1,
-        tzinfo=datetime.timezone(datetime.timedelta(hours=-3)),
+        tzinfo=dt.timezone(dt.timedelta(hours=-3)),
     )
     dst = tmp_path / "out.mov"
 

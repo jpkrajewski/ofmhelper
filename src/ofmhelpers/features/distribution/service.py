@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import time
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -138,8 +138,8 @@ class Distribution(BaseModel, frozen=True):
         channels = repo.channels_of(self.scope)
         counts = {c.id: repo.counts(c.id) for c in channels}
         links = [m.link_id for m in repo.model_links(self.scope)]
-        today = datetime.datetime.now(datetime.UTC).date()
-        week = today - datetime.timedelta(days=_WEEK_DAYS - 1)
+        today = dt.datetime.now(dt.UTC).date()
+        week = today - dt.timedelta(days=_WEEK_DAYS - 1)
         return DistributionPage(
             health=_health(channels, counts),
             pinned_today=sum(c.today for c in counts.values()),

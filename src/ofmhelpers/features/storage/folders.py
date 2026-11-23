@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Never
@@ -57,11 +57,11 @@ def enabled() -> bool:
     return settings.signin.google_configured or settings.infra.fake_externals
 
 
-def now() -> datetime.datetime:
-    return datetime.datetime.now(ZoneInfo(settings.gdrive.timezone))
+def now() -> dt.datetime:
+    return dt.datetime.now(ZoneInfo(settings.gdrive.timezone))
 
 
-def _today_start(at: datetime.datetime) -> datetime.datetime:
+def _today_start(at: dt.datetime) -> dt.datetime:
     local = at.astimezone(ZoneInfo(settings.gdrive.timezone))
     return local.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -194,7 +194,7 @@ def _saved_board(result: DriveBoard, folders: StoredFolders) -> None:
     result.as_of = min(reads) if reads else None
 
 
-def _uploaded_since(card: DriveCard, start: datetime.datetime) -> list[str]:
+def _uploaded_since(card: DriveCard, start: dt.datetime) -> list[str]:
     return [
         f.id
         for f in (*card.scan.waiting, *card.scan.posted)
@@ -202,7 +202,7 @@ def _uploaded_since(card: DriveCard, start: datetime.datetime) -> list[str]:
     ]
 
 
-def _count_uploaded(result: DriveBoard, at: datetime.datetime) -> None:
+def _count_uploaded(result: DriveBoard, at: dt.datetime) -> None:
     start = _today_start(at)
     today = {c.target.login_id: _uploaded_since(c, start) for c in result.cards}
     ours = set(upload_store.made_here([i for ids in today.values() for i in ids]))
@@ -299,7 +299,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         job = latest_job(StorageTask.SYNC, str(self.owner_id))
         return job.id if job is not None and job.status is JobStatus.running else None
 
-    def _board_head(self, at: datetime.datetime, viewer: int | None) -> DriveBoard:
+    def _board_head(self, at: dt.datetime, viewer: int | None) -> DriveBoard:
         me = users.get_user(viewer) if viewer is not None else None
         result = DriveBoard(
             day=at.date(),
@@ -338,7 +338,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
     def saved_board(
         self,
         viewer: int | None = None,
-        at: datetime.datetime | None = None,
+        at: dt.datetime | None = None,
     ) -> DriveBoard:
         at = at or now()
         result = self._board_head(at, viewer)
@@ -846,7 +846,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
     def board(
         self,
         viewer: int | None = None,
-        at: datetime.datetime | None = None,
+        at: dt.datetime | None = None,
     ) -> DriveBoard:
         at = at or now()
         result = self._board_head(at, viewer)

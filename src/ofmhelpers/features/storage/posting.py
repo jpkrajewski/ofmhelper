@@ -1,21 +1,21 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.storage.constants import posting_constants
 from ofmhelpers.features.storage.schema import PostingWindow
 
 
-def posting_day_start(at: datetime.datetime) -> datetime.datetime:
+def posting_day_start(at: dt.datetime) -> dt.datetime:
     s = settings.gdrive
     day = posting_constants().day
-    posting = datetime.datetime.combine(
-        at.astimezone(datetime.UTC).date(),
+    posting = dt.datetime.combine(
+        at.astimezone(dt.UTC).date(),
         s.posting_time_utc,
-        datetime.UTC,
+        dt.UTC,
     )
-    start = posting - datetime.timedelta(hours=s.posting_window_before_h)
+    start = posting - dt.timedelta(hours=s.posting_window_before_h)
     while start > at:
         start -= day
     while start + day <= at:
@@ -23,10 +23,10 @@ def posting_day_start(at: datetime.datetime) -> datetime.datetime:
     return start
 
 
-def window(at: datetime.datetime | None = None) -> PostingWindow:
-    at = at or datetime.datetime.now(datetime.UTC)
+def window(at: dt.datetime | None = None) -> PostingWindow:
+    at = at or dt.datetime.now(dt.UTC)
     s = settings.gdrive
-    length = datetime.timedelta(
+    length = dt.timedelta(
         hours=s.posting_window_before_h + s.posting_window_after_h,
     )
     start = posting_day_start(at)

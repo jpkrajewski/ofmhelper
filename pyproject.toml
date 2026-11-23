@@ -149,9 +149,6 @@ select = ["ALL"]
 ignore = [
     # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    # ruff 0.17's default conventions want `import datetime as dt`: churn in 15
-    # files for no gain, and the module name reads better here.
-    "ICN001",
     # An import only annotations use: `lazy import` saves nothing for the stdlib,
     # which is loaded anyway (TC001/TC002 stay on: first- and third-party ones
     # really do not load until used).

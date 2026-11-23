@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -20,11 +20,11 @@ lazy from ofmhelpers.features.storage.models import ReviewPlace
 logger = get_logger(__name__)
 
 _KINDS = frozendict({"image": PostKind.image, "video": PostKind.video})
-_EPOCH = datetime.datetime.fromtimestamp(0, datetime.UTC)
+_EPOCH = dt.datetime.fromtimestamp(0, dt.UTC)
 _INSTAGRAM = "instagram"
 
 
-def _made(f: DriveFile) -> datetime.datetime:
+def _made(f: DriveFile) -> dt.datetime:
     return f.created_time or _EPOCH
 
 

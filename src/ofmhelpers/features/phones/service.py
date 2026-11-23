@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 from contextlib import contextmanager
 from types import MappingProxyType
 lazy from collections.abc import Iterator
@@ -119,7 +119,7 @@ def drawing(model: str, color: str) -> str:
 @_vault()
 def export(scope: int) -> Workbook:
     active = [d for d in store.export_devices(scope) if not d.retired]
-    today = datetime.datetime.now(tz=datetime.UTC).date()
+    today = dt.datetime.now(tz=dt.UTC).date()
     return Workbook(
         content=workbook.build(active),
         name=f"phones-{today.isoformat()}.xlsx",

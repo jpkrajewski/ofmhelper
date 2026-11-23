@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -136,7 +136,7 @@ def load_photo_preset(name_or_path: str) -> PhotoPreset:
 class Shot(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    taken: datetime.datetime
+    taken: dt.datetime
     place: PlaceSample | None
     exposure: Fraction
     iso: int

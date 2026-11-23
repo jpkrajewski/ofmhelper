@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import json
 import mmap
 import random
@@ -194,7 +194,7 @@ def probe(src: Path, timeout_s: int) -> SourceInfo:
     return SourceInfo.from_ffprobe(out)
 
 
-def capcut_metadata_args(now: datetime.datetime) -> list[str]:
+def capcut_metadata_args(now: dt.datetime) -> list[str]:
     iso = now.strftime("%Y-%m-%dT%H:%M:%S.000000Z")
     args = ["-map_metadata", "-1", "-fflags", "+bitexact"]
     args += ["-flags:v", "+bitexact", "-flags:a", "+bitexact"]
@@ -291,7 +291,7 @@ def apply_preset(
             "-i",
             str(src),
             *_encode_args(info, preset, jitter),
-            *capcut_metadata_args(datetime.datetime.now(datetime.UTC)),
+            *capcut_metadata_args(dt.datetime.now(dt.UTC)),
             str(dst),
         ],
         timeout_s,

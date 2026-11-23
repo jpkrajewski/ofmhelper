@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Self
 from zoneinfo import ZoneInfo
-lazy import datetime
+lazy import datetime as dt
 
 import logfire
 from pydantic import BaseModel
@@ -84,7 +84,7 @@ class Repurpose:
         dst: str | Path,
         *,
         seed: int | None = None,
-        recorded_at: datetime.datetime | None = None,
+        recorded_at: dt.datetime | None = None,
         timeout_s: int = _DEFAULT_TIMEOUT_S,
     ) -> None:
         self.src = Path(src)

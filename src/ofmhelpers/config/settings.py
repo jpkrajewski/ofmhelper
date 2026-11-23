@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import os
 from enum import IntEnum, StrEnum
 from types import MappingProxyType
@@ -998,17 +998,15 @@ class AccountsSettings(BaseSettings):
                 continue
             try:
                 hour, minute = (int(n) for n in part.split(":"))
-                datetime.time(hour, minute)
+                dt.time(hour, minute)
             except ValueError:
                 raise ValueError(_SCAN_TIMES_MSG) from None
             found.append(f"{hour:02d}:{minute:02d}")
         return ",".join(found)
 
-    def scan_time_list(self) -> list[datetime.time]:
+    def scan_time_list(self) -> list[dt.time]:
         return [
-            datetime.time(int(t[:2]), int(t[3:]))
-            for t in self.scan_times.split(",")
-            if t
+            dt.time(int(t[:2]), int(t[3:])) for t in self.scan_times.split(",") if t
         ]
 
     sources: str = Field(
@@ -1691,8 +1689,8 @@ class GDriveSettings(BaseSettings):
         default="Europe/Warsaw",
         validation_alias="OFM_GDRIVE_TIMEZONE",
     )
-    posting_time_utc: datetime.time = Field(
-        default=datetime.time(19, 45),
+    posting_time_utc: dt.time = Field(
+        default=dt.time(19, 45),
         validation_alias="OFM_GDRIVE_POSTING_TIME_UTC",
     )
     posting_window_before_h: float = Field(
@@ -2167,15 +2165,15 @@ class ReportsSettings(BaseSettings):
     def _hh_mm(cls, value: str) -> str:
         try:
             hour, minute = (int(part) for part in value.split(":"))
-            datetime.time(hour, minute)
+            dt.time(hour, minute)
         except ValueError as exc:
             msg = "OFM_REPORTS_DAILY_AT must be HH:MM"
             raise ValueError(msg) from exc
         return value
 
-    def daily_time(self) -> datetime.time:
+    def daily_time(self) -> dt.time:
         hour, minute = (int(part) for part in self.daily_at.split(":"))
-        return datetime.time(hour, minute)
+        return dt.time(hour, minute)
 
 
 class ServerSettings(BaseSettings):

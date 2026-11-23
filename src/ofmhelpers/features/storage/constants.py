@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 from enum import StrEnum
 from functools import lru_cache
 
@@ -16,7 +16,7 @@ class StorageTask(StrEnum):
 
 
 class PostingConstants(BaseModel, frozen=True):
-    day: datetime.timedelta = datetime.timedelta(days=1)
+    day: dt.timedelta = dt.timedelta(days=1)
 
 
 class StorageConstants(BaseModel, frozen=True):

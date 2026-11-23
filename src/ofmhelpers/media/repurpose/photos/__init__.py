@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 import io
 import random
 from fractions import Fraction
@@ -41,7 +41,7 @@ def _shots(
     preset: PhotoPreset,
     rng: random.Random,
 ) -> list[Shot]:
-    taken = datetime.datetime.now(tz)
+    taken = dt.datetime.now(tz)
     shots: list[Shot] = []
     for _ in range(count):
         shots.append(
@@ -52,7 +52,7 @@ def _shots(
                 iso=rng.randint(*preset.lens.iso),
             ),
         )
-        taken -= datetime.timedelta(seconds=rng.uniform(*preset.stills.gap_s))
+        taken -= dt.timedelta(seconds=rng.uniform(*preset.stills.gap_s))
     return shots[::-1]
 
 

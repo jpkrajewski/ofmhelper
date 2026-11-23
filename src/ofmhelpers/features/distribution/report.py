@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-import datetime
+import datetime as dt
 
 from pydantic import BaseModel, computed_field
 
@@ -9,7 +9,7 @@ from ofmhelpers.db.self_links import store as self_links
 
 
 class ModelDay(BaseModel):
-    day: datetime.date
+    day: dt.date
     model: str
     pins: int = 0
     ig_pins: int = 0
@@ -51,9 +51,9 @@ class Report(BaseModel):
 def report(days: int, owner: int | None = None) -> Report:
     repo = store.repository()
     channels = repo.all_channels() if owner is None else repo.channels_of(owner)
-    end = datetime.datetime.now(datetime.UTC).date()
-    start = end - datetime.timedelta(days=days - 1)
-    by_day: dict[tuple[datetime.date, str], ModelDay] = {}
+    end = dt.datetime.now(dt.UTC).date()
+    start = end - dt.timedelta(days=days - 1)
+    by_day: dict[tuple[dt.date, str], ModelDay] = {}
     per_account = {
         c.id: AccountTotal(account=c.account_name, days=days, stopped=c.error)
         for c in channels
