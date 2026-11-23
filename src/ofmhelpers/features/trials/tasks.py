@@ -16,6 +16,8 @@ from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.features.storage.service import StorageServiceReview
 from ofmhelpers.features.trials import media
 from ofmhelpers.features.trials.captions import captions_for, understand
+from ofmhelpers.features.trials.constants import trials_constants
+from ofmhelpers.features.trials.schema import Made
 from ofmhelpers.features.trials.state import (
     FolderState,
     Recipe,
@@ -46,14 +48,8 @@ DOWNLOAD_FAILED = "Could not download it from Drive"
 MAKE_FAILED = "Could not make it"
 CAPTIONS_FAILED = "Could not write captions"
 UPLOAD_FAILED = "Could not upload it"
-NOTHING_NEW = "No new reels in POSTED"
 SOURCE_GONE = "Source video is gone from Drive"
 PIPELINE = "snapchat_iphone16_usa"
-
-
-class Made(BaseModel):
-    generated: int
-    failed: int
 
 
 class Captioned(BaseModel):
@@ -272,7 +268,7 @@ class Folder(BaseModel, frozen=True):
         state = self._load()
         keys = [r.key for r in state.todo if self._on_disk(r)]
         if read and not state.todo:
-            self._change(lambda s: s.tell(NOTHING_NEW))
+            self._change(lambda s: s.tell(trials_constants().nothing_new))
         made: list[bool] = []
         for i, key in enumerate(keys):
             made.append(self.make(key))

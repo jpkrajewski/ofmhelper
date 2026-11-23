@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import time
@@ -12,7 +11,7 @@ from rq.registry import FailedJobRegistry, ScheduledJobRegistry
 import ofmhelpers.features.events.dispatch as dispatch_module
 from ofmhelpers.cache import QueueName, get_queue, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.features.events import Event, emit, emits, listening
+from ofmhelpers.features.events import Event, emit, listening
 from ofmhelpers.integrations.senders.telegram import TelegramClient
 from ofmhelpers.integrations.senders.telegram.fake import (
     TOKEN,
@@ -186,93 +185,12 @@ def test_a_group_that_became_a_supergroup_still_gets_it(caplog):
     assert _GROUP not in caplog.text.split("refused")[0]
 
 
-def test_emits_sends_what_build_makes_and_keeps_the_result():
-    @emits(lambda clicks, link: Event(name="links.clicks", title=f"{clicks} on {link}"))
-    def count(link: str) -> int:
-        return 3000
-
-    assert count("bio") == 3000
-    assert fake_telegram().sent == _sent_to(*_CHATS, text="3000 on bio")
-
-
-def test_emits_on_an_async_function():
-    @emits(lambda views, **_: Event(name="accounts.views", title=f"{views} views"))
-    async def views(*, day: str) -> int:
-        return 5000
-
-    assert asyncio.run(views(day="2026-11-06")) == 5000
-    assert fake_telegram().sent == _sent_to(*_CHATS, text="5000 views")
-
-
-def test_emits_on_a_method():
-    class Links:
-        @emits(lambda clicks, links: Event(name="n", title=f"{clicks} {links.name}"))
-        def clicks(self) -> int:
-            return 7
-
-        name = "bio"
-
-    assert Links().clicks() == 7
-    assert fake_telegram().sent == _sent_to(*_CHATS, text="7 bio")
-
-
-@pytest.mark.parametrize(
-    "build",
-    [
-        lambda clicks: None if clicks < 3000 else Event(name="n", title="t"),
-        lambda result: result["missing"],
-        lambda result: {"name": "n", "title": "t"},
-        lambda: Event(name="n", title="t"),
-    ],
-    ids=["none", "raises", "not an event", "wrong signature"],
-)
-def test_a_build_that_gives_no_event_sends_nothing_and_keeps_the_result(build):
-    @emits(build)
-    def few() -> int:
-        return 12
-
-    assert few() == 12
-    assert fake_telegram().sent == []
-
-
-def test_a_build_that_raises_says_which_function(caplog):
-    @emits(lambda result: result["missing"])
-    def refresh_links() -> dict:
-        return {}
-
-    refresh_links()
-
-    assert "event of test_a_build_that_raises_says_which_function." in caplog.text
-    assert "refresh_links not built" in caplog.text
-
-
-def test_a_function_that_raises_emits_nothing():
-    @emits(lambda *_: Event(name="n", title="t"))
-    def fails() -> None:
-        msg = "boom"
-        raise ValueError(msg)
-
-    with pytest.raises(ValueError, match="boom"):
-        fails()
-    assert fake_telegram().sent == []
-
-
 @pytest.mark.parametrize("thing", [None, {"name": "n", "title": "t"}, "3k clicks"])
 def test_emit_of_anything_but_an_event_is_logged_not_raised(thing, caplog):
     emit(thing)
 
     assert "emit takes an Event" in caplog.text
     assert fake_telegram().sent == []
-
-
-def test_what_emits_cannot_wrap_is_refused_when_decorating():
-    def gen():
-        yield 1
-
-    with pytest.raises(TypeError, match="generator"):
-        emits(lambda *_: None)(gen)
-    with pytest.raises(TypeError, match="under @classmethod"):
-        emits(lambda *_: None)(classmethod(lambda cls: 1))
 
 
 def test_the_chats_that_pressed_start_or_added_the_bot_are_listed_once():

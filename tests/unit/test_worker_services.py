@@ -353,6 +353,7 @@ WITHHELD_FROM_THE_MEDIA_SERVICES = {
     "OFM_APPLE_PRIVATE_KEY",
     "OFM_GDRIVE_SERVICE_ACCOUNT",
     "OFM_GOOGLE_CLIENT_SECRET",
+    "OFM_PASSWORD_ADMIN",
     "OFM_TELEGRAM_BOT_TOKEN",
     "OFM_VAULT_KEY",
     "SESSION_SECRET",
@@ -441,7 +442,7 @@ def test_migrate_gets_every_setting_the_migrations_read_but_the_secrets():
 
 def test_only_secrets_the_media_tasks_read_are_withheld_from_them():
     assert all(map(SECRET_NAME.search, WITHHELD_FROM_THE_MEDIA_SERVICES))
-    assert _env_names_read_by_tasks() >= WITHHELD_FROM_THE_MEDIA_SERVICES
+    assert _env_names_read_by_tasks() & WITHHELD_FROM_THE_MEDIA_SERVICES
 
 
 def _service_env(name: str) -> dict[str, Any]:

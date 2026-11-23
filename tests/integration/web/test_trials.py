@@ -20,9 +20,11 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.jobs import runner
 from ofmhelpers.features.previews.render import write_video_thumb
 from ofmhelpers.features.storage import jobs as storage_jobs
-from ofmhelpers.features.trials import cleanup, folder, media, tasks
+from ofmhelpers.features.storage.client import saved_storage
+from ofmhelpers.features.trials import cleanup, folder, media, posted, tasks
 from ofmhelpers.features.trials import state as trial_state
 from ofmhelpers.features.trials.captions import ReelNotes
+from ofmhelpers.features.trials.constants import TrialsPhase, trials_constants
 from ofmhelpers.integrations.storage import (
     DriveError,
     FolderGoneError,
@@ -631,7 +633,7 @@ def test_a_trashed_posted_folder_reads_as_gone_not_unreadable_or_nothing_new(
     client.post(f"/trials/{login}/generate")
 
     live = client.get(f"/trials/{login}/live").json()
-    assert live["status"] != tasks.NOTHING_NEW
+    assert live["status"] != trials_constants().nothing_new
     assert live["problem"] == ""
     assert _state(login).posted_folder_id == ""
     assert made == ["caption 0"]
@@ -680,9 +682,12 @@ def test_generate_with_nothing_new_says_so_and_can_be_clicked_again(drive, made)
     client.post(f"/trials/{login}/generate")
 
     assert made == ["caption 0"]
-    assert client.get(f"/trials/{login}/live").json()["status"] == tasks.NOTHING_NEW
+    assert (
+        client.get(f"/trials/{login}/live").json()["status"]
+        == trials_constants().nothing_new
+    )
     page = client.get(f"/trials/{login}").text
-    assert tasks.NOTHING_NEW in page
+    assert trials_constants().nothing_new in page
     generate = page.split('id="tr-generate"')[1].split("</form>")[0]
     assert "disabled" not in generate
     drive.add_file(_posted(drive), "b.mp4", "video/mp4")
@@ -1422,7 +1427,9 @@ def posters(made, monkeypatch) -> None:
 
 
 def _a_day_later(login: int) -> None:
-    cleanup.clean(users.agency_id(), login, time.time() + _TWO_DAYS_S)
+    uid = users.agency_id()
+    folder.read_posted(saved_storage(uid).folders, uid, login)
+    cleanup.clean(uid, login, time.time() + _TWO_DAYS_S)
 
 
 def _files(login: int) -> list[str]:
@@ -1679,7 +1686,7 @@ def test_the_sweep_cleans_every_folder_and_a_broken_one_stops_nothing(
     old = time.time() - _TWO_DAYS_S
     os.utime(copy, (old, old))
 
-    cleanup.remove_old()
+    posted.read_all()
 
     assert _state(login).reels[0].stored is False
     assert not copy.exists()
@@ -1704,11 +1711,58 @@ def test_the_cleanup_sweep_is_put_in_the_workers_line_once(real_queue):
     sweep.round()
     sweep.round()
 
-    queue = get_queue(QueueName.PREVIEWS)
+    queue = get_queue(QueueName.DEFAULT)
     assert queue.get_job_ids() == ["sweep-trials-cleanup"]
     queue.empty()
     sweep.round()
     assert queue.count == 1
+
+
+def _unread_cards(monkeypatch) -> None:
+    read_card = folder._card
+
+    def unread(folders, viewer, login_id):
+        card = read_card(folders, viewer, login_id)
+        card.unread = True
+        return card
+
+    monkeypatch.setattr(folder, "_card", unread)
+
+
+def test_an_unread_posted_folder_queues_no_clean(drive, made, monkeypatch):
+    login = _login(drive, "a.mp4")
+    _client().post(f"/trials/{login}/generate")
+    cleans: list[int] = []
+    monkeypatch.setattr(
+        cleanup, "clean", lambda uid, login_id, now: cleans.append(login_id)
+    )
+
+    posted.read_all()
+    assert cleans == [login]
+
+    _unread_cards(monkeypatch)
+    cleans.clear()
+    posted.read_all()
+    assert cleans == []
+
+
+def test_two_rounds_queue_one_clean_per_folder(drive, made, real_queue):
+    login = _login(drive, "a.mp4")
+    _client().post(f"/trials/{login}/generate")
+    real_queue()
+
+    posted.read_all()
+    posted.read_all()
+
+    queue = get_queue(QueueName.PREVIEWS)
+    assert queue.get_job_ids() == [f"trials-clean-{users.agency_id()}-{login}"]
+
+
+def test_the_old_queued_remove_old_does_nothing_but_log(caplog):
+    with caplog.at_level("INFO"):
+        assert cleanup.remove_old() is None
+
+    assert "features/trials/posted.py read_all" in caplog.text
 
 
 class _Ran:
@@ -1841,7 +1895,7 @@ def test_regenerate_and_an_upload_go_before_a_waiting_generate(
 
     line = JobQueue(name=QueueName.MEDIA).line().waiting
     labels = [get_job(job_id).params["label"] for job_id in line]
-    assert labels == [folder.UPLOAD, folder.REMAKE, folder.GENERATE]
+    assert labels == [TrialsPhase.UPLOAD, TrialsPhase.REMAKE, TrialsPhase.GENERATE]
 
 
 def test_a_trials_job_runs_again_from_its_row_alone(drive, made, posters):
@@ -1850,7 +1904,7 @@ def test_a_trials_job_runs_again_from_its_row_alone(drive, made, posters):
     client.post(f"/trials/{login}/generate")
     (reel,) = _state(login).reels
     client.post(f"/trials/{login}/reel/{reel.key}/caption", data={"caption": "mine"})
-    job = next(j for j in _jobs_of(login) if j.params["label"] == folder.REMAKE)
+    job = next(j for j in _jobs_of(login) if j.params["label"] == TrialsPhase.REMAKE)
 
     run = folder.replay_run(job)
 

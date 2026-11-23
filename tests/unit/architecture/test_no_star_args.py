@@ -4,6 +4,8 @@ from textwrap import dedent
 from test_architecture import check, under
 
 FUNCTIONS = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
+owner_allowed_file_2026_11_23 = "db/cached_repository.py::"
+owner_allowed_function_2026_11_23 = "features/generate/service.py::run_ai"
 
 
 def star_args(name: str, tree: ast.Module) -> set[str]:
@@ -29,7 +31,13 @@ def test_no_function_takes_star_args_or_kwargs():
     found: set[str] = set()
     for name, tree in under("").items():
         found |= star_args(name, tree)
-    check(found, set())
+    allowed: set[str] = set()
+    for name in found:
+        if name == owner_allowed_function_2026_11_23 or name.startswith(
+            owner_allowed_file_2026_11_23
+        ):
+            allowed.add(name)
+    check(found - allowed, set())
 
 
 def test_the_rule_sees_every_kind_of_function():

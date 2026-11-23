@@ -19,8 +19,8 @@ from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.chats.schema import OpenWait
 lazy from ofmhelpers.db.drive_folders.models import DriveTarget
 lazy from ofmhelpers.db.jobs.schema import Job
-lazy from ofmhelpers.features.trials.folder import GENERATE, REMAKE
-lazy from ofmhelpers.features.trials.tasks import NOTHING_NEW, Made
+lazy from ofmhelpers.features.trials.constants import TrialsPhase, trials_constants
+lazy from ofmhelpers.features.trials.schema import Made
 
 logger = get_logger(__name__)
 
@@ -120,7 +120,7 @@ class _TrialsRun(BaseModel):
 
 def _made(made: Made) -> str:
     if not made.generated and not made.failed:
-        return NOTHING_NEW
+        return trials_constants().nothing_new
     text = f"{made.generated} made"
     return f"{text}, {made.failed} failed" if made.failed else text
 
@@ -133,7 +133,7 @@ def _job(job: Job, accounts: list[DriveTarget]) -> Notification | None:
         text = f"Threads pictures {'ready' if done else 'failed'}: {threads.reel_name}"
     else:
         run = _TrialsRun.model_validate(job.params)
-        if run.label not in (GENERATE, REMAKE):
+        if run.label not in (TrialsPhase.GENERATE, TrialsPhase.REMAKE):
             return None
         login_id, page = run.login, _TRIALS
         made = _made(Made.model_validate(job.result)) if done else ""

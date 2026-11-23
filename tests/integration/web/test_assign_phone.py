@@ -110,7 +110,7 @@ def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
     new = _account(client, "yuki_kanasiva")
     steps: list[str] = []
     real_leaving = phones_service.logins_leaving
-    real_folder = phones_service._make_drive_folder
+    real_folder = phones_service.Phone._make_drive_folder
 
     def leaving(*args, **kwargs):
         steps.append("old account leaves")
@@ -121,7 +121,7 @@ def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
         return real_folder(*args, **kwargs)
 
     monkeypatch.setattr(phones_service, "logins_leaving", leaving)
-    monkeypatch.setattr(phones_service, "_make_drive_folder", folder)
+    monkeypatch.setattr(phones_service.Phone, "_make_drive_folder", folder)
 
     assert _assign(client, phone, new, replace=True).status_code == 201
 

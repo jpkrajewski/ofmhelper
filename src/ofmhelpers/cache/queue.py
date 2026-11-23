@@ -99,9 +99,11 @@ class JobQueue(BaseModel, frozen=True):
         )
         return rq_job
 
-    def put_once(self, key: str, fn: Callable[[], Any]) -> bool:
+    def put_once(
+        self, key: str, fn: Callable[..., Any], args: tuple[Any, ...] = ()
+    ) -> bool:
         if not settings.infra.rq_async:
-            fn()
+            fn(*args)
             return True
         queue = get_queue(self.name)
         before = queue.fetch_job(key)
@@ -109,6 +111,7 @@ class JobQueue(BaseModel, frozen=True):
             return False
         queue.enqueue(
             fn,
+            *args,
             job_id=key,
             description=f"{fn.__module__}.{fn.__qualname__}",
             result_ttl=0,

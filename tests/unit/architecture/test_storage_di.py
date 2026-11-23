@@ -15,7 +15,7 @@ COMPOSITION_ROOTS = frozenset(
         "web/dependencies.py",
         "features/storage/jobs.py",
         "features/trials/tasks.py",
-        "features/trials/cleanup.py",
+        "features/trials/posted.py",
         "features/threads/tasks.py",
         "features/distribution/publish.py",
         "features/distribution/sweep.py",

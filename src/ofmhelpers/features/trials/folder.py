@@ -19,6 +19,7 @@ from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.storage.service import StorageServiceFolders
 from ofmhelpers.features.trials import media, tasks
+from ofmhelpers.features.trials.constants import TrialsPhase
 from ofmhelpers.features.trials.state import (
     CAPTION_MAX,
     FolderState,
@@ -36,16 +37,12 @@ lazy from ofmhelpers.db.jobs.schema import Job
 logger = get_logger(__name__)
 
 TASK = "trials"
-GENERATE = "Making trials"
-REMAKE = "Making one trial"
-CAPTIONS = "Writing captions"
-UPLOAD = "Uploading"
 RUNS: frozendict[str, Callable[..., object]] = frozendict(
     {
-        GENERATE: tasks.make_trials,
-        REMAKE: tasks.generate_reels,
-        CAPTIONS: tasks.write_captions,
-        UPLOAD: tasks.upload_trials,
+        TrialsPhase.GENERATE: tasks.make_trials,
+        TrialsPhase.REMAKE: tasks.generate_reels,
+        TrialsPhase.CAPTIONS: tasks.write_captions,
+        TrialsPhase.UPLOAD: tasks.upload_trials,
     }
 )
 _RESTARTS_MAX = 2
@@ -304,11 +301,13 @@ def _sync_state(folders: StorageServiceFolders, viewer: int, login_id: int) -> _
     return _Synced(card=card, state=state)
 
 
-def read_posted(folders: StorageServiceFolders, uid: int, login_id: int) -> None:
+def read_posted(folders: StorageServiceFolders, uid: int, login_id: int) -> bool:
     try:
-        _sync_state(folders, uid, login_id)
+        card = _sync_state(folders, uid, login_id).card
     except NotFoundError:  # silent: a login with no card any more has nothing to read
         logger.info("trials: no folder card for login %s", login_id)
+        return False
+    return bool(card.posted_folder_id) and not card.error and not card.unread
 
 
 class PhoneCards(BaseModel):
@@ -409,14 +408,14 @@ def restart(job: Job) -> bool:
     label = job.params.get("label")
     args = job.params.get("args")
     if (
-        label not in (GENERATE, REMAKE, UPLOAD)
+        label not in (TrialsPhase.GENERATE, TrialsPhase.REMAKE, TrialsPhase.UPLOAD)
         or job.actor is None
         or restarts >= _RESTARTS_MAX
-        or (label != GENERATE and not isinstance(args, dict))
+        or (label != TrialsPhase.GENERATE and not isinstance(args, dict))
     ):
         return False
-    remake = RemakeArgs.model_validate(args) if label == REMAKE else None
-    upload = UploadArgs.model_validate(args) if label == UPLOAD else None
+    remake = RemakeArgs.model_validate(args) if label == TrialsPhase.REMAKE else None
+    upload = UploadArgs.model_validate(args) if label == TrialsPhase.UPLOAD else None
     uid, login_id = int(job.actor), int(job.params["login"])
     merge_params(job.id, {"restarts": restarts + 1})
     reopen_job(job.id)
@@ -481,7 +480,7 @@ class Trials(BaseModel, frozen=True):
 
     def generate(self) -> Started:
         _sync_state(self.folders, self.uid, self.login_id)
-        claim = self.claim(GENERATE)
+        claim = self.claim(TrialsPhase.GENERATE)
 
         def take(state: FolderState) -> None:
             if not self.busy(state.job_id):
@@ -497,7 +496,7 @@ class Trials(BaseModel, frozen=True):
 
     def upload(self, approved: list[str] | None) -> Uploading:
         wanted = set(approved or [])
-        claim = self.claim(UPLOAD)
+        claim = self.claim(TrialsPhase.UPLOAD)
         claimed: list[str] = []
 
         def take(state: FolderState) -> None:
@@ -535,7 +534,7 @@ class Reel(BaseModel, frozen=True):
         return state
 
     def remake(self, caption: str | None = None) -> Started:
-        claim = self.trials.claim(REMAKE)
+        claim = self.trials.claim(TrialsPhase.REMAKE)
 
         def take(reel: ReelState) -> None:
             if not self.trials.busy(reel.job_id):
@@ -553,7 +552,7 @@ class Reel(BaseModel, frozen=True):
         return Started(started=bool(claim.job_id))
 
     def ask_captions(self) -> Started:
-        claim = self.trials.claim(CAPTIONS)
+        claim = self.trials.claim(TrialsPhase.CAPTIONS)
 
         def take(reel: ReelState) -> None:
             if not reel.captions and not self.trials.busy(reel.job_id):

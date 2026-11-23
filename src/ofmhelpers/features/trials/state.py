@@ -1,4 +1,5 @@
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -176,6 +177,13 @@ class FolderState(BaseModel):
 def work_dir(user_id: int, login_id: int) -> Path:
     root = Path(settings.infra.uploads_root) / "trials"
     return root / str(user_id) / str(login_id)
+
+
+def stored_folders() -> Iterator[tuple[int, int]]:
+    for found in (Path(settings.infra.uploads_root) / "trials").glob("*/*/state.json"):
+        login, user = found.parent, found.parent.parent
+        if user.name.isdigit() and login.name.isdigit():
+            yield int(user.name), int(login.name)
 
 
 def load(user_id: int, login_id: int) -> FolderState:

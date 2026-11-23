@@ -32,7 +32,7 @@ from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.features.storage import jobs as storage_jobs
-from ofmhelpers.features.trials import cleanup as trials_cleanup
+from ofmhelpers.features.trials import posted as trials_posted
 from ofmhelpers.features.users import idle as va_idle
 from ofmhelpers.features.viral import cleanup as viral_cleanup
 from ofmhelpers.log import configure_logging, get_logger
@@ -150,9 +150,9 @@ def sweeps() -> list[Sweep]:
         ),
         Sweep(
             name="trials cleanup",
-            run=trials_cleanup.remove_old,
+            run=trials_posted.read_all,
             interval_s=lambda: settings.trials.sweep_s,
-            queue=QueueName.PREVIEWS,
+            queue=QueueName.DEFAULT,
         ),
         Sweep(
             name="downloads cleanup",

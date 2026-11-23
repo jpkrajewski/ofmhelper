@@ -33,7 +33,7 @@ from ofmhelpers.features.chatting.webhooks import (
     models_delivering,
     sync_done_key,
 )
-from ofmhelpers.features.trials.folder import GENERATE
+from ofmhelpers.features.trials.constants import TrialsPhase
 from ofmhelpers.features.trials.tasks import Made
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.integrations.fanvue.source import FanvueSource
@@ -221,7 +221,9 @@ def test_a_fan_left_waiting_is_sent_to_an_open_notifications_at_once(client, sid
 def test_chats_and_jobs_are_one_list_newest_first(client, side):
     _fan_waits(client, side, "ann")
     trials = create_job(
-        "trials", {"label": GENERATE, "login": 999}, actor=str(users.agency_id())
+        "trials",
+        {"label": TrialsPhase.GENERATE, "login": 999},
+        actor=str(users.agency_id()),
     )
     finish_job(trials, Made(generated=1, failed=0))
     _post(client, side, side.mass("mass-1"))

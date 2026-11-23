@@ -21,3 +21,6 @@ The page and its jobs: `web/routers/CLAUDE.md` (/trials).
 ~159 s total (~28 s per second of video): master (x264 veryfast crf 10, at the source's 60 fps) 55.6, recorder (x265 `fast`, HEVC Main10 HLG 30 fps 24 Mb/s) 76.4, the rest 27.
 
 A master at 30 fps instead of the source's was measured 2026-11-16 (same reel and seed, A/B twice on dev): no saving beyond the noise, and the copy changes (149 frames instead of 148, SSIM Y 0.93 between the two copies). Not applied. 116 of dev's 122 POSTED sources are 59.94 fps. The recorder's x265 is the biggest step; a faster preset there would lower quality at the same 24 Mb/s, so it is the owner's call.
+
+## Old queued job kept for one release
+- `cleanup.remove_old` only logs and returns: RQ jobs queued on prod before this deploy still name it on the previews queue (the sweep used to put it there). The POSTED read moved to `posted.py` `read_all`. Remove `remove_old` after the next deploy.
