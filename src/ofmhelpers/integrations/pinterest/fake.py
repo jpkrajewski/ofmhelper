@@ -11,6 +11,7 @@ lazy from collections.abc import Mapping
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 lazy import requests
+lazy from pydantic import JsonValue
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 
@@ -167,7 +168,7 @@ class FakePinterest:
         return FakeReply.text("no such slot", status=403)
 
 
-def _ok(data: object) -> FakeReply:
+def _ok(data: JsonValue | Mapping[str, Any] | list[Any] | BaseModel) -> FakeReply:
     return FakeReply.json_body(
         {
             "resource_response": {

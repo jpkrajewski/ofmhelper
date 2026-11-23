@@ -14,7 +14,7 @@ from pydantic import (
     model_serializer,
 )
 
-from ofmhelpers.config import WebSettings
+from ofmhelpers.config.settings import WebSettings
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Cookie, Depends, Request, WebSocket, params
 from pydantic import BaseModel
@@ -58,11 +58,11 @@ class Allowed(BaseModel, frozen=True):
 
 
 def Access(area: Area) -> params.Depends:  # noqa: N802
-    return Depends(Allowed(what=area))
+    return cast("params.Depends", Depends(Allowed(what=area)))
 
 
 def Can(action: Action) -> params.Depends:  # noqa: N802
-    return Depends(Allowed(what=action))
+    return cast("params.Depends", Depends(Allowed(what=action)))
 
 
 def _assets_root(request: Request) -> Path:

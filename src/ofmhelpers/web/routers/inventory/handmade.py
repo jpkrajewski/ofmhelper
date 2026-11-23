@@ -16,7 +16,7 @@ from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
 
-__all__ = ["router", "run_handmade"]
+__all__ = ["TASK", "router", "run_handmade"]
 
 router = APIRouter(
     prefix=service.PREFIX,

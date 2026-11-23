@@ -2,6 +2,7 @@
 
 import time
 from contextlib import contextmanager
+from typing import Any
 lazy from collections.abc import Iterator
 
 from sqlalchemy import case, delete, func, select, update
@@ -155,7 +156,7 @@ class DriveFolderRepository(CachedRepository):
         return True
 
     @invalidates_cache
-    def save_scans(self, scans: dict[int, dict], at: float) -> None:
+    def save_scans(self, scans: dict[int, dict[str, Any]], at: float) -> None:
         if not scans:
             return
         with session_scope() as s:

@@ -126,7 +126,7 @@ class JobRepository(CachedRepository):
     def create(
         self,
         task_name: str,
-        params: dict,
+        params: dict[str, Any],
         user_id: int | None = None,
         status: str = "running",
         created_at: float | None = None,
@@ -776,10 +776,11 @@ class JobRepository(CachedRepository):
         first = JobRow.params[field][0].astext
         content = func.split_part(func.regexp_replace(first, "^.*/", ""), "__", 1)
         with session_scope() as s:
+            ordered = aggregate_order_by(first, JobRow.created_at.desc())
             return list(
                 s.execute(
                     select(
-                        array_agg(aggregate_order_by(first, JobRow.created_at.desc()))[
+                        array_agg(ordered)[  # type: ignore[no-untyped-call]
                             1
                         ],
                     )

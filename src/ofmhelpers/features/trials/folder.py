@@ -354,7 +354,7 @@ class _Claim:
     def launch(
         self,
         enqueue: Callable[..., object],
-        fn: Callable,
+        fn: Callable[..., object],
         reels: int,
         task_args: dict[str, Any] | None = None,
         *,

@@ -52,9 +52,10 @@ def is_probe(raw: bytes, headers: Mapping[str, str]) -> bool:
     if _SIGNATURE in headers:
         return False
     try:
-        return json.loads(raw).get("type") == _PROBE
-    except ValueError, AttributeError:  # silent: not JSON: not a probe
+        body = json.loads(raw)
+    except ValueError:  # silent: not JSON: not a probe
         return False
+    return isinstance(body, Mapping) and body.get("type") == _PROBE
 
 
 class _Signature(BaseModel, frozen=True):

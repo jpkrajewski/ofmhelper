@@ -10,6 +10,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+lazy from pydantic import JsonValue
 
 from ofmhelpers.db.devices.catalog import (
     Family,
@@ -44,7 +45,7 @@ class DeviceFields(BaseModel):
 
     @field_validator("model_id", "color_id", mode="before")
     @classmethod
-    def _blank_is_none(cls, value: object) -> object:
+    def _blank_is_none(cls, value: JsonValue) -> JsonValue:
         return value or None
 
     @model_validator(mode="after")
@@ -232,7 +233,7 @@ class PhoneQuery(BaseModel):
 
     @field_validator("sort", mode="before")
     @classmethod
-    def _blank_sort(cls, value: object) -> object:
+    def _blank_sort(cls, value: JsonValue) -> JsonValue:
         return value or PhoneSort.FOLLOWERS
 
     @property

@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+from typing import Any
+
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -34,7 +36,7 @@ class CookieRepository:
         return next((u for u in user_ids if u in holders), None)
 
     def save(self, user_id: int, cookies: str, file_name: str) -> float:
-        values: dict = {"cookies": cookies, "file_name": file_name}
+        values: dict[str, Any] = {"cookies": cookies, "file_name": file_name}
         with session_scope() as s:
             saved = s.execute(
                 insert(UserCookiesRow)

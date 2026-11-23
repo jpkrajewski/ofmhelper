@@ -140,7 +140,10 @@ def vmaf(copy: Path, ref: Path, work: Path) -> float:
             capture_output=True,
             timeout=_TIMEOUT_S,
         )
-        return round(json.loads(log.read_text())["pooled_metrics"]["vmaf"]["mean"], 2)
+        return round(
+            float(json.loads(log.read_text())["pooled_metrics"]["vmaf"]["mean"]),
+            2,
+        )
     graph += "[d][r]ssim=shortest=1"
     out = subprocess.run(  # noqa: S603
         [

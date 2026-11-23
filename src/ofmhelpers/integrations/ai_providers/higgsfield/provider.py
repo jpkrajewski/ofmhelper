@@ -74,7 +74,7 @@ _SUBMIT_RESENT = frozenset({408, 500, 502, 503, 504})
 _ENDED = (Completed, Failed, NSFW, Cancelled)
 
 
-class _Client(SyncClient):
+class _Client(SyncClient):  # type: ignore[misc]
     @cached_property
     def _submit_transport(self) -> HttpTransport:
         retry = ExponentialBackoffRetry(retryable_status_codes=set(_SUBMIT_RESENT))
@@ -230,7 +230,7 @@ class HiggsfieldProvider(Provider):
     def _upload(self, path: Path, max_bytes: int | None) -> str:
         sent = _sendable(path, max_bytes)
         with _mapped_errors("upload"):
-            url = self.client.upload_file(sent)
+            url: str = self.client.upload_file(sent)
         logger.info("higgsfield upload done: %s -> %s", sent, url)
         return url
 

@@ -16,6 +16,8 @@ from ofmhelpers.integrations.signin.base import (
 from ofmhelpers.integrations.storage.gdrive.client import GOOGLE_TOKEN_URL
 from ofmhelpers.integrations.storage.gdrive.client import SCOPES as DRIVE_SCOPES
 
+__all__ = ["DRIVE_SCOPES"]
+
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = GOOGLE_TOKEN_URL
 ISSUERS = ("https://accounts.google.com", "accounts.google.com")

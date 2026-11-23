@@ -322,8 +322,8 @@ class ShortLinkRepository(CachedRepository):
         self,
         user_id: int,
         provider: str,
-        remotes: list[dict],
-        days: dict[str, list[dict]],
+        remotes: list[dict[str, Any]],
+        days: dict[str, list[dict[str, Any]]],
         accounts: dict[str, int],
         create_ttl_s: float,
     ) -> None:
@@ -341,7 +341,7 @@ class ShortLinkRepository(CachedRepository):
             by_remote = {r.remote_id: r for r in rows if r.remote_id}
             by_address = {(r.domain, r.slug): r for r in rows}
             seen: set[int] = set()
-            kept: list[tuple[ShortLinkRow, list[dict]]] = []
+            kept: list[tuple[ShortLinkRow, list[dict[str, Any]]]] = []
             for remote in remotes:
                 row = by_remote.get(remote["remote_id"]) or by_address.get(
                     (remote["domain"], remote["slug"]),
@@ -395,7 +395,7 @@ class ShortLinkRepository(CachedRepository):
                     )
 
     @staticmethod
-    def _replace_days(s: Session, days_of: dict[int, list[dict]]) -> None:
+    def _replace_days(s: Session, days_of: dict[int, list[dict[str, Any]]]) -> None:
         days_of = {link_id: days for link_id, days in days_of.items() if days}
         if not days_of:
             return

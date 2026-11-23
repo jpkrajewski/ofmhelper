@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, Header, Request
 from fastapi.exceptions import RequestValidationError
@@ -117,7 +117,7 @@ def _stored_body(response: Response, raw: bytes | None) -> JsonValue:
         return _raw_envelope("", response)
     if _is_json(response):
         try:
-            return json.loads(raw)
+            return cast("JsonValue", json.loads(raw))
         except ValueError:
             logger.warning("idempotency: answer is not valid JSON", exc_info=True)
     if len(raw) > RAW_MAX:

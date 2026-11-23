@@ -4,6 +4,7 @@ from urllib.parse import SplitResult, parse_qsl, urlencode, urlsplit
 lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, field_validator
+lazy from pydantic import JsonValue
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links.constants import clone_links_constants
@@ -74,7 +75,7 @@ class SourceLink(BaseModel):
 
     @field_validator("url", mode="before")
     @classmethod
-    def _clean(cls, value: object) -> str:
+    def _clean(cls, value: JsonValue) -> str:
         constants = clone_links_constants()
         text = str(value).strip().rstrip(constants.trailing)
         if "://" not in text:

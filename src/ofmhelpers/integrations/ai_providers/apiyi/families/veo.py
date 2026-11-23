@@ -6,6 +6,7 @@ lazy from pathlib import Path
 from pydantic import BaseModel, Field, JsonValue
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations.ai_providers.apiyi.client import (
     ApiyiClient,
     refused_read,
@@ -20,7 +21,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
 )
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.image_fit import ImageLimits
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)

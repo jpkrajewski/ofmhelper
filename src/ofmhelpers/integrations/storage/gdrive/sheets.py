@@ -27,7 +27,7 @@ def _value(cell: Cell) -> date | str | None:
     text = str(value).strip()
     target = cell.hyperlink.target if cell.hyperlink else None
     if target and not text.startswith(_LINK):
-        return target.strip()
+        return str(target).strip()
     return text or None
 
 

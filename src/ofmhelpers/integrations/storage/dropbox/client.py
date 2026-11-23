@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import UTC
 from functools import lru_cache
 from types import MappingProxyType
+from typing import cast
 from urllib.parse import quote
 lazy from collections.abc import Iterator
 lazy from pathlib import Path
@@ -153,13 +154,13 @@ class DropboxDrive:
     def _path(self, item_id: str) -> str:
         if self._is_root(item_id):
             return ""
-        return self._meta(item_id).path_lower or ""
+        return cast("str", self._meta(item_id).path_lower) or ""
 
     def _parent_id(self, path_lower: str) -> str:
         parent = _parent_path(path_lower)
         if not parent:
             return dropbox_constants().root_alias
-        return self._meta(parent).id
+        return cast("str", self._meta(parent).id)
 
     def _entry(self, meta: FileMetadata | FolderMetadata, parent_id: str) -> DriveFile:
         path_display = meta.path_display or meta.name

@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 
@@ -31,7 +32,7 @@ class ApplicationRepository(CachedRepository):
     cache_namespace = "application"
 
     @invalidates_cache
-    def add(self, fields: dict) -> Application:
+    def add(self, fields: dict[str, Any]) -> Application:
         row = ApplicationRow(id=uuid.uuid4().hex[:8], created_at=time.time(), **fields)
         with session_scope() as s:
             s.add(row)

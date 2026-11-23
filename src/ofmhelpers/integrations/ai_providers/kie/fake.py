@@ -4,6 +4,7 @@ import itertools
 import json
 import threading
 from functools import lru_cache
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 lazy from collections.abc import Mapping
 
@@ -22,7 +23,7 @@ _DENIED = {"code": 401, "msg": "You do not have access permissions"}
 class FakeKie:
     def __init__(self, polls_until_done: int = 2) -> None:
         self.polls_until_done = polls_until_done
-        self.tasks: dict[str, dict] = {}
+        self.tasks: dict[str, dict[str, Any]] = {}
         self.created: list[str] = []
         self._ids = itertools.count(1)
         self._lock = threading.Lock()

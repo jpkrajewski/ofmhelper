@@ -41,7 +41,7 @@ def _error(
     code: int,
     status: str,
     message: str,
-    details: list[dict] | None = None,
+    details: list[dict[str, Any]] | None = None,
 ) -> httpx.Response:
     body = {"error": {"code": code, "message": message, "status": status}}
     if details:

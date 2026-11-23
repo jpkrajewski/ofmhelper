@@ -1,12 +1,13 @@
 # Copyright (C) 2026 jpkrajewski
 
 from contextlib import contextmanager
-lazy from collections.abc import Iterator
+from typing import Any
+lazy from collections.abc import Iterator, Mapping, Sequence
 
 import sqlalchemy
 from sqlalchemy import Engine, event
 from sqlalchemy.orm import Session, sessionmaker
-lazy from sqlalchemy.engine.interfaces import DBAPICursor
+lazy from sqlalchemy.engine.interfaces import DBAPICursor, ExecutionContext
 
 from ofmhelpers import acting
 from ofmhelpers.config import settings
@@ -51,9 +52,9 @@ def _say_who_acts(
     conn: sqlalchemy.Connection,
     cursor: DBAPICursor,
     statement: str,
-    _parameters: object,
-    _context: object,
-    _executemany: object,
+    _parameters: Mapping[str, Any] | Sequence[Any],
+    _context: ExecutionContext,
+    _executemany: bool,  # noqa: FBT001
 ) -> None:
     if conn.info.get(_STAMPED) or not statement.lstrip()[:6].upper().startswith(
         _WRITES,

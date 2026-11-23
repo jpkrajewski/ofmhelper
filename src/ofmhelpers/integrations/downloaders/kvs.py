@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlparse
 
 import requests
@@ -61,7 +62,10 @@ class KvsPage(BaseModel):
         source = max(self.sources, key=lambda s: s.height)
         if not source.url.startswith("function/"):
             return source.url
-        return GenericIE._kvs_get_real_url(source.url, self.license_code)  # noqa: SLF001
+        return cast(
+            "str",
+            GenericIE._kvs_get_real_url(source.url, self.license_code),  # noqa: SLF001
+        )
 
 
 def download(url: str, output_dir: Path | None = None) -> DownloadResult:

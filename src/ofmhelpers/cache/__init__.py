@@ -1,11 +1,9 @@
 # Copyright (C) 2026 jpkrajewski
 
 from ofmhelpers.cache.queue import (
-    JOB_QUEUES,
     JobQueue,
     Line,
     QueueJob,
-    QueueName,
     RunningJob,
     active_job_ids,
     enqueue,
@@ -14,6 +12,7 @@ from ofmhelpers.cache.queue import (
     running_job,
 )
 from ofmhelpers.cache.redis import delete_text, get_redis, get_text, set_text
+from ofmhelpers.config.settings import JOB_QUEUES, QueueName
 
 __all__ = [
     "JOB_QUEUES",

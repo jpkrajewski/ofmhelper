@@ -124,6 +124,7 @@ packages = ["src/ofmhelpers"]
 
 [tool.mypy]
 python_version = "3.15"
+strict = true
 # The code runs only on Linux (Docker, the server); the pre-commit hook may
 # run mypy on a Windows host, where Linux-only modules (fcntl) do not exist.
 platform = "linux"

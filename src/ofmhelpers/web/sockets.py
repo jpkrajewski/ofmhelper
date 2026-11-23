@@ -24,7 +24,7 @@ async def _until_gone(websocket: WebSocket) -> None:
         pass
 
 
-async def _settled(task: asyncio.Task) -> None:
+async def _settled(task: asyncio.Task[None] | asyncio.Task[bool]) -> None:
     try:
         await task
     except asyncio.CancelledError:  # silent: cancelled here, its work is over

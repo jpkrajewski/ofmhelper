@@ -3,6 +3,7 @@
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+lazy from pydantic import JsonValue
 
 
 class _Api(BaseModel):
@@ -85,7 +86,7 @@ class DatasetItem(BaseModel):
 
     @field_validator("error", "url", mode="before")
     @classmethod
-    def _as_text(cls, value: object) -> object:
+    def _as_text(cls, value: JsonValue) -> str | None:
         return value if value is None else str(value)
 
     @property

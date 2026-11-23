@@ -3,6 +3,7 @@
 import itertools
 import threading
 from functools import lru_cache
+from typing import Any
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
@@ -22,7 +23,7 @@ _DENIED = {"detail": "Invalid credentials"}
 class FakeHiggsfield:
     def __init__(self, polls_until_done: int = 2) -> None:
         self.polls_until_done = polls_until_done
-        self.requests: dict[str, dict] = {}
+        self.requests: dict[str, dict[str, Any]] = {}
         self.submitted: list[str] = []
         self.keys: dict[str, str] = {}
         self.lose_next = False

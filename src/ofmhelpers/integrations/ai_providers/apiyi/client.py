@@ -10,6 +10,7 @@ import requests
 from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers import hosting
 from ofmhelpers.integrations.ai_providers.apiyi.models import (
@@ -34,7 +35,7 @@ from ofmhelpers.integrations.ai_providers.uploads import (
     upload_cache_key,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.image_fit import ImageLimits, fitted
+from ofmhelpers.media.image_fit import fitted
 
 logger = get_logger(__name__)
 

@@ -3,6 +3,7 @@
 import importlib.util
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -65,7 +66,7 @@ def descriptors(images: list[Image.Image]) -> np.ndarray:
             batch = torch.from_numpy(_batch(images[start : start + _BATCH]))
             out.append(model(batch).numpy())
     found = np.concatenate(out)
-    return found / np.linalg.norm(found, axis=1, keepdims=True)
+    return cast("np.ndarray", found / np.linalg.norm(found, axis=1, keepdims=True))
 
 
 @lru_cache(maxsize=32)

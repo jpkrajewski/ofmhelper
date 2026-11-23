@@ -24,7 +24,7 @@ class DuplicateError(ValueError): ...
 
 
 @contextmanager
-def _writing(fields: dict) -> Iterator[None]:
+def _writing(fields: dict[str, Any]) -> Iterator[None]:
     try:
         yield
     except IntegrityError as exc:
@@ -208,7 +208,7 @@ class DeviceRepository(CachedRepository):
             return row.user_id if row else None
 
     @invalidates_cache
-    def add_device(self, fields: dict, user_id: int) -> int:
+    def add_device(self, fields: dict[str, Any], user_id: int) -> int:
         with _writing(fields), session_scope() as s:
             row = DeviceRow(**fields, user_id=user_id)
             s.add(row)
@@ -219,7 +219,7 @@ class DeviceRepository(CachedRepository):
     def update_device(
         self,
         device_id: int,
-        fields: dict,
+        fields: dict[str, Any],
         owner: int | None = None,
     ) -> bool:
         with _writing(fields), session_scope() as s:
@@ -265,7 +265,7 @@ class DeviceRepository(CachedRepository):
     def add_login(
         self,
         device_id: int,
-        fields: dict,
+        fields: dict[str, Any],
         owner: int | None = None,
     ) -> AddedLogin | None:
         with _writing(fields), session_scope() as s:
@@ -397,7 +397,7 @@ class DeviceRepository(CachedRepository):
     def update_login(
         self,
         login_id: int,
-        fields: dict,
+        fields: dict[str, Any],
         owner: int | None = None,
     ) -> bool:
         with _writing(fields), session_scope() as s:

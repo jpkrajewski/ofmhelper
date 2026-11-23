@@ -7,7 +7,7 @@ lazy import random
 
 from pydantic import BaseModel
 
-from ofmhelpers.media.recorder.models import Place
+from ofmhelpers.config.types import Place
 from ofmhelpers.media.repurpose.values import Value, even
 from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.repurpose.probe import Source

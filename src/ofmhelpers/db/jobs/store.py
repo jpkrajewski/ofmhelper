@@ -55,7 +55,11 @@ def _user_ids(actors: Readers) -> list[int] | None:
     return sorted({int(a) for a in named if a.isdecimal()})
 
 
-def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
+def create_job(
+    task_name: str,
+    params: dict[str, Any],
+    actor: str | None = None,
+) -> str:
     user_id = agency_id() if actor is None else _user_id(actor)
     job_id = _repository().create(task_name, params, user_id=user_id, status="running")
     logger.info("job %s created: %s", job_id, task_name)
@@ -65,7 +69,7 @@ def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
 def log_event(
     task_name: str,
     actor: str | None,
-    params: dict | None = None,
+    params: dict[str, Any] | None = None,
     at: float | None = None,
 ) -> str:
     return _repository().create(
@@ -89,7 +93,7 @@ def register_runner(runner: Runner) -> None:
     _runners()[:] = [runner]
 
 
-def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     runners = _runners()
     if not runners:
         msg = "no job runner registered: import ofmhelpers.features.jobs.runner"

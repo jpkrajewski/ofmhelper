@@ -12,6 +12,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations.llm.base import LLMProvider
 from ofmhelpers.integrations.llm.errors import (
     LLMAuthError,
@@ -30,7 +31,7 @@ from ofmhelpers.integrations.llm.models import (
     TextPart,
     Usage,
 )
-from ofmhelpers.media.image_fit import ImageLimits, fitted
+from ofmhelpers.media.image_fit import fitted
 lazy from ofmhelpers.integrations.llm.models import Prompt
 
 _AUTH = (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)

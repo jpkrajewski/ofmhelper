@@ -85,7 +85,7 @@ def refused(exc: BaseException) -> bool:
     )
 
 
-def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     header = store.task_of(job_id)
     if header is None:
         logger.warning("job %s no longer exists: not run", job_id)
@@ -159,9 +159,9 @@ def _actor_deactivated(actor: str | None) -> bool:
 
 def start_job(  # noqa: PLR0913
     task: str,
-    params: dict,
+    params: dict[str, Any],
     run: Callable[..., Any],
-    kwargs: dict,
+    kwargs: dict[str, Any],
     *,
     actor: str | None,
     queue: QueueName | None = None,
@@ -211,7 +211,7 @@ def _job_acting(job_id: str, task: str, actor: str | None) -> Acting:
     )
 
 
-def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     running = running_job()
     queue = running.queue if running else QueueName.DEFAULT
     timeout = running.timeout if running else None

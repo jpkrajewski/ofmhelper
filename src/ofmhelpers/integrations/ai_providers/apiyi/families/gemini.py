@@ -5,11 +5,11 @@ from typing import Any
 from pydantic import Field
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations.ai_providers.apiyi.families.sync import Made, SyncImages
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER, Text
 from ofmhelpers.integrations.ai_providers.errors import ProviderGenerationError
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
-from ofmhelpers.media.image_fit import ImageLimits
 lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 

@@ -2,7 +2,7 @@
 
 import json
 from functools import cache, wraps
-from typing import Protocol, TypeVar, get_type_hints
+from typing import Protocol, TypeVar, cast, get_type_hints
 lazy from collections.abc import Callable, Sequence
 
 from pydantic import TypeAdapter, ValidationError
@@ -79,7 +79,7 @@ class RepositoryCache:
             )
             return loader()
         if cached is not None:
-            return json.loads(cached)
+            return cast("T", json.loads(cached))
         value = loader()
         try:
             self._redis.set(key, json.dumps(value), ex=self._ttl_s)
@@ -123,7 +123,7 @@ def cached[T](method: Callable[..., T]) -> Callable[..., T]:
             lambda: returned.dump_python(method(self, *args, **kwargs), mode="json"),
         )
         try:
-            return returned.validate_python(stored)
+            return cast("T", returned.validate_python(stored))
         except ValidationError:
             logger.warning(
                 "cache %s: stored %s does not fit its model, read from the database",

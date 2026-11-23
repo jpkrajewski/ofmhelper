@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 from decimal import Decimal
+from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
@@ -27,7 +28,7 @@ def _usd(amount: float) -> Decimal:
     return Decimal(str(amount)).quantize(_CENT_PARTS)
 
 
-def _clone_estimate(params: dict) -> float | None:
+def _clone_estimate(params: dict[str, Any]) -> float | None:
     try:
         run = _PricedRun.model_validate(params)
     except ValidationError:  # silent: not a priced clone run
@@ -42,7 +43,7 @@ def _clone_estimate(params: dict) -> float | None:
         return None
 
 
-def cost_of(params: dict, generations: list[GenerationRecord]) -> JobCost:
+def cost_of(params: dict[str, Any], generations: list[GenerationRecord]) -> JobCost:
     reported = [g.cost_usd for g in generations if g.cost_usd is not None]
     if reported:
         return JobCost(usd=_usd(sum(reported)))

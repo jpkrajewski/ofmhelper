@@ -4,12 +4,13 @@ from types import MappingProxyType
 
 from pydantic import BaseModel
 
-from ofmhelpers.config import WebSettings, settings
+from ofmhelpers.config import settings
 from ofmhelpers.features.clone_pricing.targets import (
     CloneTarget,
     PriceRate,
     clone_targets,
 )
+lazy from ofmhelpers.config.settings import WebSettings
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 

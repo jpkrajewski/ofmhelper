@@ -7,6 +7,7 @@ import threading
 import zipfile
 from functools import lru_cache
 from http import HTTPStatus
+from typing import cast
 lazy from pathlib import Path
 
 import logfire
@@ -66,6 +67,7 @@ logger = get_logger(__name__)
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
 SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/drive",)
+_CacheKey = tuple[str, float | None, int | None, int]
 _FILE_FIELDS = "id, name, mimeType, webViewLink, hasThumbnail, createdTime, size"
 _THUMB_SIZE = re.compile(r"=s\d+$")
 _THUMB_TIMEOUT_S = 20
@@ -77,9 +79,12 @@ _PARENTS_PER_QUERY = 40
 @lru_cache(maxsize=1)
 def _credentials(key_json: str) -> service_account.Credentials:
     try:
-        return service_account.Credentials.from_service_account_info(
-            json.loads(key_json),
-            scopes=SCOPES,
+        return cast(
+            "service_account.Credentials",
+            service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call]
+                json.loads(key_json),
+                scopes=SCOPES,
+            ),
         )
     except (ValueError, KeyError, GoogleAuthError) as exc:
         msg = "OFM_GDRIVE_SERVICE_ACCOUNT is not a service account key (JSON)"
@@ -91,12 +96,15 @@ def drive_credentials(refresh_token: str) -> Credentials:
     if not s.google_configured or s.google_client_secret is None:
         msg = "Google Drive sign in is not set up"
         raise DriveNotSetUpError(msg)
-    return OAuthCredentials(
-        token=None,
-        refresh_token=refresh_token,
-        token_uri=GOOGLE_TOKEN_URL,
-        client_id=s.google_client_id,
-        client_secret=s.google_client_secret.get_secret_value(),
+    return cast(
+        "Credentials",
+        OAuthCredentials(  # type: ignore[no-untyped-call]
+            token=None,
+            refresh_token=refresh_token,
+            token_uri=GOOGLE_TOKEN_URL,
+            client_id=s.google_client_id,
+            client_secret=s.google_client_secret.get_secret_value(),
+        ),
     )
 
 
@@ -112,7 +120,7 @@ def service_account_email() -> str | None:
     if settings.infra.fake_externals:
         return FAKE_BOT_EMAIL
     try:
-        return _credentials(_key()).service_account_email
+        return cast("str", _credentials(_key()).service_account_email)
     except DriveError:
         logger.warning("drive: service account not usable", exc_info=True)
         return None
@@ -395,7 +403,7 @@ class Drive:
             return None
         url = _THUMB_SIZE.sub(f"=s{px}", item.thumbnail_link)
         try:
-            response = AuthorizedSession(self._credentials).get(
+            response = AuthorizedSession(self._credentials).get(  # type: ignore[no-untyped-call]
                 url,
                 timeout=_THUMB_TIMEOUT_S,
             )
@@ -417,7 +425,7 @@ class Drive:
         item = self.file(file_id)
         url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
         try:
-            response = AuthorizedSession(self._credentials).get(
+            response = AuthorizedSession(self._credentials).get(  # type: ignore[no-untyped-call]
                 url,
                 params={"alt": "media", "supportsAllDrives": "true"},
                 timeout=_DOWNLOAD_TIMEOUT_S,
@@ -484,8 +492,8 @@ class Drive:
 
 class _PerThread(threading.local):
     def __init__(self) -> None:
-        self.drives: dict[tuple, StorageClient] = {}
-        self.people: dict[tuple, Drive] = {}
+        self.drives: dict[_CacheKey, StorageClient] = {}
+        self.people: dict[_CacheKey, Drive] = {}
 
 
 _THREAD = _PerThread()
@@ -501,7 +509,7 @@ def connect(*, interactive: bool = False) -> StorageClient:
         if interactive
         else (None, None)
     )
-    cache_key: tuple = (key, timeout_s, retries, s.retries)
+    cache_key: _CacheKey = (key, timeout_s, retries, s.retries)
     drives = _THREAD.drives
     if cache_key not in drives:
         drives[cache_key] = Drive(

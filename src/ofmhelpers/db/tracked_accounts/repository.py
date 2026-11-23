@@ -166,7 +166,12 @@ def _post_views(s: Session, account_id: int | None) -> list[_AccountPostViews]:
     ]
 
 
-def _upsert_posts(s: Session, account_id: int, posts: list[dict], now: float) -> None:
+def _upsert_posts(
+    s: Session,
+    account_id: int,
+    posts: list[dict[str, Any]],
+    now: float,
+) -> None:
     if not posts:
         return
     rows = [
@@ -282,7 +287,7 @@ _ACCOUNTS = select(TrackedAccountRow, CreatorRow.name).outerjoin(
 
 def _with_baselines(
     s: Session,
-    rows: Sequence[Row],
+    rows: Sequence[Row[Any]],
     periods_days: list[int],
     account_id: int | None,
 ) -> list[TrackedAccount]:
@@ -546,7 +551,7 @@ class TrackedAccountRepository(CachedRepository):
         account_id: int,
         profile: dict[str, Any] | None,
         metrics: dict[str, Any] | None,
-        posts: list[dict],
+        posts: list[dict[str, Any]],
         reach: float | None,
         retention_days: int,
         error: str | None,

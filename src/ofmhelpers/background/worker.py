@@ -7,6 +7,9 @@ import os
 import signal
 import sys
 from multiprocessing.connection import wait
+lazy from collections.abc import Sequence
+lazy from multiprocessing.process import BaseProcess
+lazy from types import FrameType
 
 import logfire
 from rq import Worker
@@ -117,7 +120,7 @@ class QueueGroup:
             pool.start()
         asked = False
 
-        def stop(signum: int, _frame: object) -> None:
+        def stop(signum: int, _frame: FrameType | None) -> None:
             nonlocal asked
             asked = True
             _signal_all(pools, signum)
@@ -133,7 +136,7 @@ class QueueGroup:
         sys.exit(0 if asked else 1)
 
 
-def _signal_all(pools: list, signum: int) -> None:
+def _signal_all(pools: Sequence[BaseProcess], signum: int) -> None:
     for pool in pools:
         if pool.pid is not None and pool.is_alive():
             os.kill(pool.pid, signum)

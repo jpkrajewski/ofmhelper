@@ -12,8 +12,8 @@ from pydantic import Field, JsonValue, PrivateAttr, model_validator
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import Created
 from ofmhelpers.features.jobs.gallery import GalleryAsk, gallery_jobs, hidden_jobs
+from ofmhelpers.monitoring.telemetry import LoggedFields
 from ofmhelpers.web.access import Action, allowed
-from ofmhelpers.web.forms import LoggedFields
 from ofmhelpers.web.time_zones import time_zone
 lazy from ofmhelpers.db.jobs.schema import GalleryJobs
 lazy from ofmhelpers.db.users.schema import Viewer

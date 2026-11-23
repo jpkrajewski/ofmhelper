@@ -78,9 +78,10 @@ def utc(ts: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
 
 
 def _viewer_of(request: Request) -> Viewer | None:
-    if "viewer" in request.state:
-        return request.state["viewer"]
-    return None
+    if "viewer" not in request.state:
+        return None
+    viewer = request.state["viewer"]
+    return viewer if isinstance(viewer, Viewer) else None
 
 
 def csp_nonce(request: Request) -> str:
