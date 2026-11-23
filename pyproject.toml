@@ -209,10 +209,6 @@ ignore-variadic-names = true
 "tests/e2e/test_notifications_menu.py" = ["E501"]
 "src/ofmhelpers/web/dependencies.py" = ["TC001", "TC002"]
 "src/ofmhelpers/web/forms.py" = ["TC001", "TC002"]
-# Lazy singletons that rebuild when the configured URL changes -- `global`
-# is inherent to the pattern.
-"src/ofmhelpers/cache/redis.py" = ["PLW0603"]
-"src/ofmhelpers/db/session.py" = ["PLW0603"]
 # Same: a once-per-process "already configured" flag.
 "src/ofmhelpers/log.py" = ["PLW0603"]
 # `lifespan(app)` is Starlette's required signature.

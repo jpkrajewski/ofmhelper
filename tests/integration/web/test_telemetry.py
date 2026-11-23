@@ -166,13 +166,15 @@ def test_a_query_is_a_span_but_a_pool_checkout_is_not(capfire: CaptureLogfire):
 def test_the_apps_own_engine_traces_its_queries(capfire: CaptureLogfire, monkeypatch):
     telemetry.logfire.instrument_sqlalchemy()
     telemetry._drop_connect_spans()
-    monkeypatch.setattr(session, "_engine", None)
+    url = sqlalchemy.make_url(settings.infra.database_url).update_query_dict(
+        {"application_name": "telemetry-test"},
+    )
+    monkeypatch.setenv("OFM_DATABASE_URL", url.render_as_string(hide_password=False))
     try:
         with session.session_scope() as s:
             s.execute(sqlalchemy.text("SELECT 42"))
     finally:
         session.get_engine().dispose()
-        monkeypatch.setattr(session, "_engine", None)
         SQLAlchemyInstrumentor().uninstrument()
 
     names = [s["name"] for s in _spans(capfire)]
