@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 from contextlib import contextmanager
 from types import MappingProxyType

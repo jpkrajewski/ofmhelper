@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import re
 import textwrap
@@ -7,7 +9,7 @@ from guards.event import Guard, HookEvent, Verdict, deny
 
 NAME = "no_getattr"
 BANNED = frozenset(
-    {"getattr", "attrgetter", "__getattribute__", "getattr_static", "vars", "__dict__"}
+    {"getattr", "attrgetter", "__getattribute__", "getattr_static", "vars", "__dict__"},
 )
 REFUSED = (
     "getattr, vars() and __dict__ are banned in the repo (owner 2026-11-22: you and "
@@ -15,7 +17,8 @@ REFUSED = (
     "attrgetter / __getattribute__ / getattr_static / vars / __dict__ into {path}. "
     "Read the typed field, validate the object with from_attributes=True, iterate the "
     "model, or key a read-only mapping by the name (pydantic skill). Checked again by "
-    "scripts/check_no_getattr.py (pre-commit) and tests/unit/architecture/test_no_getattr.py."
+    "scripts/check_no_getattr.py (pre-commit) and "
+    "tests/unit/architecture/test_no_getattr.py."
 )
 
 

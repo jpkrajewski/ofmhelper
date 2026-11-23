@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import time
 from urllib.parse import urlsplit
@@ -59,10 +61,10 @@ def _profile(profile: FakeXProfile) -> Answer:
             "core": {"screen_name": profile.username, "name": profile.name},
             "relationship_counts": {"followers": profile.followers, "following": 12},
             "avatar": {"image_url": f"{CDN}/avatar_normal.jpg"},
-        }
+        },
     )
     return Answer.model_validate(
-        {"data": {"user_result_by_screen_name": {"result": user}}}
+        {"data": {"user_result_by_screen_name": {"result": user}}},
     )
 
 
@@ -76,24 +78,24 @@ def _timeline(profile: FakeXProfile) -> Answer:
                             "rest_id": _post_id(p.age_h),
                             "views": {"count": str(p.views)},
                             "media_entities2": [
-                                {"media_url_https": f"{CDN}/media/{i}.jpg"}
+                                {"media_url_https": f"{CDN}/media/{i}.jpg"},
                             ],
-                        }
-                    }
-                }
-            }
+                        },
+                    },
+                },
+            },
         }
         for i, p in enumerate(profile.posts)
     ]
     user = UserResult.model_validate(
         {
             "profile_user_originals_timeline": {
-                "timeline": {"instructions": [{"entries": entries}]}
-            }
-        }
+                "timeline": {"instructions": [{"entries": entries}]},
+            },
+        },
     )
     return Answer.model_validate(
-        {"data": {"user_result_by_screen_name": {"result": user}}}
+        {"data": {"user_result_by_screen_name": {"result": user}}},
     )
 
 
@@ -108,7 +110,8 @@ def page(profile: FakeXProfile) -> str:
 
 
 def _handler(
-    request: requests.PreparedRequest, _proxies: Mapping[str, str]
+    request: requests.PreparedRequest,
+    _proxies: Mapping[str, str],
 ) -> FakeReply:
     name = urlsplit(request.url or "").path.strip("/").lower()
     found = next((p for p in PROFILES if p.username == name), None)

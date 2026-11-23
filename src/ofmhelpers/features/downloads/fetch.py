@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,7 +58,7 @@ def fetch(
         before |= {r.url: r for r in _already_here(job.user_id or user_id, missing)}
     wanted = [url for url in missing if not _on_disk(before.get(url))]
     fetched = iter(
-        download_all(wanted, cookies=login_cookies.for_user(user_id)) if wanted else []
+        download_all(wanted, cookies=login_cookies.for_user(user_id)) if wanted else [],
     )
     results: list[DownloadResult] = []
     for url in urls:
@@ -67,7 +69,10 @@ def fetch(
         new = next(fetched)
         if not new.success and old is not None:
             logger.warning(
-                "download job %s: %s not fetched again: %s", job_id, url, new.error
+                "download job %s: %s not fetched again: %s",
+                job_id,
+                url,
+                new.error,
             )
             results.append(old.model_copy(update={"again_error": new.error}))
         else:
@@ -77,7 +82,10 @@ def fetch(
 
 
 def _keep(
-    job: Job | None, results: list[DownloadResult], assets_root: Path, fetched: set[str]
+    job: Job | None,
+    results: list[DownloadResult],
+    assets_root: Path,
+    fetched: set[str],
 ) -> None:
     files = []
     position = 0
@@ -91,7 +99,7 @@ def _keep(
                         position=position,
                         file_path=str(path),
                         asset_path=None if asset is None else str(asset),
-                    )
+                    ),
                 )
                 if job is not None and result.url in fetched:
                     _drop_previews(job.id, position, path)

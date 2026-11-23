@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlencode
@@ -25,7 +27,10 @@ class SendTarget(StrEnum):
 
 
 def _kept_videos(
-    paths: list[str | None], assets_root: Path, *, one_only: bool
+    paths: list[str | None],
+    assets_root: Path,
+    *,
+    one_only: bool,
 ) -> list[str]:
     videos: list[str] = []
     for path in paths:
@@ -65,5 +70,5 @@ def send(
         msg = "This run has no video"
         raise RefusedError(msg)
     return Redirect(
-        redirect=chosen.page + "?" + urlencode([("video", v) for v in videos])
+        redirect=chosen.page + "?" + urlencode([("video", v) for v in videos]),
     )

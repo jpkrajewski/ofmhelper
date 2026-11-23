@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -113,7 +115,10 @@ EmployerStorage = Annotated[StorageService, Depends(_employer_storage)]
 
 
 def _downloads(
-    actor: Actor, owner_id: OwnerId, assets_root: AssetsRoot, storage: EmployerStorage
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
+    storage: EmployerStorage,
 ) -> DownloadService:
     return DownloadService.compose(actor, owner_id, assets_root, storage)
 

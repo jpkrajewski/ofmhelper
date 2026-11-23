@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 import time
 lazy from pathlib import Path
@@ -149,7 +151,9 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(clock):
 def test_a_deadline_already_passed_sends_nothing(clock):
     with pytest.raises(LLMUnavailableError, match="Gemini took too long"):
         get_llm(LLMUse.VIDEO).answered(
-            Prompt.of(["Check"]), Verdict, deadline=clock.monotonic() - 1
+            Prompt.of(["Check"]),
+            Verdict,
+            deadline=clock.monotonic() - 1,
         )
     assert fake_gemini().requests == []
 
@@ -249,6 +253,7 @@ def test_media_a_provider_does_not_read_is_refused_before_sending(waits, media):
 
     with pytest.raises(LLMInputError, match="Gemini does not read image, video"):
         TextOnly(FAKE_KEY, "gemini-3.8-flash").ask(
-            Prompt.of(["Check", *media]), Verdict
+            Prompt.of(["Check", *media]),
+            Verdict,
         )
     assert fake_gemini().requests == []

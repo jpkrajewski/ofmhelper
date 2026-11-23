@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -48,7 +50,7 @@ def _task_id(
             model=spec.key,
             task_id=task_id,
             api_key=provider.api_key,
-        )
+        ),
     )
     logger.info("job %s submitted %s task %s", job_id, spec.key, task_id)
     return task_id
@@ -83,7 +85,12 @@ def wait(provider: Provider, task_id: str, kind: OutputKind) -> TaskState:
 
 
 def _result_path(
-    task_id: str, provider: str, url: str, index: int, count: int, kind: OutputKind
+    task_id: str,
+    provider: str,
+    url: str,
+    index: int,
+    count: int,
+    kind: OutputKind,
 ) -> Path:
     ext = Path(urlparse(url).path).suffix.lstrip(".") or _DEFAULT_EXT[kind]
     suffix = f"_{index}" if count > 1 else ""
@@ -132,7 +139,7 @@ def generate(
             tasks.forget_part(job_id, part)
             time.sleep(waits[sent - 1])
         span.set_attributes(
-            {"state": state.state, "results": len(state.urls), "sent": sent}
+            {"state": state.state, "results": len(state.urls), "sent": sent},
         )
         if state.cost_usd is not None:
             span.set_attribute("cost_usd", state.cost_usd)

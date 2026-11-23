@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from pathlib import Path
 
@@ -121,8 +123,8 @@ def plugin_provider(tmp_path, monkeypatch):
                         "required": ["prompt"],
                         "properties": {"prompt": {"type": "string"}},
                     },
-                }
-            ]
+                },
+            ],
         ),
         encoding="utf-8",
     )

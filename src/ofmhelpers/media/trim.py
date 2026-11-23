@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import uuid
 lazy from pathlib import Path
 
@@ -74,7 +76,7 @@ def cut(
                     picture,
                     f"setpts=PTS/{speed:g}" if faster else None,
                     scaled_to(short_side),
-                ]
+                ],
             ),
             *(["-af", f"atempo={speed:g}"] if faster else []),
             "-c:v",
@@ -273,7 +275,7 @@ def part(
                     f"setpts=PTS/{speed:g}" if faster else None,
                     fit,
                     f"fps={fps:g}",
-                ]
+                ],
             ),
             *(["-af", f"atempo={speed:g}"] if faster and sound else []),
             "-c:v",

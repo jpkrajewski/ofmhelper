@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import random
@@ -103,7 +105,16 @@ def test_variants_are_named_capped_and_distinct(tmp_path):
     src = _write_clip(tmp_path / "src.mp4")
 
     outputs = generate_variants(
-        src, tmp_path, "clip", 3, Strength.HARD, 0, 0.1, MetadataMode.STRIP, 60, seed=7
+        src,
+        tmp_path,
+        "clip",
+        3,
+        Strength.HARD,
+        0,
+        0.1,
+        MetadataMode.STRIP,
+        60,
+        seed=7,
     )
 
     assert [p.name for p in outputs] == ["clip_001.mp4", "clip_002.mp4", "clip_003.mp4"]
@@ -120,7 +131,15 @@ def test_device_metadata_writes_a_recent_creation_time(tmp_path):
     src = _write_clip(tmp_path / "src.mp4", 320, 240)
 
     [out] = generate_variants(
-        src, tmp_path, "clip", 1, Strength.MINIMAL, 0, 0, MetadataMode.DEVICE, 60
+        src,
+        tmp_path,
+        "clip",
+        1,
+        Strength.MINIMAL,
+        0,
+        0,
+        MetadataMode.DEVICE,
+        60,
     )
 
     tags = _probe(out)["format"]["tags"]
@@ -156,7 +175,8 @@ def test_run_end_to_end_serves_every_copy(client, tmp_path, monkeypatch):
 
 def test_run_rejects_a_non_video(client):
     r = client.post(
-        "/uniqify/run", files={"file": ("page.html", b"<script>", "text/html")}
+        "/uniqify/run",
+        files={"file": ("page.html", b"<script>", "text/html")},
     )
     assert r.status_code == 400
 

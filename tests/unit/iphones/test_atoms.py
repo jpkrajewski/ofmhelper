@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 
 from ofmhelpers.media.recorder import atoms, load_profile
@@ -30,7 +32,13 @@ def _body(atom) -> str:
 
 def _recording(**kw) -> Recording:
     end = datetime.datetime(
-        2026, 9, 15, 14, 43, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=-3))
+        2026,
+        9,
+        15,
+        14,
+        43,
+        30,
+        tzinfo=datetime.timezone(datetime.timedelta(hours=-3)),
     )
     return Recording(end=end, duration_s=11.0, **kw)
 

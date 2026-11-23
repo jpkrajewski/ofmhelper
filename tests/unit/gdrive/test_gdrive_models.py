@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.db.drive_folders.schema import (
@@ -33,7 +35,7 @@ def test_a_listing_gives_each_folder_its_items_and_none_for_one_not_listed():
         folders=[
             FolderItems(folder_id="a", items=[clip]),
             FolderItems(folder_id="b"),
-        ]
+        ],
     )
 
     assert listing.of("a") == [clip]

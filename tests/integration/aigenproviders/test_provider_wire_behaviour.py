@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 lazy from collections.abc import Iterator
 
@@ -99,7 +101,8 @@ def test_kie_rejected_input_tells_kies_reason_and_is_not_remembered(kie):
     kie.post(_jobs("createTask"), json=_body("kie/create_rejected"))
 
     with pytest.raises(
-        ProviderInputError, match=r"kie\.ai: prompt is required \(code 422\)"
+        ProviderInputError,
+        match=r"kie\.ai: prompt is required \(code 422\)",
     ):
         generate(KieProvider("key"), KIE_SPEC, {"prompt": "x"}, "job-1")
     assert tasks.recall("job-1") is None
@@ -127,7 +130,10 @@ def test_kie_wrong_key_says_so(kie):
     ids=["5xx", "timeout", "maintenance", "unreadable"],
 )
 def test_kie_create_failing_is_unavailable_and_never_resent(
-    kie, slept, answer, message
+    kie,
+    slept,
+    answer,
+    message,
 ):
     kie.post(_jobs("createTask"), **answer)
 
@@ -196,7 +202,7 @@ def test_kie_rate_limit_that_persists_fails_after_the_last_wait(kie, slept):
                     "state": "success",
                     "resultJson": "{not json",
                 },
-            }
+            },
         },
     ],
     ids=["not-json", "no-code", "unreadable-result"],
@@ -267,7 +273,8 @@ def test_kie_failed_generation_tells_the_reason(kie):
 
     with pytest.raises(
         ProviderGenerationError,
-        match="kie.ai failed this generation: .*Content moderation: the prompt was rejected",
+        match="kie.ai failed this generation: .*Content "
+        "moderation: the prompt was rejected",
     ):
         generate(KieProvider("key"), KIE_SPEC, {"prompt": "x"}, "job-1")
     assert tasks.recall("job-1") is None
@@ -343,7 +350,10 @@ def test_higgsfield_three_pending_polls_then_done_saves_the_result_and_pays_once
     with responses.RequestsMock() as rsps:
         rsps.get(HF_RESULT, body=PNG)
         (path,) = generate(
-            HiggsfieldProvider("id:secret"), HF_SPEC, {"prompt": "a"}, "job-1"
+            HiggsfieldProvider("id:secret"),
+            HF_SPEC,
+            {"prompt": "a"},
+            "job-1",
         )
 
     assert path.read_bytes() == PNG
@@ -369,7 +379,10 @@ def test_higgsfield_three_pending_polls_then_done_saves_the_result_and_pays_once
     ids=["401", "422", "timeout"],
 )
 def test_higgsfield_submit_failing_tells_why_and_remembers_nothing(
-    hf, reply, error, message
+    hf,
+    reply,
+    error,
+    message,
 ):
     hf.queue("POST", SUBMIT, reply)
     with pytest.raises(error, match=message):
@@ -389,7 +402,10 @@ def test_higgsfield_failing_polls_are_retried_until_done(hf):
     with responses.RequestsMock() as rsps:
         rsps.get(HF_RESULT, body=PNG)
         (path,) = generate(
-            HiggsfieldProvider("id:secret"), HF_SPEC, {"prompt": "a"}, "job-1"
+            HiggsfieldProvider("id:secret"),
+            HF_SPEC,
+            {"prompt": "a"},
+            "job-1",
         )
     assert path.read_bytes() == PNG
     assert hf.count("POST", SUBMIT) == 1
@@ -403,7 +419,8 @@ def test_higgsfield_failed_generation_tells_the_reason(hf):
 
 
 def test_higgsfield_rerun_after_a_poll_timeout_resumes_and_never_pays_again(
-    hf, monkeypatch
+    hf,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_AIGEN_POLL_TIMEOUT_S", "0")
     hf.queue("POST", SUBMIT, (200, _body("higgsfield/submit_queued")))

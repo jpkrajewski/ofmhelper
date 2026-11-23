@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -15,7 +17,9 @@ from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/account", tags=["account"], dependencies=[Access(Area.ACCOUNT)]
+    prefix="/account",
+    tags=["account"],
+    dependencies=[Access(Area.ACCOUNT)],
 )
 
 
@@ -26,7 +30,10 @@ def _chats(me: SessionUser) -> bool:
 def _page(request: Request, me: SessionUser, notice: Notice) -> Response:
     view = service.page_view(me.id, notice, chats=_chats(me))
     response = render(
-        request, "account.html", dict(iter(view)), status_code=notice.status_code
+        request,
+        "account.html",
+        dict(iter(view)),
+        status_code=notice.status_code,
     )
     response.headers.update(NO_STORE)
     return response
@@ -50,7 +57,9 @@ def dropbox_connect(me: CurrentUser) -> Response:
 
 @router.get("/dropbox/callback")
 def dropbox_callback(
-    me: CurrentUser, code: str | None = None, state: str | None = None
+    me: CurrentUser,
+    code: str | None = None,
+    state: str | None = None,
 ) -> Response:
     connected = bool(code and state) and finish(me.id, code or "", state or "")
     return see_other("/drive" if connected else "/account?dropbox=failed")
@@ -81,7 +90,9 @@ async def _keys_form(request: Request) -> ApiKeysForm:
 
 @router.post("/keys", dependencies=[Can(Action.SAVE_KEYS)])
 def save_keys(
-    request: Request, me: CurrentUser, form: Annotated[ApiKeysForm, Depends(_keys_form)]
+    request: Request,
+    me: CurrentUser,
+    form: Annotated[ApiKeysForm, Depends(_keys_form)],
 ) -> Response:
     return _page(request, me, service.save_keys(me.id, form, chats=_chats(me)))
 

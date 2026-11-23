@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 import uuid
@@ -50,7 +52,8 @@ def _open(va: Session, clip: Path) -> None:
     va.page.locator(".file-picker .file-add-input").set_input_files(str(clip))
     va.page.wait_for_url(re.compile(r"/edit\?video="))
     va.page.wait_for_function(
-        "() => document.getElementById('edit-player').currentSrc.includes('/edit/proxy')"
+        "() => "
+        "document.getElementById('edit-player').currentSrc.includes('/edit/proxy')"
         " && document.getElementById('edit-player').readyState >= 2",
         timeout=JOB_TIMEOUT_MS,
     )
@@ -89,7 +92,8 @@ def test_each_frame_step_moves_the_marker_by_one_frame(va: Session, clip: Path):
 
 
 def test_the_crop_box_and_the_turn_change_the_size_it_comes_out_at(
-    va: Session, clip: Path
+    va: Session,
+    clip: Path,
 ):
     _open(va, clip)
     size = va.page.locator("#edit-size")
@@ -137,7 +141,8 @@ def test_playing_at_2x_goes_on_when_the_light_copy_comes_in(va: Session, app_dir
 
     held["copy"] = False
     va.page.wait_for_function(
-        f"() => {player}.currentSrc.includes('/edit/proxy') && {player}.readyState >= 2",
+        f"() => {player}.currentSrc.includes('/edit/proxy') "
+        f"&& {player}.readyState >= 2",
         timeout=JOB_TIMEOUT_MS,
     )
     swapped = va.page.evaluate(f"{player}.currentTime")
@@ -181,7 +186,9 @@ def _labels(va: Session) -> list[str]:
 
 
 def test_the_timeline_is_the_result_delete_undo_add_and_cut(
-    va: Session, clip: Path, tmp_path: Path
+    va: Session,
+    clip: Path,
+    tmp_path: Path,
 ):
     _open(va, clip)
     page_url = va.page.url

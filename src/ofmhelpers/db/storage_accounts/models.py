@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.db.users.schema import StorageProvider

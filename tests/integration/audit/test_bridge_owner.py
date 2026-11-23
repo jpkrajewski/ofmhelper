@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user
@@ -31,7 +33,7 @@ def _link(user_id: int, slug: str, destination: str) -> int:
                 target="onlyfans",
                 account_id=None,
                 creator="",
-            )
+            ),
         ],
     )
     provider = link_keys.client(user_id, "self")
@@ -56,9 +58,9 @@ def _views(link_id: int) -> int:
                     select(SelfLinkClickRow).where(
                         SelfLinkClickRow.link_id == link_id,
                         SelfLinkClickRow.kind == "view",
-                    )
-                ).scalars()
-            )
+                    ),
+                ).scalars(),
+            ),
         )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import shutil
 from pathlib import Path
@@ -74,7 +76,11 @@ def add(job_id: str, title: str) -> CloneExample:
     folder.mkdir(parents=True, exist_ok=True)
     video = folder / _FILES[ExamplePart.VIDEO]
     side_by_side(
-        source, result, video, height=COMPARE_HEIGHT, timeout_s=COMPARE_TIMEOUT_S
+        source,
+        result,
+        video,
+        height=COMPARE_HEIGHT,
+        timeout_s=COMPARE_TIMEOUT_S,
     )
     write_video_thumb(video, folder / _FILES[ExamplePart.POSTER], 2 * FRAME_PX)
     logger.info("clone example %s (%s) made from job %s", example.id, title, job.id)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -66,17 +68,18 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.CheckConstraint(
-            "provider IN ('dropbox')", name="ck_storage_accounts_provider"
+            "provider IN ('dropbox')",
+            name="ck_storage_accounts_provider",
         ),
     )
     op.execute(
         "CREATE TRIGGER storage_accounts_stamp BEFORE INSERT OR UPDATE "
-        "ON storage_accounts FOR EACH ROW EXECUTE FUNCTION stamp_row('')"
+        "ON storage_accounts FOR EACH ROW EXECUTE FUNCTION stamp_row('')",
     )
     op.execute(
         "CREATE TRIGGER storage_accounts_audit AFTER INSERT OR UPDATE OR DELETE "
         "ON storage_accounts FOR EACH ROW EXECUTE FUNCTION "
-        "audit_row('', 'refresh_token', 'user_id,provider', 'user_id')"
+        "audit_row('', 'refresh_token', 'user_id,provider', 'user_id')",
     )
 
 

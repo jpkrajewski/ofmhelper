@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.snapchat.client import (
     SnapchatClient,
     SnapchatError,

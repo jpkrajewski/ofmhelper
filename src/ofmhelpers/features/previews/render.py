@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import subprocess
 import tempfile
@@ -31,7 +33,9 @@ class FailedBeforeError(RuntimeError): ...
 def write_atomic(dest: Path, write: Callable[[Path], None]) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        dir=dest.parent, suffix=dest.suffix, delete=False
+        dir=dest.parent,
+        suffix=dest.suffix,
+        delete=False,
     ) as tmp:
         tmp_path = Path(tmp.name)
     try:
@@ -49,7 +53,12 @@ def write_image_thumb(source: Path, dest: Path, size: int) -> None:
 
 
 def write_video_thumb(
-    source: Path, dest: Path, size: int, *, pre_filter: str = "", at_s: float = 0
+    source: Path,
+    dest: Path,
+    size: int,
+    *,
+    pre_filter: str = "",
+    at_s: float = 0,
 ) -> None:
 
     def write(tmp: Path) -> None:
@@ -178,7 +187,9 @@ class ResultPreview(BaseModel, frozen=True):
             marker.write_text(f"{_stamp(self.source)}:{count}", encoding="utf-8")
         except OSError:
             logger.warning(
-                "preview failure of %s not marked", self.source, exc_info=True
+                "preview failure of %s not marked",
+                self.source,
+                exc_info=True,
             )
 
     def make(self) -> Path:

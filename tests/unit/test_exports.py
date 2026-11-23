@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 import ofmhelpers.media.exports as module

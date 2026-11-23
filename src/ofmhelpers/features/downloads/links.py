@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -35,7 +37,9 @@ class LinkDownloads(BaseModel, frozen=True):
 
     def queue(self, links: list[str], noted: dict[str, str] | None = None) -> str:
         job_id = create_job(
-            self.task, {"urls": links, **(noted or {})}, actor=self.actor
+            self.task,
+            {"urls": links, **(noted or {})},
+            actor=self.actor,
         )
         enqueue(
             run_job,

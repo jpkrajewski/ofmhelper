@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from itertools import islice
 
@@ -48,7 +50,11 @@ class _Reels(BaseModel):
 
 
 def _reels(
-    client: InstagramClient, username: str, user_id: str, cap: int, logged_in: bool
+    client: InstagramClient,
+    username: str,
+    user_id: str,
+    cap: int,
+    logged_in: bool,
 ) -> _Reels:
     if logged_in:
         try:
@@ -69,11 +75,16 @@ class InstagramPlatform(InstagramNames, Platform):
         return ApifyInstagramSource()
 
     def fetch(
-        self, handle: str, proxy: str | None, cookies: str | None = None
+        self,
+        handle: str,
+        proxy: str | None,
+        cookies: str | None = None,
     ) -> AccountStats:
         try:
             return self._fetch(
-                InstagramClient(proxy, cookies), handle, logged_in=bool(cookies)
+                InstagramClient(proxy, cookies),
+                handle,
+                logged_in=bool(cookies),
             )
         except InstagramRateLimitedError as exc:
             raise RateLimitedError(str(exc)) from exc
@@ -82,14 +93,19 @@ class InstagramPlatform(InstagramNames, Platform):
         except requests.RequestException as exc:
             msg = f"connection failed ({type(exc).__name__})"
             raise RetryableError(
-                msg, reached=False, dead_proxy=isinstance(exc, _DEAD_PROXY)
+                msg,
+                reached=False,
+                dead_proxy=isinstance(exc, _DEAD_PROXY),
             ) from exc
         except InstagramError as exc:
             raise SocialError(str(exc)) from exc
 
     @staticmethod
     def _fetch(
-        client: InstagramClient, handle: str, *, logged_in: bool
+        client: InstagramClient,
+        handle: str,
+        *,
+        logged_in: bool,
     ) -> AccountStats:
         profile = client.open_profile(handle)
         cap = settings.instagram.track_max_reels

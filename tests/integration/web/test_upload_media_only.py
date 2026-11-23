@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 
 import pytest
@@ -71,7 +73,7 @@ def test_clean_images_rejects_a_non_image_upload(va_client):
     r = va_client.post(
         "/clean-images/run",
         files={
-            "files": ("payload.html", io.BytesIO(b"<script>x</script>"), "image/png")
+            "files": ("payload.html", io.BytesIO(b"<script>x</script>"), "image/png"),
         },
     )
 

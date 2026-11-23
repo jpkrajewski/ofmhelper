@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import math
 from fractions import Fraction
@@ -30,7 +32,10 @@ def _without_jfif(jpeg: bytes) -> bytes:
 
 
 def exif_for(
-    device: Device, lens: Lens, shot: Shot, size: tuple[int, int]
+    device: Device,
+    lens: Lens,
+    shot: Shot,
+    size: tuple[int, int],
 ) -> Image.Exif:
     when = shot.taken.strftime("%Y:%m:%d %H:%M:%S")
     offset = shot.taken.strftime("%z")
@@ -54,7 +59,8 @@ def exif_for(
 
     tags = exif.get_ifd(ExifTags.IFD.Exif)
     tags[_B.ExposureTime] = IFDRational(
-        shot.exposure.numerator, shot.exposure.denominator
+        shot.exposure.numerator,
+        shot.exposure.denominator,
     )
     tags[_B.FNumber] = _q(lens.f_number)
     tags[_B.ExposureProgram] = 2

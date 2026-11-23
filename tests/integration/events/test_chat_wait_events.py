@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 import time
 from http import HTTPStatus
@@ -71,14 +73,14 @@ def _fan_wrote(
                 fan_name=fan,
                 text="hi",
                 sent_at=NOW - ago_s,
-            )
+            ),
         )
 
 
 def _answered(fan: str) -> None:
     with session_scope() as s:
         s.query(ChatFanMessageRow).filter_by(channel_id=f"chat-{fan}").update(
-            {"replied_at": NOW}
+            {"replied_at": NOW},
         )
 
 
@@ -112,7 +114,7 @@ def test_waiting_fans_are_listed_by_platform_and_model_in_one_message():
             "Stacked:\n\n"
             "Chats unanswered (1): @danewalkerjohnson\n"
             "- Carl (unanswered 15m)"
-        )
+        ),
     ]
 
 
@@ -149,7 +151,7 @@ def test_an_answered_fan_is_no_longer_listed():
         (
             "Chatting:\n\nFanvue:\n\nChats unanswered (1): @walker_dane\n"
             "- Bob (unanswered 6m)"
-        )
+        ),
     ]
 
 
@@ -209,7 +211,7 @@ def test_a_chat_still_waiting_after_a_fresh_read_is_listed(stacked):
         (
             "Chatting:\n\nStacked:\n\nChats unanswered (1): @fake_creator\n"
             "- ann (unanswered 10m)"
-        )
+        ),
     ]
 
 
@@ -242,7 +244,7 @@ def test_a_model_that_cannot_be_read_does_not_drop_the_others(monkeypatch):
         platform=ChatPlatform.STACKED,
         configured=lambda: True,
         models=lambda: ChatModels(
-            found=[ChatModel(model_id=n, username=n) for n in ("broken", "fine")]
+            found=[ChatModel(model_id=n, username=n) for n in ("broken", "fine")],
         ),
         new_reads=new_reads,
     )
@@ -290,7 +292,7 @@ def test_a_fan_by_webhook_is_told_five_minutes_after_writing(stacked):
     now = time.time()
     message_id = stacked.fan_writes("ann", now)
     raw, headers = stacked.signed(
-        stacked.message("ann", message_id, from_fan=True, at=now)
+        stacked.message("ann", message_id, from_fan=True, at=now),
     )
     reply = TestClient(app).post("/events/stacked", content=raw, headers=headers)
     assert reply.status_code == HTTPStatus.OK
@@ -360,7 +362,7 @@ def test_a_chats_history_plans_no_recheck_the_look_covers_it(stacked):
     due = rechecks.take_due(now + LIMIT)
 
     assert [(r.platform, r.channel_id) for r in due] == [
-        ("stacked", stacked.channel("bob"))
+        ("stacked", stacked.channel("bob")),
     ]
 
 
@@ -373,7 +375,7 @@ def test_a_recheck_is_taken_by_one_caller_only(stacked):
     second = rechecks.take_due(now + LIMIT)
 
     assert [(r.platform, r.channel_id) for r in first] == [
-        ("stacked", stacked.channel("ann"))
+        ("stacked", stacked.channel("ann")),
     ]
     assert second == []
 
@@ -391,7 +393,7 @@ def test_fanvue_messages_plan_no_recheck_while_it_is_off():
     assert rechecks.take_due(NOW + LIMIT + 2) == []
     rechecks.plan(ChatPlatform.STACKED, read, NOW)
     assert [(r.platform, r.channel_id) for r in rechecks.take_due(NOW + LIMIT + 2)] == [
-        ("stacked", "c1")
+        ("stacked", "c1"),
     ]
 
 

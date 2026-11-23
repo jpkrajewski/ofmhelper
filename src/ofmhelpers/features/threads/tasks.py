@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 import logfire
@@ -80,7 +82,11 @@ def make_pictures(
         folder_id=folder_id,
     )
     with logfire.span(
-        "threads set {key}", key=key, login_id=login_id, seed=seed, preset=preset
+        "threads set {key}",
+        key=key,
+        login_id=login_id,
+        seed=seed,
+        preset=preset,
     ):
         here = run.here(user_id)
         review = storage_of(user_id, interactive=False).review
@@ -101,7 +107,10 @@ def make_pictures(
 
 
 def _folder(
-    review: StorageServiceReview, place: ReviewPlace, run: PicturesRun, job_id: str
+    review: StorageServiceReview,
+    place: ReviewPlace,
+    run: PicturesRun,
+    job_id: str,
 ) -> str:
     drive = place.drive
     if run.folder_id:
@@ -114,7 +123,9 @@ def _folder(
                 exc_info=True,
             )
     threads = review.account_subfolder(
-        place, run.account_folder_id, AccountFolder.THREADS
+        place,
+        run.account_folder_id,
+        AccountFolder.THREADS,
     )
     used = {f.name for f in drive.children(threads, folders_only=True)}
     stem = Path(run.reel_name).stem
@@ -161,7 +172,7 @@ def _make(place: ReviewPlace, here: Path, run: PicturesRun) -> _Made:
         taken=[
             Taken(name=p.path.name, at=round(p.at, 3), crop=p.crop, bits=p.bits)
             for p in written
-        ]
+        ],
     )
     (here / "made.json").write_text(made.model_dump_json(), encoding="utf-8")
     return made

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -77,10 +79,16 @@ def check(links: Annotated[str, Form()] = "") -> CheckedLinks:
 
 @router.post("/previews")
 def previews(
-    body: PreviewsRequest, user: CurrentUser, owner_id: OwnerId
+    body: PreviewsRequest,
+    user: CurrentUser,
+    owner_id: OwnerId,
 ) -> StreamingResponse:
     found = service.previews(
-        body.urls, body.provider, body.resolution, user.id, owner_id
+        body.urls,
+        body.provider,
+        body.resolution,
+        user.id,
+        owner_id,
     )
     return StreamingResponse(
         (p.model_dump_json() + "\n" for p in found),
@@ -92,7 +100,9 @@ def previews(
 @router.get("/thumb/{key}")
 def thumb(key: str, owner_id: OwnerId) -> FileResponse:
     return FileResponse(
-        service.cover(key, owner_id), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
+        service.cover(key, owner_id),
+        media_type="image/webp",
+        headers=PRIVATE_FOR_A_DAY,
     )
 
 
@@ -148,7 +158,10 @@ def form(
 
 @router.get("/gallery")
 def gallery_page(
-    request: Request, scope: Scope, viewer: Viewing, query: GalleryParams
+    request: Request,
+    scope: Scope,
+    viewer: Viewing,
+    query: GalleryParams,
 ) -> Response:
     found = gallery.page(viewer, query)
     return render(
@@ -185,7 +198,9 @@ def stop(job_id: str, actor: Actor) -> BatchStopped:
 
 @router.get("/reviews")
 def reviews(
-    job: Annotated[list[str], Query(max_length=200)], actor: Actor, scope: Scope
+    job: Annotated[list[str], Query(max_length=200)],
+    actor: Actor,
+    scope: Scope,
 ) -> list[ReviewState]:
     return [
         ReviewState(

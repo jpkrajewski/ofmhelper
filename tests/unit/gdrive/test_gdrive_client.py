@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from urllib.parse import parse_qs, urlparse
 
@@ -29,7 +31,7 @@ _OK = {"status": "200"}
 
 def _drive(*responses: tuple[dict, object]) -> tuple[Drive, HttpMockSequence]:
     http = HttpMockSequence(
-        [(r, json.dumps(b) if not isinstance(b, str) else b) for r, b in responses]
+        [(r, json.dumps(b) if not isinstance(b, str) else b) for r, b in responses],
     )
     return Drive(credentials=None, http=http), http  # type: ignore[arg-type]
 
@@ -54,7 +56,7 @@ def test_find_folder_quotes_the_name_and_reuses_the_oldest():
                         "name": "o'neil - Ann",
                         "createdTime": "2026-01-01T00:00:00Z",
                     },
-                ]
+                ],
             },
         ),
     )
@@ -79,8 +81,13 @@ def test_children_follow_every_page():
     }
     page2 = {
         "files": [
-            {"id": "b", "name": "b.jpg", "mimeType": "image/jpeg", "hasThumbnail": True}
-        ]
+            {
+                "id": "b",
+                "name": "b.jpg",
+                "mimeType": "image/jpeg",
+                "hasThumbnail": True,
+            },
+        ],
     }
     drive, http = _drive((_OK, page1), (_OK, page2))
     files = drive.children("day")
@@ -90,7 +97,7 @@ def test_children_follow_every_page():
 
 def test_folder_missing_or_not_shared_is_gone():
     drive, _ = _drive(
-        ({"status": "404"}, {"error": {"code": 404, "message": "File not found"}})
+        ({"status": "404"}, {"error": {"code": 404, "message": "File not found"}}),
     )
     with pytest.raises(FolderGoneError):
         drive.folder("root")
@@ -98,7 +105,7 @@ def test_folder_missing_or_not_shared_is_gone():
 
 def test_folder_reports_its_parents():
     drive, http = _drive(
-        (_OK, {"id": "f", "name": "POSTED", "mimeType": FOLDER_MIME, "parents": ["a"]})
+        (_OK, {"id": "f", "name": "POSTED", "mimeType": FOLDER_MIME, "parents": ["a"]}),
     )
     assert drive.folder("f").parents == ["a"]
     assert "parents" in _query(http)["fields"][0]
@@ -106,7 +113,7 @@ def test_folder_reports_its_parents():
 
 def test_trashed_folder_is_gone():
     drive, _ = _drive(
-        (_OK, {"id": "f", "name": "x", "mimeType": FOLDER_MIME, "trashed": True})
+        (_OK, {"id": "f", "name": "x", "mimeType": FOLDER_MIME, "trashed": True}),
     )
     with pytest.raises(FolderGoneError):
         drive.folder("f")
@@ -128,7 +135,7 @@ def _refused(reason: str, message: str) -> tuple[dict, dict]:
                 "code": 403,
                 "message": message,
                 "errors": [{"domain": "global", "reason": reason, "message": message}],
-            }
+            },
         },
     )
 
@@ -137,8 +144,9 @@ def test_a_full_drive_is_a_drive_full_error(monkeypatch):
     monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
     drive, _ = _drive(
         _refused(
-            "storageQuotaExceeded", "The user's Drive storage quota has been exceeded."
-        )
+            "storageQuotaExceeded",
+            "The user's Drive storage quota has been exceeded.",
+        ),
     )
     with pytest.raises(DriveFullError, match="storage quota"):
         drive.create_folder("root", "x")
@@ -165,7 +173,7 @@ def test_a_revoked_grant_is_a_drive_auth_error_with_a_safe_message(monkeypatch):
                 "error": "invalid_grant",
                 "error_description": "Token has been expired or revoked.",
             },
-        )
+        ),
     )
     with pytest.raises(DriveAuthError) as caught:
         drive.folder("1AbCdEf")
@@ -177,7 +185,7 @@ def test_a_revoked_grant_is_a_drive_auth_error_with_a_safe_message(monkeypatch):
 def test_an_access_token_refused_is_a_drive_auth_error(monkeypatch):
     monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
     drive, _ = _drive(
-        ({"status": "401"}, {"error": {"code": 401, "message": "Invalid Credentials"}})
+        ({"status": "401"}, {"error": {"code": 401, "message": "Invalid Credentials"}}),
     )
     with pytest.raises(DriveAuthError, match=RECONNECT):
         drive.folder("1AbCdEf")
@@ -187,8 +195,9 @@ def test_drive_unticked_on_the_consent_screen_is_a_drive_auth_error(monkeypatch)
     monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
     drive, _ = _drive(
         _refused(
-            "insufficientPermissions", "Request had insufficient authentication scopes."
-        )
+            "insufficientPermissions",
+            "Request had insufficient authentication scopes.",
+        ),
     )
     with pytest.raises(DriveAuthError):
         drive.create_folder("root", "x")
@@ -196,7 +205,8 @@ def test_drive_unticked_on_the_consent_screen_is_a_drive_auth_error(monkeypatch)
 
 def test_googles_token_endpoint_down_is_no_auth_error():
     failure = drive_client._failure(
-        RefreshError("server_error: try later", retryable=True), "Folder 1"
+        RefreshError("server_error: try later", retryable=True),
+        "Folder 1",
     )
     assert type(failure) is DriveError
 
@@ -211,7 +221,7 @@ def test_create_folder_puts_it_in_the_parent():
 
 def _item(**fields) -> DriveFile:
     return DriveFile.model_validate(
-        {"id": "f", "name": "a.jpg", "mimeType": "image/jpeg", **fields}
+        {"id": "f", "name": "a.jpg", "mimeType": "image/jpeg", **fields},
     )
 
 
@@ -227,7 +237,7 @@ def test_file_reads_parents_and_the_preview_link():
                 "thumbnailLink": "https://lh3.example/abc=s220",
                 "ownedByMe": False,
             },
-        )
+        ),
     )
     item = drive.file("f")
     assert item.parents == ["day"]
@@ -239,7 +249,7 @@ def test_file_reads_parents_and_the_preview_link():
 
 def test_trash_file_asks_first_and_never_updates_a_missing_id():
     drive, http = _drive(
-        ({"status": "404"}, {"error": {"code": 404, "message": "File not found"}})
+        ({"status": "404"}, {"error": {"code": 404, "message": "File not found"}}),
     )
     with pytest.raises(FolderGoneError):
         drive.trash_file("gone")
@@ -256,7 +266,7 @@ def test_trash_file_trashes_what_is_there():
 
 def test_a_trashed_file_is_gone():
     drive, _ = _drive(
-        (_OK, {"id": "f", "name": "a", "mimeType": "image/jpeg", "trashed": True})
+        (_OK, {"id": "f", "name": "a", "mimeType": "image/jpeg", "trashed": True}),
     )
     with pytest.raises(FolderGoneError):
         drive.file("f")
@@ -289,7 +299,8 @@ def test_thumbnail_asks_for_the_size(monkeypatch):
     drive, _ = _drive()
     item = _item(thumbnailLink="https://lh3.example/abc=s220")
     assert drive.thumbnail(item, 400) == DriveThumb(
-        content=b"jpeg", media_type="image/jpeg"
+        content=b"jpeg",
+        media_type="image/jpeg",
     )
     assert asked["url"] == "https://lh3.example/abc=s400"
 
@@ -310,10 +321,10 @@ def test_a_bad_key_is_a_drive_error(monkeypatch):
 
 def test_file_kinds_and_links():
     video = DriveFile.model_validate(
-        {"id": "v", "name": "a.mov", "mimeType": "video/quicktime"}
+        {"id": "v", "name": "a.mov", "mimeType": "video/quicktime"},
     )
     doc = DriveFile.model_validate(
-        {"id": "d", "name": "a.pdf", "mimeType": "application/pdf"}
+        {"id": "d", "name": "a.pdf", "mimeType": "application/pdf"},
     )
     folder = DriveFile.model_validate({"id": "f", "name": "x", "mimeType": FOLDER_MIME})
     assert (video.kind, doc.kind, folder.kind) == ("video", "file", "folder")

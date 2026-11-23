@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Any
 lazy from collections.abc import Callable
@@ -55,7 +57,7 @@ class PreparedRun(BaseModel):
 def _head(form: FormData) -> AiRunForm:
     try:
         return AiRunForm.model_validate(
-            {k: form.get(k) for k in AiRunForm.model_fields if form.get(k) is not None}
+            {k: form.get(k) for k in AiRunForm.model_fields if form.get(k) is not None},
         )
     except ValidationError:
         msg = "Some settings have a value they cannot take"
@@ -170,7 +172,9 @@ def _hosted_results(remote: list[str], spec: ModelSpec) -> list[ResultFile]:
 
 
 def _saved_results(
-    paths: list[Path], remote: list[str], assets_root: Path
+    paths: list[Path],
+    remote: list[str],
+    assets_root: Path,
 ) -> list[ResultFile]:
     for path in paths:
         register_generated_asset(path, assets_root)

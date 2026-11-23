@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 lazy from pathlib import Path
@@ -12,13 +14,18 @@ DEPLOYS = [REPO / "scripts/deploy.sh", REPO / ".github/workflows/deploy.yml"]
 
 _EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
 _REMOTE = re.compile(
-    r"remote_script='\n(.*?)\n[ \t]*'[ \t]*$", re.DOTALL | re.MULTILINE
+    r"remote_script='\n(.*?)\n[ \t]*'[ \t]*$",
+    re.DOTALL | re.MULTILINE,
 )
 
 
 def _bash_n(text: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", "-n"], input=text, capture_output=True, text=True, check=False
+        ["bash", "-n"],
+        input=text,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 

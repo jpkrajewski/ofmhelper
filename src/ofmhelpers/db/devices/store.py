@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.db.devices.catalog import services
@@ -33,7 +35,8 @@ def _handle(platform: str, username: str) -> str:
 
 
 def _linked(
-    devices: list[Device], accounts: list[TrackedAccount] | None = None
+    devices: list[Device],
+    accounts: list[TrackedAccount] | None = None,
 ) -> list[Device]:
     if accounts is None:
         accounts = list_accounts()
@@ -48,7 +51,7 @@ def _linked(
                         device.user_id,
                         service.tracked_platform,
                         _handle(service.tracked_platform, login.username),
-                    )
+                    ),
                 )
                 if found is not None:
                     login.tracked_account_id = found.id
@@ -65,7 +68,8 @@ def get_device(device_id: int, owner: int | None = None) -> Device | None:
 
 
 def phones_by_account(
-    accounts: list[TrackedAccount], owner: int | None = None
+    accounts: list[TrackedAccount],
+    owner: int | None = None,
 ) -> PhonesByAccount:
     found: dict[int, list[Device]] = {}
     for device in _linked(_repository().list_all(owner), accounts):
@@ -75,7 +79,7 @@ def phones_by_account(
         for account_id in sorted(i for i in ids if i is not None):
             found.setdefault(account_id, []).append(device)
     return PhonesByAccount(
-        rows=[AccountPhones(account_id=k, phones=v) for k, v in found.items()]
+        rows=[AccountPhones(account_id=k, phones=v) for k, v in found.items()],
     )
 
 
@@ -97,7 +101,9 @@ def add_device(fields: DeviceFields, user_id: int | None = None) -> int:
 
 
 def update_device(
-    device_id: int, fields: DeviceFields, owner: int | None = None
+    device_id: int,
+    fields: DeviceFields,
+    owner: int | None = None,
 ) -> bool:
     return _repository().update_device(device_id, fields.model_dump(), owner)
 
@@ -115,7 +121,9 @@ def delete_device(device_id: int, owner: int | None = None) -> bool:
 
 
 def add_login(
-    device_id: int, fields: LoginFields, owner: int | None = None
+    device_id: int,
+    fields: LoginFields,
+    owner: int | None = None,
 ) -> AddedLogin | None:
     return _repository().add_login(device_id, fields.model_dump(), owner)
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 import pytest
@@ -66,7 +68,8 @@ class _Reply:
 
 
 def test_download_saves_the_best_quality_with_the_page_as_referer(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     asked = []
 
@@ -105,7 +108,9 @@ def test_a_failed_video_stream_leaves_no_file(monkeypatch, tmp_path):
 
 def test_a_site_without_a_kvs_player_says_unsupported(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        kvs.egress.outbound, "get", lambda *a, **k: _Reply(text="<html>plain</html>")
+        kvs.egress.outbound,
+        "get",
+        lambda *a, **k: _Reply(text="<html>plain</html>"),
     )
     result = kvs.download("https://example.com/v", tmp_path)
     assert (result.success, result.error) == (False, "Unsupported URL: no KVS player")

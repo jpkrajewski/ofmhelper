@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any, ClassVar
 
 lazy import httpx

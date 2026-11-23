@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from urllib.parse import urlsplit
 lazy from collections.abc import Callable
@@ -147,11 +149,12 @@ def _views_blocks() -> list[str]:
         if change is not None:
             link = account.profile_url.rstrip("/")
             per_model.setdefault(account.creator or _NO_MODEL, []).append(
-                (link, change.views)
+                (link, change.views),
             )
     blocks = []
     for name, found in sorted(
-        per_model.items(), key=lambda item: (-sum(v for _, v in item[1]), item[0])
+        per_model.items(),
+        key=lambda item: (-sum(v for _, v in item[1]), item[0]),
     ):
         found.sort(key=lambda pair: (-pair[1], pair[0]))
         total = sum(views for _, views in found)
@@ -203,7 +206,9 @@ class _ModelsBlock(BaseModel, frozen=True):
 
 
 def _models_block(
-    links: list[ShortLink], previous: ReportRun, now: float
+    links: list[ShortLink],
+    previous: ReportRun,
+    now: float,
 ) -> _ModelsBlock:
     window = window_title(local(previous.ran_at), local(now))
     rows = _model_rows(
@@ -225,7 +230,10 @@ def build(links: list[ShortLink], previous: ReportRun, now: float) -> list[Event
     title, models = models_block.title, models_block.chunks
 
     def events(
-        block: str, title: str, chunks: list[str], replaces: str | None = None
+        block: str,
+        title: str,
+        chunks: list[str],
+        replaces: str | None = None,
     ) -> list[Event]:
         return _events(
             f"reports.daily.{block}",

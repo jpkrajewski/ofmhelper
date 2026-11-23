@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 lazy from collections.abc import AsyncIterator
 
@@ -6,7 +8,8 @@ lazy from pydantic import BaseModel
 
 
 async def _send_until_signed_out(
-    websocket: WebSocket, updates: AsyncIterator[BaseModel]
+    websocket: WebSocket,
+    updates: AsyncIterator[BaseModel],
 ) -> bool:
     try:
         async for update in updates:
@@ -32,7 +35,8 @@ async def stream(websocket: WebSocket, updates: AsyncIterator[BaseModel]) -> Non
     sending = asyncio.create_task(_send_until_signed_out(websocket, updates))
     leaving = asyncio.create_task(_until_gone(websocket))
     done, _ = await asyncio.wait(
-        {sending, leaving}, return_when=asyncio.FIRST_COMPLETED
+        {sending, leaving},
+        return_when=asyncio.FIRST_COMPLETED,
     )
     other = leaving if sending in done else sending
     other.cancel()

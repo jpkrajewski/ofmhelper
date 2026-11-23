@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.cache.queue import (
     JOB_QUEUES,
     JobQueue,

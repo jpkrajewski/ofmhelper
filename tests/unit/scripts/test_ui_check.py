@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 import sys
 from collections.abc import Callable
@@ -71,7 +73,7 @@ def _raises(error: Exception) -> Callable:
     return checked
 
 
-def test_the_mocked_steps_fake_the_notifications_socket_and_fail_on_one_that_reached_the_server():
+def test_the_mocked_steps_fake_the_notifications_socket_and_fail_on_one_that_reached_the_server():  # noqa: E501
     context = FakeContext()
     watch = ui_check.Watch(context)
     [(glob, fake)] = context.page.socket_routes
@@ -79,11 +81,11 @@ def test_the_mocked_steps_fake_the_notifications_socket_and_fail_on_one_that_rea
     fake(FakeSocket(url="ws://ofmhelpers:8000/notifications/ws"))
     assert watch.problems(ui_check.never) == []
     assert watch.lines == [
-        "[socket] faked ws://ofmhelpers:8000/notifications/ws, never connected"
+        "[socket] faked ws://ofmhelpers:8000/notifications/ws, never connected",
     ]
     context.page.handlers["websocket"](FakeSocket(url="ws://ofmhelpers:8000/other"))
     assert watch.problems(ui_check.never) == [
-        "a WebSocket reached the server: ws://ofmhelpers:8000/other"
+        "a WebSocket reached the server: ws://ofmhelpers:8000/other",
     ]
 
 
@@ -96,7 +98,9 @@ def test_the_real_step_leaves_the_sockets_alone():
 
 @pytest.mark.parametrize("path", ["/clone", "/clone-long", "/generate", "/edit"])
 def test_real_is_refused_on_every_paid_page(
-    signed: Path, capsys: pytest.CaptureFixture[str], path: str
+    signed: Path,
+    capsys: pytest.CaptureFixture[str],
+    path: str,
 ):
     assert ui_check.run([path, "--real"]) == 2
     assert _last_line(capsys) == (
@@ -142,7 +146,9 @@ def test_reads_go_through_and_the_fake_job_status_is_answered():
 
 
 def test_a_passing_run_exits_0_and_ends_on_pass_with_the_report(
-    signed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    signed: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     made: list[Path] = []
     steps = [ui_check.Step(name="load", done="loaded")]
@@ -155,7 +161,9 @@ def test_a_passing_run_exits_0_and_ends_on_pass_with_the_report(
 
 
 def test_a_failing_step_exits_1_and_ends_on_fail_with_the_report(
-    signed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    signed: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     made: list[Path] = []
     steps = [
@@ -171,7 +179,8 @@ def test_a_failing_step_exits_1_and_ends_on_fail_with_the_report(
 
 
 def test_a_dev_app_that_does_not_answer_exits_2_and_ends_on_down(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     monkeypatch.setenv("OFM_UI_PASSWORD", "not-the-real-one")
     monkeypatch.setenv("OFM_UI_BASE_URL", "http://nowhere:1")
@@ -184,12 +193,14 @@ def test_a_dev_app_that_does_not_answer_exits_2_and_ends_on_down(
     assert ui_check.run(["/clone"]) == 2
     assert _last_line(capsys).startswith(
         "ui_check: DOWN the dev app at http://nowhere:1 does not answer"
-        " (ConnectionError); start it:"
+        " (ConnectionError); start it:",
     )
 
 
 def test_a_sign_in_that_cannot_reach_the_app_ends_on_down(
-    signed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    signed: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     error = ui_check.DevUnreachableError("could not sign in at http://x: timeout")
     monkeypatch.setattr(ui_check, "checked", _raises(error))
@@ -198,7 +209,9 @@ def test_a_sign_in_that_cannot_reach_the_app_ends_on_down(
 
 
 def test_a_wrong_password_ends_on_fail(
-    signed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    signed: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     error = ui_check.SignInError("sign-in failed")
     monkeypatch.setattr(ui_check, "checked", _raises(error))
@@ -207,7 +220,8 @@ def test_a_wrong_password_ends_on_fail(
 
 
 def test_bad_arguments_and_a_missing_password_end_on_fail(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     monkeypatch.delenv("OFM_UI_PASSWORD", raising=False)
     assert ui_check.run([]) == 2
@@ -222,7 +236,8 @@ def test_bad_arguments_and_a_missing_password_end_on_fail(
 
 
 def test_a_crash_exits_1_and_still_ends_on_fail(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     def crashed(_argv: list[str]) -> int:
         msg = "boom\nsecond line"

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
@@ -67,10 +69,12 @@ def test_a_day_long_window_is_the_last_24h_and_another_says_where_it_starts():
 
 def test_the_first_look_takes_a_baseline_that_still_lets_todays_report_out():
     assert due(_at(2026, 11, 6, 10, 0), None) == Planned(
-        action=Due.BASELINE, day=date(2026, 11, 5)
+        action=Due.BASELINE,
+        day=date(2026, 11, 5),
     )
     assert due(_at(2026, 11, 6, 15, 0), None) == Planned(
-        action=Due.BASELINE, day=date(2026, 11, 6)
+        action=Due.BASELINE,
+        day=date(2026, 11, 6),
     )
 
 
@@ -79,17 +83,20 @@ def test_it_goes_out_at_14_warsaw_once_a_day():
 
     assert due(_at(2026, 11, 6, 13, 59), yesterday).action == Due.NOTHING
     assert due(_at(2026, 11, 6, 14, 0), yesterday) == Planned(
-        action=Due.SEND, day=date(2026, 11, 6)
+        action=Due.SEND,
+        day=date(2026, 11, 6),
     )
     assert due(_at(2026, 11, 6, 20, 0), _run(date(2026, 11, 6))).action == Due.NOTHING
 
 
 def test_a_day_missed_while_down_goes_out_when_back():
     assert due(_at(2026, 11, 8, 9, 0), _run(date(2026, 11, 5))) == Planned(
-        action=Due.NOTHING, day=date(2026, 11, 8)
+        action=Due.NOTHING,
+        day=date(2026, 11, 8),
     )
     assert due(_at(2026, 11, 8, 16, 30), _run(date(2026, 11, 5))) == Planned(
-        action=Due.SEND, day=date(2026, 11, 8)
+        action=Due.SEND,
+        day=date(2026, 11, 8),
     )
 
 
@@ -170,7 +177,11 @@ class _Site:
 def _rows(monkeypatch, links, sites) -> dict[str, tuple[int | None, int | None]]:
     monkeypatch.setattr(daily, "fan_sites", lambda *_: list(sites))
     previous = ReportRun(
-        name="daily", day=_NOV5, ran_at=_RAN, sent=True, marks=ReportMarks()
+        name="daily",
+        day=_NOV5,
+        ran_at=_RAN,
+        sent=True,
+        marks=ReportMarks(),
     )
     rows = daily._model_rows(
         links,
@@ -183,7 +194,7 @@ def _rows(monkeypatch, links, sites) -> dict[str, tuple[int | None, int | None]]
 
 def _to(link_id: int, destination: str, target: str, creator: str | None) -> ShortLink:
     return _link(link_id, (_NOV5, 10, 10)).model_copy(
-        update={"destination": destination, "target": target, "creator": creator}
+        update={"destination": destination, "target": target, "creator": creator},
     )
 
 
@@ -212,7 +223,10 @@ def test_a_block_too_long_for_one_message_is_split_between_lines_not_cut():
     lines = [f"https://www.instagram.com/account{n:03d}: 1.2k" for n in range(120)]
 
     events = daily._events(
-        "views", "Views (last 24H)", ["\n".join(lines)], "2026-11-06"
+        "views",
+        "Views (last 24H)",
+        ["\n".join(lines)],
+        "2026-11-06",
     )
 
     assert len(events) == 2

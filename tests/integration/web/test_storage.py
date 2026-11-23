@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -64,19 +66,27 @@ class Account:
 
     def file(self, parent: str, name: str, megabytes: int) -> str:
         return self.drive.add_file(
-            parent, name, "video/mp4", owner=AGENCY, size=megabytes * MB
+            parent,
+            name,
+            "video/mp4",
+            owner=AGENCY,
+            size=megabytes * MB,
         )
 
 
 def _accounts(drive: FakeDrive, *handles: str) -> list[Account]:
     phone = devices.add_device(
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
-        )
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Anna",
+        ),
     )
     for handle in handles:
         assert devices.add_login(
-            phone, LoginFields(service="instagram", username=handle)
+            phone,
+            LoginFields(service="instagram", username=handle),
         )
     storage_jobs.sync()
     return [Account(drive, drive.named(f"{h} - Anna", ROOT)[0]) for h in handles]
@@ -155,7 +165,8 @@ def test_one_folders_trials_go_to_the_bin_and_nothing_else_moves(drive):
     ids = _laid_out(drive)
 
     answer = _client().post(
-        "/storage/bin-moves", data={"part": "TRIALS", "folder_id": ids["ann"]}
+        "/storage/bin-moves",
+        data={"part": "TRIALS", "folder_id": ids["ann"]},
     )
 
     assert answer.status_code == 202
@@ -219,11 +230,12 @@ def test_twenty_clicks_at_once_start_one_move(drive, real_queue):
             pool.map(
                 lambda _: (
                     client.post(
-                        "/storage/bin-moves", data={"part": "SPOOFED"}
+                        "/storage/bin-moves",
+                        data={"part": "SPOOFED"},
                     ).status_code
                 ),
                 range(20),
-            )
+            ),
         )
 
     assert codes == [202] + [409] * 19
@@ -241,7 +253,8 @@ def test_without_google_drive_the_page_asks_to_connect_and_nothing_runs(drive):
 
 
 def test_drive_failing_keeps_the_reason_on_the_job_and_the_page_says_so(
-    drive, monkeypatch
+    drive,
+    monkeypatch,
 ):
     _laid_out(drive)
 
@@ -264,7 +277,8 @@ def test_a_server_that_only_reads_the_live_drive_refuses_to_move(drive, monkeypa
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
 
     answer = _client().post(
-        "/storage/bin-moves", data={"part": "TRIALS", "folder_id": ids["ann"]}
+        "/storage/bin-moves",
+        data={"part": "TRIALS", "folder_id": ids["ann"]},
     )
 
     assert answer.status_code == 400

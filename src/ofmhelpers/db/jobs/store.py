@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from collections.abc import Callable, Collection
 from functools import lru_cache
@@ -110,7 +112,10 @@ def record_failure(job_id: str, error: str) -> None:
 
 def keep_cost(job_id: str, meta: JobMeta, cost: JobCost) -> None:
     _repository().set_cost(
-        job_id, meta.model_dump(mode="json"), cost.usd, cost.estimated
+        job_id,
+        meta.model_dump(mode="json"),
+        cost.usd,
+        cost.estimated,
     )
 
 
@@ -130,12 +135,18 @@ def days(
     reel_tasks: Collection[str],
 ) -> list[UserDay]:
     return _repository().days(
-        tuple(sorted(user_ids)), from_ts, to_ts, zone, tuple(sorted(reel_tasks))
+        tuple(sorted(user_ids)),
+        from_ts,
+        to_ts,
+        zone,
+        tuple(sorted(reel_tasks)),
     )
 
 
 def sessions(
-    user_ids: Collection[int], from_ts: float, to_ts: float
+    user_ids: Collection[int],
+    from_ts: float,
+    to_ts: float,
 ) -> list[SessionSpan]:
     return _repository().sessions(tuple(sorted(user_ids)), from_ts, to_ts)
 
@@ -310,7 +321,9 @@ def latest_job(task: str, actor: str, status: JobStatus | None = None) -> Job | 
 
 
 def running_with_links(
-    tasks: Collection[str], actor: str, links: list[str]
+    tasks: Collection[str],
+    actor: str,
+    links: list[str],
 ) -> list[Job]:
     user_id = _user_id(actor)
     if user_id is None:
@@ -346,21 +359,30 @@ class ParamHistory(BaseModel, frozen=True):
         if not self._user_ids:
             return None
         return _repository().last_param(
-            self._tasks, self._user_ids, self.field, tuple(sorted(among))
+            self._tasks,
+            self._user_ids,
+            self.field,
+            tuple(sorted(among)),
         )
 
     def last_used_firsts(self, limit: int) -> list[str]:
         if not self._user_ids:
             return []
         return _repository().last_used_firsts(
-            self._tasks, self._user_ids, self.field, limit
+            self._tasks,
+            self._user_ids,
+            self.field,
+            limit,
         )
 
     def most_used_firsts(self, limit: int) -> list[str]:
         if not self._user_ids:
             return []
         return _repository().most_used_firsts(
-            self._tasks, self._user_ids, self.field, limit
+            self._tasks,
+            self._user_ids,
+            self.field,
+            limit,
         )
 
 

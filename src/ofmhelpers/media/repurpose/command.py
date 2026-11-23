@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 lazy import random
 lazy from pathlib import Path

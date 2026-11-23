@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Protocol
 lazy from pathlib import Path
 
@@ -39,7 +41,10 @@ class StorageClient(Protocol):
     def folder(self, folder_id: str) -> DriveFolder: ...
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]: ...
 
     def children_of(self, parent_ids: list[str]) -> DriveListing: ...
@@ -67,7 +72,11 @@ class StorageClient(Protocol):
     def download(self, file_id: str) -> DriveDownload: ...
 
     def upload(
-        self, parent_id: str, path: Path, name: str, mime_type: str
+        self,
+        parent_id: str,
+        path: Path,
+        name: str,
+        mime_type: str,
     ) -> DriveFile: ...
 
     def web_url(self, item_id: str) -> str: ...

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import subprocess
 lazy from collections.abc import Iterator
@@ -18,7 +20,8 @@ SNAPSHOT = FIXTURES / "prod_snapshot.sql"
 pytestmark = [
     pytest.mark.snapshot,
     pytest.mark.skipif(
-        not SNAPSHOT.exists(), reason="no production snapshot (tests/fixtures)"
+        not SNAPSHOT.exists(),
+        reason="no production snapshot (tests/fixtures)",
     ),
 ]
 
@@ -66,7 +69,7 @@ def db(snapshot_url) -> Iterator[Engine]:
 def _revision(db: Engine) -> str:
     with db.connect() as conn:
         return conn.execute(
-            text("SELECT version_num FROM alembic_version")
+            text("SELECT version_num FROM alembic_version"),
         ).scalar_one()
 
 
@@ -88,8 +91,8 @@ def _json_posts(db: Engine) -> set[StoredPost]:
                        (p ->> 'posted_at')::double precision
                 FROM tracked_accounts AS a, jsonb_array_elements(a.posts) AS p
                 WHERE a.scanned_at IS NOT NULL
-                """
-            )
+                """,
+            ),
         ).all()
     return {
         StoredPost(account_id=a, post_id=i, views=v, posted_at=t) for a, i, v, t in rows
@@ -99,7 +102,7 @@ def _json_posts(db: Engine) -> set[StoredPost]:
 def _table_posts(db: Engine) -> set[StoredPost]:
     with db.connect() as conn:
         rows = conn.execute(
-            text("SELECT account_id, post_id, views, posted_at FROM tracked_posts")
+            text("SELECT account_id, post_id, views, posted_at FROM tracked_posts"),
         ).all()
     return {
         StoredPost(account_id=a, post_id=i, views=v, posted_at=t) for a, i, v, t in rows
@@ -115,8 +118,8 @@ def _fully_covered(db: Engine) -> dict[int, bool]:
                     SELECT 1 FROM jsonb_array_elements(a.metrics -> 'windows') AS w
                     WHERE NOT (w ->> 'covered')::boolean)
                 FROM tracked_accounts AS a WHERE a.metrics IS NOT NULL
-                """
-            )
+                """,
+            ),
         ).all()
     return dict(rows)
 
@@ -187,8 +190,8 @@ def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
         rows = conn.execute(
             text(
                 "SELECT id, covered_since, metrics ? 'windows' FROM tracked_accounts"
-                " WHERE metrics IS NOT NULL"
-            )
+                " WHERE metrics IS NOT NULL",
+            ),
         ).all()
     oldest: dict[int, float] = {}
     for p in posts:
@@ -214,7 +217,9 @@ def test_untracked_keeps_every_account_tracked(db):
     command.upgrade(_alembic(), UNTRACKED)
     with db.connect() as conn:
         untracked = conn.execute(
-            text("SELECT count(*) FROM tracked_accounts WHERE untracked_at IS NOT NULL")
+            text(
+                "SELECT count(*) FROM tracked_accounts WHERE untracked_at IS NOT NULL",
+            ),
         ).scalar_one()
     assert untracked == 0
 
@@ -236,8 +241,8 @@ def test_identity_starts_unknown_with_no_failures(db):
         ids, failures = conn.execute(
             text(
                 "SELECT count(platform_account_id), coalesce(sum(failed_scans), 0)"
-                " FROM tracked_accounts"
-            )
+                " FROM tracked_accounts",
+            ),
         ).one()
     assert (ids, failures) == (0, 0)
 
@@ -254,19 +259,19 @@ def test_devices_adds_empty_tables_and_drops_only_them(db):
         device = conn.execute(
             text(
                 "INSERT INTO devices (label, added_at, updated_at)"
-                " VALUES ('p1', 1, 1) RETURNING id"
-            )
+                " VALUES ('p1', 1, 1) RETURNING id",
+            ),
         ).scalar_one()
         login = conn.execute(
             text(
                 "INSERT INTO logins (service, username, password, added_at, updated_at)"
-                " VALUES ('gmail', 'a@b.c', 'tok', 1, 1) RETURNING id"
-            )
+                " VALUES ('gmail', 'a@b.c', 'tok', 1, 1) RETURNING id",
+            ),
         ).scalar_one()
         conn.execute(
             text(
                 "INSERT INTO device_logins (device_id, login_id, linked_at)"
-                " VALUES (:d, :l, 1)"
+                " VALUES (:d, :l, 1)",
             ),
             {"d": device, "l": login},
         )
@@ -283,20 +288,20 @@ def test_drive_folders_follow_their_login_and_drop_only_themselves(db):
         login = conn.execute(
             text(
                 "INSERT INTO logins (service, username, added_at, updated_at)"
-                " VALUES ('instagram', 'drive_probe', 1, 1) RETURNING id"
-            )
+                " VALUES ('instagram', 'drive_probe', 1, 1) RETURNING id",
+            ),
         ).scalar_one()
         conn.execute(
             text(
                 "INSERT INTO drive_account_folders (login_id, folder_id, name,"
-                " updated_at) VALUES (:l, 'f1', 'drive_probe - Ann', 1)"
+                " updated_at) VALUES (:l, 'f1', 'drive_probe - Ann', 1)",
             ),
             {"l": login},
         )
         conn.execute(
             text(
                 "INSERT INTO drive_day_folders (login_id, day, folder_id, created_at)"
-                " VALUES (:l, '2026-10-21', 'f2', 1)"
+                " VALUES (:l, '2026-10-21', 'f2', 1)",
             ),
             {"l": login},
         )
@@ -312,7 +317,7 @@ def test_posted_folders_keep_every_account_folder_and_day_folder(db):
     command.upgrade(_alembic(), "f4a5b6c7d8e9")
     with db.connect() as conn:
         accounts = conn.execute(
-            text("SELECT login_id, folder_id, name FROM drive_account_folders")
+            text("SELECT login_id, folder_id, name FROM drive_account_folders"),
         ).all()
     days = _count(db, "drive_day_folders")
 
@@ -322,8 +327,8 @@ def test_posted_folders_keep_every_account_folder_and_day_folder(db):
         after = conn.execute(
             text(
                 "SELECT login_id, folder_id, name, posted_folder_id"
-                " FROM drive_account_folders"
-            )
+                " FROM drive_account_folders",
+            ),
         ).all()
     assert {(a, f, n) for a, f, n, _ in after} == set(accounts)
     assert all(p is None for *_, p in after)
@@ -340,7 +345,7 @@ def test_finished_at_keeps_every_job_untimed(db):
 
     with db.connect() as conn:
         timed = conn.execute(
-            text("SELECT count(*) FROM jobs WHERE finished_at IS NOT NULL")
+            text("SELECT count(*) FROM jobs WHERE finished_at IS NOT NULL"),
         ).scalar()
     assert _count(db, "jobs") == jobs
     assert timed == 0
@@ -451,7 +456,8 @@ def test_preset_aspect_adds_an_empty_column_and_changes_no_row(db):
     assert "aspect_ratio" in _columns(db, "picture_presets")
     assert (
         _scalar(
-            db, "SELECT count(*) FROM picture_presets WHERE aspect_ratio IS NOT NULL"
+            db,
+            "SELECT count(*) FROM picture_presets WHERE aspect_ratio IS NOT NULL",
         )
         == 0
     )
@@ -542,7 +548,7 @@ def test_job_owners_keep_every_job_with_its_owner_and_its_cost(db):
             db,
             "SELECT id, (meta ->> 'cost_usd')::numeric FROM jobs"
             " WHERE meta ->> 'cost_usd' IS NOT NULL",
-        )
+        ),
     )
     generations = dict(_rows(db, "SELECT id, meta -> 'generations' FROM jobs"))
 
@@ -709,8 +715,8 @@ def test_last_seen_starts_empty_and_every_card_a_va_hid_is_shown_again(db):
             text(
                 "UPDATE jobs SET hidden_at = 1 WHERE id IN ("
                 "SELECT jobs.id FROM jobs JOIN users ON users.id = jobs.user_id "
-                "WHERE users.role = 'va' LIMIT 3)"
-            )
+                "WHERE users.role = 'va' LIMIT 3)",
+            ),
         )
     before = _row_counts(db)
     others = _scalar(db, _HIDDEN_OTHER_JOBS)
@@ -796,7 +802,8 @@ def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
         )
     oldest = _scalar(
         db,
-        "SELECT min(id) FROM phone_revisions WHERE snapshot -> 'devices' -> 0 ? 'added_at'",
+        "SELECT min(id) FROM phone_revisions WHERE "
+        "snapshot -> 'devices' -> 0 ? 'added_at'",
     )
     assert oldest is not None
     with db.begin() as conn:
@@ -804,7 +811,7 @@ def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
             text(
                 "SELECT count(*) FROM jsonb_populate_recordset(NULL::devices, "
                 "phone_snapshot_current((SELECT snapshot FROM phone_revisions "
-                "WHERE id = :id)) -> 'devices') r WHERE r.created_at IS NOT NULL"
+                "WHERE id = :id)) -> 'devices') r WHERE r.created_at IS NOT NULL",
             ),
             {"id": oldest},
         ).scalar_one()
@@ -812,13 +819,15 @@ def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
     with db.begin() as conn:
         conn.execute(
             text(
-                "UPDATE devices SET notes = notes || '' WHERE id = (SELECT min(id) FROM devices)"
-            )
+                "UPDATE devices SET notes = notes || '' "
+                "WHERE id = (SELECT min(id) FROM devices)",
+            ),
         )
         conn.execute(
             text(
-                "UPDATE devices SET notes = 'audited' WHERE id = (SELECT min(id) FROM devices)"
-            )
+                "UPDATE devices SET notes = 'audited' WHERE "
+                "id = (SELECT min(id) FROM devices)",
+            ),
         )
     assert _count(db, "audit_log") == 1
 

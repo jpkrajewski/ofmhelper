@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -124,7 +126,11 @@ def _require_drive(user_id: int) -> None:
 
 
 def previews(
-    urls: list[str], provider: str, resolution: str, user_id: int, owner_id: int
+    urls: list[str],
+    provider: str,
+    resolution: str,
+    user_id: int,
+    owner_id: int,
 ) -> Iterator[LinkPreview]:
     _require_drive(user_id)
     links = read("\n".join(urls))
@@ -152,7 +158,7 @@ def _first_send(actor: str, batch: str) -> bool:
                 "1",
                 nx=True,
                 ex=constants.sent_ttl_s,
-            )
+            ),
         )
     except RedisError:
         logger.warning("could not mark batch %s as sent", batch, exc_info=True)
@@ -162,7 +168,7 @@ def _first_send(actor: str, batch: str) -> bool:
 def _forget_send(actor: str, batch: str) -> None:
     try:
         get_redis().delete(
-            clone_links_constants().run_key.format(actor=actor, batch=batch)
+            clone_links_constants().run_key.format(actor=actor, batch=batch),
         )
     except RedisError:
         logger.warning("could not clear batch %s", batch, exc_info=True)
@@ -220,7 +226,9 @@ class Generate(BaseModel):
             )
         except Exception:
             logger.warning(
-                "clone-links job %s could not be queued", job_id, exc_info=True
+                "clone-links job %s could not be queued",
+                job_id,
+                exc_info=True,
             )
             fail_job(job_id, clone_links_constants().not_queued)
             raise
@@ -228,7 +236,9 @@ class Generate(BaseModel):
 
     def _key(self, form: Submitted) -> str:
         return Keys.of(self.owner_id).for_run(
-            form.provider, _target(form.provider).model, form.api_key
+            form.provider,
+            _target(form.provider).model,
+            form.api_key,
         )
 
     def _checked(self, form: Submitted) -> _Shared:
@@ -253,7 +263,10 @@ class Generate(BaseModel):
 
     def _subject(self, form: Submitted) -> list[str]:
         paths = build_ordered_paths(
-            form.image_manifest, form.image, self.assets_root, user_id=self.owner_id
+            form.image_manifest,
+            form.image,
+            self.assets_root,
+            user_id=self.owner_id,
         )
         max_images = settings.web.clone_max_images
         if not 1 <= len(paths) <= max_images:
@@ -378,5 +391,6 @@ def stop(job_id: str, actor: str) -> BatchStopped:
     runs = list_batch(CloneLinksTask.RUN, batch, actor)
     logger.info("clone-links batch %s stopped by %s", batch, actor)
     return BatchStopped(
-        batch=batch, running=sum(run.status == "running" for run in runs)
+        batch=batch,
+        running=sum(run.status == "running" for run in runs),
     )

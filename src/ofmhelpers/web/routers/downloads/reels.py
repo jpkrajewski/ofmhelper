@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -62,14 +64,18 @@ def feed_page(
 @router.get("/thumb/{code}")
 def thumb(code: ReelCode, scope: Scope) -> FileResponse:
     return FileResponse(
-        page.cover(code, scope), media_type="image/webp", headers=_THUMB_CACHE
+        page.cover(code, scope),
+        media_type="image/webp",
+        headers=_THUMB_CACHE,
     )
 
 
 @router.get("/watchlist")
 def watchlist(request: Request, scope: Scope, group: GroupQuery = None) -> Response:
     return render(
-        request, "_reels_watch_rows.html", dict(page.watch_rows(scope, group))
+        request,
+        "_reels_watch_rows.html",
+        dict(page.watch_rows(scope, group)),
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import pickle
 import re
@@ -80,7 +82,9 @@ def queued(monkeypatch) -> list[tuple]:
 
 def _failed(link: str, batch: str, error: str = NO_CREDITS) -> str:
     job_id = create_job(
-        CloneLinksTask.RUN, {"link": link, "batch": batch}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": link, "batch": batch},
+        actor=_actor(),
     )
     fail_job(job_id, error)
     return job_id
@@ -88,7 +92,9 @@ def _failed(link: str, batch: str, error: str = NO_CREDITS) -> str:
 
 def _done(link: str, batch: str) -> str:
     job_id = create_job(
-        CloneLinksTask.RUN, {"link": link, "batch": batch}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": link, "batch": batch},
+        actor=_actor(),
     )
     run_job(job_id, list, {})
     return job_id
@@ -97,8 +103,12 @@ def _done(link: str, batch: str) -> str:
 def _remember(job_id: str) -> None:
     tasks.remember(
         tasks.ProviderTask(
-            job_id=job_id, provider="kie", model="wan", task_id="t", api_key=KIE_KEY
-        )
+            job_id=job_id,
+            provider="kie",
+            model="wan",
+            task_id="t",
+            api_key=KIE_KEY,
+        ),
     )
 
 
@@ -193,7 +203,8 @@ def test_previews_stream_a_line_per_link_unbuffered(monkeypatch):
     )
 
     r = client().post(
-        "/clone-links/previews", json={"urls": [REEL, OTHER], "provider": "kie"}
+        "/clone-links/previews",
+        json={"urls": [REEL, OTHER], "provider": "kie"},
     )
 
     assert r.status_code == 200, r.text
@@ -239,7 +250,9 @@ def test_the_same_generate_sent_twice_queues_its_runs_once(queued, monkeypatch):
 
 def test_a_send_racing_the_first_of_its_generate_queues_nothing(queued, monkeypatch):
     monkeypatch.setattr(
-        clone_links_service, "_first_send", lambda _actor, _batch: False
+        clone_links_service,
+        "_first_send",
+        lambda _actor, _batch: False,
     )
 
     answer = run(client(), [REEL], batch="abcdef0123456789")
@@ -324,7 +337,9 @@ def test_a_failed_cards_recreate_brings_back_its_generates_links_left_to_redo():
     last = _failed(_reel(7), batch)
     _done(_reel(5), "bbbb2222")
     create_job(
-        CloneLinksTask.RUN, {"link": _reel(6), "batch": "cccc3333"}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": _reel(6), "batch": "cccc3333"},
+        actor=_actor(),
     )
 
     assert _recreate(ann, last) == [_reel(1), _reel(7)]
@@ -339,7 +354,9 @@ def test_a_done_cards_recreate_brings_back_its_link_until_it_is_made_again():
 
     assert _recreate(ann, done) == [_reel(1)]
     create_job(
-        CloneLinksTask.RUN, {"link": _reel(1), "batch": "eeee5555"}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": _reel(1), "batch": "eeee5555"},
+        actor=_actor(),
     )
     assert _recreate(ann, done) == []
 
@@ -368,7 +385,9 @@ def test_the_page_never_waits_on_google_for_the_drive_space(monkeypatch):
         return real_render(request, name, **context)
 
     monkeypatch.setattr(
-        clone_links_page, "drive_space", lambda _user, **kw: asked.append(kw) or None
+        clone_links_page,
+        "drive_space",
+        lambda _user, **kw: asked.append(kw) or None,
     )
     monkeypatch.setattr(clone_links, "render", spy)
 
@@ -413,7 +432,10 @@ def test_a_queued_run_loads_in_a_fresh_worker_process(queued):
         [
             sys.executable,
             "-c",
-            "import pickle, sys; print(pickle.loads(sys.stdin.buffer.read()).__module__)",
+            (
+                "import pickle, sys; "
+                "print(pickle.loads(sys.stdin.buffer.read()).__module__)"
+            ),
         ],
         input=pickle.dumps(fn),
         capture_output=True,

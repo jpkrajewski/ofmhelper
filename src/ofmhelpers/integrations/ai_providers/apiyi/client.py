@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import mimetypes
 from pathlib import Path
@@ -174,7 +176,10 @@ class ApiyiClient:
 
     def _model_ids(self) -> str:
         answer = parsed(
-            self.call("GET", MODELS_PATH), ModelList, PROVIDER, "model list"
+            self.call("GET", MODELS_PATH),
+            ModelList,
+            PROVIDER,
+            "model list",
         )
         return " ".join(model.id for model in answer.data if model.id)
 
@@ -212,7 +217,8 @@ class ApiyiClient:
         s = settings.apiyi
         if self.lighter:
             limits = ImageLimits(
-                max_bytes=s.link_image_max_bytes, max_side=s.ref_image_max_side
+                max_bytes=s.link_image_max_bytes,
+                max_side=s.ref_image_max_side,
             )
             out = Path(settings.aigen.out_dir) / "apiyi" / "fitted"
             try:
@@ -249,6 +255,9 @@ class ApiyiClient:
             response = outbound.get(url, timeout=settings.aigen.download_timeout_s)
             response.raise_for_status()
         except requests.RequestException as exc:
-            msg = f"{PROVIDER}: could not fetch the result {url.split('?', maxsplit=1)[0]}"
+            msg = (
+                f"{PROVIDER}: could not fetch the "
+                f"result {url.split('?', maxsplit=1)[0]}"
+            )
             raise ProviderUnavailableError(msg) from exc
         return response.content

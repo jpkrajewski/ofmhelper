@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import NoReturn
 
 from pydantic import Field
@@ -64,7 +66,8 @@ class RhUsage(Lenient):
     consume_money: str | float | None = Field(default=None, alias="consumeMoney")
     consume_coins: str | float | None = Field(default=None, alias="consumeCoins")
     third_party_money: str | float | None = Field(
-        default=None, alias="thirdPartyConsumeMoney"
+        default=None,
+        alias="thirdPartyConsumeMoney",
     )
     cost_time_s: str | float | None = Field(default=None, alias="taskCostTime")
 

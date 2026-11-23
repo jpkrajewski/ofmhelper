@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import shutil
 import subprocess
@@ -86,7 +88,8 @@ def test_a_bare_green_deploy_on_a_clean_tree_writes_the_gate(project):
     result = project.run("deploy")
     assert result.returncode == 0, result.stderr
     assert project.gate_green.read_text(encoding="utf-8").split()[0] == project.git(
-        "rev-parse", "HEAD^{tree}"
+        "rev-parse",
+        "HEAD^{tree}",
     )
 
 

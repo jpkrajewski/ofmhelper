@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
 

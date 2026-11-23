@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import inspect
 import logging
 import sys
@@ -53,7 +55,7 @@ PATCHED_PACKAGES = frozenset(
         "urllib3",
         "http",
         "sys",
-    }
+    },
 )
 
 
@@ -123,7 +125,8 @@ def _sentry_made(routine: Any, saved: set[int]) -> bool:
         else routine
     )
     reached = inspect.unwrap(
-        function, stop=lambda step: _defined_by_sentry(step, saved)
+        function,
+        stop=lambda step: _defined_by_sentry(step, saved),
     )
     return _defined_by_sentry(reached, saved)
 
@@ -240,7 +243,9 @@ def test_a_logged_error_is_an_event(sent):
 def test_a_failed_job_is_an_event_without_its_arguments(sent):
     queue = Queue(connection=get_redis())
     job = queue.enqueue(
-        worker_tasks.fails_with, "argument-value", secret="keyword-value"
+        worker_tasks.fails_with,
+        "argument-value",
+        secret="keyword-value",
     )
 
     SimpleWorker([queue], connection=get_redis()).work(burst=True)
@@ -329,7 +334,12 @@ def test_an_unhealthy_heartbeat_fails_and_alarms_from_the_second_in_a_row(sent):
 def _loads(**workers: int) -> list[QueueLoad]:
     return [
         QueueLoad(
-            name=name, workers=count, busy=0, waiting=0, failed=0, oldest_wait_s=None
+            name=name,
+            workers=count,
+            busy=0,
+            waiting=0,
+            failed=0,
+            oldest_wait_s=None,
         )
         for name, count in workers.items()
     ]
@@ -346,7 +356,9 @@ def test_every_queue_with_a_worker_is_a_healthy_heartbeat(sent, monkeypatch):
 
 def test_a_queue_nobody_works_on_is_an_error_that_names_it(sent, monkeypatch):
     monkeypatch.setattr(
-        alive, "queue_loads", lambda: _loads(default=10, media=0, edit=0)
+        alive,
+        "queue_loads",
+        lambda: _loads(default=10, media=0, edit=0),
     )
 
     alive.report_alive()
@@ -400,7 +412,7 @@ def _wrapper_depth(function: Any) -> int:
     depth = 0
     while function.__name__ == "sentry_patched_callhandlers":
         closure = dict(
-            zip(function.__code__.co_freevars, function.__closure__, strict=True)
+            zip(function.__code__.co_freevars, function.__closure__, strict=True),
         )
         function = closure["old_callhandlers"].cell_contents
         depth += 1

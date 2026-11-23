@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in_admin, sign_in_agency
@@ -101,7 +103,9 @@ def test_a_renamed_va_renames_their_folder(drive):
     renamed = va.model_copy(update={"name": "Noelyn R."})
 
     access = StorageAccess(
-        owner_id=users.agency_id(), client=drive, constants=StorageConstants()
+        owner_id=users.agency_id(),
+        client=drive,
+        constants=StorageConstants(),
     )
     vas = StorageService.compose(access).va_folders
     folder = vas.ensure(ROOT, renamed, old)

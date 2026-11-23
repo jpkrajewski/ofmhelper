@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 from pathlib import Path
 from types import MappingProxyType
@@ -37,7 +39,7 @@ def _roots() -> MappingProxyType[str, Path]:
             "uploads": Path(settings.infra.uploads_root).resolve(),
             "downloads": Path("downloads").resolve(),
             "kieai_out": Path(settings.aigen.out_dir).resolve(),
-        }
+        },
     )
 
 
@@ -139,7 +141,7 @@ def folder(root_name: str, rel_dir: str) -> Folder:
                     mtime=st.st_mtime,
                     size=_human_size(st.st_size),
                     kind=classify_kind(entry.name),
-                )
+                ),
             )
     dirs.sort(key=lambda d: d.mtime, reverse=True)
     files.sort(key=lambda f: f.mtime, reverse=True)
@@ -174,7 +176,10 @@ def upload(root_name: str, rel_dir: str, uploads: Sequence[UploadFile]) -> None:
         with out:
             shutil.copyfileobj(item.file, out)
     logger.info(
-        "file manager: %d upload(s) into %s/%s", len(uploads), root_name, rel_dir
+        "file manager: %d upload(s) into %s/%s",
+        len(uploads),
+        root_name,
+        rel_dir,
     )
 
 

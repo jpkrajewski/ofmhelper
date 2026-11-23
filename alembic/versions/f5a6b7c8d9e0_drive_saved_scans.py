@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -17,7 +19,8 @@ def upgrade() -> None:
         sa.Column("scan", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     )
     op.add_column(
-        "drive_account_folders", sa.Column("scanned_at", sa.Float(), nullable=True)
+        "drive_account_folders",
+        sa.Column("scanned_at", sa.Float(), nullable=True),
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
 lazy from ofmhelpers.features.jobs.runner import Requeued
 
@@ -26,5 +28,6 @@ def note_down(name):
 
 def note_the_line():
     get_redis().set(
-        "line_seen", JobQueue(name=QueueName.MEDIA).line().model_dump_json()
+        "line_seen",
+        JobQueue(name=QueueName.MEDIA).line().model_dump_json(),
     )

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 
@@ -44,7 +46,7 @@ def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path, capl
         "input": {"prompt": "p"},
     }
     assert http.request.call_args.kwargs["headers"] == {
-        "Authorization": "Bearer kie-key"
+        "Authorization": "Bearer kie-key",
     }
     assert "kie.ai task created: taskId=t1 model=wan/3-0-video jobId=job1" in (
         caplog.text
@@ -127,7 +129,7 @@ def test_the_upload_cache_key_never_carries_the_api_key(tmp_path):
 def test_a_rejected_key_says_so_in_one_line(provider):
     with kie_http() as http:
         http.request.return_value = response(
-            {"code": 401, "msg": "Authentication failed: Unauthorized"}
+            {"code": 401, "msg": "Authentication failed: Unauthorized"},
         )
         with pytest.raises(ProviderAuthError) as raised:
             provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
@@ -151,7 +153,9 @@ def test_create_task_is_never_retried_by_the_transport():
 
 
 def test_status_success_returns_the_result_urls_and_logs_credits(
-    provider, tmp_path, caplog
+    provider,
+    tmp_path,
+    caplog,
 ):
     with (
         caplog.at_level(logging.INFO, logger=client_module.__name__),

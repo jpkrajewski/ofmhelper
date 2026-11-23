@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import itertools
 import json
@@ -105,10 +107,10 @@ class FakeFamilies:
                             "parts": [draft, {"text": "x"}, final],
                         },
                         "finishReason": "STOP",
-                    }
+                    },
                 ],
                 "usageMetadata": {"promptTokenCount": 10},
-            }
+            },
         )
 
     def _images(self, request: requests.PreparedRequest, path: str) -> FakeReply:
@@ -126,7 +128,9 @@ class FakeFamilies:
             return error(400, "invalid_request_error", "model is required")
         if model == "gpt-image-2" and "response_format" in body:
             return error(
-                400, "unknown_parameter", "Unknown parameter: 'response_format'."
+                400,
+                "unknown_parameter",
+                "Unknown parameter: 'response_format'.",
             )
         if (
             model.startswith(("seedream", "flux"))
@@ -139,7 +143,8 @@ class FakeFamilies:
     def _seedance(self, request: requests.PreparedRequest, path: str) -> FakeReply:
         if request.headers.get("Accept-Encoding") != "identity":
             return FakeReply(
-                body=b'id":"cgt-trunc', headers={"Content-Type": "application/json"}
+                body=b'id":"cgt-trunc',
+                headers={"Content-Type": "application/json"},
             )
         if request.method == "POST":
             body = self._json(request).values
@@ -161,7 +166,7 @@ class FakeFamilies:
                 "status": "succeeded",
                 "content": {"video_url": url},
                 "usage": {"completion_tokens": 108900},
-            }
+            },
         )
 
     def _veo(self, request: requests.PreparedRequest, path: str) -> FakeReply:
@@ -171,7 +176,8 @@ class FakeFamilies:
         task_id, _, tail = rest.partition("/")
         if tail == "content":
             return FakeReply(
-                body=fake_media.mp4(), headers={"Content-Type": "video/mp4"}
+                body=fake_media.mp4(),
+                headers={"Content-Type": "video/mp4"},
             )
         polls = self._poll(task_id)
         if polls is None:
@@ -207,7 +213,7 @@ class FakeFamilies:
         with self._lock:
             self.tasks[task_id] = {"polls": 0}
         return FakeReply.json_body(
-            {"id": task_id, "task_id": task_id, "object": "video", "status": "queued"}
+            {"id": task_id, "task_id": task_id, "object": "video", "status": "queued"},
         )
 
     def _poll(self, task_id: str) -> int | None:

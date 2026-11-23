@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import re
 import threading
@@ -98,7 +100,7 @@ class FakePinterest:
             raw = parse_qs(body or str(request.body or "")).get("data", ["{}"])[0]
         session = re.search(r"_pinterest_sess=([^;]+)", cookies)
         self.account = ACCOUNT.model_copy(
-            update={"username": f"pin_{session.group(1) if session else 'x'}"}
+            update={"username": f"pin_{session.group(1) if session else 'x'}"},
         )
         options = json.loads(raw).get("options", {})
         if "/BoardResource/create/" in parts.path:
@@ -143,12 +145,16 @@ class FakePinterest:
         self._uploads[upload_id] = asked + 1
         if self.broken_uploads:
             return FakeUploadFailed(
-                upload_id=upload_id, status="failed", failure_code=3
+                upload_id=upload_id,
+                status="failed",
+                failure_code=3,
             )
         if asked == 0:
             return FakeUpload(upload_id=upload_id, status="processing")
         return FakeUploadSucceeded(
-            upload_id=upload_id, status="succeeded", signature=f"sig{upload_id}"
+            upload_id=upload_id,
+            status="succeeded",
+            signature=f"sig{upload_id}",
         )
 
     def _put(self, request: requests.PreparedRequest) -> FakeReply:
@@ -168,8 +174,8 @@ def _ok(data: object) -> FakeReply:
                 "status": "success",
                 "code": 0,
                 "data": to_jsonable_python(data),
-            }
-        }
+            },
+        },
     )
 
 
@@ -179,7 +185,8 @@ def fake_pinterest() -> FakePinterest:
 
 
 def _handle(
-    request: requests.PreparedRequest, _proxies: Mapping[str, str]
+    request: requests.PreparedRequest,
+    _proxies: Mapping[str, str],
 ) -> FakeReply:
     return fake_pinterest().answer(request)
 

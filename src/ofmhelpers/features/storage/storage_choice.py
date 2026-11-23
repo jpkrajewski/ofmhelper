@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.log import get_logger
@@ -15,5 +17,6 @@ def use(user_id: int, provider: StorageProvider) -> None:
         storage_jobs.queue_sync(user_id)
     except Exception:
         logger.exception(
-            "storage: queueing the sync after switching %s failed", user_id
+            "storage: queueing the sync after switching %s failed",
+            user_id,
         )

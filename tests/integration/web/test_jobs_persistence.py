@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 from signin import make_user
@@ -231,8 +233,12 @@ def test_a_job_whose_row_is_gone_is_never_run():
     job_id = create_job("clone_links", {"link": "https://x/1"})
     tasks.remember(
         tasks.ProviderTask(
-            job_id=job_id, provider="kie", model="m", task_id="t1", api_key="k"
-        )
+            job_id=job_id,
+            provider="kie",
+            model="m",
+            task_id="t1",
+            api_key="k",
+        ),
     )
     JobRepository().delete(job_id)
     called = []
@@ -246,7 +252,8 @@ def test_a_job_whose_row_is_gone_is_never_run():
 
 def test_merge_params_adds_values_and_keeps_the_other_keys():
     job_id = create_job(
-        "clone_links", {"link": "https://x/1", "batch": "ab12cd34", "seconds": 6}
+        "clone_links",
+        {"link": "https://x/1", "batch": "ab12cd34", "seconds": 6},
     )
     assert get_job(job_id).params["link"] == "https://x/1"
 

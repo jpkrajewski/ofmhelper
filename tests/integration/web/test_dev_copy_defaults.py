@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.background import sweeps
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import LinksSettings

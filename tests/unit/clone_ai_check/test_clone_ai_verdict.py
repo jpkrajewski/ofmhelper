@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 import pytest
@@ -15,7 +17,7 @@ def _answer(severities: list[str], percent: int) -> CloneAiVerdict:
                 {"at_s": 1.0, "what": "hand", "severity": s} for s in severities
             ],
             "glitch_percent": percent,
-        }
+        },
     )
 
 
@@ -32,7 +34,9 @@ def _answer(severities: list[str], percent: int) -> CloneAiVerdict:
     ],
 )
 def test_glitchy_when_a_glitch_blocks_or_the_model_is_unsure(
-    severities, percent, verdict
+    severities,
+    percent,
+    verdict,
 ):
     assert _answer(severities, percent).verdict(50) is verdict
 

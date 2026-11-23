@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import hashlib
 import hmac
@@ -37,7 +39,7 @@ def _signed(task_id: str, headers: Mapping[str, str], key: str) -> bool:
         logger.warning("kie.ai callback for %s signed %.0f s ago", task_id, age_s)
         return False
     expected = base64.b64encode(
-        hmac.new(key.encode(), f"{task_id}.{stamp}".encode(), hashlib.sha256).digest()
+        hmac.new(key.encode(), f"{task_id}.{stamp}".encode(), hashlib.sha256).digest(),
     ).decode()
     if not hmac.compare_digest(expected, signature):
         logger.warning("kie.ai callback for %s: signature does not match", task_id)

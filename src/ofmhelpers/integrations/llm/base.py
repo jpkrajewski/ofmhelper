@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 import pkgutil
 import subprocess
@@ -82,14 +84,21 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def _ask(
-        self, prompt: Prompt, answer: type[BaseModel], timeout_s: float
+        self,
+        prompt: Prompt,
+        answer: type[BaseModel],
+        timeout_s: float,
     ) -> Reply: ...
 
     def ask[A: BaseModel](self, prompt: Prompt, answer: type[A]) -> A:
         return self.answered(prompt, answer).answer
 
     def answered[A: BaseModel](
-        self, prompt: Prompt, answer: type[A], *, deadline: float | None = None
+        self,
+        prompt: Prompt,
+        answer: type[A],
+        *,
+        deadline: float | None = None,
     ) -> Answered[A]:
         started = time.monotonic()
         attempts = 0
@@ -172,7 +181,9 @@ class LLMProvider(ABC):
         raise AssertionError(msg)
 
     def _with_retries[T](
-        self, attempt: Callable[[float], T], deadline: float | None
+        self,
+        attempt: Callable[[float], T],
+        deadline: float | None,
     ) -> T:
         s = settings.llm
         for tried in range(s.retries + 1):

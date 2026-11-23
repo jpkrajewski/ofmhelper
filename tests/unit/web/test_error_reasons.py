@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.features.clone_links.constants import clone_links_constants
@@ -13,15 +15,24 @@ from ofmhelpers.features.jobs.schema import (
     ("error", "reason"),
     [
         (
-            "createTask rejected: {'code': 402, 'msg': 'Credits insufficient : Your current balance isn't enough'}",
+            (
+                "createTask rejected: {'code': 402, 'msg': 'Credits "
+                "insufficient : Your current balance isn't enough'}"
+            ),
             "No credits",
         ),
         (
-            "abc123 failed: The input or output was flagged as sensitive. Please try again with different inputs.",
+            (
+                "abc123 failed: The input or output was flagged as "
+                "sensitive. Please try again with different inputs."
+            ),
             "Flagged content",
         ),
         (
-            "kie.ai failed this generation: your content creation prompt contains NSFW, which isn't allowed",
+            (
+                "kie.ai failed this generation: your content creation "
+                "prompt contains NSFW, which isn't allowed"
+            ),
             "Flagged content",
         ),
         (
@@ -29,25 +40,45 @@ from ofmhelpers.features.jobs.schema import (
             "Flagged content",
         ),
         (
-            "createTask rejected: {'code': 422, 'msg': 'reference_image_urls resolution is out of range', 'data': None}",
+            (
+                "createTask rejected: {'code': 422, 'msg': 'reference_image_urls "
+                "resolution is out of range', 'data': None}"
+            ),
             "Input out of range",
         ),
         (
-            "createTask rejected: {'code': 422, 'msg': 'reference_video_urls duration must be between 1 and 15 seconds'}",
+            (
+                "createTask rejected: {'code': 422, 'msg': 'reference_video_urls "
+                "duration must be between 1 and 15 seconds'}"
+            ),
             "Input out of range",
         ),
         ("abc123 failed: Internal Error, Please try again later.", "Provider error"),
         (
-            "ERROR: [Instagram] DdolTu_JpJ0: Instagram sent an empty media response. Check if this post is accessible in your browser without being logged-in.",
+            (
+                "ERROR: [Instagram] DdolTu_JpJ0: Instagram "
+                "sent an empty media response. "
+                "Check if this post is accessible in your "
+                "browser without being logged-in."
+            ),
             "Post deleted or profile banned",
         ),
         (
-            "ERROR: [Instagram] DdolTu_JpJ0: The webpage request was redirected to the login page. You have exceeded the rate-limit for accessing posts anonymously. Use --cookies-from-browser or --cookies for the authentication.",
+            (
+                "ERROR: [Instagram] DdolTu_JpJ0: The "
+                "webpage request was redirected to the "
+                "login page. You have exceeded the rate-limit for accessing posts "
+                "anonymously. Use --cookies-from-browser "
+                "or --cookies for the authentication."
+            ),
             "Needs login",
         ),
         ("ERROR: [youtube] abc: Video unavailable", "Post deleted or profile banned"),
         (
-            "Higgsfield failed this generation: Your credit balance is too low to complete this request. Please top up your balance and try again.",
+            (
+                "Higgsfield failed this generation: Your credit balance is too low to "
+                "complete this request. Please top up your balance and try again."
+            ),
             "No credits",
         ),
         (
@@ -55,12 +86,18 @@ from ofmhelpers.features.jobs.schema import (
             "Provider error",
         ),
         (
-            "HTTPSConnectionPool(host='api.kie.ai', port=443): Read timed out. (read timeout=30)",
+            (
+                "HTTPSConnectionPool(host='api.kie.ai', "
+                "port=443): Read timed out. (read timeout=30)"
+            ),
             "Timed out",
         ),
         ("kie.ai failed this generation: generate task timeout.", "Timed out"),
         (
-            "createTask rejected: {'code': 500, 'msg': 'File type not supported', 'data': None}",
+            (
+                "createTask rejected: {'code': 500, 'msg': "
+                "'File type not supported', 'data': None}"
+            ),
             "Bad input file",
         ),
         (
@@ -68,7 +105,10 @@ from ofmhelpers.features.jobs.schema import (
             "Bad input file",
         ),
         (
-            "Higgsfield failed this generation: The image dimensions or aspect ratio are not supported by this model.",
+            (
+                "Higgsfield failed this generation: The image dimensions "
+                "or aspect ratio are not supported by this model."
+            ),
             "Bad input file",
         ),
         ("createTask rejected: {'code': 401, 'msg': 'Unauthorized'}", "Wrong API key"),
@@ -184,7 +224,8 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
     [
         (
             (
-                "video: ERROR: [Instagram] DesPzbYsp: This content is only available for"
+                "video: ERROR: [Instagram] DesPzbYsp: "
+                "This content is only available for"
                 " registered users who follow this account. Use --cookies-from-browser"
                 " | images: [instagram][error] HttpError: '400 Bad Request'"
             ),
@@ -193,7 +234,8 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
         (
             (
                 "images: [instagram][error] HttpError: '401 Unauthorized' for 'https://"
-                "www.instagram.com/api/v1/media/1/info/' | video: ERROR: [Instagram] Dc1:"
+                "www.instagram.com/api/v1/media/1/info/' "
+                "| video: ERROR: [Instagram] Dc1:"
                 " There is no video in this post"
             ),
             "No video in this post (photos only)",
@@ -212,7 +254,8 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
         ),
         (
             (
-                "video: x: The server may not support the current cipher list. | images:"
+                "video: x: The server may not support "
+                "the current cipher list. | images:"
                 " This post needs a login: upload your fresh cookies.txt at /cookies"
             ),
             "Instagram wants a login: upload fresh cookies on Cookies",
@@ -230,7 +273,8 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
         ),
         (
             (
-                "ERROR: [Instagram] Dc1: Video info extraction failed: HTTP Error 400: Bad"
+                "ERROR: [Instagram] Dc1: Video info "
+                "extraction failed: HTTP Error 400: Bad"
                 " Request (caused by <HTTPError 400: Bad Request>)"
             ),
             "Instagram blocked the download for now: try again later",
@@ -244,7 +288,8 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
         ),
         (
             (
-                "video: ERROR: [Instagram] Dc1: Something nobody knew yet; please report"
+                "video: ERROR: [Instagram] Dc1: Something "
+                "nobody knew yet; please report"
                 " this issue"
             ),
             "Something nobody knew yet",

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -24,12 +26,14 @@ def admin() -> tuple[TestClient, int]:
 @pytest.fixture
 def known_model(monkeypatch):
     monkeypatch.setattr(
-        "ofmhelpers.features.chatting.service.platform_models", lambda _p: ["x"]
+        "ofmhelpers.features.chatting.service.platform_models",
+        lambda _p: ["x"],
     )
 
 
 def test_opening_a_chat_page_writes_nothing_and_the_open_call_records_it(
-    admin, known_model
+    admin,
+    known_model,
 ):
     client, user_id = admin
 
@@ -40,7 +44,7 @@ def test_opening_a_chat_page_writes_nothing_and_the_open_call_records_it(
 
     assert answer.status_code == 204
     assert [(m.platform.value, m.username) for m in recent_models(user_id)] == [
-        ("fanvue", "x")
+        ("fanvue", "x"),
     ]
 
 
@@ -69,7 +73,8 @@ def test_the_error_page_cannot_be_framed():
         raise RuntimeError
 
     answer = TestClient(crashing, raise_server_exceptions=False).get(
-        "/boom", headers=PAGE
+        "/boom",
+        headers=PAGE,
     )
 
     assert answer.status_code == 500
@@ -97,7 +102,7 @@ def polled_app(monkeypatch) -> TestClient:
     def render(request, _name, _context=None):
         nonce = templates_config.csp_nonce(request)
         return HTMLResponse(
-            f'<script nonce="{nonce}"></script><p>{fragment["text"]}</p>'
+            f'<script nonce="{nonce}"></script><p>{fragment["text"]}</p>',
         )
 
     monkeypatch.setattr(templates_config, "render", render)

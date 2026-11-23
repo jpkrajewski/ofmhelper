@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import zipfile
@@ -67,7 +69,9 @@ def client(tmp_path, monkeypatch):
 
 
 def _found(
-    username: str, views: int = 60_000, code: str = "Dekxh8BJYdu"
+    username: str,
+    views: int = 60_000,
+    code: str = "Dekxh8BJYdu",
 ) -> ProfileReels:
     profile = Profile(user_id="1", username=username, followers=1000, is_private=False)
     reel = Reel(
@@ -109,7 +113,8 @@ def test_page_is_in_the_nav(client):
 
 def test_watch_form_takes_the_handle_off_each_line():
     form = WatchForm(
-        profiles="https://www.instagram.com/Sheep_Love33/\n@safaree — Safaree Samuels\n\n"
+        profiles="https://www.instagram.com/Sheep_Love33/\n@safaree "
+        "— Safaree Samuels\n\n"
         "https://instagram.com/kikiumi2026?cplk=x\nsheep_love33",
         group="  Gay  ",
     )
@@ -180,7 +185,9 @@ def test_feed_pages(client, monkeypatch):
         for i in range(5)
     ]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
 
     first = client.get("/reels").text
@@ -204,7 +211,7 @@ def test_login_only_reel_is_shown_but_not_pickable(client, monkeypatch):
     def gated(_client, username, *_args):
         found = _found(username)
         found.reels[0] = found.reels[0].model_copy(
-            update={"video_url": None, "duration_s": None}
+            update={"video_url": None, "duration_s": None},
         )
         return found
 
@@ -220,7 +227,7 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(client, monkeypatch):
     def gated(_client, username, *_args):
         found = _found(username)
         found.reels[0] = found.reels[0].model_copy(
-            update={"video_url": None, "duration_s": None}
+            update={"video_url": None, "duration_s": None},
         )
         return found
 
@@ -260,7 +267,10 @@ def test_a_cookies_upload_leaves_a_job_row_for_the_unlock(client):
 def test_feed_is_every_profiles_reels_most_viewed_first():
     def watched(username, views):
         return WatchedProfile(
-            user_id=1, username=username, added_at=0, result=_found(username, views)
+            user_id=1,
+            username=username,
+            added_at=0,
+            result=_found(username, views),
         )
 
     feed = FeedItem.of([watched("a", 60_000), watched("b", 2_000_000), watched("c", 0)])
@@ -284,7 +294,9 @@ def test_bad_line_adds_nothing(client):
 
 
 def test_failed_rescan_keeps_the_last_result_next_to_its_error(
-    client, scans, monkeypatch
+    client,
+    scans,
+    monkeypatch,
 ):
     client.post("/reels/watch", data={"profiles": "x"})
 
@@ -323,7 +335,9 @@ def test_rate_limit_stops_the_batch_and_leaves_the_rest_due(monkeypatch):
 
 
 def test_not_found_is_retried_on_another_proxy_and_never_drops_the_profile(
-    client, scans, monkeypatch
+    client,
+    scans,
+    monkeypatch,
 ):
     client.post("/reels/watch", data={"profiles": "real"})
     monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2,c:3")
@@ -352,7 +366,9 @@ def test_a_new_profile_confirmed_gone_is_not_added(monkeypatch):
     monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
     monkeypatch.setattr(reel_watch, "scan_profile", _not_found)
     monkeypatch.setattr(
-        reel_watch.InstagramClient, "exists_logged_in", lambda _self, _u: False
+        reel_watch.InstagramClient,
+        "exists_logged_in",
+        lambda _self, _u: False,
     )
     watch("deleted_account")
     reel_watch.scan_all(["deleted_account"])
@@ -363,7 +379,9 @@ def test_a_new_profile_the_login_still_sees_is_kept(monkeypatch):
     monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
     monkeypatch.setattr(reel_watch, "scan_profile", _not_found)
     monkeypatch.setattr(
-        reel_watch.InstagramClient, "exists_logged_in", lambda _self, _u: True
+        reel_watch.InstagramClient,
+        "exists_logged_in",
+        lambda _self, _u: True,
     )
     watch("flagged_proxies")
     reel_watch.scan_all(["flagged_proxies"])
@@ -371,7 +389,9 @@ def test_a_new_profile_the_login_still_sees_is_kept(monkeypatch):
 
 
 def test_a_private_profile_is_not_added_but_a_known_one_turning_private_stays(
-    client, scans, monkeypatch
+    client,
+    scans,
+    monkeypatch,
 ):
     client.post("/reels/watch", data={"profiles": "known"})
 
@@ -526,7 +546,10 @@ def test_feed_filters_by_rank_and_group_together(client, monkeypatch):
             result=_found("b", 1_200_000, "huge"),
         ),
         WatchedProfile(
-            user_id=1, username="c", added_at=0, result=_found("c", 2_000_000, "other")
+            user_id=1,
+            username="c",
+            added_at=0,
+            result=_found("c", 2_000_000, "other"),
         ),
     ]
     monkeypatch.setattr(
@@ -574,12 +597,14 @@ def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
     assert 'data-next-offset="2"' in first
 
     page2 = client.get(
-        "/reels/feed", params={"group": "gay", "rank": "uncommon", "offset": 2}
+        "/reels/feed",
+        params={"group": "gay", "rank": "uncommon", "offset": 2},
     ).text
     assert 'data-code="c130000"' in page2
     assert 'data-code="c120000"' in page2
     last = client.get(
-        "/reels/feed", params={"group": "gay", "rank": "uncommon", "offset": 4}
+        "/reels/feed",
+        params={"group": "gay", "rank": "uncommon", "offset": 4},
     ).text
     assert 'data-code="c110000"' in last
     assert "gallery-sentinel" not in last
@@ -595,7 +620,11 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
         profile = result.profile.model_copy(update={"followers": followers})
         result = result.model_copy(update={"reels": [reel], "profile": profile})
         return WatchedProfile(
-            user_id=1, username=username, added_at=0, scanned_at=1, result=result
+            user_id=1,
+            username=username,
+            added_at=0,
+            scanned_at=1,
+            result=result,
         )
 
     profiles = [
@@ -604,7 +633,9 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
         found("big", 1_000_000, 900_000),
     ]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
 
     def shown(query):
@@ -679,7 +710,8 @@ def test_every_scan_appends_its_numbers_to_the_history(monkeypatch):
 
 
 def test_watch_list_shows_two_week_views_and_crowns_the_most_viewed(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     def scanned(username, views):
         return WatchedProfile(
@@ -692,7 +724,9 @@ def test_watch_list_shows_two_week_views_and_crowns_the_most_viewed(
 
     profiles = [scanned("small", [5_000]), scanned("king", [2_000_000, 500_000])]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
     rows = client.get("/reels/watchlist").text
     king = rows.split('data-username="king"', 1)[1].split("</li>", 1)[0]
@@ -732,7 +766,9 @@ def test_leaderboard_leads_with_most_views_then_most_reels(client, monkeypatch):
     assert (board.top_views, board.top_reels) == ("nnnaomi.chuu", "sheep_love33")
 
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
     rows = client.get("/reels/watchlist?group=asian").text
     sheep = rows.split('data-username="sheep_love33"', 1)[1].split("</li>", 1)[0]
@@ -898,7 +934,9 @@ def _watching(monkeypatch, *codes: str) -> None:
     found.reels = [found.reels[0].model_copy(update={"code": code}) for code in codes]
     profiles = [WatchedProfile(user_id=1, username="u", added_at=0, result=found)]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
 
 
@@ -928,7 +966,9 @@ def test_clone_downloads_picked_reels_and_opens_clone_with_them(client, monkeypa
 
 @pytest.mark.parametrize("url", ["/reels/clone", "/reels/download"])
 def test_a_reel_of_no_watched_profile_is_404_and_fetches_nothing(
-    client, monkeypatch, url
+    client,
+    monkeypatch,
+    url,
 ):
     _watching(monkeypatch, "A1")
     fetched: list[str] = []
@@ -1004,7 +1044,9 @@ def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
 
     profiles = [stored("short", 15.0), stored("long", 15.7), stored("gated", None)]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
 
     html = client.get("/reels/feed").text
@@ -1041,11 +1083,16 @@ def cdn(monkeypatch, tmp_path):
 def _one_profile(monkeypatch, code: str = "Dekxh8BJYdu") -> None:
     profiles = [
         WatchedProfile(
-            user_id=1, username="u", added_at=0, result=_found("u", code=code)
-        )
+            user_id=1,
+            username="u",
+            added_at=0,
+            result=_found("u", code=code),
+        ),
     ]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
 
 
@@ -1073,7 +1120,9 @@ def test_thumbnail_is_fetched_once_shrunk_and_kept(client, monkeypatch, cdn):
 
 
 def test_thumbnail_of_a_reel_not_watched_is_404_and_fetches_nothing(
-    client, monkeypatch, cdn
+    client,
+    monkeypatch,
+    cdn,
 ):
     asked, _state = cdn
     _one_profile(monkeypatch)
@@ -1082,7 +1131,9 @@ def test_thumbnail_of_a_reel_not_watched_is_404_and_fetches_nothing(
 
 
 def test_thumbnail_of_a_profile_someone_else_watches_is_404_like_a_missing_one(
-    client, scans, cdn
+    client,
+    scans,
+    cdn,
 ):
     client.post("/reels/watch", data={"profiles": "user1", "group": "asian"})
     assert client.get("/reels/thumb/r_user1").status_code == 200

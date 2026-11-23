@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from fastapi.dependencies.models import Dependant
@@ -59,7 +61,8 @@ def test_every_area_has_a_route_and_the_menu_names_its_pages_area():
         if "GET" in (route.methods or ())
     }
     wrong = sorted(
-        f"{item.href}: menu says {item.area}, its route {sorted(pages.get(item.href, []))}"
+        f"{item.href}: menu says {item.area}, its "
+        f"route {sorted(pages.get(item.href, []))}"
         for item in NAV
         if item.area not in RETIRED | pages.get(item.href, set())
     )

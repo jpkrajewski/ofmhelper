@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 
@@ -22,7 +24,7 @@ def senders(since: float, until: float) -> list[str]:
             t.model_username
             for t in chats.counts_between(DeliveryKind.MASS, since, until)
             if t.platform.value not in off
-        }
+        },
     )
 
 
@@ -56,5 +58,5 @@ def _tell(now: float) -> None:
             key=f"chatting.mass:{digest}",
             replaces=SLOT,
             at=now,
-        )
+        ),
     )

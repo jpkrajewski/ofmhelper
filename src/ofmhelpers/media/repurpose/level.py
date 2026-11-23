@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -10,7 +12,10 @@ _MAKEUP_MAX_DB = 30.0
 
 
 def mean_volume_db(
-    src: Path, video: VideoTransformer, af: str, timeout_s: int
+    src: Path,
+    video: VideoTransformer,
+    af: str,
+    timeout_s: int,
 ) -> float:
     log = run_log(
         [

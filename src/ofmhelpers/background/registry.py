@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any
 lazy from collections.abc import Callable
 
@@ -40,19 +42,19 @@ RESUMABLE: frozendict[str, Callable[..., Any]] = frozendict(
         CloneLinksTask.RUN: run_clone_link,
         clone_long_page.TASK: run_long_clone,
         pictures.TASK: pictures.run_picture,
-    }
+    },
 )
 JOB_TIMEOUTS: frozendict[str, Callable[[dict[str, Any]], int]] = frozendict(
-    {clone_long_page.TASK: clone_long_time_limit}
+    {clone_long_page.TASK: clone_long_time_limit},
 )
 QUEUES: frozendict[str, QueueName] = frozendict(
-    {CloneLinksTask.RUN: QueueName.CLONE_LINKS}
+    {CloneLinksTask.RUN: QueueName.CLONE_LINKS},
 )
 
 
 def _stored(job: Job) -> RunArgs:
     return RunArgs.model_validate(
-        {name: value for name, value in job.params.items() if name != COUNT}
+        {name: value for name, value in job.params.items() if name != COUNT},
     )
 
 
@@ -66,13 +68,13 @@ def _with_assets_root(job: Job) -> RunArgs:
         {
             **_stored(job).model_dump(),
             "assets_root": str(assets_root_for_actor(job.actor)),
-        }
+        },
     )
 
 
 def _handmade(job: Job) -> RunArgs:
     return RunArgs.model_validate(
-        {**_in_its_folder(job).model_dump(), "job_id": job.id}
+        {**_in_its_folder(job).model_dump(), "job_id": job.id},
     )
 
 
@@ -82,7 +84,7 @@ def _sheet(job: Job) -> RunArgs:
             "job_dir": job.params["dir"],
             "files": job.params["files"],
             "assets_root": str(assets_root_for_actor(job.actor)),
-        }
+        },
     )
 
 
@@ -92,7 +94,7 @@ def _threads(job: Job) -> RunArgs:
             **threads.PicturesRun.model_validate(job.params).model_dump(),
             "user_id": int(job.actor or ""),
             "job_id": job.id,
-        }
+        },
     )
 
 
@@ -109,7 +111,7 @@ def _bin_move(job: Job) -> RunArgs:
         {
             **_storage_scan(job).model_dump(),
             **BinMove.model_validate(job.params).model_dump(mode="json"),
-        }
+        },
     )
 
 
@@ -154,7 +156,7 @@ RESTARTS = frozendict(
             kwargs=_bin_move,
             job_timeout=lambda _params: settings.storage.clean_timeout_s,
         ),
-    }
+    },
 )
 
 DRAINED = frozenset(
@@ -167,6 +169,6 @@ DRAINED = frozenset(
         report_asks.TASK,
         viral.TASK,
         clean_images.TASK,
-    }
+    },
 )
 RECOVERED_BY_THEIR_SWEEP = frozenset({pinterest.TASK, CloneLinksTask.REVIEW})

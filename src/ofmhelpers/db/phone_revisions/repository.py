@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -17,7 +19,7 @@ _LIST = text(
     WHERE user_id = :owner
     ORDER BY created_at DESC, id DESC
     LIMIT :limit
-    """
+    """,
 )
 
 _OWNS = text("SELECT 1 FROM phone_revisions WHERE id = :revision AND user_id = :owner")
@@ -30,7 +32,7 @@ _BACK = text(
     ) AS x(id integer)
     WHERE NOT EXISTS (SELECT 1 FROM logins l WHERE l.id = x.id)
     ORDER BY x.id
-    """
+    """,
 )
 
 _DROP_ADDED = (
@@ -43,7 +45,7 @@ _DROP_ADDED = (
                     ->'device_logins'
             ) AS x(device_id integer, login_id integer)
             WHERE x.device_id = dl.device_id AND x.login_id = dl.login_id)
-        """
+        """,
     ),
     text(
         """
@@ -52,7 +54,7 @@ _DROP_ADDED = (
                 (SELECT snapshot FROM phone_revisions WHERE id = :revision)->'devices'
             ) AS x(id integer)
             WHERE x.id = d.id)
-        """
+        """,
     ),
     text(
         """
@@ -61,7 +63,7 @@ _DROP_ADDED = (
                 (SELECT snapshot FROM phone_revisions WHERE id = :revision)->'logins'
             ) AS x(id integer)
             WHERE x.id = l.id)
-        """
+        """,
     ),
     text("UPDATE devices SET label = '~' || id WHERE user_id = :owner"),
     text("UPDATE logins SET username = '~' || id WHERE user_id = :owner"),
@@ -72,7 +74,7 @@ _HISTORY = text(
     SELECT id AS revision, user_id, created_at AS taken_at, change, snapshot
     FROM phone_revisions
     ORDER BY id
-    """
+    """,
 )
 
 _NEWEST = text("SELECT max(id) FROM phone_revisions")
@@ -85,7 +87,7 @@ _LOAD = text(
         SELECT 1 FROM phone_revisions
         WHERE user_id = :owner AND created_at = :taken_at AND change = :change)
     RETURNING id
-    """
+    """,
 ).bindparams(bindparam("snapshot", type_=JSONB))
 
 

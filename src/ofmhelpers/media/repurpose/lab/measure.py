@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import subprocess
@@ -77,10 +79,15 @@ class Measurement(BaseModel):
 
 
 def reference(
-    draws: VideoDraws, fps: str | None, sample: Path, dst: Path, work: Path
+    draws: VideoDraws,
+    fps: str | None,
+    sample: Path,
+    dst: Path,
+    work: Path,
 ) -> None:
     ref = VideoTransformer.from_draws(
-        VideoSettings(), draws.model_copy(update=_NO_LOOK)
+        VideoSettings(),
+        draws.model_copy(update=_NO_LOOK),
     )
     run(
         [
@@ -113,7 +120,7 @@ def vmaf(copy: Path, ref: Path, work: Path) -> float:
     tool = settings.repurpose.lab_vmaf_ffmpeg
     if tool:
         log = work / "vmaf.json"
-        graph += f"[d][r]libvmaf=log_fmt=json:log_path={log}:n_threads=2:n_subsample=2:shortest=1"
+        graph += f"[d][r]libvmaf=log_fmt=json:log_path={log}:n_threads=2:n_subsample=2:shortest=1"  # noqa: E501
         subprocess.run(
             [
                 tool,
@@ -164,7 +171,10 @@ def _pcm(path: Path, start: float | None, seconds: float | None) -> np.ndarray:
         argv += ["-t", f"{seconds:.3f}"]
     argv += ["-i", str(path), "-vn", "-ac", "1", "-ar", str(_RATE), "-f", "f32le", "-"]
     raw = subprocess.run(
-        argv, check=True, capture_output=True, timeout=_TIMEOUT_S
+        argv,
+        check=True,
+        capture_output=True,
+        timeout=_TIMEOUT_S,
     ).stdout
     return np.frombuffer(raw, dtype=np.float32)
 
@@ -252,7 +262,10 @@ def measure(
             if (full or part is Part.AUDIO) and report.audio:
                 t = step.video.timeline
                 out.audio_change_db = audio_change_db(
-                    copy, sample, t.start_s, t.duration_s
+                    copy,
+                    sample,
+                    t.start_s,
+                    t.duration_s,
                 )
             if keep:
                 keep.parent.mkdir(parents=True, exist_ok=True)

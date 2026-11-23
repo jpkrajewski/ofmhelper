@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from typing import Any
 
@@ -35,6 +37,6 @@ class CloneAiCheckRepository(CachedRepository):
             rows = s.execute(
                 select(CloneAiCheckRow)
                 .where(CloneAiCheckRow.job_id.in_(job_ids))
-                .order_by(CloneAiCheckRow.id)
+                .order_by(CloneAiCheckRow.id),
             ).scalars()
             return [_check(r) for r in rows]

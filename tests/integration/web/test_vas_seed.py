@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -50,7 +52,10 @@ def _real(task: str, user: User, folder: Path, params: dict, usd: str | None = N
     run_job(job_id, lambda: [{"name": file.name, "path": str(file)}], {})
     if usd is not None:
         generation = GenerationRecord(
-            provider="kie", model="m", task_id="t", cost_usd=float(usd)
+            provider="kie",
+            model="m",
+            task_id="t",
+            cost_usd=float(usd),
         )
         keep_cost(job_id, JobMeta(generations=[generation]), JobCost(usd=Decimal(usd)))
     return job_id
@@ -121,7 +126,7 @@ def test_a_made_up_month_is_the_vas_rows_priced_by_the_apps_own_prices(uploads):
         price = prices[row.params["provider"]]
         per_second = price.per_second("720P") * price.usd_per_credit
         expected = Decimal(str(per_second * row.params["duration"])).quantize(
-            Decimal("0.0001")
+            Decimal("0.0001"),
         )
         assert row.cost_usd == expected, row.params["provider"]
         assert row.cost_estimated is (row.params["provider"] != "kie")

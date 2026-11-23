@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 from datetime import UTC, datetime
@@ -90,7 +92,7 @@ class UserRepository(CachedRepository):
                     UserRow.password_hash,
                     UserRow.sessions_ended_at,
                     employer_active,
-                ).where(UserRow.id == user_id)
+                ).where(UserRow.id == user_id),
             ).one_or_none()
         if found is None:
             return None
@@ -111,7 +113,7 @@ class UserRepository(CachedRepository):
     def by_email(self, email: str) -> User | None:
         with session_scope() as s:
             row = s.execute(
-                select(UserRow).where(UserRow.email == email)
+                select(UserRow).where(UserRow.email == email),
             ).scalar_one_or_none()
             return _user(row) if row else None
 
@@ -126,7 +128,7 @@ class UserRepository(CachedRepository):
     def password_account(self) -> User | None:
         with session_scope() as s:
             row = s.execute(
-                select(UserRow).where(UserRow.is_password_account.is_(True)).limit(1)
+                select(UserRow).where(UserRow.is_password_account.is_(True)).limit(1),
             ).scalar_one_or_none()
             return _user(row) if row else None
 
@@ -168,7 +170,7 @@ class UserRepository(CachedRepository):
                     owner_id=owner_id,
                 )
                 .on_conflict_do_nothing(index_elements=[UserRow.email])
-                .returning(UserRow)
+                .returning(UserRow),
             ).one_or_none()
             return _user(row) if row else None
 
@@ -210,7 +212,7 @@ class UserRepository(CachedRepository):
                     ),
                 )
                 .values(sessions_ended_at=datetime.now(tz=UTC))
-                .returning(UserRow.id)
+                .returning(UserRow.id),
             )
             return ended.first() is not None
 
@@ -226,7 +228,7 @@ class UserRepository(CachedRepository):
                         UserRow.sessions_ended_at.is_(None),
                         UserRow.sessions_ended_at < UserRow.last_seen_at,
                     ),
-                )
+                ),
             ).all()
             return [_user(row) for row in rows]
 
@@ -262,17 +264,17 @@ class UserRepository(CachedRepository):
     def refresh_token(self, user_id: int) -> str:
         with session_scope() as s:
             token = s.execute(
-                select(UserRow.google_refresh_token).where(UserRow.id == user_id)
+                select(UserRow.google_refresh_token).where(UserRow.id == user_id),
             ).scalar_one_or_none()
             return token or ""
 
     def api_keys(self, user_id: int) -> SavedKeys:
         with session_scope() as s:
             rows = s.execute(
-                select(UserApiKeyRow).where(UserApiKeyRow.user_id == user_id)
+                select(UserApiKeyRow).where(UserApiKeyRow.user_id == user_id),
             ).scalars()
             return SavedKeys(
-                keys=[SavedKey(provider=r.provider, api_key=r.api_key) for r in rows]
+                keys=[SavedKey(provider=r.provider, api_key=r.api_key) for r in rows],
             )
 
     def keys_in_slot(self, slot: str) -> list[str]:
@@ -282,7 +284,7 @@ class UserRepository(CachedRepository):
                 select(key)
                 .join(user, user.id == key.user_id)
                 .where(key.provider == slot, user.active, user.role == Role.ADMIN.value)
-                .order_by(key.user_id)
+                .order_by(key.user_id),
             ).scalars()
             return [r.api_key for r in rows if r.api_key]
 
@@ -292,7 +294,7 @@ class UserRepository(CachedRepository):
                 delete(UserApiKeyRow).where(
                     UserApiKeyRow.user_id == user_id,
                     UserApiKeyRow.provider == provider,
-                )
+                ),
             )
             if api_key:
                 s.add(
@@ -300,7 +302,7 @@ class UserRepository(CachedRepository):
                         user_id=user_id,
                         provider=provider,
                         api_key=api_key,
-                    )
+                    ),
                 )
 
     @cached
@@ -315,13 +317,17 @@ class UserRepository(CachedRepository):
             rows = s.execute(
                 select(UserIdentityRow)
                 .where(UserIdentityRow.user_id == user_id)
-                .order_by(UserIdentityRow.provider)
+                .order_by(UserIdentityRow.provider),
             ).scalars()
             return [_linked_account(r) for r in rows]
 
     @invalidates_cache
     def link_identity(
-        self, user_id: int, provider: str, subject: str, email: str
+        self,
+        user_id: int,
+        provider: str,
+        subject: str,
+        email: str,
     ) -> bool:
         with session_scope() as s:
             s.execute(
@@ -333,8 +339,8 @@ class UserRepository(CachedRepository):
                     email=email,
                 )
                 .on_conflict_do_nothing(
-                    index_elements=[UserIdentityRow.provider, UserIdentityRow.subject]
-                )
+                    index_elements=[UserIdentityRow.provider, UserIdentityRow.subject],
+                ),
             )
             row = s.get(UserIdentityRow, (provider, subject))
             if row is None or row.user_id != user_id:
@@ -349,7 +355,7 @@ class UserRepository(CachedRepository):
                 delete(UserIdentityRow).where(
                     UserIdentityRow.user_id == user_id,
                     UserIdentityRow.provider == provider,
-                )
+                ),
             )
             if provider == "google":
                 row = s.get(UserRow, user_id)
@@ -372,14 +378,17 @@ class UserRepository(CachedRepository):
 
     @invalidates_cache
     def replace_password_hash(
-        self, user_id: int, expected: str, password_hash: str
+        self,
+        user_id: int,
+        expected: str,
+        password_hash: str,
     ) -> bool:
         with session_scope() as s:
             swapped = s.execute(
                 update(UserRow)
                 .where(UserRow.id == user_id, UserRow.password_hash == expected)
                 .values(password_hash=password_hash)
-                .returning(UserRow.id)
+                .returning(UserRow.id),
             ).scalar_one_or_none()
             if swapped is None:
                 return False
@@ -387,19 +396,27 @@ class UserRepository(CachedRepository):
             return True
 
     def add_password_link(
-        self, user_id: int, token_hash: str, expires_at: float
+        self,
+        user_id: int,
+        token_hash: str,
+        expires_at: float,
     ) -> None:
         with session_scope() as s:
             s.execute(delete(PasswordLinkRow).where(PasswordLinkRow.user_id == user_id))
             s.add(
                 PasswordLinkRow(
-                    token_hash=token_hash, user_id=user_id, expires_at=expires_at
-                )
+                    token_hash=token_hash,
+                    user_id=user_id,
+                    expires_at=expires_at,
+                ),
             )
 
     @invalidates_cache
     def use_password_link(
-        self, token_hash: str, now: float, password_hash: str
+        self,
+        token_hash: str,
+        now: float,
+        password_hash: str,
     ) -> int | None:
         with session_scope() as s:
             user_id = s.execute(
@@ -408,7 +425,7 @@ class UserRepository(CachedRepository):
                     PasswordLinkRow.token_hash == token_hash,
                     PasswordLinkRow.expires_at >= now,
                 )
-                .returning(PasswordLinkRow.user_id)
+                .returning(PasswordLinkRow.user_id),
             ).scalar_one_or_none()
             row = s.get(UserRow, user_id) if user_id is not None else None
             if row is None or not row.active:

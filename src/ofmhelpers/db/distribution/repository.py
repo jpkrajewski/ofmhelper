@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select, update
@@ -103,7 +105,7 @@ class DistributionRepository:
                     _C.error.is_(None),
                     _C.cookies != "",
                     UserRow.active.is_(True),
-                )
+                ),
             )
             return [_channel(r) for r in rows]
 
@@ -134,9 +136,10 @@ class DistributionRepository:
                     **values,
                 )
                 .on_conflict_do_update(
-                    constraint="uq_distribution_channels_account", set_=values
+                    constraint="uq_distribution_channels_account",
+                    set_=values,
                 )
-                .returning(_C.id)
+                .returning(_C.id),
             )
         found = self.channel(int(channel_id or 0))
         if found is None:
@@ -145,13 +148,16 @@ class DistributionRepository:
         return found
 
     def set_cookies(
-        self, channel_id: int, cookies: str, expires_at: float | None
+        self,
+        channel_id: int,
+        cookies: str,
+        expires_at: float | None,
     ) -> None:
         with session_scope() as s:
             s.execute(
                 update(_C)
                 .where(_C.id == channel_id, _C.error.is_(None))
-                .values(cookies=cookies, cookies_expire_at=_at(expires_at))
+                .values(cookies=cookies, cookies_expire_at=_at(expires_at)),
             )
 
     def set_error(self, channel_id: int, error: str | None) -> None:
@@ -170,7 +176,7 @@ class DistributionRepository:
     def presets_of(self, user_id: int) -> list[ModelPreset]:
         with session_scope() as s:
             rows = s.scalars(
-                select(_M.data).where(_M.user_id == user_id).order_by(_M.key)
+                select(_M.data).where(_M.user_id == user_id).order_by(_M.key),
             )
             return [ModelPreset.model_validate(d) for d in rows]
 
@@ -186,8 +192,9 @@ class DistributionRepository:
                 insert(_M)
                 .values(user_id=user_id, key=preset.key, data=data)
                 .on_conflict_do_update(
-                    constraint="uq_distribution_presets_owner_key", set_={"data": data}
-                )
+                    constraint="uq_distribution_presets_owner_key",
+                    set_={"data": data},
+                ),
             )
 
     def model_links(self, user_id: int) -> list[ModelLink]:
@@ -195,7 +202,7 @@ class DistributionRepository:
             rows = s.execute(
                 select(_M.key, ShortLinkRow.id, ShortLinkRow.url)
                 .join(ShortLinkRow, ShortLinkRow.id == _M.link_id)
-                .where(_M.user_id == user_id)
+                .where(_M.user_id == user_id),
             )
             return [ModelLink(preset=k, link_id=i, url=u) for k, i, u in rows]
 
@@ -204,7 +211,7 @@ class DistributionRepository:
             s.execute(
                 update(_M)
                 .where(_M.user_id == user_id, _M.key == key)
-                .values(link_id=link_id)
+                .values(link_id=link_id),
             )
 
     def add_posts(self, channel_id: int, found: list[NewPost]) -> int:
@@ -216,7 +223,7 @@ class DistributionRepository:
                 insert(_P)
                 .values(rows)
                 .on_conflict_do_nothing(constraint="uq_distribution_posts_channel_file")
-                .returning(_P.id)
+                .returning(_P.id),
             )
             return len(added.all())
 
@@ -246,9 +253,11 @@ class DistributionRepository:
                     or_(_P.status == PostStatus.queued, retry),
                 )
                 .order_by(
-                    pinned_elsewhere, _P.status != PostStatus.queued, func.random()
+                    pinned_elsewhere,
+                    _P.status != PostStatus.queued,
+                    func.random(),
                 )
-                .limit(1)
+                .limit(1),
             ).one_or_none()
             return _post(row) if row is not None else None
 
@@ -276,7 +285,7 @@ class DistributionRepository:
                     ~went_up,
                 )
                 .distinct(_P.channel_id)
-                .order_by(_P.channel_id, _P.started_at.desc())
+                .order_by(_P.channel_id, _P.started_at.desc()),
             )
             return [Failing(channel_id=c, error=e or "") for c, e in rows]
 
@@ -285,7 +294,7 @@ class DistributionRepository:
             return None
         with session_scope() as s:
             at = s.scalar(
-                select(func.max(_P.published_at)).where(_P.channel_id.in_(channel_ids))
+                select(func.max(_P.published_at)).where(_P.channel_id.in_(channel_ids)),
             )
             return _epoch(at)
 
@@ -294,7 +303,7 @@ class DistributionRepository:
             found = s.scalar(
                 select(_P.id)
                 .where(_P.channel_id == channel_id, _P.status == PostStatus.publishing)
-                .limit(1)
+                .limit(1),
             )
             return found is not None
 
@@ -315,7 +324,7 @@ class DistributionRepository:
                     link=link,
                     error=None,
                 )
-                .returning(_P.id)
+                .returning(_P.id),
             )
             return bool(took.all())
 
@@ -333,7 +342,7 @@ class DistributionRepository:
                     remote_id=remote_id,
                     published_at=func.now(),
                     error=None,
-                )
+                ),
             )
 
     def failed(self, post_id: int, error: str, *, final: bool = False) -> None:
@@ -344,7 +353,7 @@ class DistributionRepository:
             s.execute(
                 update(_P)
                 .where(_P.id == post_id, _P.status == PostStatus.publishing)
-                .values(**values)
+                .values(**values),
             )
 
     def failed_in_a_row(self, channel_id: int, n: int) -> bool:
@@ -353,7 +362,7 @@ class DistributionRepository:
                 select(_P.status)
                 .where(_P.channel_id == channel_id, _P.started_at.is_not(None))
                 .order_by(_P.started_at.desc())
-                .limit(n)
+                .limit(n),
             ).all()
         return len(last) == n and all(x == PostStatus.failed for x in last)
 
@@ -366,7 +375,7 @@ class DistributionRepository:
                     status=PostStatus.queued,
                     attempts=func.greatest(_P.attempts - 1, 0),
                     error=error,
-                )
+                ),
             )
 
     def cut_off(self, older_than_s: float, error: str, alive: set[str]) -> int:
@@ -380,7 +389,7 @@ class DistributionRepository:
                     or_(_P.job_id.is_(None), _P.job_id.not_in(alive or {""})),
                 )
                 .values(status=PostStatus.failed, error=error)
-                .returning(_P.id)
+                .returning(_P.id),
             )
             return len(done.all())
 
@@ -395,7 +404,7 @@ class DistributionRepository:
                     func.count().filter(_P.published_at >= midnight),
                 )
                 .where(_P.channel_id == channel_id)
-                .group_by(_P.status)
+                .group_by(_P.status),
             )
             for status, n, today in rows:
                 setattr(found, status, n)
@@ -410,7 +419,7 @@ class DistributionRepository:
                 select(_P)
                 .where(_P.channel_id.in_(channel_ids), _P.started_at.is_not(None))
                 .order_by(_P.started_at.desc(), _P.id.desc())
-                .limit(limit)
+                .limit(limit),
             )
             return [_post(r) for r in rows]
 
@@ -439,7 +448,7 @@ class DistributionRepository:
                         _P.status == status,
                         column >= start,
                     )
-                    .group_by(_P.channel_id, _P.preset, day)
+                    .group_by(_P.channel_id, _P.preset, day),
                 )
                 for channel_id, preset, on, n, ig in rows:
                     entry = found.setdefault(

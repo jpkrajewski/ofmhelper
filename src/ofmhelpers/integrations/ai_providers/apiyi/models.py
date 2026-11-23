@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from typing import Annotated, Any, NoReturn
 
@@ -18,7 +20,7 @@ lazy from ofmhelpers.integrations.ai_providers.apiyi.keys import group_of
 PROVIDER = "APIYI"
 
 PENDING = frozenset(
-    {"submitted", "in_progress", "queued", "pending", "running", "processing"}
+    {"submitted", "in_progress", "queued", "pending", "running", "processing"},
 )
 COMPLETED = frozenset({"completed", "succeeded", "success"})
 FAILED = frozenset({"failed", "canceled", "cancelled", "unknown"})
@@ -105,7 +107,10 @@ def _no_channel(message: str, said: str) -> NoReturn:
 
 
 def raise_for(
-    status: int, text: str, *, forbidden_is_refusal: bool = False
+    status: int,
+    text: str,
+    *,
+    forbidden_is_refusal: bool = False,
 ) -> NoReturn:
     read = _read_error(status, text)
     message, said = read.message, read.said
@@ -163,7 +168,8 @@ class ApiyiSubmit(Unwrapped):
     output: ApiyiSubmitOutput | None = None
     request_id: Text = ""
     top_task_id: Text = Field(
-        default="", validation_alias=AliasChoices("task_id", "id")
+        default="",
+        validation_alias=AliasChoices("task_id", "id"),
     )
 
     @property

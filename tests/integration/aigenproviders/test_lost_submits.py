@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import hashlib
 import hmac
@@ -108,13 +110,17 @@ def _callback(
         },
     }
     answer = client.post(
-        f"/events/ai/{provider}/{job_key}", json=body, headers=headers or {}
+        f"/events/ai/{provider}/{job_key}",
+        json=body,
+        headers=headers or {},
     )
     return answer.status_code
 
 
 def test_a_create_answered_too_late_goes_on_once_kie_calls_back(
-    kie, client, monkeypatch
+    kie,
+    client,
+    monkeypatch,
 ):
     kie.post(_jobs("createTask"), body=requests.ReadTimeout("read timed out"))
     _record_success(kie)
@@ -141,7 +147,10 @@ def test_a_create_answered_too_late_goes_on_once_kie_calls_back(
 
 
 def test_no_callback_in_time_fails_the_run_and_a_late_one_still_finds_it(
-    kie, client, slept, monkeypatch
+    kie,
+    client,
+    slept,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_AIGEN_POLL_TIMEOUT_S", "0")
     kie.post(_jobs("createTask"), body=requests.ReadTimeout("read timed out"))
@@ -172,7 +181,7 @@ def test_a_piece_of_a_long_clone_is_found_by_its_own_part(kie, client):
             model=KIE_SPEC.key,
             task_id="",
             api_key="key",
-        )
+        ),
     )
     _record_success(kie)
 
@@ -214,7 +223,7 @@ def test_a_callback_naming_a_task_not_on_the_jobs_key_is_ignored(kie, client):
             model=KIE_SPEC.key,
             task_id="",
             api_key="key",
-        )
+        ),
     )
     kie.get(_jobs("recordInfo"), json={"code": 422, "msg": "recordInfo is null"})
 
@@ -234,7 +243,7 @@ def _note(job_id: str = "job-1", part: int = 0, age_s: float = 0) -> None:
             task_id="",
             api_key="key",
             created_at=time.time() - age_s,
-        )
+        ),
     )
 
 
@@ -252,7 +261,9 @@ def test_kie_too_slow_to_check_the_callback_still_counts(client):
 
 
 def test_a_rerun_never_sends_a_lost_submit_again_and_takes_its_callback(
-    kie, client, monkeypatch
+    kie,
+    client,
+    monkeypatch,
 ):
     _note()
     _record_success(kie)
@@ -291,14 +302,18 @@ def test_a_rerun_with_no_callback_yet_fails_without_sending_it_again(kie, slept)
         requests.ConnectTimeout("connect timed out"),
         requests.ConnectionError(
             MaxRetryError(
-                None, "/api/v1/jobs/createTask", NewConnectionError(None, "refused")
-            )  # type: ignore[arg-type]
+                None,
+                "/api/v1/jobs/createTask",
+                NewConnectionError(None, "refused"),
+            ),  # type: ignore[arg-type]
         ),
     ],
     ids=["connect-timeout", "refused"],
 )
 def test_a_create_that_never_left_fails_at_once_and_waits_for_nothing(
-    kie, slept, never_left
+    kie,
+    slept,
+    never_left,
 ):
     kie.post(_jobs("createTask"), body=never_left)
 
@@ -328,7 +343,9 @@ def _signed_headers(task: str = TASK) -> dict[str, str]:
 
 
 def test_a_signed_callback_is_believed_once_the_jobs_key_knows_its_task(
-    kie, client, monkeypatch
+    kie,
+    client,
+    monkeypatch,
 ):
     monkeypatch.setenv("KIE_AI_WEBHOOK_HMAC_KEY", HMAC_KEY)
     _note()
@@ -343,7 +360,9 @@ def test_a_signed_callback_is_believed_once_the_jobs_key_knows_its_task(
 
 
 def test_a_signed_callback_for_a_task_not_on_the_jobs_account_is_ignored(
-    kie, client, monkeypatch
+    kie,
+    client,
+    monkeypatch,
 ):
     monkeypatch.setenv("KIE_AI_WEBHOOK_HMAC_KEY", HMAC_KEY)
     _note()
@@ -367,7 +386,7 @@ def test_with_the_key_set_only_a_signed_callback_counts(kie, client, monkeypatch
             model=KIE_SPEC.key,
             task_id="",
             api_key="key",
-        )
+        ),
     )
     now = int(time.time())
     stale = now - 3600
@@ -411,7 +430,9 @@ def test_a_refused_create_leaves_nothing_waiting(kie):
 
 
 def test_without_a_public_address_no_callback_is_asked_and_nothing_waits(
-    kie, slept, monkeypatch
+    kie,
+    slept,
+    monkeypatch,
 ):
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
     kie.post(_jobs("createTask"), body=requests.ReadTimeout("read timed out"))
@@ -431,7 +452,10 @@ def test_an_elyum_create_whose_answer_is_lost_is_sent_again_and_made_once(slept)
     spec = get_spec("elyum:alibaba/wan-3.0/text-to-video")
 
     (path,) = runner.generate(
-        ElyumProvider(FAKE_KEY), spec, {"prompt": "p"}, "elyum-lost"
+        ElyumProvider(FAKE_KEY),
+        spec,
+        {"prompt": "p"},
+        "elyum-lost",
     )
 
     assert path.stat().st_size > 0
@@ -446,7 +470,10 @@ def test_a_higgsfield_submit_whose_answer_is_lost_is_sent_again_and_made_once(sl
     spec = get_spec("higgsfield:z-image/turbo")
 
     (path,) = runner.generate(
-        HiggsfieldProvider(HF_KEY), spec, {"prompt": "p"}, "hf-lost"
+        HiggsfieldProvider(HF_KEY),
+        spec,
+        {"prompt": "p"},
+        "hf-lost",
     )
 
     assert path.stat().st_size > 0

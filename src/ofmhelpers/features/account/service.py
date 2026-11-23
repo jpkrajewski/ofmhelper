@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict, SkipValidation
@@ -172,14 +174,18 @@ def link_notice(google: str, apple: str, dropbox: str = "") -> Notice:
 
 
 def change_password(
-    user_id: int, current: str, password: str, confirm: str
+    user_id: int,
+    current: str,
+    password: str,
+    confirm: str,
 ) -> PasswordChange:
     try:
         passwords.change_password(user_id, current, password, confirm)
     except credentials.PasswordRejectedError as exc:  # silent: shown on the page
         return PasswordChange(notice=Notice(error=str(exc), status_code=400))
     return PasswordChange(
-        notice=Notice(message="Password saved."), user=users.get_user(user_id)
+        notice=Notice(message="Password saved."),
+        user=users.get_user(user_id),
     )
 
 
@@ -222,9 +228,10 @@ def unlink(user_id: int, provider: str) -> PasswordChange:
     if user is not None and not user.has_password and not others:
         return PasswordChange(
             notice=Notice(
-                error="Set a password or link another account first: this is your only way in.",
+                error="Set a password or link another "
+                "account first: this is your only way in.",
                 status_code=400,
-            )
+            ),
         )
     users.unlink_identity(user_id, provider)
     users.end_sessions(user_id)

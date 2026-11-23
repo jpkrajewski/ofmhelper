@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.web.routers.task_helpers.manifests import (
     build_ordered_paths,

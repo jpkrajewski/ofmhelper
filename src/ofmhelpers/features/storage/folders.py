@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -86,7 +88,8 @@ def review_folders() -> set[str]:
 
 def _deleted_by_hand(target: DriveTarget) -> None:
     logger.warning(
-        "drive: folder of %s deleted by hand: removing the account", target.handle
+        "drive: folder of %s deleted by hand: removing the account",
+        target.handle,
     )
     store.forget_account_folder(target.login_id)
     owner, login_id = target.device.user_id, target.login_id
@@ -96,13 +99,14 @@ def _deleted_by_hand(target: DriveTarget) -> None:
             for phone in devices.list_devices(owner)
             for login in phone.logins
             if login.id == login_id and login.tracked_account_id
-        }
+        },
     )
     devices.archive_logins([login_id], owner)
     if tracked:
         untrack(tracked, owner)
     logger.info(
-        "drive folder of login %s deleted by hand: removed everywhere", login_id
+        "drive folder of login %s deleted by hand: removed everywhere",
+        login_id,
     )
 
 
@@ -218,7 +222,8 @@ def _cached_thumb(file_id: str, px: int) -> DriveThumb | None:
         return None
     for path in base.parent.glob(f"{base.name}.*"):
         return DriveThumb(
-            content=path.read_bytes(), media_type=f"image/{path.suffix.lstrip('.')}"
+            content=path.read_bytes(),
+            media_type=f"image/{path.suffix.lstrip('.')}",
         )
     return None
 
@@ -313,7 +318,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         return result
 
     def _board_cards(
-        self, result: DriveBoard, folders: StoredFolders, viewer: int | None
+        self,
+        result: DriveBoard,
+        folders: StoredFolders,
+        viewer: int | None,
     ) -> None:
         result.va_folders = self.va_folders.of_owner() if viewer is not None else []
         result.cards = [
@@ -328,7 +336,9 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         ]
 
     def saved_board(
-        self, viewer: int | None = None, at: datetime.datetime | None = None
+        self,
+        viewer: int | None = None,
+        at: datetime.datetime | None = None,
     ) -> DriveBoard:
         at = at or now()
         result = self._board_head(at, viewer)
@@ -388,7 +398,8 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                 else self.constants.bot_root_name_it.format(root=self.root_name())
             )
             msg = self.constants.bot_root_unusable.format(
-                email=self.bot.email, named=named
+                email=self.bot.email,
+                named=named,
             )
             raise DriveError(msg)
         found = (
@@ -442,7 +453,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                     drive.rename(current.id, target.folder_name)
                     report.renamed.append(target.folder_name)
                 if stored.name != target.folder_name and not store.save_account_folder(
-                    target.login_id, current.id, target.folder_name, root
+                    target.login_id,
+                    current.id,
+                    target.folder_name,
+                    root,
                 ):
                     _gone_meanwhile(target)
                 return _AccountFolder(folder_id=current.id, kept=True)
@@ -451,7 +465,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         if found is None:
             found = drive.create_folder(root, target.folder_name)
         if not store.save_account_folder(
-            target.login_id, found.id, target.folder_name, root
+            target.login_id,
+            found.id,
+            target.folder_name,
+            root,
         ):
             _gone_meanwhile(target)
         (report.adopted if adopted else report.created).append(target.folder_name)
@@ -537,7 +554,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         for d in _posted_dirs(items, posted_id):
             try:
                 posted_items.folders.append(
-                    FolderItems(folder_id=d.id, items=drive.children(d.id))
+                    FolderItems(folder_id=d.id, items=drive.children(d.id)),
                 )
             except FolderGoneError:  # silent: only that POSTED folder went
                 logger.info("drive: POSTED folder %s gone mid-scan", d.id)
@@ -547,7 +564,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         )
 
     def _tally_one(
-        self, target: DriveTarget, stored: StoredFolder, seen_at: float
+        self,
+        target: DriveTarget,
+        stored: StoredFolder,
+        seen_at: float,
     ) -> SyncReport:
         report = SyncReport()
         try:
@@ -561,7 +581,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             report.renamed.append(target.folder_name)
         if not _kept_posted_ok(scan, stored):
             self._posted_folder(
-                target, stored.folder_id, stored.posted_folder_id, report
+                target,
+                stored.folder_id,
+                stored.posted_folder_id,
+                report,
             )
         newly = store.record_posted(
             [
@@ -569,7 +592,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                     login_id=target.login_id,
                     folder_id=stored.folder_id,
                     files=scan.posted,
-                )
+                ),
             ],
             seen_at,
         )
@@ -600,7 +623,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                     _merge(report, future.result())
                 except (DriveError, SignInError) as exc:
                     logger.warning(
-                        "drive: %s not tallied: %s", target.handle, exc, exc_info=True
+                        "drive: %s not tallied: %s",
+                        target.handle,
+                        exc,
+                        exc_info=True,
                     )
                     report.failed.append(f"{target.folder_name}: {exc}")
 
@@ -612,7 +638,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             root = self.ensure_root()
         except (DriveError, SignInError) as exc:
             logger.warning(
-                "drive: root of %s failed: %s", self.owner_id, exc, exc_info=True
+                "drive: root of %s failed: %s",
+                self.owner_id,
+                exc,
+                exc_info=True,
             )
             report.failed.append(f"{self.owner_label()}: {exc}")
             return
@@ -622,7 +651,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                 self._sync_one(root, target, folders.get(target.login_id), report)
             except (DriveError, SignInError) as exc:
                 logger.warning(
-                    "drive: %s not synced: %s", target.handle, exc, exc_info=True
+                    "drive: %s not synced: %s",
+                    target.handle,
+                    exc,
+                    exc_info=True,
                 )
                 report.failed.append(f"{target.folder_name}: {exc}")
         self.va_folders.sync(root, report)
@@ -641,7 +673,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             return
         except (DriveError, SignInError) as exc:
             logger.warning(
-                "drive: listing %s failed: %s", card.target.handle, exc, exc_info=True
+                "drive: listing %s failed: %s",
+                card.target.handle,
+                exc,
+                exc_info=True,
             )
             card.error = self.constants.drive_unreadable
             return
@@ -651,7 +686,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                     login_id=card.target.login_id,
                     folder_id=folder_id,
                     files=card.scan.posted,
-                )
+                ),
             ],
             seen_at,
         )
@@ -661,7 +696,9 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         current = self._drive().folder(root)
         if not self._is_root(current):
             msg = self.constants.root_mismatch.format(
-                root_id=root, found=current.name, expected=self.root_name()
+                root_id=root,
+                found=current.name,
+                expected=self.root_name(),
             )
             raise FolderGoneError(msg)
 
@@ -673,7 +710,10 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         return listed
 
     def _list_batched(
-        self, cards: list[DriveCard], names: dict[str, str], seen_at: float
+        self,
+        cards: list[DriveCard],
+        names: dict[str, str],
+        seen_at: float,
     ) -> None:
         drive = self._drive()
         ids = [c.account_folder_id for c in cards if c.account_folder_id]
@@ -682,7 +722,8 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             d.id
             for c in cards
             for d in _posted_dirs(
-                inside.of(c.account_folder_id or ""), c.posted_folder_id
+                inside.of(c.account_folder_id or ""),
+                c.posted_folder_id,
             )
         ]
         posted_items = drive.children_of(posted_ids)
@@ -700,7 +741,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
                     login_id=card.target.login_id,
                     folder_id=folder_id,
                     files=card.scan.posted,
-                )
+                ),
             )
         _record_posted(seen, seen_at)
         store.save_scans({c.target.login_id: c.scan for c in cards}, seen_at)
@@ -709,7 +750,8 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         with ThreadPoolExecutor(max_workers=settings.gdrive.list_workers) as pool:
             listed = {
                 pool.submit(
-                    in_this_trace(lambda one: self._list_account(one, seen_at)), card
+                    in_this_trace(lambda one: self._list_account(one, seen_at)),
+                    card,
                 ): card
                 for card in cards
             }
@@ -740,7 +782,8 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             return None
         except Exception:
             logger.exception(
-                "drive: root of %s not listed, listing one by one", self.owner_id
+                "drive: root of %s not listed, listing one by one",
+                self.owner_id,
             )
             return _RootListing(names={})
         in_root = {f.id: f.name for f in listed}
@@ -756,7 +799,9 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
             )
         try:
             self._list_batched(
-                [c for c in cards if c.account_folder_id in in_root], in_root, seen_at
+                [c for c in cards if c.account_folder_id in in_root],
+                in_root,
+                seen_at,
             )
         except Exception:
             logger.exception("drive: batched listing failed, listing one by one")
@@ -774,7 +819,7 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         if self.client is None:
             for card in cards:
                 card.error = self.constants.owner_not_connected.format(
-                    owner=self.owner_label()
+                    owner=self.owner_label(),
                 )
             return
         user = users.get_user(self.owner_id)
@@ -799,7 +844,9 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
         )
 
     def board(
-        self, viewer: int | None = None, at: datetime.datetime | None = None
+        self,
+        viewer: int | None = None,
+        at: datetime.datetime | None = None,
     ) -> DriveBoard:
         at = at or now()
         result = self._board_head(at, viewer)
@@ -821,7 +868,8 @@ class StorageServiceFolders(BaseModel, frozen=True, arbitrary_types_allowed=True
 
     def thumbnail(self, login_id: int, file_id: str) -> DriveThumb | None:
         target = next(
-            (t for t in store.targets(self.owner_id) if t.login_id == login_id), None
+            (t for t in store.targets(self.owner_id) if t.login_id == login_id),
+            None,
         )
         folder = store.account_folders().get(login_id) if target else None
         if target is None or folder is None or self.client is None:

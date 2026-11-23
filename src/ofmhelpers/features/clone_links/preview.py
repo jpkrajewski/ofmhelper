@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import math
 import threading
@@ -88,7 +90,9 @@ def _remembered(info_key: str) -> VideoInfo | None:
         return VideoInfo.model_validate_json(raw)
     except ValueError:
         logger.warning(
-            "clone-links: cached info %s unreadable", info_key, exc_info=True
+            "clone-links: cached info %s unreadable",
+            info_key,
+            exc_info=True,
         )
         return None
 
@@ -142,7 +146,9 @@ def preview(
         info = _read(url, cookies, until)
         if info is None:
             return LinkPreview(
-                url=url, max_s=price.max_s, error=clone_links_constants().too_slow
+                url=url,
+                max_s=price.max_s,
+                error=clone_links_constants().too_slow,
             )
         if info.error or info.seconds is None:
             logger.info(
@@ -178,12 +184,17 @@ def _answer(done: Future[LinkPreview], url: str, price: Price) -> LinkPreview:
     except Exception:
         logger.warning("clone-links preview %s failed", url, exc_info=True)
         return LinkPreview(
-            url=url, max_s=price.max_s, error=clone_links_constants().cannot_open
+            url=url,
+            max_s=price.max_s,
+            error=clone_links_constants().cannot_open,
         )
 
 
 def preview_all(
-    urls: list[str], user_id: int | None, price: Price, thumbs: str
+    urls: list[str],
+    user_id: int | None,
+    price: Price,
+    thumbs: str,
 ) -> Iterator[LinkPreview]:
     deadline_s = settings.clone_links.preview_deadline_s
     until = time.monotonic() + deadline_s
@@ -191,7 +202,7 @@ def preview_all(
     futures = {
         pool.submit(
             in_this_trace(
-                lambda link: preview(link, user_id, price, thumbs, until=until)
+                lambda link: preview(link, user_id, price, thumbs, until=until),
             ),
             url,
         ): url

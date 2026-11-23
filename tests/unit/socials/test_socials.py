@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 import requests
 
@@ -33,7 +35,13 @@ def _pk(posted_at: float) -> str:
 
 class _FakeClient:
     def __init__(
-        self, proxy=None, *, private=False, reels=(), error=None, logged_in=None
+        self,
+        proxy=None,
+        *,
+        private=False,
+        reels=(),
+        error=None,
+        logged_in=None,
     ):
         self.proxy = proxy
         self.private = private
@@ -144,7 +152,8 @@ def test_the_scan_logs_in_with_the_cookies_it_is_given(fake_client):
 
 @pytest.mark.parametrize("login", [None, requests.ConnectionError("down")])
 def test_without_a_working_login_the_logged_out_view_is_marked_limited(
-    fake_client, login
+    fake_client,
+    login,
 ):
     fake_client(reels=[ReelSummary(pk=_pk(NOW), code="A")], logged_in=login)
     stats = get_platform("instagram").fetch("yuki", None, "owner-jar")

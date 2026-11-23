@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Mapping
 
 from pydantic import BaseModel
@@ -42,7 +44,7 @@ class AudioConstants(KnobConstants, frozen=True):
             "phaser": (1, 4),
             "tremolo": (2, 8),
             "vibrato": (2, 8),
-        }
+        },
     )
 
 
@@ -97,7 +99,7 @@ class VideoConstants(KnobConstants, frozen=True):
             "gamma": 1.0,
             "size": 1.0,
             "colortemp": 6500.0,
-        }
+        },
     )
     min_kept_share: float = 0.5
     right_angle: float = 1.5708

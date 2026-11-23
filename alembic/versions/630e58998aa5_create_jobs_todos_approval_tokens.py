@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -23,7 +25,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("token"),
     )
     op.create_index(
-        "ix_approval_tokens_expires_at", "approval_tokens", ["expires_at"], unique=False
+        "ix_approval_tokens_expires_at",
+        "approval_tokens",
+        ["expires_at"],
+        unique=False,
     )
     op.create_table(
         "jobs",

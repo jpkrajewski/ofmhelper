@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from types import MappingProxyType
@@ -83,7 +85,8 @@ class DeviceExport(Export):
         cfg = settings.exports
         dst = self._dst(src, options, ".mov")
         recording = Recording.ending_now(
-            ZoneInfo(cfg.device_timezone), cfg.device_place
+            ZoneInfo(cfg.device_timezone),
+            cfg.device_place,
         ).model_copy(update={"mirror": options.mirror})
         record(src, dst, load_profile(self.profile), recording, cfg.timeout_s)
         return dst

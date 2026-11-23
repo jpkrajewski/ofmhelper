@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 from datetime import datetime
 from typing import Any

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
@@ -6,7 +8,7 @@ from ofmhelpers.integrations.downloaders.models import ExtractorArgs, YtDlpInfo
 
 def test_info_reads_merged_files_of_a_single_video():
     info = {
-        "requested_downloads": [{"filepath": "/d/a.mp4"}, {"_filename": "/d/b.mp4"}]
+        "requested_downloads": [{"filepath": "/d/a.mp4"}, {"_filename": "/d/b.mp4"}],
     }
     assert YtDlpInfo.model_validate(info).output_paths() == [
         Path("/d/a.mp4"),

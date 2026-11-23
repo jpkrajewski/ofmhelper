@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 from typing import Any
 lazy from collections.abc import Callable
@@ -30,7 +32,7 @@ FAKE_KEYS: frozendict[str, str] = frozendict(
         "kie": kie_fake.FAKE_KEY,
         "runninghub": runninghub_fake.FAKE_KEY,
         "fake": "",
-    }
+    },
 )
 NOT_REPLAYABLE: frozendict[str, str] = frozendict(
     {
@@ -44,7 +46,7 @@ NOT_REPLAYABLE: frozendict[str, str] = frozendict(
         "idle_logout": "an idle sign-out, not work",
         "viewing": "the start of View as, not work",
         "viewing_end": "the end of View as, not work",
-    }
+    },
 )
 
 

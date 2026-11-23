@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -197,7 +199,12 @@ def save(user_id: int, state: FolderState) -> None:
     root = work_dir(user_id, state.login_id)
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=root, delete=False, prefix="state_", suffix=".tmp"
+        "w",
+        encoding="utf-8",
+        dir=root,
+        delete=False,
+        prefix="state_",
+        suffix=".tmp",
     ) as handle:
         handle.write(state.model_dump_json(indent=1))
         tmp = Path(handle.name)
@@ -206,7 +213,10 @@ def save(user_id: int, state: FolderState) -> None:
 
 @contextmanager
 def locked(
-    user_id: int, login_id: int, what: str = "state", wait_s: int = _LOCK_S
+    user_id: int,
+    login_id: int,
+    what: str = "state",
+    wait_s: int = _LOCK_S,
 ) -> Iterator[None]:
     lock = get_redis().lock(
         f"lock:trials:{what}:{user_id}:{login_id}",
@@ -234,7 +244,9 @@ def locked(
 
 
 def change(
-    user_id: int, login_id: int, edit: Callable[[FolderState], None]
+    user_id: int,
+    login_id: int,
+    edit: Callable[[FolderState], None],
 ) -> FolderState:
     with locked(user_id, login_id):
         state = load(user_id, login_id)
@@ -244,7 +256,10 @@ def change(
 
 
 def change_reel(
-    user_id: int, login_id: int, key: str, edit: Callable[[ReelState], None]
+    user_id: int,
+    login_id: int,
+    key: str,
+    edit: Callable[[ReelState], None],
 ) -> FolderState:
 
     def apply(state: FolderState) -> None:

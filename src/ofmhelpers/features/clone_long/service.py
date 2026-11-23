@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import contextvars
 import math
 import shutil
@@ -187,12 +189,12 @@ class LongClone:
                 chain=switches.chain,
                 colour_match=switches.colour_match,
                 audio=switches.audio,
-            )
+            ),
         )
         with input_refused():
             for piece in plan.pieces:
                 target.spec.check(
-                    target.values(clone.params, piece.length, video).model_dump()
+                    target.values(clone.params, piece.length, video).model_dump(),
                 )
         return clone
 
@@ -318,7 +320,12 @@ class LongClone:
                 set_job_preview(job_id, JobPreview(remote_url=hosted[0], kind="video"))
 
         first, *extra = runner.generate(
-            client, spec, payload, job_id, preview if part == 0 else None, part=part
+            client,
+            spec,
+            payload,
+            job_id,
+            preview if part == 0 else None,
+            part=part,
         )
         for path in extra:
             path.unlink(missing_ok=True)

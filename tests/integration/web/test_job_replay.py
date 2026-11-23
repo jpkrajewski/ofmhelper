@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -42,7 +44,9 @@ def test_a_download_runs_again_from_its_row(tmp_path, monkeypatch):
     client = TestClient(app)
     sign_in(client)
     job_id = client.post(
-        "/download-media/run", data={"urls": LINK}, headers=keyed()
+        "/download-media/run",
+        data={"urls": LINK},
+        headers=keyed(),
     ).json()["job_id"]
 
     done = replay.replay(job_id)
@@ -68,7 +72,7 @@ def test_a_paid_job_runs_on_its_providers_fake_key():
 
 def test_a_trials_job_runs_from_its_args():
     job = get_job(
-        _job("trials", label=TrialsPhase.REMAKE, login=3, args={"keys": ["k1"]})
+        _job("trials", label=TrialsPhase.REMAKE, login=3, args={"keys": ["k1"]}),
     )
     assert job is not None
 

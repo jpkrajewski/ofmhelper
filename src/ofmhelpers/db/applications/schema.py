@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import UTC, datetime
 
@@ -85,5 +87,5 @@ class Application(ApplicationFields):
     @property
     def created_at_display(self) -> str:
         return datetime.fromtimestamp(self.created_at, UTC).strftime(
-            "%Y-%m-%d %H:%M UTC"
+            "%Y-%m-%d %H:%M UTC",
         )

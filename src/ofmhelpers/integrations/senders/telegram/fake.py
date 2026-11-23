@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import threading
 import time
@@ -52,14 +54,14 @@ class FakeTelegram:
                         "text": text,
                         "date": int(time.time() if sent_at is None else sent_at),
                     },
-                }
+                },
             )
 
     def odd_update(self) -> None:
         with self._lock:
             self._last_id += 1
             self._updates.append(
-                {"update_id": self._last_id, "message": {"text": "money"}}
+                {"update_id": self._last_id, "message": {"text": "money"}},
             )
 
     def _updates_from(self, body: dict[str, Any]) -> FakeReply:
@@ -73,7 +75,8 @@ class FakeTelegram:
     def _delete(self, body: dict[str, Any]) -> FakeReply:
         with self._lock:
             found = self._by_id.pop(
-                (str(body["chat_id"]), int(body["message_id"])), None
+                (str(body["chat_id"]), int(body["message_id"])),
+                None,
             )
             if found is not None:
                 self.deleted.append(found)
@@ -115,7 +118,7 @@ class FakeTelegram:
                 "message_id": message_id,
                 "chat": _chat(chat_id).model_dump(exclude_none=True),
                 "text": text,
-            }
+            },
         )
 
 

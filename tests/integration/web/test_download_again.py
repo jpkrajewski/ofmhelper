@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -54,7 +56,9 @@ def client() -> TestClient:
 
 def _paste(client: TestClient, *links: str) -> dict:
     r = client.post(
-        "/download-media/run", data={"urls": "\n".join(links)}, headers=keyed()
+        "/download-media/run",
+        data={"urls": "\n".join(links)},
+        headers=keyed(),
     )
     assert r.status_code == 202, r.text
     return r.json()
@@ -82,7 +86,8 @@ def _remove_videos() -> None:
 
 
 def test_a_link_downloads_once_and_its_card_goes_first_when_asked_again(
-    client, downloads
+    client,
+    downloads,
 ):
     first = _paste(client, A)["job_id"]
     second = _paste(client, B)["job_id"]
@@ -126,7 +131,8 @@ def _my_va(client: TestClient) -> TestClient:
 
 
 def test_a_link_my_va_downloaded_is_not_fetched_again_and_the_card_is_mine(
-    client, downloads
+    client,
+    downloads,
 ):
     other = _my_va(client)
     theirs = _paste(other, A)["job_id"]
@@ -341,7 +347,9 @@ def test_a_job_that_is_no_download_is_not_found(client):
 
 
 def test_a_video_gone_from_its_site_keeps_its_card_and_stays_removed(
-    client, downloads, monkeypatch
+    client,
+    downloads,
+    monkeypatch,
 ):
     job = _paste(client, A)["job_id"]
     _remove_videos()
@@ -356,7 +364,7 @@ def test_a_video_gone_from_its_site_keeps_its_card_and_stays_removed(
     assert "download-again" in card
     status = client.get(f"/download-media/jobs/{job}/status").json()
     assert [(item["index"], item["removed"]) for item in status["result"]] == [
-        (0, True)
+        (0, True),
     ]
     assert status["failed_sources"] == []
     assert "data-removed-reason" in card
@@ -394,7 +402,8 @@ def test_a_video_that_comes_back_loses_its_reason(client, downloads, monkeypatch
 
 
 def test_a_removed_download_is_restorable_and_comes_back_under_its_new_path(
-    client, assets
+    client,
+    assets,
 ):
     job = _paste(client, A)["job_id"]
     old = row(job).asset_path
@@ -431,7 +440,8 @@ def test_a_file_that_is_there_or_someone_elses_is_not_restorable(client):
     assert client.post(f"/download-media/{mine}/replays").status_code == 202
 
     answer = client.get(
-        "/refs/missing", params={"path": [their_path, row(mine).asset_path]}
+        "/refs/missing",
+        params={"path": [their_path, row(mine).asset_path]},
     ).json()
 
     assert answer == {"missing": [their_path], "restorable": []}

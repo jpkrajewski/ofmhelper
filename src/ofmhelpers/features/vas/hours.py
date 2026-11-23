@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, datetime, timedelta
 lazy from zoneinfo import ZoneInfo
 
@@ -29,7 +31,9 @@ def _split(user_id: int, start: float, end: float, zone: ZoneInfo) -> list[DayHo
     stop = datetime.fromtimestamp(end, zone)
     while at < stop:
         midnight = datetime.combine(
-            at.date() + timedelta(days=1), datetime.min.time(), zone
+            at.date() + timedelta(days=1),
+            datetime.min.time(),
+            zone,
         )
         upto = min(stop, midnight)
         found.append(
@@ -37,14 +41,16 @@ def _split(user_id: int, start: float, end: float, zone: ZoneInfo) -> list[DayHo
                 user_id=user_id,
                 day=at.date(),
                 seconds=upto.timestamp() - at.timestamp(),
-            )
+            ),
         )
         at = upto
     return found
 
 
 def day_hours(
-    spans: list[SessionSpan], vas: list[User], zone: ZoneInfo
+    spans: list[SessionSpan],
+    vas: list[User],
+    zone: ZoneInfo,
 ) -> list[DayHours]:
     seen = {va.id: va.last_seen_at for va in vas}
     totals: dict[tuple[int, date], float] = {}

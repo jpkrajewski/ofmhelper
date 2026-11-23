@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 import worker_tasks
 from rq import SimpleWorker, Worker
@@ -46,7 +48,10 @@ def test_a_job_queued_under_run_jobs_old_path_still_runs():
     old_path = "ofmhelpers.db.stores.jobs.run_job"
     job_id = create_job("seedance", {})
     rq_job = get_queue().enqueue(
-        old_path, job_id, worker_tasks.make_result, {"name": "out.mp4"}
+        old_path,
+        job_id,
+        worker_tasks.make_result,
+        {"name": "out.mp4"},
     )
     assert rq_job.func_name == old_path
 
@@ -60,7 +65,10 @@ def test_a_job_queued_under_run_jobs_old_path_still_runs():
 def test_a_failing_job_queued_under_the_old_path_is_recorded_failed():
     job_id = create_job("seedance", {})
     get_queue().enqueue(
-        "ofmhelpers.db.stores.jobs.run_job", job_id, worker_tasks.always_fails, {}
+        "ofmhelpers.db.stores.jobs.run_job",
+        job_id,
+        worker_tasks.always_fails,
+        {},
     )
 
     _drain_queue()
@@ -84,7 +92,8 @@ def test_worker_marks_a_raising_job_failed_never_stuck_running():
 def test_worker_log_description_never_carries_the_job_arguments():
     job_id = create_job("seedance", {})
     rq_job = enqueue(
-        run_job, (job_id, worker_tasks.make_result, {"name": "secret-api-key"})
+        run_job,
+        (job_id, worker_tasks.make_result, {"name": "secret-api-key"}),
     )
 
     assert rq_job.description == "ofmhelpers.features.jobs.runner.run_job"
@@ -95,7 +104,9 @@ def test_worker_log_description_never_carries_the_job_arguments():
 def _queue_run(queue: str) -> tuple[str, str]:
     job_id = create_job("clone_links", {})
     rq_job = enqueue_to(
-        queue, run_job, (job_id, worker_tasks.make_result, {"name": "out.mp4"})
+        queue,
+        run_job,
+        (job_id, worker_tasks.make_result, {"name": "out.mp4"}),
     )
     return job_id, rq_job.id
 
@@ -107,7 +118,7 @@ def test_a_clone_links_run_waits_and_runs_on_its_own_queue():
     assert active_job_ids() == {job_id}
 
     SimpleWorker([get_queue(QueueName.CLONE_LINKS)], connection=get_redis()).work(
-        burst=True
+        burst=True,
     )
     assert get_job(job_id).status == "done"
 

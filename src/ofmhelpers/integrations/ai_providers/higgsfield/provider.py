@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import json
 import math
@@ -59,7 +61,7 @@ UPLOAD_TYPES = frozenset(
         "audio/wav",
         "audio/x-wav",
         "video/mp4",
-    }
+    },
 )
 mimetypes.add_type("image/webp", ".webp")
 _KEY_REFUSED = 401
@@ -121,7 +123,8 @@ def _refused(action: str, exc: HiggsfieldClientError) -> ProviderError:
     message = f"Higgsfield {action}: {exc} (HTTP {code or '?'})"
     api = response is not None and _from_api(response)
     disabled = response is not None and "no-store" in response.headers.get(
-        "Cache-Control", ""
+        "Cache-Control",
+        "",
     )
     if api and (code == _KEY_REFUSED or (code == _KEY_DISABLED and disabled)):
         return ProviderAuthError(HiggsfieldProvider.label, message)
@@ -178,7 +181,9 @@ def _sendable(path: Path, max_bytes: int | None) -> Path:
 
 def _submit_key(job_key: str, model_id: str, payload: Payload) -> str:
     body = json.dumps(
-        {"model": model_id, "input": payload}, sort_keys=True, separators=(",", ":")
+        {"model": model_id, "input": payload},
+        sort_keys=True,
+        separators=(",", ":"),
     )
     return f"{job_key}-{hashlib.sha256(body.encode()).hexdigest()[:32]}"
 
@@ -194,7 +199,9 @@ class HiggsfieldProvider(Provider):
         super().__init__(api_key)
         s = settings.higgsfield
         self.client = _Client(
-            base_url=s.base_url, timeout=s.request_timeout_s, api_key=api_key
+            base_url=s.base_url,
+            timeout=s.request_timeout_s,
+            api_key=api_key,
         )
         if settings.infra.fake_externals:
             install_fake(self.client)
@@ -253,7 +260,9 @@ class HiggsfieldProvider(Provider):
         if request.status == "completed":
             return TaskState(state="done", urls=request.urls)
         return TaskState(
-            state="failed", error=request.failure, no_credits=request.out_of_credits
+            state="failed",
+            error=request.failure,
+            no_credits=request.out_of_credits,
         )
 
 

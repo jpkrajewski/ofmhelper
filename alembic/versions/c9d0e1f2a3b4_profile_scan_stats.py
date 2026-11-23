@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -35,6 +37,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(
-        "ix_profile_scan_stats_username_scanned_at", table_name="profile_scan_stats"
+        "ix_profile_scan_stats_username_scanned_at",
+        table_name="profile_scan_stats",
     )
     op.drop_table("profile_scan_stats")

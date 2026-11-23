@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from sqlalchemy import ColumnElement, select
 
 from ofmhelpers.db.audit_log.schema import AuditEntry
@@ -27,14 +29,15 @@ class AuditLogRepository:
         log = AuditLogRow
         with session_scope() as s:
             rows = s.execute(
-                select(log).where(*where).order_by(log.id.desc()).limit(limit)
+                select(log).where(*where).order_by(log.id.desc()).limit(limit),
             ).scalars()
             return [_entry(r) for r in rows]
 
     def history(self, table: str, row_id: str, limit: int = 100) -> list[AuditEntry]:
         log = AuditLogRow
         return self._newest(
-            [log.table_name == table, log.row_id == row_id], limit=limit
+            [log.table_name == table, log.row_id == row_id],
+            limit=limit,
         )
 
     def by_actor(self, actor_id: int, limit: int = 100) -> list[AuditEntry]:

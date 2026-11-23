@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from PIL import Image
 
@@ -82,7 +84,9 @@ def fast_polls(monkeypatch):
 
 
 def test_the_cheapest_job_runs_end_to_end_on_the_fake(
-    fake_externals, fast_polls, provider_name
+    fake_externals,
+    fast_polls,
+    provider_name,
 ):
     cls, _, fake_key = PROVIDERS[provider_name]
     _cheapest_job(cls, fake_key)

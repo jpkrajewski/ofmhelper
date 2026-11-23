@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 from pathlib import Path
@@ -68,7 +70,8 @@ FAILURE_MODES = (
     (
         "service down or slow",
         re.compile(
-            r"\bdown\b|slow|time ?outs?|unavailable|unreachable|offline", re.IGNORECASE
+            r"\bdown\b|slow|time ?outs?|unavailable|unreachable|offline",
+            re.IGNORECASE,
         ),
     ),
     (
@@ -82,7 +85,8 @@ FAILURE_MODES = (
     (
         "many clicks, two tabs, retries",
         re.compile(
-            r"click|two tabs|double|concurren|\brac(?:e|es|y)\b|retr(?:y|ies)|duplicate|idempoten",
+            r"click|two "
+            r"tabs|double|concurren|\brac(?:e|es|y)\b|retr(?:y|ies)|duplicate|idempoten",
             re.IGNORECASE,
         ),
     ),
@@ -112,32 +116,39 @@ TEMPLATE = (
     "Pattern in repo: <file and symbol the new code copies, or none>\n"
     "Web: <URLs read; required when the pattern is none>\n"
     "Skills: <skills and .claude/rules that apply>\n"
-    "Breaks when: <what the code does when> the service is down or slow | the backend answers "
-    "5xx, HTML or non-JSON | it crashes after a side effect | 50 clicks, two tabs, retries | "
+    "Breaks when: <what the code does when> the "
+    "service is down or slow | the backend answers "
+    "5xx, HTML or non-JSON | it crashes after a side "
+    "effect | 50 clicks, two tabs, retries | "
     "junk input | scale | a JS crash"
 )
 HOW = (
-    "1. codegraph_explore for the pattern in this repo (the shell's codegraph explore counts). "
+    "1. codegraph_explore for the pattern in this "
+    "repo (the shell's codegraph explore counts). "
     "2. If there is none: WebSearch how it is done at enterprise scale. "
     '3. Search the skills: git grep -n -i "<terms>" -- .claude/skills .claude/rules '
     "'*CLAUDE.md', or load the skill. "
     "4. Write reports/research/<slug>.md with these lines:\n" + TEMPLATE
 )
 STEPS = (
-    "Research before new code (a new file under src/, scripts/ or .claude/hooks/, or a new "
+    "Research before new code (a new file under "
+    "src/, scripts/ or .claude/hooks/, or a new "
     "def/class/function line): such an edit is denied until, since this task started: "
     + HOW
 )
 DENIED = (
     "Research before new code: {path} adds new code. Missing since this task started: "
-    "{missing}. Moving code instead? Cut it from its old file first: a name the old file "
+    "{missing}. Moving code instead? Cut it from "
+    "its old file first: a name the old file "
     "no longer defines is not new.\n" + HOW
 )
 SHELL_CODE = (
-    "New code was written from the shell ({paths}) before the research: the Write/Edit gate "
+    "New code was written from the shell ({paths}) "
+    "before the research: the Write/Edit gate "
     "never saw it. Missing since this task started: {missing}.\n"
     + HOW
-    + "\nThen recheck those files against the research, and write new code with Write or Edit."
+    + "\nThen recheck those files against the research, "
+    "and write new code with Write or Edit."
 )
 
 
@@ -354,7 +365,8 @@ def judge(event: HookEvent) -> Verdict | None:
         return None
     if missing := missing_research(event):
         return deny(
-            NAME, DENIED.format(path=event.relative, missing="; ".join(missing))
+            NAME,
+            DENIED.format(path=event.relative, missing="; ".join(missing)),
         )
     return None
 
@@ -403,10 +415,10 @@ def check(event: HookEvent) -> Verdict | None:
 GUARD = Guard(
     name=NAME,
     events=frozenset(
-        {"UserPromptSubmit", "SubagentStart", "PostToolUse", "PreToolUse", *STOPS}
+        {"UserPromptSubmit", "SubagentStart", "PostToolUse", "PreToolUse", *STOPS},
     ),
     tools=frozenset(
-        {*EDITS, *SHELLS, *AGENTS, *WEB_TOOLS, "Grep", "Skill", CODEGRAPH_TOOL}
+        {*EDITS, *SHELLS, *AGENTS, *WEB_TOOLS, "Grep", "Skill", CODEGRAPH_TOOL},
     ),
     check=check,
 )

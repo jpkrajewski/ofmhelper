@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime
 
 import pytest
@@ -167,7 +169,9 @@ def test_messages_come_newest_first_and_page_backwards():
     assert [
         m.message_id
         for m in client.messages(
-            CREATOR, "channel", before_message_id=newest.message_id
+            CREATOR,
+            "channel",
+            before_message_id=newest.message_id,
         )
     ] == [middle.message_id, oldest.message_id]
 
@@ -192,7 +196,7 @@ def test_a_rate_limit_is_waited_out_as_asked(monkeypatch):
     waits: list[float] = []
     monkeypatch.setattr(stacked_client.time, "sleep", waits.append)
     fake_stacked().fail_next = [
-        FakeReply(status=429, body=b'{"error": "slow"}', headers={"Retry-After": "7"})
+        FakeReply(status=429, body=b'{"error": "slow"}', headers={"Retry-After": "7"}),
     ]
 
     assert StackedClient(CREATOR_KEY).me().account.id == CREATOR

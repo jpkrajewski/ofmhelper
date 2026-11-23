@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import math
 import time
@@ -260,7 +262,10 @@ class TrackedAccount(BaseModel):
         if self.metrics is None or self.last_scan_at is None:
             return None
         found = ViewWindow.of(
-            self.post_views, days, self.last_scan_at, self.covered_since
+            self.post_views,
+            days,
+            self.last_scan_at,
+            self.covered_since,
         )
         return found if found.covered else None
 
@@ -269,7 +274,8 @@ class TrackedAccount(BaseModel):
             return None
         both = self.window(2 * days)
         return ViewsChange(
-            views=last.views, previous=both.views - last.views if both else None
+            views=last.views,
+            previous=both.views - last.views if both else None,
         )
 
     def posts_in(self, days: int) -> int | None:
@@ -343,7 +349,9 @@ class AccountQuery(BaseModel):
         return self.link(changes={"order": flipped})
 
     def ordered(
-        self, accounts: list[TrackedAccount], days: int
+        self,
+        accounts: list[TrackedAccount],
+        days: int,
     ) -> list[TrackedAccount]:
 
         def views(a: TrackedAccount) -> int | None:
@@ -369,7 +377,9 @@ class AccountQuery(BaseModel):
         return sorted(known, key=key, reverse=reverse) + unknown
 
     def link(
-        self, path: str = "/accounts", changes: dict[str, object] | None = None
+        self,
+        path: str = "/accounts",
+        changes: dict[str, object] | None = None,
     ) -> str:
         update = {"page": 1, **(changes or {})}
         data = self.model_copy(update=update).model_dump(mode="json")
@@ -584,7 +594,11 @@ class FollowerChart(BaseModel):
 
 def _point(snap: Snapshot, change: int | None, x: float, y: float) -> ChartPoint:
     return ChartPoint(
-        taken_at=snap.taken_at, followers=snap.followers, change=change, x=x, y=y
+        taken_at=snap.taken_at,
+        followers=snap.followers,
+        change=change,
+        x=x,
+        y=y,
     )
 
 
@@ -649,7 +663,10 @@ class AccountHistory(BaseModel):
         return rows
 
     def follower_chart(
-        self, days: int, rescan_s: float, now: float | None = None
+        self,
+        days: int,
+        rescan_s: float,
+        now: float | None = None,
     ) -> FollowerChart:
         since = (now or time.time()) - days * _DAY_S
         base = [s for s in self.snapshots if s.taken_at <= since][-1:]

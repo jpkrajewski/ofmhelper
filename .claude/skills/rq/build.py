@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Fetch RQ's own docs for one release, one file per page, into `docs/`.
 
 RQ and its docs are BSD-licensed (rq/rq `LICENSE`): committed, source in SKILL.md.

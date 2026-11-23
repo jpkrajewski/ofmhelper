@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 from contextlib import nullcontext, suppress
 
@@ -141,7 +143,9 @@ def test_a_folder_made_by_hand_is_adopted(drive):
 
 
 def test_dev_reading_the_live_folders_files_reviews_in_its_own_root(
-    drive, monkeypatch, tmp_path
+    drive,
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")

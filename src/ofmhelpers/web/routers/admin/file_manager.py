@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
@@ -27,7 +29,8 @@ router = APIRouter(
 _NAMED = {
     "aigen": Section(label="AI GEN", tasks=frozenset(GENERATE_TOOLS)),
     "clone": Section(
-        label="CLONE", tasks=frozenset({"clone", "clone_long", CloneLinksTask.RUN})
+        label="CLONE",
+        tasks=frozenset({"clone", "clone_long", CloneLinksTask.RUN}),
     ),
     "downloads": Section(label="DOWNLOADS", tasks=frozenset(DOWNLOAD_TOOLS)),
 }
@@ -66,7 +69,9 @@ DiskFile = Annotated[Path, Depends(_disk_file)]
 
 def _thumb(file_path: Path) -> FileResponse:
     return FileResponse(
-        library.thumb(file_path), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
+        library.thumb(file_path),
+        media_type="image/webp",
+        headers=PRIVATE_FOR_A_DAY,
     )
 
 
@@ -81,7 +86,10 @@ def _back(user_id: int, section: str) -> RedirectResponse:
 
 @router.get("")
 def files_page(
-    request: Request, user: int | None = None, section: str = "aigen", page: int = 0
+    request: Request,
+    user: int | None = None,
+    section: str = "aigen",
+    page: int = 0,
 ) -> Response:
     view = LIBRARY.view(user, section, page)
     return render(request, "file_manager.html", dict(view))

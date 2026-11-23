@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 lazy from fastapi import UploadFile
@@ -27,7 +29,9 @@ def upload_root() -> Path:
 
 
 def run_clean(
-    job_dir: str, assets_root: str, files: list[str] | None = None
+    job_dir: str,
+    assets_root: str,
+    files: list[str] | None = None,
 ) -> list[ResultFile]:
     outputs = clean_metadata(Path(job_dir), None if files is None else set(files))
     for p in outputs:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import json
 import time
@@ -206,7 +208,7 @@ def test_a_va_is_out_at_the_next_click_when_the_employer_is_deactivated():
     client = TestClient(app)
     employer = make_user("boss-live@example.com")
     va = users.add_user(
-        UserForm(email="va-live@example.com", role=Role.VA, owner_id=employer.id)
+        UserForm(email="va-live@example.com", role=Role.VA, owner_id=employer.id),
     )
     assert va is not None
     client.cookies.set(SESSION_COOKIE, session_cookie(va))
@@ -238,7 +240,7 @@ def test_a_fanvue_connect_with_redis_down_goes_back_to_the_page(monkeypatch):
 def test_a_va_signs_in_only_while_the_employer_is_active():
     employer = make_user("boss-active@example.com")
     va = users.add_user(
-        UserForm(email="va-active@example.com", role=Role.VA, owner_id=employer.id)
+        UserForm(email="va-active@example.com", role=Role.VA, owner_id=employer.id),
     )
     assert va is not None
     credentials.set_va_password(va.id, employer.id, PASSWORD)
@@ -324,7 +326,10 @@ def test_a_start_token_from_before_a_password_change_links_nothing(telegram_on):
     token = _start_token(user.id)
 
     credentials.change_password(
-        user.id, PASSWORD, "another long password", "another long password"
+        user.id,
+        PASSWORD,
+        "another long password",
+        "another long password",
     )
 
     assert telegram.link(Start(token=token, chat_id="555")) is False

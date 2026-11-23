@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated, Self
 from urllib.parse import quote
 
@@ -64,7 +66,9 @@ def page(
         "edit.html",
         {
             "page": service.Asked(
-                video=video or "", assets_root=assets_root, actor=actor
+                video=video or "",
+                assets_root=assets_root,
+                actor=actor,
             ).page(run_prepare),
             "limit_s": _limit_s(),
             "min_s": settings.web.edit_min_s,
@@ -80,23 +84,29 @@ def page(
 
 @router.post("/upload", status_code=201)
 def upload(
-    assets_root: AssetsRoot, actor: Actor, file: Annotated[UploadFile, File()]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    file: Annotated[UploadFile, File()],
 ) -> EditVideo:
     return service.upload(file, assets_root, actor, run_prepare)
 
 
 @router.get("/video")
 def video_to_add(
-    assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    video: Annotated[str, Query()],
 ) -> EditVideo:
     return service.Asked(video=video, assets_root=assets_root, actor=actor).add(
-        run_prepare
+        run_prepare,
     )
 
 
 @router.get("/prepared")
 def prepared(
-    assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    video: Annotated[str, Query()],
 ) -> Prepared:
     return service.Asked(video=video, assets_root=assets_root, actor=actor).prepared()
 
@@ -142,8 +152,13 @@ def frame(assets_root: AssetsRoot, query: Annotated[FrameQuery, Query()]) -> Res
 def cut(assets_root: AssetsRoot, actor: Actor, body: CutRequest) -> JobQueued:
     return JobQueued(
         job_id=service.queue_cut(
-            body.clips, body, body.speed, assets_root, actor, run_cut
-        )
+            body.clips,
+            body,
+            body.speed,
+            assets_root,
+            actor,
+            run_cut,
+        ),
     )
 
 

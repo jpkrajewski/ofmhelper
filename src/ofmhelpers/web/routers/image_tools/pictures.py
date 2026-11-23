@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -52,7 +54,9 @@ __all__ = [
 ]
 
 router: APIRouter = APIRouter(
-    prefix="/pictures", tags=["pictures"], dependencies=[Access(Area.PICTURES)]
+    prefix="/pictures",
+    tags=["pictures"],
+    dependencies=[Access(Area.PICTURES)],
 )
 
 gallery = Gallery({TASK})

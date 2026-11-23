@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import re
 from typing import Any
@@ -320,7 +322,7 @@ def _imported_modules(tree: ast.AST) -> set[str]:
     found = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
-            "ofmhelpers"
+            "ofmhelpers",
         ):
             found.add(node.module or "")
             found.update(f"{node.module}.{alias.name}" for alias in node.names)
@@ -342,7 +344,7 @@ def _settings_reads(tree: ast.AST) -> set[tuple[str, str]]:
 
 SECRET_NAME = re.compile(
     r"(KEYS?|SECRET|TOKEN|PASSWORD|DSN|PRIVATE_KEY|SERVICE_ACCOUNT)"
-    r"(_ADMIN|_DEFAULT|_WAN|_SEEDANCE)?$"
+    r"(_ADMIN|_DEFAULT|_WAN|_SEEDANCE)?$",
 )
 TELEMETRY_THE_MEDIA_SERVICES_MAY_HOLD = {"LOGFIRE_TOKEN", "SENTRY_DSN"}
 WITHHELD_FROM_THE_MEDIA_SERVICES = {

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Any, NoReturn
 lazy from collections.abc import Mapping
@@ -70,7 +72,8 @@ class RunningHubClient:
         )
         with sent.open("rb") as fh:
             response = self._post(
-                "media/upload/binary", files={"file": (sent.name, fh)}
+                "media/upload/binary",
+                files={"file": (sent.name, fh)},
             )
         url = parsed(response, RhUpload, PROVIDER, "upload answer").url()
         logger.info("runninghub upload %s -> %s", path.name, url.split("?")[0])

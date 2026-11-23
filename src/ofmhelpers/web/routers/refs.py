@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,7 +22,8 @@ MAX_CHECKED = 50
 def _limit(limit: Annotated[int | None, Query(ge=1)] = None) -> int | None:
     if limit is not None and limit > settings.web.max_ref_limit:
         raise HTTPException(
-            status_code=422, detail=f"limit: at most {settings.web.max_ref_limit}"
+            status_code=422,
+            detail=f"limit: at most {settings.web.max_ref_limit}",
         )
     return limit
 

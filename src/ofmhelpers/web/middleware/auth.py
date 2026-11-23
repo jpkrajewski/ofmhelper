@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 import time
 from urllib.parse import quote, urlsplit
@@ -59,7 +61,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
     HOME = signin_state.HOME
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         if self.is_public(request.url.path):
             with acting(_request(request)):
@@ -87,7 +91,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.session[_SEEN] = int(now)
             await run_in_threadpool(presence.seen, user, now)
         viewer = await run_in_threadpool(
-            viewer_for, user, request.session.get(_VIEWING)
+            viewer_for,
+            user,
+            request.session.get(_VIEWING),
         )
         if viewer.by is None:
             request.session.pop(_VIEWING, None)
@@ -98,7 +104,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 "enduser.email": user.email,
                 "enduser.role": str(user.role),
                 **({"viewing.id": str(viewer.user.id)} if viewer.by else {}),
-            }
+            },
         )
         name_user(user.id)
         if (
@@ -111,7 +117,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             update={
                 "actor_id": (viewer.by or viewer.user).id,
                 "viewing_id": viewer.user.id if viewer.by else None,
-            }
+            },
         )
         with acting(who):
             return await call_next(request)
@@ -132,7 +138,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _refused(
-        request: HTTPConnection, current: SessionUser | None, seated: Seated | None
+        request: HTTPConnection,
+        current: SessionUser | None,
+        seated: Seated | None,
     ) -> str | None:
         if current is None:
             return "no session"
@@ -164,7 +172,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
         if "dl" in request.query_params:
             return PlainTextResponse(
-                "Signed out: sign in again, then download", status_code=401
+                "Signed out: sign in again, then download",
+                status_code=401,
             )
         next_url = request.url.path
         if request.url.query:
@@ -207,7 +216,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 "email": user.email,
                 "role": str(user.role),
                 _STAMP: user.credential_stamp,
-            }
+            },
         )
 
     @classmethod
@@ -234,7 +243,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not all(k in session for k in _KEYS):
             return None
         return SessionUser(
-            id=session["user_id"], email=session["email"], role=session["role"]
+            id=session["user_id"],
+            email=session["email"],
+            role=session["role"],
         )
 
     @classmethod

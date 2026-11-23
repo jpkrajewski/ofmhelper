@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 
 import pytest
@@ -105,7 +107,8 @@ def test_a_client_of_its_own_is_named(owner):
     with session_scope() as s:
         s.execute(text("SET LOCAL application_name = 'psql'"))
         s.execute(
-            text("UPDATE devices SET notes = 'by hand' WHERE id = :id"), {"id": phone}
+            text("UPDATE devices SET notes = 'by hand' WHERE id = :id"),
+            {"id": phone},
         )
 
     entry = _changes("devices", phone)[-1]
@@ -145,7 +148,8 @@ def test_a_change_to_quiet_columns_only_is_not_recorded_and_keeps_the_stamps(own
             {"id": owner},
         ).one()
         s.execute(
-            text("UPDATE users SET last_seen_at = now() WHERE id = :id"), {"id": owner}
+            text("UPDATE users SET last_seen_at = now() WHERE id = :id"),
+            {"id": owner},
         )
     with session_scope() as s:
         after = s.execute(
@@ -165,18 +169,22 @@ def test_rows_carry_who_made_and_changed_them(owner):
     with session_scope() as s:
         made = s.execute(
             text(
-                "SELECT created_by, updated_by, created_at, updated_at FROM devices WHERE id = :id"
+                "SELECT created_by, updated_by, created_at, "
+                "updated_at FROM devices WHERE id = :id",
             ),
             {"id": phone},
         ).one()
     with acting(Acting(via=Via.REQUEST, actor_id=other)):
         devices.update_device(
-            phone, DeviceFields(label="Phone 01", notes="moved"), owner
+            phone,
+            DeviceFields(label="Phone 01", notes="moved"),
+            owner,
         )
     with session_scope() as s:
         changed = s.execute(
             text(
-                "SELECT created_by, updated_by, created_at, updated_at FROM devices WHERE id = :id"
+                "SELECT created_by, updated_by, created_at, "
+                "updated_at FROM devices WHERE id = :id",
             ),
             {"id": phone},
         ).one()
@@ -202,8 +210,8 @@ def _triggers() -> set[str]:
     with get_engine().connect() as conn:
         return set(
             conn.execute(
-                text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal")
-            ).scalars()
+                text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal"),
+            ).scalars(),
         )
 
 
@@ -234,7 +242,9 @@ def test_every_audited_table_has_both_stamps():
 def test_a_phone_revision_from_before_the_stamps_restores(owner):
     phone = _phone(owner)
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig"), owner
+        phone,
+        LoginFields(service="instagram", username="ann.ig"),
+        owner,
     )
     assert added is not None
     old_shape = text(
@@ -256,7 +266,7 @@ def test_a_phone_revision_from_before_the_stamps_restores(owner):
                 FROM device_logins dl JOIN devices d ON d.id = dl.device_id
                 WHERE d.user_id = :o)))
         RETURNING id
-        """
+        """,
     )
     with session_scope() as s:
         revision = s.execute(old_shape, {"o": owner}).scalar_one()

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import copy
 import json
@@ -47,7 +49,7 @@ _NOT_STRICT = frozenset(
         "minLength",
         "pattern",
         "title",
-    }
+    },
 )
 
 
@@ -166,7 +168,9 @@ class ChatCompletionsLLM(LLMProvider):
                 "messages": [
                     message.model_dump()
                     for message in self._messages(
-                        prompt, schema.json_schema, Path(work)
+                        prompt,
+                        schema.json_schema,
+                        Path(work),
                     )
                 ],
                 **({} if temperature is None else {"temperature": temperature}),
@@ -187,7 +191,10 @@ class ChatCompletionsLLM(LLMProvider):
         return self._reply(response)
 
     def _messages(
-        self, prompt: Prompt, schema: dict[str, Any], work: Path
+        self,
+        prompt: Prompt,
+        schema: dict[str, Any],
+        work: Path,
     ) -> list[ChatMessage]:
         content = [self._part(p, work) for p in prompt.parts]
         shape = f"{_JSON_ONLY}\n{json.dumps(schema, separators=(',', ':'))}"
@@ -198,7 +205,9 @@ class ChatCompletionsLLM(LLMProvider):
         ]
 
     def _part(
-        self, part: TextPart | MediaPart, work: Path
+        self,
+        part: TextPart | MediaPart,
+        work: Path,
     ) -> TextContent | ImageContent:
         if isinstance(part, TextPart):
             return TextContent(text=part.text)
@@ -229,7 +238,8 @@ class ChatCompletionsLLM(LLMProvider):
             raise LLMOutputError(msg)
         used = found.usage or _Usage()
         usage = Usage(
-            input_tokens=used.prompt_tokens, output_tokens=used.completion_tokens
+            input_tokens=used.prompt_tokens,
+            output_tokens=used.completion_tokens,
         )
         return Reply(text=choice.message.content, usage=usage)
 

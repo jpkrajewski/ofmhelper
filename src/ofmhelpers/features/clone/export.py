@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
@@ -26,7 +28,10 @@ def export_choice(export: str | None, capcut: bool = False) -> str:
 
 
 def exported_file(
-    result: ResultFile, export: str, options: ExportOptions, assets_root: Path
+    result: ResultFile,
+    export: str,
+    options: ExportOptions,
+    assets_root: Path,
 ) -> ResultFile:
     if result.path is None:
         return result

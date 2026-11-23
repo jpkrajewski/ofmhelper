@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import html as html_lib
 import json
 import re
@@ -68,7 +70,8 @@ def _post(client, videos, data=None):
 
 
 @pytest.mark.parametrize(
-    ("seconds", "expected"), [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)]
+    ("seconds", "expected"),
+    [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)],
 )
 def test_duration_is_the_video_length_clamped_to_wan3(seconds, expected):
     for target in list(clone.CLONE_TARGETS.values()):
@@ -298,7 +301,10 @@ def _with_video(job: Job, tmp_path: Path) -> Path:
     ],
 )
 def test_a_running_and_a_failed_card_show_the_video_being_cloned(
-    status, error, line, tmp_path
+    status,
+    error,
+    line,
+    tmp_path,
 ):
     job = _job("s1", status=status, error=error)
     video = _with_video(job, tmp_path)
@@ -387,7 +393,9 @@ def _stub(provider_cls, monkeypatch, sent):
         raise ProviderUnavailableError(msg)
 
     monkeypatch.setattr(
-        provider_cls, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+        provider_cls,
+        "upload",
+        lambda _self, p, max_bytes=None: f"https://up/{p.name}",
     )
     monkeypatch.setattr(provider_cls, "submit", submit)
     monkeypatch.setattr(
@@ -464,7 +472,9 @@ def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
         raise ProviderUnavailableError(msg)
 
     monkeypatch.setattr(
-        ApiyiProvider, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+        ApiyiProvider,
+        "upload",
+        lambda _self, p, max_bytes=None: f"https://up/{p.name}",
     )
     monkeypatch.setattr(ApiyiClient, "submit", submit)
     monkeypatch.setattr(
@@ -475,7 +485,9 @@ def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
     monkeypatch.setattr(ApiyiProvider, "download", download)
 
     r = _post_clips(
-        client, [_clip(tmp_path / "a.mp4", 3)], {"provider": "apiyi", "audio": "true"}
+        client,
+        [_clip(tmp_path / "a.mp4", 3)],
+        {"provider": "apiyi", "audio": "true"},
     )
 
     assert r.status_code == 202, r.text
@@ -597,7 +609,7 @@ def test_export_choice_is_stored_and_recreated(client):
     picked = get_job(
         _post(client, ["a.mp4"], {"export": "iphone17", "mirror": "true"}).json()[
             "job_ids"
-        ][0]
+        ][0],
     )
     default = get_job(_post(client, ["a.mp4"]).json()["job_ids"][0])
 
@@ -635,7 +647,8 @@ def test_export_keeps_a_remote_only_result(monkeypatch):
 def test_capcut_export_serves_the_capcut_copy(tmp_path, monkeypatch):
     src = _clip(tmp_path / "gen.mp4", 2)
     _generated(
-        monkeypatch, [ResultFile(name=src.name, path=str(src), remote_url="https://r")]
+        monkeypatch,
+        [ResultFile(name=src.name, path=str(src), remote_url="https://r")],
     )
     assets = tmp_path / "assets"
 
@@ -652,10 +665,13 @@ def test_device_export_serves_the_device_copy(tmp_path, monkeypatch):
     src = tmp_path / "gen.mp4"
     src.write_bytes(b"video")
     _generated(
-        monkeypatch, [ResultFile(name=src.name, path=str(src), remote_url="https://r")]
+        monkeypatch,
+        [ResultFile(name=src.name, path=str(src), remote_url="https://r")],
     )
     monkeypatch.setattr(
-        exports_module, "record", lambda s, d, *_a: d.write_bytes(s.read_bytes())
+        exports_module,
+        "record",
+        lambda s, d, *_a: d.write_bytes(s.read_bytes()),
     )
 
     [result] = _run_clone(str(tmp_path / "assets"), export="iphone17")
@@ -757,7 +773,9 @@ def test_higgsfield_default_rate_matches_the_measured_runs(client):
     [("kie", 0.08), ("runninghub", 0.07), ("elyum", 0.0792), ("apiyi", 0.0588)],
 )
 def test_billed_by_video_plus_result_costs_twice_the_rate_per_source_second(
-    client, provider, usd_per_billed_s
+    client,
+    provider,
+    usd_per_billed_s,
 ):
     price = _pricing(client)[provider]
 

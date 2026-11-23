@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 from functools import lru_cache
 from pathlib import Path
@@ -50,7 +52,7 @@ def _batch(images: list[Image.Image]) -> np.ndarray:
         [
             np.asarray(i.resize(size, Image.Resampling.BICUBIC), dtype=np.float32) / 255
             for i in images
-        ]
+        ],
     )
     return ((pixels - _MEAN) / _STD).transpose(0, 3, 1, 2)
 
@@ -71,7 +73,8 @@ def _source(path: str, mtime: float, fps: float, timeout_s: int) -> _SourceDescr
     del mtime
     sampled = frames.sample(Path(path), fps, timeout_s)
     return _SourceDescriptors(
-        stored=descriptors(sampled.images), times=np.array(sampled.times)
+        stored=descriptors(sampled.images),
+        times=np.array(sampled.times),
     )
 
 
@@ -94,6 +97,9 @@ def score(
         median=round(float(np.median(nearest)), 3),
         matched_share=round(sum(s >= cut for s in nearest) / len(nearest), 3),
         sequence=best_line(
-            similarity >= cut, np.array(copy.times), reference.times, sample_s
+            similarity >= cut,
+            np.array(copy.times),
+            reference.times,
+            sample_s,
         ),
     )

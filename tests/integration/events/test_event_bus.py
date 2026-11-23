@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 import time
@@ -82,7 +84,7 @@ def test_an_event_with_a_key_reaches_each_chat_once():
 
 def test_a_key_whose_send_failed_can_be_sent_again():
     fake_telegram().fail_next.append(
-        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
     )
     emit(_clicks(key="links.clicks:3000:42"))
 
@@ -134,7 +136,7 @@ def test_without_a_bot_token_nothing_is_sent(monkeypatch):
 
 def test_a_failed_send_fails_neither_the_producer_nor_the_other_chats():
     fake_telegram().fail_next.append(
-        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
     )
 
     emit(_clicks())
@@ -165,7 +167,7 @@ def test_a_flood_answer_is_waited_out_and_sent_in_place(waits, capfire):
 
 def test_a_chat_that_is_gone_is_given_up_at_once(capfire, caplog):
     fake_telegram().fail_next.append(
-        error(HTTPStatus.FORBIDDEN, "Forbidden: bot was kicked from the group chat")
+        error(HTTPStatus.FORBIDDEN, "Forbidden: bot was kicked from the group chat"),
     )
 
     emit(_clicks())
@@ -251,17 +253,18 @@ class TestOnTheRealQueue:
     def test_a_send_has_a_short_time_limit_and_a_short_stay_when_failed(self):
         emit(_clicks())
         SimpleWorker([self._queue()], connection=get_redis()).work(
-            burst=True, max_jobs=1
+            burst=True,
+            max_jobs=1,
         )
 
         jobs = [self._queue().fetch_job(i) for i in self._queue().get_job_ids()]
         assert [(j.timeout, j.failure_ttl) for j in jobs if j] == [
-            (180, 14 * 24 * 3600)
+            (180, 14 * 24 * 3600),
         ] * 2
 
     def test_a_failed_send_is_tried_again_later_on_its_own(self):
         fake_telegram().fail_next.append(
-            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
         )
         emit(_clicks())
 
@@ -275,7 +278,9 @@ class TestOnTheRealQueue:
         assert job.retries_left == 1
 
     def test_a_send_failing_every_try_ends_in_the_failed_registry(
-        self, monkeypatch, capfire
+        self,
+        monkeypatch,
+        capfire,
     ):
         monkeypatch.setenv("OFM_EVENTS_RETRY_WAITS_S", "[]")
         fake_telegram().fail_next.append(error(HTTPStatus.BAD_GATEWAY, "Bad Gateway"))
@@ -289,7 +294,8 @@ class TestOnTheRealQueue:
     def test_switching_a_sender_off_stops_what_is_already_queued(self, monkeypatch):
         emit(_clicks())
         SimpleWorker([self._queue()], connection=get_redis()).work(
-            burst=True, max_jobs=1
+            burst=True,
+            max_jobs=1,
         )
         monkeypatch.setenv("OFM_EVENTS_SENDERS_OFF", "telegram")
 
@@ -301,7 +307,7 @@ class TestOnTheRealQueue:
         hide = _HideJobArguments()
         logging.getLogger("rq.worker").addFilter(hide)
         fake_telegram().fail_next.append(
-            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
         )
         emit(_clicks())
 
@@ -325,7 +331,7 @@ def test_a_message_that_replaces_deletes_the_one_before_in_each_chat():
 
     assert fake_telegram().deleted == first
     assert [m.text.split("\n")[0] for m in fake_telegram().sent[2:]] == [
-        "4,000 clicks"
+        "4,000 clicks",
     ] * 2
 
 

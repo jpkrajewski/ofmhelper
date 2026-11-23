@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.media.recorder import load_profile
@@ -21,7 +23,10 @@ def _source(width: int, height: int, fps: float) -> Source:
     ],
 )
 def test_the_master_is_no_bigger_or_faster_than_the_recorder_needs(
-    profile, source, max_width, fps
+    profile,
+    source,
+    max_width,
+    fps,
 ):
     video = master_for(load_profile(profile), source).video
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any
 lazy from pathlib import Path
 
@@ -39,7 +41,10 @@ class FormView(BaseModel):
 
 
 def form_view(
-    actor: str, team: frozenset[str], assets_root: Path, videos: list[str]
+    actor: str,
+    team: frozenset[str],
+    assets_root: Path,
+    videos: list[str],
 ) -> FormView:
     targets = clone_targets()
     return FormView(

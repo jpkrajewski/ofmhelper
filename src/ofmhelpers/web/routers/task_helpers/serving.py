@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 from http import HTTPStatus
 from pathlib import Path
@@ -77,7 +79,9 @@ def _kept_thumbnail(job: Job | None, index: int, kind: str) -> FileResponse | No
     if not kept.is_file():
         return None
     return FileResponse(
-        kept, media_type="image/webp", headers={"Cache-Control": _IMMUTABLE}
+        kept,
+        media_type="image/webp",
+        headers={"Cache-Control": _IMMUTABLE},
     )
 
 
@@ -112,7 +116,9 @@ def _result_media(job: Job | None, index: int, kinds: set[str]) -> _ResultMedia:
 
 
 def serve_job_preview(
-    job: Job | None, index: int, files_prefix: str
+    job: Job | None,
+    index: int,
+    files_prefix: str,
 ) -> FileResponse | RedirectResponse:
     kept = _kept_thumbnail(job, index, "image")
     if kept is not None:
@@ -135,7 +141,9 @@ def serve_job_preview(
         return media_response(path)
     media_type = "video/mp4" if dest.suffix == ".mp4" else "image/webp"
     return FileResponse(
-        dest, media_type=media_type, headers={"Cache-Control": _IMMUTABLE}
+        dest,
+        media_type=media_type,
+        headers={"Cache-Control": _IMMUTABLE},
     )
 
 
@@ -151,5 +159,7 @@ def serve_job_poster(job: Job | None, index: int) -> FileResponse:
         logger.warning("could not make a poster of %s", path, exc_info=True)
         raise HTTPException(status_code=404, detail="No poster") from None
     return FileResponse(
-        dest, media_type="image/webp", headers={"Cache-Control": _IMMUTABLE}
+        dest,
+        media_type="image/webp",
+        headers={"Cache-Control": _IMMUTABLE},
     )

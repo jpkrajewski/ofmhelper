@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
@@ -38,7 +40,10 @@ PAGES = [
     "/action-log",
 ]
 
-COOKIES = b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc\n"
+COOKIES = (
+    b"# Netscape HTTP Cookie "
+    b"File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc\n"
+)
 
 
 @pytest.fixture

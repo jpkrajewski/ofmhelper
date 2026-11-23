@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import re
 
@@ -23,7 +25,9 @@ def script(client):
 def _models(client):
     html = client.get("/generate").text
     raw = re.search(
-        r'id="model-catalog" type="application/json">(.*?)</script>', html, re.DOTALL
+        r'id="model-catalog" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
     )
     return {m["key"]: m for m in json.loads(raw.group(1))}
 

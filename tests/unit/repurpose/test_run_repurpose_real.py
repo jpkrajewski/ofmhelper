@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import subprocess
 from fractions import Fraction
@@ -62,7 +64,8 @@ def _by_the_pipeline(tmp_path: Path, source: Path) -> RepurposeResult:
 
 @pytest.mark.parametrize("made_by", [_by_the_job, _by_the_pipeline])
 def test_a_spoof_copy_is_a_real_iphone_h264_file_that_passed_the_self_check(
-    tmp_path, made_by
+    tmp_path,
+    made_by,
 ):
     source = _clip(tmp_path / "src.mp4")
 

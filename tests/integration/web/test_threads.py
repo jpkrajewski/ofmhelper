@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -76,11 +78,15 @@ def _account(drive: FakeDrive) -> str:
 def _login(drive: FakeDrive, *files: tuple[str, str]) -> int:
     phone = devices.add_device(
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
-        )
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Anna",
+        ),
     )
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig")
+        phone,
+        LoginFields(service="instagram", username="ann.ig"),
     )
     assert added is not None
     storage_jobs.sync()
@@ -123,7 +129,7 @@ def test_thirty_clicks_at_once_start_one_set(drive, real_queue):
             pool.map(
                 lambda _: client.post(url, follow_redirects=False).status_code,
                 range(30),
-            )
+            ),
         )
 
     assert set(codes) == {303}
@@ -135,7 +141,7 @@ def test_a_picture_or_a_reel_not_in_posted_is_refused(drive, photos):
     client = _client()
 
     picture = client.post(
-        f"/threads/{login_id}/reels/{_key(drive, 'IMG_1.jpg')}/pictures"
+        f"/threads/{login_id}/reels/{_key(drive, 'IMG_1.jpg')}/pictures",
     )
     unknown = client.post(f"/threads/{login_id}/reels/nope/pictures")
 
@@ -149,7 +155,7 @@ def test_without_google_drive_nothing_is_queued(drive, photos, monkeypatch):
     monkeypatch.setattr(service, "refresh_token", lambda _uid: "")
 
     answer = _client().post(
-        f"/threads/{login_id}/reels/{_key(drive, 'VID_1.mp4')}/pictures"
+        f"/threads/{login_id}/reels/{_key(drive, 'VID_1.mp4')}/pictures",
     )
 
     assert answer.status_code == 400

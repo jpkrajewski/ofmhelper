@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 import time
 from pathlib import Path
@@ -51,7 +53,9 @@ def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: AR
         raise NotFoundError(NO_POST)
     if post.status is PostStatus.published and post.remote_id:
         return PublishedPin(
-            post_id=post.id, pin_id=post.remote_id, url=pin_url(post.remote_id)
+            post_id=post.id,
+            pin_id=post.remote_id,
+            url=pin_url(post.remote_id),
         )
     if post.status is not PostStatus.publishing:
         raise NotFoundError(NOT_CLAIMED)
@@ -76,7 +80,9 @@ def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: AR
 
 
 def _publish(
-    channel: Channel, post: Post, review: StorageServiceReview
+    channel: Channel,
+    post: Post,
+    review: StorageServiceReview,
 ) -> PublishedPin:
     repo = store.repository()
     model = preset_of(channel.user_id, post.preset)
@@ -98,7 +104,7 @@ def _publish(
                 title=post.title if post.title is not None else model.title,
                 description=post.description or "",
                 link=post.link or "",
-            )
+            ),
         )
     except PinterestRateLimitedError as exc:
         wait_s = exc.retry_after or settings.distribution.rate_limit_pause_s
@@ -173,7 +179,8 @@ def _keep_session(channel: Channel, client: PinterestClient) -> None:
         store.repository().set_cookies(channel.id, cookies, session_expires_at(cookies))
     except Exception:
         logger.exception(
-            "pinterest @%s: could not save the renewed session", channel.account_name
+            "pinterest @%s: could not save the renewed session",
+            channel.account_name,
         )
 
 
@@ -202,7 +209,7 @@ def _media(client: PinterestClient, path: Path, kind: PostKind, here: Path) -> M
             short_side=min(size.width, size.height),
             threads=1,
             timeout_s=timeout_s,
-        )
+        ),
     )
     video_id = client.upload(path, video_ms=duration_ms)
     cover_id = client.upload(cover)

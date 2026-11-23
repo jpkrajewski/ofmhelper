@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import timedelta
 lazy from collections.abc import Callable
 
@@ -63,14 +65,21 @@ def sync_links(user_id: int, provider: str) -> None:
         _regate(found, user_id, provider)
     except LinkError as exc:
         logger.warning(
-            "%s sync of user %s failed: %s", provider, user_id, exc, exc_info=True
+            "%s sync of user %s failed: %s",
+            provider,
+            user_id,
+            exc,
+            exc_info=True,
         )
         store.finish_sync(user_id, provider, None, str(exc))
         return
     except Exception as exc:
         logger.exception("%s sync of user %s failed", provider, user_id)
         store.finish_sync(
-            user_id, provider, None, f"Sync failed ({type(exc).__name__}): {exc}"
+            user_id,
+            provider,
+            None,
+            f"Sync failed ({type(exc).__name__}): {exc}",
         )
         return
     store.finish_sync(user_id, provider, usage, None)
@@ -88,7 +97,7 @@ def _make(provider: LinkProvider, link: ShortLink, taken: set[str]) -> None:
                     domain=link.domain,
                     destination=link.destination,
                     title=f"@{link.account_handle}" if link.account_handle else slug,
-                )
+                ),
             )
         except SlugTakenError:  # silent: taken: the next number is tried
             taken.add(slug)
@@ -167,7 +176,10 @@ def enable_adult(user_id: int, link_ids: list[int]) -> None:
             found.enable_adult(link.remote_id)
         except LinkError as exc:
             logger.warning(
-                "adult gate of %s failed: %s", link.address, exc, exc_info=True
+                "adult gate of %s failed: %s",
+                link.address,
+                exc,
+                exc_info=True,
             )
             store.set_status([link.id], link.status, str(exc))
             continue
@@ -189,7 +201,10 @@ def delete_links(user_id: int, link_ids: list[int]) -> None:
                 found.delete(link.remote_id)
             except LinkError as exc:
                 logger.warning(
-                    "deleting %s failed: %s", link.address, exc, exc_info=True
+                    "deleting %s failed: %s",
+                    link.address,
+                    exc,
+                    exc_info=True,
                 )
                 store.set_status([link.id], "active", str(exc))
                 continue
@@ -209,7 +224,7 @@ def _queue(wanted: list[LinkSyncKey]) -> list[LinkSyncKey]:
 
 def queue_due_syncs() -> list[LinkSyncKey]:
     return _queue(
-        [LinkSyncKey(user_id=k.user_id, provider=k.provider) for k in keys.keyed()]
+        [LinkSyncKey(user_id=k.user_id, provider=k.provider) for k in keys.keyed()],
     )
 
 
@@ -220,5 +235,5 @@ def sync_now(user_id: int, provider: str | None = None) -> list[LinkSyncKey]:
             LinkSyncKey(user_id=user_id, provider=key)
             for key in link_providers()
             if (provider is None or key == provider) and keys.api_key(user_id, key)
-        ]
+        ],
     )

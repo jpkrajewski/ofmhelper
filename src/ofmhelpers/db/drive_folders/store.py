@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 lazy from contextlib import AbstractContextManager
 
@@ -36,7 +38,8 @@ def targets(owner: int | None = None) -> list[DriveTarget]:
                     followers=login.tracked_followers,
                 )
     return sorted(
-        found.values(), key=lambda t: (t.followers is None, -(t.followers or 0))
+        found.values(),
+        key=lambda t: (t.followers is None, -(t.followers or 0)),
     )
 
 
@@ -95,7 +98,8 @@ def record_posted(seen: list[PostedSeen], seen_at: float) -> int | None:
 
 def save_scans(scans: dict[int, AccountScan], at: float) -> None:
     _repository().save_scans(
-        {k: v.model_dump(mode="json", by_alias=True) for k, v in scans.items()}, at
+        {k: v.model_dump(mode="json", by_alias=True) for k, v in scans.items()},
+        at,
     )
 
 

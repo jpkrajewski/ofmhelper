@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 import zipfile
 from collections.abc import Iterator
@@ -83,7 +85,7 @@ def _thumbnail_sizes() -> MappingProxyType[int, ThumbnailSize]:
             960: ThumbnailSize.w960h640,
             1024: ThumbnailSize.w1024h768,
             2048: ThumbnailSize.w2048h1536,
-        }
+        },
     )
 
 
@@ -170,7 +172,7 @@ class DropboxDrive:
                     "web_view_link": _web_url(path_display),
                     "owned_by_me": True,
                     "parents": [parent_id],
-                }
+                },
             )
         return DriveFile.model_validate(
             {
@@ -183,7 +185,7 @@ class DropboxDrive:
                 "size": meta.size,
                 "owned_by_me": True,
                 "parents": [parent_id],
-            }
+            },
         )
 
     def _folder_of(self, meta: FolderMetadata, parent_id: str) -> DriveFolder:
@@ -199,7 +201,10 @@ class DropboxDrive:
         return self._folder_of(meta, self._parent_id(meta.path_lower or ""))
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]:
         items: list[DriveFile] = []
         with _guard(f"list {parent_id}"):
@@ -221,7 +226,7 @@ class DropboxDrive:
             folders=[
                 FolderItems(folder_id=parent_id, items=self.children(parent_id))
                 for parent_id in parent_ids
-            ]
+            ],
         )
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
@@ -298,7 +303,10 @@ class DropboxDrive:
         target = f"{self._path(parent_id)}/{file_name}"
         with _guard(f"making the sheet {file_name!r}"):
             meta = self._api.files_upload(
-                content, target, mode=WriteMode.add, autorename=False
+                content,
+                target,
+                mode=WriteMode.add,
+                autorename=False,
             )
         logger.info("dropbox: made the sheet %r (%s)", file_name, meta.id)
         return self._entry(meta, parent_id)
@@ -328,21 +336,27 @@ class DropboxDrive:
         with _guard(f"upload {name!r}"), path.open("rb") as source:
             if size <= c.upload_chunk_bytes:
                 meta = self._api.files_upload(
-                    source.read(), target, mode=WriteMode.add, autorename=False
+                    source.read(),
+                    target,
+                    mode=WriteMode.add,
+                    autorename=False,
                 )
             else:
                 started = self._api.files_upload_session_start(
-                    source.read(c.upload_chunk_bytes)
+                    source.read(c.upload_chunk_bytes),
                 )
                 cursor = UploadSessionCursor(started.session_id, source.tell())
                 commit = CommitInfo(target, mode=WriteMode.add, autorename=False)
                 while size - cursor.offset > c.upload_chunk_bytes:
                     self._api.files_upload_session_append_v2(
-                        source.read(c.upload_chunk_bytes), cursor
+                        source.read(c.upload_chunk_bytes),
+                        cursor,
                     )
                     cursor.offset = source.tell()
                 meta = self._api.files_upload_session_finish(
-                    source.read(), cursor, commit
+                    source.read(),
+                    cursor,
+                    commit,
                 )
         logger.info("dropbox: uploaded %r (%s)", name, meta.id)
         return self._entry(meta, parent_id)

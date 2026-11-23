@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable, Mapping
 from datetime import date
 from typing import Any, Self
@@ -151,7 +153,9 @@ class LinkQuery(BaseModel):
         return sorted(known, key=key, reverse=reverse) + unknown
 
     def link(
-        self, path: str = "/links", changes: dict[str, object] | None = None
+        self,
+        path: str = "/links",
+        changes: dict[str, object] | None = None,
     ) -> str:
         update = {"page": 1, **(changes or {})}
         data = self.model_copy(update=update).model_dump(mode="json")

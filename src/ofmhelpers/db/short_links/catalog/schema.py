@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import date, datetime
 from typing import Literal

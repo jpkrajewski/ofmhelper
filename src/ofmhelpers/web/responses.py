@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi.responses import RedirectResponse
 
 NO_STORE = frozendict({"Cache-Control": "no-store"})

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from typing import BinaryIO
 
@@ -16,7 +18,8 @@ from ofmhelpers.features.refusals import RefusedError
 UNLOCK_TASK = "reels_unlock"
 
 _NOTES = {
-    "uploaded": "Cookies saved. Your accounts synced without a login are syncing again.",
+    "uploaded": "Cookies saved. Your accounts "
+    "synced without a login are syncing again.",
     "removed": "Cookies removed. Your downloads and scans now run logged out.",
 }
 
@@ -28,10 +31,14 @@ class PageView(BaseModel):
 
 
 def page_view(
-    owner_id: int, note: str | None = None, error: str | None = None
+    owner_id: int,
+    note: str | None = None,
+    error: str | None = None,
 ) -> PageView:
     return PageView(
-        saved=jar.saved(owner_id), message=_NOTES.get(note or ""), error=error
+        saved=jar.saved(owner_id),
+        message=_NOTES.get(note or ""),
+        error=error,
     )
 
 

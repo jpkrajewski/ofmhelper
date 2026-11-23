@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pathlib
 from typing import Any, NoReturn
 lazy from collections.abc import Mapping
@@ -119,7 +121,10 @@ class KieAIClient:
         return upload_cache_key("kieai", self.api_key, path, max_bytes)
 
     def upload_local_file(
-        self, path: str, upload_path: str = "refs", max_bytes: int | None = None
+        self,
+        path: str,
+        upload_path: str = "refs",
+        max_bytes: int | None = None,
     ) -> str:
         return memoized(
             self._upload_cache_key(path, max_bytes),
@@ -144,7 +149,9 @@ class KieAIClient:
         return url
 
     def _fit_for_upload(
-        self, path: pathlib.Path, max_bytes: int | None = None
+        self,
+        path: pathlib.Path,
+        max_bytes: int | None = None,
     ) -> pathlib.Path:
         limits = settings.kieai.ref_image_limits.with_max_bytes(max_bytes)
         return fitted(path, self.OUT_DIR / "fitted", limits)
@@ -153,7 +160,11 @@ class KieAIClient:
         return remote_file_exists(url, settings.kieai.remote_check_timeout_s)
 
     def create_task(
-        self, model: str, payload: Payload, job_id: str = "", callback_url: str = ""
+        self,
+        model: str,
+        payload: Payload,
+        job_id: str = "",
+        callback_url: str = "",
     ) -> str:
         body: dict[str, Any] = {"model": model, "input": payload}
         if callback_url:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from html.parser import HTMLParser
 
@@ -175,7 +177,7 @@ def test_the_script_check_reads_tags_and_attributes_in_any_spelling():
         '<script src = "/x.js"></script>'
         "<script type='application/json'>{}</script>"
         '<img src="x" onerror = "d()">'
-        '<script nonce="first" nonce="second">e()</script>'
+        '<script nonce="first" nonce="second">e()</script>',
     )
 
     assert found.inline_nonces == [None, "n", None, "first"]

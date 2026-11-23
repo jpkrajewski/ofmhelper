@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -24,8 +26,8 @@ def _owner_column(table: str) -> None:
     op.add_column(table, sa.Column("user_id", sa.Integer(), nullable=True))
     op.execute(
         sa.text(
-            f"UPDATE {table} SET user_id = (SELECT id FROM users WHERE email = :email)"  # noqa: S608
-        ).bindparams(email=AGENCY_EMAIL)
+            f"UPDATE {table} SET user_id = (SELECT id FROM users WHERE email = :email)",  # noqa: S608
+        ).bindparams(email=AGENCY_EMAIL),
     )
     op.alter_column(table, "user_id", nullable=False)
     op.create_foreign_key(
@@ -45,21 +47,29 @@ def upgrade() -> None:
 
     op.drop_constraint("devices_label_key", "devices", type_="unique")
     op.create_unique_constraint(
-        "uq_devices_owner_label", "devices", ["user_id", "label"]
+        "uq_devices_owner_label",
+        "devices",
+        ["user_id", "label"],
     )
 
     op.drop_constraint("uq_logins_identity", "logins", type_="unique")
     op.create_unique_constraint(
-        "uq_logins_identity", "logins", ["user_id", "service", "provider", "username"]
+        "uq_logins_identity",
+        "logins",
+        ["user_id", "service", "provider", "username"],
     )
 
     op.drop_constraint("creators_name_key", "creators", type_="unique")
     op.create_unique_constraint(
-        "uq_creators_owner_name", "creators", ["user_id", "name"]
+        "uq_creators_owner_name",
+        "creators",
+        ["user_id", "name"],
     )
 
     op.drop_constraint(
-        "uq_tracked_accounts_platform_handle", "tracked_accounts", type_="unique"
+        "uq_tracked_accounts_platform_handle",
+        "tracked_accounts",
+        type_="unique",
     )
     op.create_unique_constraint(
         "uq_tracked_accounts_platform_handle",
@@ -67,7 +77,9 @@ def upgrade() -> None:
         ["user_id", "platform", "handle"],
     )
     op.drop_constraint(
-        "uq_tracked_accounts_platform_account", "tracked_accounts", type_="unique"
+        "uq_tracked_accounts_platform_account",
+        "tracked_accounts",
+        type_="unique",
     )
     op.create_unique_constraint(
         "uq_tracked_accounts_platform_account",
@@ -77,7 +89,9 @@ def upgrade() -> None:
 
     op.drop_constraint("watched_profiles_pkey", "watched_profiles", type_="primary")
     op.create_primary_key(
-        "watched_profiles_pkey", "watched_profiles", ["user_id", "username"]
+        "watched_profiles_pkey",
+        "watched_profiles",
+        ["user_id", "username"],
     )
     op.create_index("ix_watched_profiles_username", "watched_profiles", ["username"])
 
@@ -94,7 +108,9 @@ def downgrade() -> None:
     op.create_primary_key("watched_profiles_pkey", "watched_profiles", ["username"])
 
     op.drop_constraint(
-        "uq_tracked_accounts_platform_account", "tracked_accounts", type_="unique"
+        "uq_tracked_accounts_platform_account",
+        "tracked_accounts",
+        type_="unique",
     )
     op.create_unique_constraint(
         "uq_tracked_accounts_platform_account",
@@ -102,7 +118,9 @@ def downgrade() -> None:
         ["platform", "platform_account_id"],
     )
     op.drop_constraint(
-        "uq_tracked_accounts_platform_handle", "tracked_accounts", type_="unique"
+        "uq_tracked_accounts_platform_handle",
+        "tracked_accounts",
+        type_="unique",
     )
     op.create_unique_constraint(
         "uq_tracked_accounts_platform_handle",
@@ -115,7 +133,9 @@ def downgrade() -> None:
 
     op.drop_constraint("uq_logins_identity", "logins", type_="unique")
     op.create_unique_constraint(
-        "uq_logins_identity", "logins", ["service", "provider", "username"]
+        "uq_logins_identity",
+        "logins",
+        ["service", "provider", "username"],
     )
 
     op.drop_constraint("uq_devices_owner_label", "devices", type_="unique")

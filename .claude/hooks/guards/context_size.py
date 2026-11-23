@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -13,7 +15,8 @@ CHUNK = 65_536
 READ_LIMIT = 8 * 1024 * 1024
 ASSISTANT = b'"type":"assistant"'
 TELL = (
-    "context is {k}k tokens; tell the owner in one line that a fresh session for a new task "
+    "context is {k}k tokens; tell the owner in one "
+    "line that a fresh session for a new task "
     "cuts cost"
 )
 

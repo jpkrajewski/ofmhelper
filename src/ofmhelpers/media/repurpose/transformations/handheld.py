@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 lazy import random
 
@@ -82,7 +84,7 @@ class Handheld(BaseModel, frozen=True):
                     drift_amp * rng.uniform(0.5, 1.0),
                     seconds,
                     constants,
-                )
+                ),
             ),
             aspect=aspect,
         )
@@ -110,7 +112,7 @@ class Handheld(BaseModel, frozen=True):
             chain.append(self._perspective())
         chain.append(
             f"crop=w=trunc(iw/{o:.5f}/2)*2:h=trunc(ih/{o:.5f}/2)*2"
-            f":x={_window(self.x, 'iw', 'ow')}:y={_window(self.y, 'ih', 'oh')}"
+            f":x={_window(self.x, 'iw', 'ow')}:y={_window(self.y, 'ih', 'oh')}",
         )
         return chain
 

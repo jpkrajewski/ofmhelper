@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from typing import Any
 
@@ -44,7 +46,7 @@ GENERATE_TOOLS = frozendict(
             task: Tool(label=label, router=router, form_params=as_ai_params)
             for task, (label, router) in LEGACY_TOOLS.items()
         },
-    }
+    },
 )
 
 DOWNLOAD_TOOLS = frozendict(
@@ -53,7 +55,7 @@ DOWNLOAD_TOOLS = frozendict(
         "download_videos": Tool(label="Download videos", router=videos.router),
         "download_images": Tool(label="Download images", router=images.router),
         "clean_images": Tool(label="Clean images", router=clean_image.router),
-    }
+    },
 )
 
 
@@ -80,7 +82,7 @@ TOOLS = frozendict(
             router=pictures.router,
             describe=pictures.describe,
         ),
-    }
+    },
 )
 
 

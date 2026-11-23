@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import SplitResult, parse_qsl, urlencode, urlsplit
 lazy from collections.abc import Callable
 
@@ -12,7 +14,9 @@ def _instagram(parts: SplitResult) -> str:
     found = clone_links_constants().instagram_post.match(parts.path)
     if found is None:
         return parts._replace(
-            scheme="https", netloc="www.instagram.com", query=""
+            scheme="https",
+            netloc="www.instagram.com",
+            query="",
         ).geturl()
     return f"https://www.instagram.com/reel/{found[1]}/"
 
@@ -78,7 +82,7 @@ class SourceLink(BaseModel):
         parts = urlsplit(text)
         host = (parts.hostname or "").lower()
         if parts.scheme.lower() not in ("http", "https") or not constants.tld.search(
-            host
+            host,
         ):
             msg = f"Not a link: {value!r}"
             raise ValueError(msg)
@@ -133,7 +137,8 @@ def read_pasted(text: str) -> PastedLinks:
 
 
 def read_links(
-    text: str, video_site: Callable[[str], bool | str] | None = None
+    text: str,
+    video_site: Callable[[str], bool | str] | None = None,
 ) -> PastedLinks:
     constants = clone_links_constants()
     links: list[str] = []

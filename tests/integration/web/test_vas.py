@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import datetime
 from decimal import Decimal
@@ -32,7 +34,7 @@ APIYI_CLONE = "apiyi:wan3.0-video"
 
 def _va(email: str, owner: User, name: str = "") -> User:
     va = users.add_user(
-        UserForm(email=email, role=Role.VA, name=name, owner_id=owner.id)
+        UserForm(email=email, role=Role.VA, name=name, owner_id=owner.id),
     )
     assert va is not None
     return va
@@ -46,7 +48,11 @@ def _client(email: str, role: Role = Role.USER) -> TestClient:
 
 def _generation(cost_usd: float | None = None) -> GenerationRecord:
     return GenerationRecord(
-        provider="kie", model="m", task_id="t", state="done", cost_usd=cost_usd
+        provider="kie",
+        model="m",
+        task_id="t",
+        state="done",
+        cost_usd=cost_usd,
     )
 
 
@@ -63,7 +69,7 @@ def _run(
     keep_cost(job_id, JobMeta(generations=[_generation()]), cost)
     with session_scope() as s:
         s.execute(
-            update(JobRow).where(JobRow.id == job_id).values(created_at=at.timestamp())
+            update(JobRow).where(JobRow.id == job_id).values(created_at=at.timestamp()),
         )
     return job_id
 
@@ -75,7 +81,11 @@ def _amounts(view, va: User) -> dict[Period, Amount]:
 
 def _view(owner: User, va: User, now: datetime = NOW, zone: str = "Europe/Warsaw"):
     return service.page_view(
-        owner.id, {owner.id, va.id}, everyone=False, zone=time_zone(zone), now=now
+        owner.id,
+        {owner.id, va.id},
+        everyone=False,
+        zone=time_zone(zone),
+        now=now,
     )
 
 
@@ -135,7 +145,10 @@ def test_reported_estimated_and_unpriced_runs_are_told_apart():
     today = _amounts(_view(owner, va), va)[Period.TODAY]
 
     assert today == Amount(
-        runs=4, usd=Decimal("1.75"), estimated_usd=Decimal("0.5"), unpriced=2
+        runs=4,
+        usd=Decimal("1.75"),
+        estimated_usd=Decimal("0.5"),
+        unpriced=2,
     )
     assert (today.dollars, today.runs_label) == ("$1.75", "4 runs")
 
@@ -158,7 +171,10 @@ def test_a_job_that_asked_no_provider_is_not_a_run():
     run_job(job_id, list, {})
 
     view = service.page_view(
-        owner.id, {owner.id, va.id}, everyone=False, zone=time_zone(None)
+        owner.id,
+        {owner.id, va.id},
+        everyone=False,
+        zone=time_zone(None),
     )
 
     assert _amounts(view, va)[Period.MONTH] == Amount()
@@ -176,11 +192,12 @@ def test_a_clone_run_without_a_reported_cost_gets_the_clone_price(monkeypatch):
     params = {"provider": "apiyi", "model": APIYI_CLONE, "resolution": "720P"}
 
     assert cost_of({**params, "duration": 10}, [_generation()]) == JobCost(
-        usd=Decimal("1.1760"), estimated=True
+        usd=Decimal("1.1760"),
+        estimated=True,
     )
     assert cost_of({**params, "seconds": 20.0}, [_generation()]).usd == Decimal("2.352")
     assert cost_of({**params, "source_seconds": 5}, [_generation()]).usd == Decimal(
-        "0.588"
+        "0.588",
     )
 
 
@@ -228,7 +245,7 @@ def test_a_finished_job_keeps_its_estimate_in_its_row(monkeypatch):
             model="wan3.0-video",
             task_id="t1",
             api_key="k",
-        )
+        ),
     )
     tasks.settle(job_id, 0, "done", None)
 
@@ -247,7 +264,9 @@ def _cell(html: str, va: User, period: Period) -> str:
     row = re.search(rf'<tr data-va="{va.id}">.*?</tr>', html, re.DOTALL)
     assert row, f"no row of VA {va.id}"
     cell = re.search(
-        rf'<td data-period="{period.value}">(.*?)</td>', row.group(0), re.DOTALL
+        rf'<td data-period="{period.value}">(.*?)</td>',
+        row.group(0),
+        re.DOTALL,
     )
     assert cell
     return " ".join(re.sub(r"<[^>]+>", " ", cell.group(1)).split())

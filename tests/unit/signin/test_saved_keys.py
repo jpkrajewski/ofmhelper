@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.users.schema import SavedKey, SavedKeys
 
 
@@ -6,7 +8,7 @@ def test_a_saved_key_is_found_by_its_provider():
         keys=[
             SavedKey(provider="kie", api_key="kie-key-1111"),
             SavedKey(provider="oopsie", api_key="oopsie-key-2222"),
-        ]
+        ],
     )
 
     assert saved.get("oopsie") == "oopsie-key-2222"

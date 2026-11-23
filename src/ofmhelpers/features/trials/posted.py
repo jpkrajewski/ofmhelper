@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from ofmhelpers.cache import JobQueue, QueueName
@@ -23,5 +25,8 @@ def read_all() -> None:
             )
         except Exception:
             logger.warning(
-                "trials: cleanup of %s/%s failed", uid, login_id, exc_info=True
+                "trials: cleanup of %s/%s failed",
+                uid,
+                login_id,
+                exc_info=True,
             )

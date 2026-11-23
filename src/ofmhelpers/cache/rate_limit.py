@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from redis.exceptions import RedisError
 lazy from starlette.requests import Request
 

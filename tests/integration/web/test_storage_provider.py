@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 
 import pytest
@@ -44,7 +46,11 @@ def stubbed_dropbox(fake_externals, monkeypatch):
 def _dropbox_user() -> int:
     user = make_user(EMAIL)
     storage_accounts.save(
-        user.id, StorageProvider.DROPBOX, "dropbox-refresh", "dbid:1", EMAIL
+        user.id,
+        StorageProvider.DROPBOX,
+        "dropbox-refresh",
+        "dbid:1",
+        EMAIL,
     )
     users.set_storage_provider(user.id, StorageProvider.DROPBOX)
     return user.id

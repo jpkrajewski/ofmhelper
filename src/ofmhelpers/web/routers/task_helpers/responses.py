@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from urllib.parse import quote
 
@@ -48,8 +50,9 @@ def job_inputs(job: Job) -> JobInputs:
             if value:
                 inputs.file_groups.append(
                     InputFileGroup(
-                        label=label, assets=[reference_asset(p) for p in value]
-                    )
+                        label=label,
+                        assets=[reference_asset(p) for p in value],
+                    ),
                 )
         elif isinstance(value, str) and len(value) > _LONG_TEXT_THRESHOLD:
             inputs.long_text.append(InputSetting(label=label, value=value))

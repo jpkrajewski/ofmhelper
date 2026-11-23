@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 
 import pytest
@@ -112,7 +114,8 @@ def test_the_job_being_run_counts_as_ahead():
 def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
     job_id = _waiting_job()
     JobQueue(name=QueueName.MEDIA).put(
-        run_job, (job_id, worker_tasks.make_result, {"name": "a.mp4"})
+        run_job,
+        (job_id, worker_tasks.make_result, {"name": "a.mp4"}),
     )
 
     assert job_id in active_job_ids()

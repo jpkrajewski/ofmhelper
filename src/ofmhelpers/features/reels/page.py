@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -138,7 +140,7 @@ def _group_links(filters: Filters, owner: int | None) -> list[FilterLink]:
             label="All",
             href=filters.url("/reels", {"group": None}),
             current=not filters.group,
-        )
+        ),
     ] + [
         FilterLink(
             label=g,
@@ -160,7 +162,7 @@ def _rank_links(filters: Filters) -> list[FilterLink]:
             label="All",
             href=filters.url("/reels", {"rank": None}),
             current=not filters.rank,
-        )
+        ),
     ] + [
         FilterLink(
             label=f"{name} {_short(floor)}+"
@@ -180,7 +182,7 @@ def _ratio_links(filters: Filters) -> list[FilterLink]:
             label="Any",
             href=filters.url("/reels", {"ratio": None}),
             current=not filters.ratio,
-        )
+        ),
     ] + [
         FilterLink(
             label=f"\N{MULTIPLICATION SIGN}{n}+",
@@ -192,7 +194,10 @@ def _ratio_links(filters: Filters) -> list[FilterLink]:
 
 
 def page_view(
-    scope: int, group: str | None, rank: str | None, ratio: int | None
+    scope: int,
+    group: str | None,
+    rank: str | None,
+    ratio: int | None,
 ) -> PageView:
     filters = _filters(group, rank, ratio)
     first = _feed_page(filters, 0, scope)
@@ -213,7 +218,11 @@ def page_view(
 
 
 def feed_page(
-    scope: int, group: str | None, rank: str | None, ratio: int | None, offset: int
+    scope: int,
+    group: str | None,
+    rank: str | None,
+    ratio: int | None,
+    offset: int,
 ) -> FeedPage:
     return _feed_page(_filters(group, rank, ratio), offset, scope)
 

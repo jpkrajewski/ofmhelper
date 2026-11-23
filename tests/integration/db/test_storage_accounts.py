@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from cryptography.fernet import Fernet
 from signin import make_user
@@ -65,7 +67,7 @@ def test_the_token_is_encrypted_at_rest_and_masked_in_the_audit_log(user_id):
             s.execute(
                 text(
                     "SELECT changes::text FROM audit_log"
-                    " WHERE table_name = 'storage_accounts' AND row_id = :r"
+                    " WHERE table_name = 'storage_accounts' AND row_id = :r",
                 ),
                 {"r": f"{user_id}:dropbox"},
             )

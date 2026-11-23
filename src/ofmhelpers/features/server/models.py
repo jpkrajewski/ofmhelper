@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.cache.queue import QueueLoad

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from sqlalchemy import (
@@ -78,7 +80,7 @@ class CloneFromLinkRepository(CachedRepository):
                         ),
                     ),
                 )
-                .returning(row.id)
+                .returning(row.id),
             )
             return found.scalar_one_or_none()
 
@@ -98,13 +100,15 @@ class CloneFromLinkRepository(CachedRepository):
                     row.started_at.is_(None),
                 )
                 .values(started_at=time.time(), attempts=row.attempts + 1)
-                .returning(*CloneFromLinkRow.__table__.columns)
+                .returning(*CloneFromLinkRow.__table__.columns),
             )
             claimed = found.mappings().one_or_none()
             return CloneFromLink.model_validate(dict(claimed)) if claimed else None
 
     def for_jobs(
-        self, job_ids: list[str], user_id: int | None = None
+        self,
+        job_ids: list[str],
+        user_id: int | None = None,
     ) -> list[CloneFromLink]:
         if not job_ids:
             return []
@@ -113,7 +117,7 @@ class CloneFromLinkRepository(CachedRepository):
             query = query.where(CloneFromLinkRow.user_id == user_id)
         with session_scope() as s:
             rows = s.execute(
-                query.order_by(CloneFromLinkRow.job_id, CloneFromLinkRow.file_index)
+                query.order_by(CloneFromLinkRow.job_id, CloneFromLinkRow.file_index),
             ).scalars()
             return [_review(r) for r in rows]
 
@@ -128,7 +132,7 @@ class CloneFromLinkRepository(CachedRepository):
         return _changed(
             update(row)
             .where(row.id == review_id, row.status == "checking", _held(claimed))
-            .values(status="uploading", check_id=check_id, folder_name=folder_name)
+            .values(status="uploading", check_id=check_id, folder_name=folder_name),
         )
 
     def finish(
@@ -150,7 +154,7 @@ class CloneFromLinkRepository(CachedRepository):
                 drive_url=drive_url,
                 error=error,
                 finished_at=time.time(),
-            )
+            ),
         )
 
     def cut_off(self, stale_before: float) -> list[CloneFromLink]:
@@ -159,7 +163,7 @@ class CloneFromLinkRepository(CachedRepository):
             rows = s.execute(
                 select(row)
                 .where(row.status.in_(_RUNNING), row.started_at < stale_before)
-                .order_by(row.id)
+                .order_by(row.id),
             ).scalars()
             return [_review(r) for r in rows]
 
@@ -173,7 +177,7 @@ class CloneFromLinkRepository(CachedRepository):
                     row.started_at.is_(None),
                     row.created_at < created_before,
                 )
-                .order_by(row.id)
+                .order_by(row.id),
             ).scalars()
             return [_review(r) for r in rows]
 
@@ -182,7 +186,7 @@ class CloneFromLinkRepository(CachedRepository):
         return _changed(
             update(row)
             .where(row.id == review_id, row.status.in_(_RUNNING), _held(claimed))
-            .values(started_at=None)
+            .values(started_at=None),
         )
 
     def failed_since(self, since: float) -> list[CloneFromLink]:
@@ -195,7 +199,7 @@ class CloneFromLinkRepository(CachedRepository):
                     row.drive_file_id.is_(None),
                     row.finished_at > since,
                 )
-                .order_by(row.id)
+                .order_by(row.id),
             ).scalars()
             return [_review(r) for r in rows]
 
@@ -210,12 +214,13 @@ class CloneFromLinkRepository(CachedRepository):
             )
             .values(
                 status=case(
-                    (row.folder_name.is_not(None), "uploading"), else_="checking"
+                    (row.folder_name.is_not(None), "uploading"),
+                    else_="checking",
                 ),
                 error=None,
                 finished_at=None,
                 started_at=None,
-            )
+            ),
         )
 
     def unreviewed_jobs(self, task: str, since: float) -> list[Job]:
@@ -237,6 +242,6 @@ class CloneFromLinkRepository(CachedRepository):
                     job.finished_at > since,
                     ~reviewed,
                 )
-                .order_by(job.created_at)
+                .order_by(job.created_at),
             ).mappings()
             return [Job.model_validate(dict(r)) for r in rows]

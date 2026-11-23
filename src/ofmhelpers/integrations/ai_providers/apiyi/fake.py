@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import threading
@@ -75,7 +77,7 @@ class FakeApiyi:
                 self.model_lists += 1
             listed = self.key_models.get(key, ["wan3.0-video", "wan3.0-video-prime"])
             return FakeReply.json_body(
-                {"object": "list", "data": [{"id": model} for model in listed]}
+                {"object": "list", "data": [{"id": model} for model in listed]},
             )
         other = self.families.handle(request, path)
         if other is not None:
@@ -85,7 +87,8 @@ class FakeApiyi:
                 return FakeReply.json_body(
                     {
                         "code": "AccessDenied",
-                        "message": "current user api does not support synchronous calls",
+                        "message": "current user api does "
+                        "not support synchronous calls",
                     },
                     status=403,
                 )
@@ -116,7 +119,7 @@ class FakeApiyi:
             {
                 "output": {"task_id": task_id, "task_status": "PENDING"},
                 "request_id": f"req-{task_id[-6:]}",
-            }
+            },
         )
 
     def _task(self, task_id: str) -> FakeReply:
@@ -178,7 +181,8 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
         return FakeReply(body=b"AccessDenied", status=403)
     if urlsplit(request.url or "").path.endswith(".png"):
         return FakeReply(
-            body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+            body=fake_media.image(fmt="PNG"),
+            headers={"Content-Type": "image/png"},
         )
     return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
 

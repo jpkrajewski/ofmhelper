@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import fcntl
 import io
 import threading
@@ -178,7 +180,7 @@ class FakeDrive:
                 ),
                 "ownedByMe": item.owner == FAKE_BOT_EMAIL,
                 "size": item.size,
-            }
+            },
         )
 
     def folder(self, folder_id: str) -> DriveFolder:
@@ -195,7 +197,10 @@ class FakeDrive:
             return DriveFolder(id=item.id, name=item.name, parents=list(item.parents))
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]:
         with self._state("children") as state:
             chain = list(self._chain(state, parent_id))
@@ -221,7 +226,7 @@ class FakeDrive:
             return DriveListing()
         listed = {parent_id: self.children(parent_id) for parent_id in parent_ids}
         found = DriveListing(
-            folders=[FolderItems(folder_id=p, items=listed[p]) for p in listed]
+            folders=[FolderItems(folder_id=p, items=listed[p]) for p in listed],
         )
         with self._state() as state:
             del state.calls[-len(parent_ids) :]
@@ -245,7 +250,11 @@ class FakeDrive:
             return DriveFolder(id=oldest.id, name=oldest.name)
 
     def create_folder(
-        self, parent_id: str, name: str, *, owner: str = FAKE_BOT_EMAIL
+        self,
+        parent_id: str,
+        name: str,
+        *,
+        owner: str = FAKE_BOT_EMAIL,
     ) -> DriveFolder:
         with self._state("create") as state:
             if name in state.fail_on:
@@ -287,7 +296,12 @@ class FakeDrive:
         return self.find_file(parent_id, name)
 
     def create_sheet(
-        self, parent_id: str, name: str, content: bytes, *, owner: str = UPLOADER
+        self,
+        parent_id: str,
+        name: str,
+        content: bytes,
+        *,
+        owner: str = UPLOADER,
     ) -> DriveFile:
         with self._state("create_sheet") as state:
             self._live(state, parent_id, f"Making the sheet {name!r}")
@@ -305,7 +319,10 @@ class FakeDrive:
         with self._state("sheet") as state:
             item = self._live(state, file_id, f"Sheet {file_id}")
             if item.sheet is None:
-                msg = f"Sheet {file_id}: Drive refused (Export only supports Docs Editors files.)"
+                msg = (
+                    f"Sheet {file_id}: Drive refused "
+                    f"(Export only supports Docs Editors files.)"
+                )
                 raise DriveError(msg)
             return item.sheet
 
@@ -380,7 +397,10 @@ class FakeDrive:
             if item_id is not None and item_id in state.items:
                 return item_id
             made = self._new(
-                state, name=name, parents=[parent] if parent else [], owner=owner
+                state,
+                name=name,
+                parents=[parent] if parent else [],
+                owner=owner,
             )
             if item_id is not None:
                 del state.items[made.id]
@@ -553,7 +573,10 @@ class FakePersonDrive:
             return item_id
         if self._drive.item(self.my_drive) is None:
             self._drive.seed_folder(
-                "My Drive", item_id=self.my_drive, owner=self.email, shared=True
+                "My Drive",
+                item_id=self.my_drive,
+                owner=self.email,
+                shared=True,
             )
         return self.my_drive
 
@@ -561,7 +584,10 @@ class FakePersonDrive:
         return self._me().folder(self._id(folder_id))
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]:
         return self._me().children(self._id(parent_id), folders_only=folders_only)
 
@@ -594,7 +620,10 @@ class FakePersonDrive:
 
     def create_sheet(self, parent_id: str, name: str, content: bytes) -> DriveFile:
         return self._me().create_sheet(
-            self._id(parent_id), name, content, owner=self.email
+            self._id(parent_id),
+            name,
+            content,
+            owner=self.email,
         )
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
@@ -607,10 +636,18 @@ class FakePersonDrive:
         return self._me().storage()
 
     def upload(
-        self, parent_id: str, path: Path, name: str, mime_type: str
+        self,
+        parent_id: str,
+        path: Path,
+        name: str,
+        mime_type: str,
     ) -> DriveFile:
         return self._me().upload(
-            self._id(parent_id), path, name, mime_type, owner=self.email
+            self._id(parent_id),
+            path,
+            name,
+            mime_type,
+            owner=self.email,
         )
 
     def web_url(self, item_id: str) -> str:

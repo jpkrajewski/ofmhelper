@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from ofmhelpers.db.chats import store as chats

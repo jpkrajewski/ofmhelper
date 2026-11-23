@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 from pathlib import Path
 from typing import Any, Protocol
@@ -64,7 +66,8 @@ def run_repurpose(
             "special": special,
         }
         logger.warning(
-            "repurpose: a job queued before /spoof (params %s) runs as a Spoof copy, seed %s",
+            "repurpose: a job queued before /spoof "
+            "(params %s) runs as a Spoof copy, seed %s",
             sorted(name for name, value in old_params.items() if value is not None),
             seed,
         )
@@ -122,7 +125,10 @@ class PageView(CardsView):
 
 
 def page_view(
-    actor: str, uploads: StorageServiceUploads, assets_root: Path, videos: list[str]
+    actor: str,
+    uploads: StorageServiceUploads,
+    assets_root: Path,
+    videos: list[str],
 ) -> PageView:
     recent = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor).jobs
     return PageView(
@@ -143,7 +149,10 @@ class Submitted(Protocol):
 
 def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> JobsQueued:
     paths = build_ordered_paths(
-        form.video_manifest, form.video, assets_root, user_id=owner_id
+        form.video_manifest,
+        form.video,
+        assets_root,
+        user_id=owner_id,
     )
     if len(paths) != 1:
         raise RefusedError(NO_VIDEO)

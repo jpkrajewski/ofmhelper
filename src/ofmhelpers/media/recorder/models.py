@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 import random
 from enum import IntEnum, StrEnum

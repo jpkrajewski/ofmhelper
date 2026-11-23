@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from http import HTTPStatus
 
@@ -34,7 +36,10 @@ def _mass_by_webhook(stacked: StackedDriver, mass_id: str) -> None:
 
 
 def _mass_stored(
-    platform: ChatPlatform, model: str, event_id: str, at: float | None = None
+    platform: ChatPlatform,
+    model: str,
+    event_id: str,
+    at: float | None = None,
 ) -> None:
     chats.save_notification(
         platform,

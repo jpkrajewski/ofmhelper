@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 from datetime import date, datetime
 from unittest.mock import MagicMock

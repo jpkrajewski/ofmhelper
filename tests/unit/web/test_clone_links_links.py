@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.features.clone_links.constants import clone_links_constants
@@ -43,7 +45,7 @@ def test_every_kind_of_instagram_post_is_written_as_its_reel(pasted):
 def test_a_post_pasted_as_p_and_as_reel_is_one_link():
     found = read_links(
         "https://www.instagram.com/p/ABC_12-3/\n"
-        "https://www.instagram.com/reel/ABC_12-3/?igsh=x"
+        "https://www.instagram.com/reel/ABC_12-3/?igsh=x",
     )
 
     assert found.links == [REEL]
@@ -58,7 +60,7 @@ def test_a_reels_audio_page_is_not_made_a_reel():
 
 def test_a_tiktok_video_keeps_only_its_path():
     found = SourceLink(
-        url="https://www.tiktok.com/@some.one/video/7400000000000000000?is_from_webapp=1&sender_device=pc&lang=en"
+        url="https://www.tiktok.com/@some.one/video/7400000000000000000?is_from_webapp=1&sender_device=pc&lang=en",
     )
     assert found.url == "https://www.tiktok.com/@some.one/video/7400000000000000000"
 
@@ -80,7 +82,7 @@ def test_tiktok_spellings_are_one_link_yt_dlp_takes():
     found = read_pasted(
         "tiktok.com/@a/video/7400000000000000000\n"
         "https://m.tiktok.com/@a/video/7400000000000000000?x=1\n"
-        "https://www.tiktok.com/@a/video/7400000000000000000"
+        "https://www.tiktok.com/@a/video/7400000000000000000",
     )
 
     assert found.links == ["https://www.tiktok.com/@a/video/7400000000000000000"]
@@ -91,7 +93,7 @@ def test_tiktok_spellings_are_one_link_yt_dlp_takes():
 
 def test_other_sites_lose_only_trackers_and_the_fragment():
     found = SourceLink(
-        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ&si=abc&utm_campaign=x#t=10"
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ&si=abc&utm_campaign=x#t=10",
     )
     assert found.url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -120,7 +122,7 @@ def test_a_share_link_is_refused_never_made_a_reel(pasted):
 
     assert found.links == []
     assert [(b.number, b.reason) for b in found.bad_lines] == [
-        (1, clone_links_constants().share_link)
+        (1, clone_links_constants().share_link),
     ]
     assert "/share/" in SourceLink(url=pasted).url
 
@@ -170,14 +172,14 @@ def test_a_profile_playlist_or_redirector_is_refused(pasted):
 
     assert found.links == []
     assert [(b.number, b.reason) for b in found.bad_lines] == [
-        (1, clone_links_constants().not_one_post)
+        (1, clone_links_constants().not_one_post),
     ]
 
 
 def test_a_link_of_no_site_says_which_sites():
     found = read_pasted("https://abc-8077.proxy.runpod.net/docs")
     assert [b.reason for b in found.bad_lines] == [
-        clone_links_constants().not_a_video_site
+        clone_links_constants().not_a_video_site,
     ]
 
 
@@ -188,7 +190,7 @@ def test_the_extractors_taken_are_the_settings(monkeypatch):
 
     assert found.links == [REEL]
     assert [(b.number, b.reason) for b in found.bad_lines] == [
-        (2, clone_links_constants().not_one_post)
+        (2, clone_links_constants().not_one_post),
     ]
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from abc import ABC, abstractmethod
 from functools import lru_cache

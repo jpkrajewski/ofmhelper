@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -50,7 +52,7 @@ def _prefill(html: str, form_id: str, attr: str) -> list[str]:
 
 def test_send_to_clone_registers_the_videos_and_opens_clone_with_them(client, tmp_path):
     job = _download_job(
-        [_downloaded(tmp_path, "a.mp4"), _downloaded(tmp_path, "b.mp4")]
+        [_downloaded(tmp_path, "a.mp4"), _downloaded(tmp_path, "b.mp4")],
     )
 
     r = client.post("/download-media/send", data={"job_id": job, "target": "clone"})
@@ -67,11 +69,12 @@ def test_send_to_clone_registers_the_videos_and_opens_clone_with_them(client, tm
 
 def test_send_to_clone_long_opens_with_only_the_first_video(client, tmp_path):
     job = _download_job(
-        [_downloaded(tmp_path, "a.mp4"), _downloaded(tmp_path, "b.mp4")]
+        [_downloaded(tmp_path, "a.mp4"), _downloaded(tmp_path, "b.mp4")],
     )
 
     r = client.post(
-        "/download-media/send", data={"job_id": job, "target": "clone-long"}
+        "/download-media/send",
+        data={"job_id": job, "target": "clone-long"},
     )
     assert r.status_code == 200
     videos = _redirect_videos(r)
@@ -91,7 +94,8 @@ def test_a_download_with_no_video_cannot_be_sent(client, tmp_path):
 
 def test_another_users_download_cannot_be_sent(client, tmp_path):
     job = _download_job(
-        [_downloaded(tmp_path, "a.mp4")], actor=str(make_user("other@example.com").id)
+        [_downloaded(tmp_path, "a.mp4")],
+        actor=str(make_user("other@example.com").id),
     )
 
     r = client.post("/download-media/send", data={"job_id": job, "target": "clone"})

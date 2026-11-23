@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from abc import abstractmethod
 from typing import ClassVar
 
@@ -19,7 +21,10 @@ class Platform(PlatformNames):
 
     @abstractmethod
     def fetch(
-        self, handle: str, proxy: str | None, cookies: str | None = None
+        self,
+        handle: str,
+        proxy: str | None,
+        cookies: str | None = None,
     ) -> AccountStats: ...
 
     def api_source(self) -> AccountSource | None:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 from enum import StrEnum
 lazy from pathlib import Path
@@ -27,7 +29,9 @@ class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
         w, h = self.w, self.h
         for offset in range(-h, w + h, self.c.stripe_period):
             self.pen.line(
-                [(offset, 0), (offset + h, h)], fill="white", width=self.c.stripe_width
+                [(offset, 0), (offset + h, h)],
+                fill="white",
+                width=self.c.stripe_width,
             )
 
     def grid(self) -> None:
@@ -57,12 +61,16 @@ class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
             x, y = rng.uniform(0, self.w), rng.uniform(0, self.h)
             r = rng.uniform(*self.c.particle_radius)
             self.pen.ellipse(
-                [x - r, y - r, x + r, y + r], fill=rng.choice(self.c.particle_colours)
+                [x - r, y - r, x + r, y + r],
+                fill=rng.choice(self.c.particle_colours),
             )
 
 
 def draw(
-    pattern: Pattern, size: tuple[int, int], rng: random.Random, c: PatternConstants
+    pattern: Pattern,
+    size: tuple[int, int],
+    rng: random.Random,
+    c: PatternConstants,
 ) -> Image.Image:
     w, h = size
     background = c.particle_background if pattern is Pattern.PARTICLES else "black"

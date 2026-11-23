@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 import random
 import subprocess
@@ -79,7 +81,7 @@ class DownloadConfig(BaseModel):
     filename_template: str = "%(uploader)s_%(id)s%(playlist_index)s.%(ext)s"
 
     cookies_from_browser: str | None = Field(
-        default_factory=lambda: settings.downloaders.cookies_from_browser
+        default_factory=lambda: settings.downloaders.cookies_from_browser,
     )
 
     reencode_tiktok_to_h264: bool = True
@@ -94,7 +96,9 @@ class DownloadConfig(BaseModel):
 
     @classmethod
     def single_post(
-        cls, output_dir: Path = Path("downloads"), socket_timeout: float | None = None
+        cls,
+        output_dir: Path = Path("downloads"),
+        socket_timeout: float | None = None,
     ) -> DownloadConfig:
         return cls(
             download_playlist=False,
@@ -197,7 +201,9 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
         ffmpeg.run_bytes(cmd, settings.downloaders.reencode_timeout_s)
     except RuntimeError, FileNotFoundError:
         logger.warning(
-            "re-encode of %s failed, original kept", path.name, exc_info=True
+            "re-encode of %s failed, original kept",
+            path.name,
+            exc_info=True,
         )
         tmp_dst.unlink(missing_ok=True)
         return path
@@ -209,7 +215,9 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
 
 
 def download(
-    url: str, config: DownloadConfig | None = None, cookiefile: str | None = None
+    url: str,
+    config: DownloadConfig | None = None,
+    cookiefile: str | None = None,
 ) -> DownloadResult:
     config = config or DownloadConfig()
     if settings.infra.fake_externals:
@@ -233,7 +241,9 @@ def download(
             break
         except ValidationError as exc:
             logger.warning(
-                "download %s: its files could not be read", url, exc_info=True
+                "download %s: its files could not be read",
+                url,
+                exc_info=True,
             )
             return DownloadResult(url=url, success=False, error=str(exc))
         except Exception as exc:
@@ -268,7 +278,10 @@ def download(
 
 
 def video_info(
-    url: str, cookiefile: str | None = None, *, socket_timeout: float | None = None
+    url: str,
+    cookiefile: str | None = None,
+    *,
+    socket_timeout: float | None = None,
 ) -> VideoInfo:
     if settings.infra.fake_externals:
         return fake.info(url)
@@ -304,12 +317,17 @@ def video_info(
             seconds = duration_s(stream, settings.downloaders.probe_timeout_s)
         except egress.NotPublicError:
             logger.warning(
-                "video info %s: stream refused: not public", url, exc_info=True
+                "video info %s: stream refused: not public",
+                url,
+                exc_info=True,
             )
             return VideoInfo(url=url, error="This link is not on the public internet")
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             logger.warning(
-                "video info %s: length not probed: %s", url, exc, exc_info=True
+                "video info %s: length not probed: %s",
+                url,
+                exc,
+                exc_info=True,
             )
             return VideoInfo(url=url, error=f"The video's length is unreadable: {exc}")
     return VideoInfo(url=url, seconds=seconds, thumbnail=entry.thumbnail)
@@ -350,7 +368,7 @@ class _Reading(BaseModel, frozen=True):
         opts = self.opts
         if proxy is not None:
             opts = opts.model_copy(
-                update={"cookiefile": None, "cookiesfrombrowser": None, "proxy": proxy}
+                update={"cookiefile": None, "cookiesfrombrowser": None, "proxy": proxy},
             )
         with self._ydl(opts) as ydl:
             return YtDlpInfo.model_validate(ydl.extract_info(self.url, download=False))
@@ -359,10 +377,10 @@ class _Reading(BaseModel, frozen=True):
         if proxy is None:
             with self._ydl(self.opts) as ydl:
                 return YtDlpInfo.model_validate(
-                    ydl.extract_info(self.url, download=True)
+                    ydl.extract_info(self.url, download=True),
                 )
         anon = self.opts.model_copy(
-            update={"cookiefile": None, "cookiesfrombrowser": None}
+            update={"cookiefile": None, "cookiesfrombrowser": None},
         )
         with self._ydl(anon.model_copy(update={"proxy": proxy})) as ydl:
             info = ydl.sanitize_info(ydl.extract_info(self.url, download=False))
@@ -371,7 +389,9 @@ class _Reading(BaseModel, frozen=True):
 
 
 def download_all(
-    urls: list[str], config: DownloadConfig | None = None, cookies: str | None = None
+    urls: list[str],
+    config: DownloadConfig | None = None,
+    cookies: str | None = None,
 ) -> list[DownloadResult]:
     config = config or DownloadConfig()
     with cookie_file(cookies) as cookiefile:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import StrEnum

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 from io import BytesIO
 
@@ -60,7 +62,8 @@ def _phone(label: str = "Phone 01", **extra) -> int:
 
 def _add_login(device_id: int, service: str, username: str, **extra: str) -> int:
     added = store.add_login(
-        device_id, LoginFields(service=service, username=username, **extra)
+        device_id,
+        LoginFields(service=service, username=username, **extra),
     )
     assert added is not None
     return added.id
@@ -239,7 +242,11 @@ def test_custom_service_needs_its_provider_name():
 
 def test_secrets_are_ciphertext_in_the_database_and_absent_from_lists():
     login_id = _add_login(
-        _phone(), "instagram", "yuki", password="hunter2", backup_codes="111\n222"
+        _phone(),
+        "instagram",
+        "yuki",
+        password="hunter2",
+        backup_codes="111\n222",
     )
     password, codes = _raw_login(login_id)
     assert "hunter2" not in password
@@ -361,7 +368,8 @@ def test_one_account_on_two_phones_is_stored_once():
     second = _phone("Phone 02")
     login_id = _add_login(first, "gmail", "team@gmail.com", password="pw")
     added = store.add_login(
-        second, LoginFields(service="gmail", username="Team@Gmail.com")
+        second,
+        LoginFields(service="gmail", username="Team@Gmail.com"),
     )
     assert added == AddedLogin(id=login_id, existed=True)
     assert _count("logins") == 1
@@ -387,7 +395,8 @@ def test_linking_never_overwrites_a_different_password():
     _add_login(first, "gmail", "a@b.c", password="one")
     with pytest.raises(DuplicateError, match="already saved with other password"):
         store.add_login(
-            second, LoginFields(service="gmail", username="a@b.c", password="two")
+            second,
+            LoginFields(service="gmail", username="a@b.c", password="two"),
         )
     with pytest.raises(DuplicateError, match="already on this phone"):
         store.add_login(first, LoginFields(service="gmail", username="a@b.c"))
@@ -598,7 +607,8 @@ def test_admin_flow(admin):
     device = r.json()["id"]
     assert admin.post("/phones/add", json={"label": "Phone 05"}).status_code == 409
     bad = admin.post(
-        "/phones/add", json={"label": "y", "model_id": "iphone-12", "color_id": "gold"}
+        "/phones/add",
+        json={"label": "y", "model_id": "iphone-12", "color_id": "gold"},
     )
     assert bad.status_code == 422
     assert "never came in" in bad.text
@@ -610,7 +620,8 @@ def test_admin_flow(admin):
     assert r.json() == {"id": r.json()["id"], "linked": False}
     login_id = r.json()["id"]
     dup = admin.post(
-        f"/phones/{device}/logins", json={"service": "x", "username": "brand"}
+        f"/phones/{device}/logins",
+        json={"service": "x", "username": "brand"},
     )
     assert dup.status_code == 409
     assert "already on this phone" in dup.json()["detail"]
@@ -646,7 +657,7 @@ def _workbook(client: TestClient):
     r = client.get("/phones/export.xlsx")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith(
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     assert r.headers["content-disposition"].startswith('attachment; filename="phones-')
     assert r.headers["cache-control"] == "no-store"

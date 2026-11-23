@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from guards.event import Guard, HookEvent, Verdict, deny
 from guards.shell import Statement, shell_statements
 
@@ -6,7 +8,8 @@ CHECK_TOOLS = {"mypy", "biome", "djlint"}
 DOCKER = (
     "CLAUDE.md: every check runs in Docker dev, never on the host: "
     "docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm tests "
-    "uv run --frozen {tool} ...  (tests: scripts/test.sh; templates: djlint; JS: biome lint)."
+    "uv run --frozen {tool} ...  (tests: scripts/test.sh; "
+    "templates: djlint; JS: biome lint)."
 )
 
 

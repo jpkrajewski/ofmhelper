@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import date, timedelta
 lazy from pathlib import Path
@@ -161,7 +163,9 @@ def test_only_the_links_added_since_are_downloaded(downloads):
 def test_a_link_pasted_by_hand_before_is_not_downloaded_again(downloads):
     client = _client()
     pasted = client.post(
-        "/download-media/run", data={"urls": A}, headers=keyed()
+        "/download-media/run",
+        data={"urls": A},
+        headers=keyed(),
     ).json()["job_id"]
     _type(OWNER, A, B)
 
@@ -415,7 +419,8 @@ def test_a_refused_google_sign_in_says_to_reconnect(drive, downloads):
 
 
 def test_a_drive_failure_is_one_plain_sentence_and_nothing_is_marked(
-    downloads, monkeypatch
+    downloads,
+    monkeypatch,
 ):
     client = _client()
     _type(OWNER, A)

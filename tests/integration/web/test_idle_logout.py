@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 import pytest
@@ -43,8 +45,8 @@ def _events(user: User, task: str) -> list[float]:
             s.scalars(
                 select(JobRow.created_at)
                 .where(JobRow.user_id == user.id, JobRow.task == task)
-                .order_by(JobRow.created_at)
-            )
+                .order_by(JobRow.created_at),
+            ),
         )
 
 

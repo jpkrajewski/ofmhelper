@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import shlex
 import subprocess
@@ -9,10 +11,11 @@ from guards.event import Guard, HookEvent, Verdict, context
 NAME = "docker_up"
 DOCKER_DESKTOP = Path(
     os.environ.get("CLAUDE_GUARDS_DOCKER_DESKTOP")
-    or r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
+    or r"C:\Program Files\Docker\Docker\Docker Desktop.exe",
 )
 STARTED = (
-    "Docker Desktop was down at session start, so it was started; the engine answers within "
+    "Docker Desktop was down at session start, so "
+    "it was started; the engine answers within "
     "seconds and the dev stack comes back by itself."
 )
 NOT_STARTED = (
@@ -29,7 +32,10 @@ def engine_answers() -> bool:
     try:
         return (
             subprocess.run(
-                [*docker_cli(), "info"], capture_output=True, timeout=8, check=False
+                [*docker_cli(), "info"],
+                capture_output=True,
+                timeout=8,
+                check=False,
             ).returncode
             == 0
         )

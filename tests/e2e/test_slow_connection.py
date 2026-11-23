@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import subprocess
 lazy from pathlib import Path
@@ -93,7 +95,8 @@ def test_a_heavy_gallery_loads_only_previews(admin: Session, heavy_gallery):
 
 
 def test_a_video_with_no_preview_yet_plays_its_original_url(
-    admin: Session, heavy_gallery
+    admin: Session,
+    heavy_gallery,
 ):
     admin.goto("/generate")
     video = admin.page.locator("video.result-video").first

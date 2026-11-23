@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy import random
 
 from pydantic import BaseModel, Field
@@ -112,7 +114,7 @@ class AudioTransformer:
         chain += self._loud()
         if d.compress_db is not None:
             chain.append(
-                f"acompressor=threshold={d.compress_db:.1f}dB:ratio=4:attack=5:release=50"
+                f"acompressor=threshold={d.compress_db:.1f}dB:ratio=4:attack=5:release=50",
             )
         if d.deess_db:
             chain.append(f"equalizer=f=7000:t=h:w=3000:g={-d.deess_db:.2f}")
@@ -120,7 +122,7 @@ class AudioTransformer:
             chain.append(f"volume={makeup_db:.2f}dB")
         if d.limit is not None:
             chain.append(
-                f"alimiter=limit={d.limit:.3f}:attack=5:release=50:level=false"
+                f"alimiter=limit={d.limit:.3f}:attack=5:release=50:level=false",
             )
         return ",".join(chain)
 
@@ -153,9 +155,9 @@ class AudioTransformer:
             return []
         v, k = d.loud_value, self.settings.loudness
         effect = {
-            "chorus": f"chorus=0.5:0.85:{v:.0f}|{v + 5:.0f}:{0.2 * k:.3f}|{0.15 * k:.3f}:0.25|0.3:1|0.75",
-            "flanger": f"flanger=delay={v:.1f}:depth={min(min(v, 10) * k, 10):.2f}:width=25:speed=0.5",
-            "phaser": f"aphaser=in_gain=0.4:out_gain=0.74:delay={v:.1f}:decay={0.2 * k:.3f}:speed=0.5",
+            "chorus": f"chorus=0.5:0.85:{v:.0f}|{v + 5:.0f}:{0.2 * k:.3f}|{0.15 * k:.3f}:0.25|0.3:1|0.75",  # noqa: E501
+            "flanger": f"flanger=delay={v:.1f}:depth={min(min(v, 10) * k, 10):.2f}:width=25:speed=0.5",  # noqa: E501
+            "phaser": f"aphaser=in_gain=0.4:out_gain=0.74:delay={v:.1f}:decay={0.2 * k:.3f}:speed=0.5",  # noqa: E501
             "tremolo": f"tremolo=f={v:.1f}:d={0.15 * k:.3f}",
             "vibrato": f"vibrato=f={v:.1f}:d={0.12 * k:.3f}",
         }

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from functools import cache, wraps
 from typing import Protocol, TypeVar, get_type_hints
@@ -18,7 +20,10 @@ logger = get_logger(__name__)
 
 class RepositoryCacheLike(Protocol):
     def get_or_set(
-        self, method: str, args: Sequence[object], loader: Callable[[], T]
+        self,
+        method: str,
+        args: Sequence[object],
+        loader: Callable[[], T],
     ) -> T: ...
 
     def bump(self) -> None: ...
@@ -57,7 +62,10 @@ class RepositoryCache:
         return f"cache:v2:{self._namespace}:{self._version()}:{method}:{parts}"
 
     def get_or_set(
-        self, method: str, args: Sequence[object], loader: Callable[[], T]
+        self,
+        method: str,
+        args: Sequence[object],
+        loader: Callable[[], T],
     ) -> T:
         try:
             key = self._key(method, args)
@@ -148,5 +156,7 @@ class CachedRepository:
             msg = f"{type(self).__name__} must define cache_namespace"
             raise ValueError(msg)
         self._cache: RepositoryCacheLike = cache or RepositoryCache(
-            None, self.cache_namespace, depends_on=self.cache_depends_on
+            None,
+            self.cache_namespace,
+            depends_on=self.cache_depends_on,
         )

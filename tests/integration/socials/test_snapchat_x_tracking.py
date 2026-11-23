@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
@@ -97,7 +99,8 @@ def test_the_page_shows_one_platform_at_a_time_instagram_first(client):
 
 
 def test_a_hidden_follower_count_and_hidden_spotlights_read_as_hidden(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     quiet = snapchat_fake.PROFILES[0].model_copy(update={"subscribers": 0})
     monkeypatch.setattr(snapchat_fake, "PROFILES", (quiet,))
@@ -123,7 +126,8 @@ def test_a_hidden_follower_count_and_hidden_spotlights_read_as_hidden(
 
 
 def test_a_count_shown_after_being_hidden_grows_from_itself_not_zero(
-    fake_externals, monkeypatch
+    fake_externals,
+    monkeypatch,
 ):
     original = snapchat_fake.PROFILES[0]
     quiet = original.model_copy(update={"subscribers": 0})
@@ -146,7 +150,7 @@ def test_an_unknown_platform_shows_an_empty_page(client):
 
 def test_a_hidden_count_leaves_the_shown_ones_in_the_total(client, monkeypatch):
     quiet = snapchat_fake.PROFILES[0].model_copy(
-        update={"username": "quiet_snap", "subscribers": 0}
+        update={"username": "quiet_snap", "subscribers": 0},
     )
     monkeypatch.setattr(snapchat_fake, "PROFILES", (snapchat_fake.PROFILES[0], quiet))
     ids = _ids("snapchat", "fake_snap", "quiet_snap")

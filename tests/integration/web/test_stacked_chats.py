@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from http import HTTPStatus
 
@@ -37,7 +39,8 @@ def _popups():
 
 
 def test_a_creator_an_agency_key_adds_is_listed_before_any_chat_is_read(
-    side, monkeypatch
+    side,
+    monkeypatch,
 ):
     monkeypatch.setenv("STACKED_API_KEY_AGENCY", stacked_fake.AGENCY_KEY)
 
@@ -83,7 +86,7 @@ def test_a_waiting_chat_costs_one_read_of_one_message_a_round(side):
 
 def test_the_reactions_of_a_message_may_be_null():
     message = Message.model_validate(
-        {"messageId": 1, "createdAt": 1_790_000_000_000, "reactions": None}
+        {"messageId": 1, "createdAt": 1_790_000_000_000, "reactions": None},
     )
 
     assert message.reactions == []
@@ -119,7 +122,8 @@ def test_a_destination_is_made_once_with_every_event(side, monkeypatch):
 
 
 def test_a_creator_moving_to_the_agency_key_takes_its_destination_along(
-    side, monkeypatch
+    side,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CHATTING_WEBHOOK_BASE_URL", "https://example.invalid/")
     side.fake.webhooks.clear()
@@ -143,7 +147,8 @@ def test_a_creator_moving_to_the_agency_key_takes_its_destination_along(
 
 
 def test_a_move_that_cannot_retire_the_old_destination_waits_for_the_next_round(
-    side, monkeypatch
+    side,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CHATTING_WEBHOOK_BASE_URL", "https://example.invalid/")
     side.fake.webhooks.clear()
@@ -217,7 +222,9 @@ def _sent_to(side, fans, ago=60):
 def _mass_event(side, mass_id):
     raw, headers = side.signed(side.mass(mass_id))
     answer = TestClient(app).post(
-        f"/events/{PLATFORM.value}", content=raw, headers=headers
+        f"/events/{PLATFORM.value}",
+        content=raw,
+        headers=headers,
     )
     assert answer.status_code == HTTPStatus.OK
 

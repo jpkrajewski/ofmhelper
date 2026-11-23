@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.config import settings
@@ -83,7 +85,9 @@ def delete_user(user_id: int) -> bool:
 
 
 def admit(
-    user: User | None, name: str = "", refresh_token: str | None = None
+    user: User | None,
+    name: str = "",
+    refresh_token: str | None = None,
 ) -> User | None:
     if user is None or not user.active:
         return None
@@ -99,7 +103,8 @@ def _claim_password_account(email: str, name: str) -> User | None:
     if account is None or account.email != settings.signin.password_admin:
         return None
     return _repository().update(
-        account.id, {"email": normalized_email(email), "name": name}
+        account.id,
+        {"email": normalized_email(email), "name": name},
     )
 
 
@@ -117,7 +122,10 @@ def sign_in_identity(identity: Identity) -> User | None:
         user = env_admin(identity.email, identity.name)
         if user is not None:
             repo.link_identity(
-                user.id, identity.provider, identity.subject, identity.email
+                user.id,
+                identity.provider,
+                identity.subject,
+                identity.email,
             )
         return admit(user, identity.name, identity.refresh_token)
     linked = repo.user_for_identity(identity.provider, identity.subject)
@@ -126,7 +134,10 @@ def sign_in_identity(identity: Identity) -> User | None:
         user = by_email(identity.email)
         if user is not None:
             repo.link_identity(
-                user.id, identity.provider, identity.subject, identity.email
+                user.id,
+                identity.provider,
+                identity.subject,
+                identity.email,
             )
     elif user is not None and is_env_admin(user.email):
         user = env_admin(user.email, identity.name)
@@ -137,7 +148,10 @@ def link_identity(user_id: int, identity: Identity) -> bool:
     if identity.provider == settings.signin.owner_provider:
         return False
     if not _repository().link_identity(
-        user_id, identity.provider, identity.subject, identity.email
+        user_id,
+        identity.provider,
+        identity.subject,
+        identity.email,
     ):
         return False
     _repository().signed_in(user_id, "", identity.refresh_token)
@@ -225,7 +239,10 @@ def refresh_token(user_id: int) -> str:
         return _repository().refresh_token(user_id)
     except VaultError as exc:
         logger.warning(
-            "user %s: Google token unreadable: %s", user_id, exc, exc_info=True
+            "user %s: Google token unreadable: %s",
+            user_id,
+            exc,
+            exc_info=True,
         )
         return ""
 
@@ -235,7 +252,10 @@ def api_keys(user_id: int) -> SavedKeys:
         return _repository().api_keys(user_id)
     except VaultError as exc:
         logger.warning(
-            "user %s: saved API keys unreadable: %s", user_id, exc, exc_info=True
+            "user %s: saved API keys unreadable: %s",
+            user_id,
+            exc,
+            exc_info=True,
         )
         return SavedKeys()
 

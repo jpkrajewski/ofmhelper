@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from importlib import resources
 from types import MappingProxyType
@@ -56,7 +58,7 @@ def services() -> MappingProxyType[str, LoginService]:
 @lru_cache(maxsize=1)
 def tracked_services() -> MappingProxyType[str, LoginService]:
     return MappingProxyType(
-        {s.tracked_platform: s for s in services().values() if s.tracked_platform}
+        {s.tracked_platform: s for s in services().values() if s.tracked_platform},
     )
 
 
@@ -111,7 +113,7 @@ def _models() -> MappingProxyType[str, ListedModel]:
             m.id: ListedModel(family=f, model=m)
             for f in catalog().families
             for m in f.models
-        }
+        },
     )
 
 

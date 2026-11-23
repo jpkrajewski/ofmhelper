@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from importlib import resources
 from types import MappingProxyType
@@ -42,7 +44,7 @@ def _read(name: str) -> str:
 def provider_infos() -> MappingProxyType[str, ProviderInfo]:
     found = TypeAdapter(dict[str, ProviderInfo]).validate_json(_read("providers.json"))
     return MappingProxyType(
-        {key: info.model_copy(update={"key": key}) for key, info in found.items()}
+        {key: info.model_copy(update={"key": key}) for key, info in found.items()},
     )
 
 
@@ -50,7 +52,7 @@ def provider_infos() -> MappingProxyType[str, ProviderInfo]:
 def targets() -> MappingProxyType[str, Target]:
     found = TypeAdapter(dict[str, Target]).validate_json(_read("targets.json"))
     return MappingProxyType(
-        {key: t.model_copy(update={"key": key}) for key, t in found.items()}
+        {key: t.model_copy(update={"key": key}) for key, t in found.items()},
     )
 
 

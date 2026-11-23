@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 import uuid
 lazy from collections.abc import Iterator
@@ -140,7 +142,9 @@ def _trash(drive, backend, folder_id: str) -> None:
         drive.trash(folder_id)
     else:
         drive._files.update(
-            fileId=folder_id, body={"trashed": True}, supportsAllDrives=True
+            fileId=folder_id,
+            body={"trashed": True},
+            supportsAllDrives=True,
         ).execute()
 
 

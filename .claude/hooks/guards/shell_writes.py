@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 from pathlib import Path
@@ -25,18 +27,26 @@ RUFF_WRITE = (
 SCRIPTED_WRITE = re.compile(
     r"\bsed\s+-i|\bpython|\bperl\b|\bawk\b|\bcat\s+>|\btee\b|[^0-9&]>\s*[\w./\"']|"
     r"Set-Content|Out-File|Add-Content|\bcp\s|\bmv\s|\bgit\s+apply\b|\bpatch\b|"
-    rf"{RUFF_WRITE}|\bprettier\b[^;&|]*--write"
+    rf"{RUFF_WRITE}|\bprettier\b[^;&|]*--write",
 )
 UNNAMED_WRITE = re.compile(rf"\bgit\s+apply\b|\bpatch\b|{RUFF_WRITE}|\bprettier\b")
 UNCHECKED = (
-    "The files this shell call wrote could not be checked ({error}); git was slow or failed. "
+    "The files this shell call wrote could not be "
+    "checked ({error}); git was slow or failed. "
     "Run the CRLF, comment and skill checks by hand on the files you wrote."
 )
-CRLF = "CRLF written into {files} (Windows text mode; .gitattributes is eol=lf): rewrite them with LF."
-COMMENTS = "Comments or docstrings written from the shell: {spots} (CLAUDE.md NO COMMENTS, EVER)."
+CRLF = (
+    "CRLF written into {files} (Windows text mode; "
+    ".gitattributes is eol=lf): rewrite them with LF."
+)
+COMMENTS = (
+    "Comments or docstrings written from the "
+    "shell: {spots} (CLAUDE.md NO COMMENTS, EVER)."
+)
 GETATTR = "getattr written from the shell (banned, owner 2026-11-22): {spots}"
 SKILLS = (
-    "Edited from the shell without the STANDARDS skill(s) {skills}: load them now and re-check "
+    "Edited from the shell without the STANDARDS "
+    "skill(s) {skills}: load them now and re-check "
     "{files} against them. Prefer the Edit tool for source files."
 )
 
@@ -56,7 +66,10 @@ class ChangedFile(BaseModel):
         if plain == required(self.path, self.is_new, adds_names=True, written=text):
             return plain
         return required(
-            self.path, self.is_new, adds_names=bool(self.added_names()), written=text
+            self.path,
+            self.is_new,
+            adds_names=bool(self.added_names()),
+            written=text,
         )
 
 
@@ -83,7 +96,8 @@ def changed_by_this_call(event: HookEvent) -> list[ChangedFile]:
     cutoff = event.started_at
     found = [
         ChangedFile(
-            path=line[3:].split(" -> ")[-1].strip('"'), is_new=line.startswith("??")
+            path=line[3:].split(" -> ")[-1].strip('"'),
+            is_new=line.startswith("??"),
         )
         for line in listed.stdout.splitlines()
     ]

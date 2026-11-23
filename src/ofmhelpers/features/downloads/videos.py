@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.downloads.fetch import fetch
 from ofmhelpers.integrations.downloaders.generic import download_all
 lazy from ofmhelpers.integrations.downloaders.models import DownloadResult

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -16,7 +18,9 @@ def upgrade() -> None:
         sa.Column("group_name", sa.String(length=64), nullable=True),
     )
     op.create_index(
-        "ix_watched_profiles_group_name", "watched_profiles", ["group_name"]
+        "ix_watched_profiles_group_name",
+        "watched_profiles",
+        ["group_name"],
     )
 
 

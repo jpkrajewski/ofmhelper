@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Path
@@ -45,7 +47,9 @@ def sheet_downloads(downloads: Downloads) -> SheetQueued:
 
 @router.post("/send")
 def send(
-    form: Annotated[SendForm, Form()], actors: Actors, assets_root: AssetsRoot
+    form: Annotated[SendForm, Form()],
+    actors: Actors,
+    assets_root: AssetsRoot,
 ) -> Redirect:
     return sending.send(form.job_id, form.target, form.index, actors, assets_root)
 
@@ -57,7 +61,9 @@ def replay(job_id: str, downloads: Downloads) -> JobQueued:
 
 @router.get("/{job_id}/files/{index}/stored", summary="Its file in the asset store")
 def stored_file(
-    job_id: str, index: Annotated[int, Path(ge=0)], downloads: Downloads
+    job_id: str,
+    index: Annotated[int, Path(ge=0)],
+    downloads: Downloads,
 ) -> again.StoredFile:
     return downloads.again.stored_file(job_id, index)
 

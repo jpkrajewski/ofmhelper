@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import threading
@@ -20,7 +22,7 @@ MODELS = frozenset(
         "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
-    }
+    },
 )
 USAGE = {
     "promptTokenCount": 1200,
@@ -36,7 +38,10 @@ _BAD_KEY = (
 
 
 def _error(
-    code: int, status: str, message: str, details: list[dict] | None = None
+    code: int,
+    status: str,
+    message: str,
+    details: list[dict] | None = None,
 ) -> httpx.Response:
     body = {"error": {"code": code, "message": message, "status": status}}
     if details:
@@ -72,7 +77,7 @@ class FakeGemini:
     def answer_next(self, answer: dict[str, Any] | str) -> None:
         with self._lock:
             self._replies.append(
-                answer if isinstance(answer, str) else json.dumps(answer)
+                answer if isinstance(answer, str) else json.dumps(answer),
             )
 
     def fail_next(
@@ -87,7 +92,7 @@ class FakeGemini:
                 {
                     "@type": "type.googleapis.com/google.rpc.RetryInfo",
                     "retryDelay": f"{retry_delay_s:g}s",
-                }
+                },
             ]
             if retry_delay_s is not None
             else None
@@ -104,7 +109,7 @@ class FakeGemini:
                         "promptFeedback": {"blockReason": "PROHIBITED_CONTENT"},
                         "candidates": [],
                     },
-                )
+                ),
             )
 
     def fail_processing(self) -> None:
@@ -166,7 +171,7 @@ class FakeGemini:
                     {
                         "content": {"role": "model", "parts": [{"text": queued}]},
                         "finishReason": "STOP",
-                    }
+                    },
                 ],
                 "usageMetadata": USAGE,
             },
@@ -217,7 +222,9 @@ class FakeGemini:
             }
             made = self._public(self.files[name]).model_dump(by_alias=True)
         return httpx.Response(
-            200, json={"file": made}, headers={"x-goog-upload-status": "final"}
+            200,
+            json={"file": made},
+            headers={"x-goog-upload-status": "final"},
         )
 
     def _get(self, name: str) -> httpx.Response:
@@ -229,7 +236,8 @@ class FakeGemini:
             if found["polls"] >= self.polls_until_active:
                 found["state"] = "FAILED" if self.processing_fails else "ACTIVE"
             return httpx.Response(
-                200, json=self._public(found).model_dump(by_alias=True)
+                200,
+                json=self._public(found).model_dump(by_alias=True),
             )
 
     def _delete(self, name: str) -> httpx.Response:

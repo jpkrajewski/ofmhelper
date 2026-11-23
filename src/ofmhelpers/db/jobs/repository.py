@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 import uuid
 from typing import Any
@@ -22,6 +24,7 @@ from sqlalchemy import (
     values,
 )
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array, array_agg
+lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
@@ -61,7 +64,7 @@ def _job(row: JobRow) -> Job:
             "meta": row.meta or {},
             "cost_usd": row.cost_usd,
             "cost_estimated": row.cost_estimated,
-        }
+        },
     )
 
 
@@ -88,13 +91,16 @@ def _page_filter(
         where.append(JobRow.status == status)
     if hidden is not None:
         where.append(
-            JobRow.hidden_at.is_not(None) if hidden else JobRow.hidden_at.is_(None)
+            JobRow.hidden_at.is_not(None) if hidden else JobRow.hidden_at.is_(None),
         )
     return where
 
 
 def _page(
-    where: list[ColumnElement[bool]], order: list[Any], offset: int, limit: int
+    where: list[ColumnElement[bool]],
+    order: list[Any],
+    offset: int,
+    limit: int,
 ) -> JobPage:
     with session_scope() as s:
         rows = (
@@ -103,7 +109,7 @@ def _page(
                 .where(*where)
                 .order_by(*order)
                 .offset(offset)
-                .limit(limit)
+                .limit(limit),
             )
             .scalars()
             .all()
@@ -137,7 +143,7 @@ class JobRepository(CachedRepository):
                     error=None,
                     created_at=created_at if created_at is not None else time.time(),
                     preview=None,
-                )
+                ),
             )
             s.flush()
             self._enforce_cap(s, task_name, user_id)
@@ -174,11 +180,11 @@ class JobRepository(CachedRepository):
             gone = s.execute(
                 delete(JobRow)
                 .where(JobRow.id.startswith(prefix, autoescape=True))
-                .returning(JobRow.id)
+                .returning(JobRow.id),
             )
             return len(gone.all())
 
-    def _enforce_cap(self, session, task: str, user_id: int | None) -> None:
+    def _enforce_cap(self, session: Session, task: str, user_id: int | None) -> None:
         cap = settings.web.max_jobs
         owner = (
             JobRow.user_id.is_(None) if user_id is None else JobRow.user_id == user_id
@@ -192,7 +198,7 @@ class JobRepository(CachedRepository):
                     JobRow.status.in_(("done", "failed")),
                 )
                 .order_by(JobRow.created_at.desc())
-                .offset(cap)
+                .offset(cap),
             )
             .scalars()
             .all()
@@ -236,7 +242,7 @@ class JobRepository(CachedRepository):
                 update(JobRow)
                 .where(JobRow.id == job_id, JobRow.status != "running")
                 .values(status="running", error=None, finished_at=None)
-                .returning(JobRow.id)
+                .returning(JobRow.id),
             )
             return found.scalar_one_or_none() is not None
 
@@ -254,7 +260,7 @@ class JobRepository(CachedRepository):
     def set_hidden(self, job_id: str, hidden_at: float | None) -> None:
         with session_scope() as s:
             s.execute(
-                update(JobRow).where(JobRow.id == job_id).values(hidden_at=hidden_at)
+                update(JobRow).where(JobRow.id == job_id).values(hidden_at=hidden_at),
             )
 
     @invalidates_cache
@@ -268,7 +274,7 @@ class JobRepository(CachedRepository):
                 s.execute(
                     select(JobRow)
                     .where(JobRow.status == "running")
-                    .order_by(JobRow.created_at)
+                    .order_by(JobRow.created_at),
                 )
                 .scalars()
                 .all()
@@ -282,8 +288,8 @@ class JobRepository(CachedRepository):
                     or_(
                         cast(JobRow.params, Text).contains(fragment, autoescape=True),
                         cast(JobRow.result, Text).contains(fragment, autoescape=True),
-                    )
-                )
+                    ),
+                ),
             ).all()
             return [value for row in rows for value in row if value]
 
@@ -297,7 +303,7 @@ class JobRepository(CachedRepository):
                             JobRow.task.not_in(while_running),
                             JobRow.status == "running",
                         ),
-                    )
+                    ),
                 )
                 .scalars()
                 .all()
@@ -308,7 +314,7 @@ class JobRepository(CachedRepository):
         if not fragments:
             return []
         asked = values(column("fragment", Text), name="asked").data(
-            [(fragment,) for fragment in fragments]
+            [(fragment,) for fragment in fragments],
         )
         as_text = (
             select(
@@ -363,7 +369,7 @@ class JobRepository(CachedRepository):
                     JobRow.user_id.is_not(None),
                     JobRow.status == "done",
                 )
-                .group_by(JobRow.user_id, JobRow.task)
+                .group_by(JobRow.user_id, JobRow.task),
             ).all()
         return [
             JobCount(actor=str(user_id), task=task, count=n)
@@ -442,7 +448,7 @@ class JobRepository(CachedRepository):
                         JobRow.user_id == user_id,
                         JobRow.params["batch"].astext == batch,
                     )
-                    .order_by(JobRow.created_at)
+                    .order_by(JobRow.created_at),
                 )
                 .scalars()
                 .all()
@@ -450,19 +456,25 @@ class JobRepository(CachedRepository):
             return [_job(r) for r in rows]
 
     def latest(
-        self, task: str, user_id: int, status: JobStatus | None = None
+        self,
+        task: str,
+        user_id: int,
+        status: JobStatus | None = None,
     ) -> Job | None:
         query = select(JobRow).where(JobRow.task == task, JobRow.user_id == user_id)
         if status is not None:
             query = query.where(JobRow.status == status)
         with session_scope() as s:
             row = s.execute(
-                query.order_by(JobRow.created_at.desc()).limit(1)
+                query.order_by(JobRow.created_at.desc()).limit(1),
             ).scalar_one_or_none()
             return _job(row) if row else None
 
     def running_with_links(
-        self, tasks: Collection[str], user_id: int, links: list[str]
+        self,
+        tasks: Collection[str],
+        user_id: int,
+        links: list[str],
     ) -> list[Job]:
         if not links:
             return []
@@ -475,7 +487,7 @@ class JobRepository(CachedRepository):
                     JobRow.status == "running",
                     JobRow.params["urls"].has_any(array(links)),
                 )
-                .order_by(JobRow.created_at)
+                .order_by(JobRow.created_at),
             ).scalars()
             return [_job(r) for r in rows]
 
@@ -485,7 +497,7 @@ class JobRepository(CachedRepository):
             s.execute(
                 update(JobRow)
                 .where(JobRow.id == job_id)
-                .values(params=JobRow.params.op("||")(type_coerce(values, JSONB)))
+                .values(params=JobRow.params.op("||")(type_coerce(values, JSONB))),
             )
 
     @invalidates_cache
@@ -500,7 +512,7 @@ class JobRepository(CachedRepository):
             s.execute(
                 update(JobRow)
                 .where(JobRow.id == job_id)
-                .values(meta=meta, cost_usd=cost_usd, cost_estimated=cost_estimated)
+                .values(meta=meta, cost_usd=cost_usd, cost_estimated=cost_estimated),
             )
 
     def days(
@@ -514,7 +526,8 @@ class JobRepository(CachedRepository):
         if not user_ids:
             return []
         day = cast(
-            func.timezone(zone, func.to_timestamp(JobRow.created_at)), Date
+            func.timezone(zone, func.to_timestamp(JobRow.created_at)),
+            Date,
         ).label("day")
         at = JobRow.created_at
 
@@ -527,7 +540,8 @@ class JobRepository(CachedRepository):
                 func.max(at).filter(JobRow.task == "logout"),
                 func.max(at).filter(JobRow.task == "idle_logout"),
                 func.count().filter(
-                    JobRow.task.in_(reel_tasks), JobRow.status == "done"
+                    JobRow.task.in_(reel_tasks),
+                    JobRow.status == "done",
                 ),
                 func.sum(JobRow.cost_usd),
             )
@@ -560,7 +574,10 @@ class JobRepository(CachedRepository):
             ]
 
     def sessions(
-        self, user_ids: Sequence[int], from_ts: float, to_ts: float
+        self,
+        user_ids: Sequence[int],
+        from_ts: float,
+        to_ts: float,
     ) -> list[SessionSpan]:
         if not user_ids:
             return []
@@ -596,7 +613,8 @@ class JobRepository(CachedRepository):
             .scalar_subquery()
         )
         ended = case(
-            (ev.c.next_task.in_(("logout", "idle_logout")), ev.c.next_at), else_=None
+            (ev.c.next_task.in_(("logout", "idle_logout")), ev.c.next_at),
+            else_=None,
         )
         query = (
             select(ev.c.user_id, ev.c.created_at, ended, ev.c.next_at, last_job)
@@ -620,7 +638,9 @@ class JobRepository(CachedRepository):
             ]
 
     def spend(
-        self, user_ids: Sequence[int], periods: tuple[SpendPeriod, ...]
+        self,
+        user_ids: Sequence[int],
+        periods: tuple[SpendPeriod, ...],
     ) -> list[Spend]:
         if not user_ids or not periods:
             return []
@@ -637,7 +657,8 @@ class JobRepository(CachedRepository):
                 func.count(),
                 func.coalesce(func.sum(JobRow.cost_usd), 0),
                 func.coalesce(
-                    func.sum(JobRow.cost_usd).filter(JobRow.cost_estimated), 0
+                    func.sum(JobRow.cost_usd).filter(JobRow.cost_estimated),
+                    0,
                 ),
                 func.count().filter(JobRow.cost_usd.is_(None)),
             )
@@ -669,7 +690,11 @@ class JobRepository(CachedRepository):
         ]
 
     def redone_links(
-        self, task: str, user_id: int, links: list[str], after: float
+        self,
+        task: str,
+        user_id: int,
+        links: list[str],
+        after: float,
     ) -> set[str]:
         if not links:
             return set()
@@ -682,7 +707,7 @@ class JobRepository(CachedRepository):
                     JobRow.created_at > after,
                     JobRow.status.in_(("running", "done")),
                     link.in_(links),
-                )
+                ),
             ).scalars()
             return set(found)
 
@@ -704,20 +729,32 @@ class JobRepository(CachedRepository):
                     value.in_(among),
                 )
                 .order_by(JobRow.created_at.desc())
-                .limit(1)
+                .limit(1),
             ).scalar()
 
     @cached
     def last_used_firsts(
-        self, tasks: Sequence[str], user_ids: Sequence[int], field: str, limit: int
+        self,
+        tasks: Sequence[str],
+        user_ids: Sequence[int],
+        field: str,
+        limit: int,
     ) -> list[str]:
         return self._firsts(
-            tasks, user_ids, field, limit, [func.max(JobRow.created_at).desc()]
+            tasks,
+            user_ids,
+            field,
+            limit,
+            [func.max(JobRow.created_at).desc()],
         )
 
     @cached
     def most_used_firsts(
-        self, tasks: Sequence[str], user_ids: Sequence[int], field: str, limit: int
+        self,
+        tasks: Sequence[str],
+        user_ids: Sequence[int],
+        field: str,
+        limit: int,
     ) -> list[str]:
         return self._firsts(
             tasks,
@@ -743,7 +780,7 @@ class JobRepository(CachedRepository):
                     select(
                         array_agg(aggregate_order_by(first, JobRow.created_at.desc()))[
                             1
-                        ]
+                        ],
                     )
                     .where(
                         JobRow.task.in_(tasks),
@@ -752,8 +789,8 @@ class JobRepository(CachedRepository):
                     )
                     .group_by(content)
                     .order_by(*order)
-                    .limit(limit)
-                ).scalars()
+                    .limit(limit),
+                ).scalars(),
             )
 
     @cached
@@ -766,5 +803,5 @@ class JobRepository(CachedRepository):
                     JobRow.task.in_(tasks),
                     JobRow.user_id.in_(user_ids),
                     JobRow.hidden_at.is_not(None),
-                )
+                ),
             ).scalar_one()

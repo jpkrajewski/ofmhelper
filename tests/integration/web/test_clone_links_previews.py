@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import threading
 import time
@@ -135,7 +137,10 @@ def test_a_video_over_the_limit_is_too_long_and_cannot_be_ticked(reads):
     ],
 )
 def test_a_length_at_the_limit_is_judged_and_shown_rounded_up(
-    reads, seconds, too_long, shown
+    reads,
+    seconds,
+    too_long,
+    shown,
 ):
     reads.answer = lambda url, _li: VideoInfo(url=url, seconds=seconds)
 
@@ -247,10 +252,17 @@ def test_the_cache_is_per_user_so_a_login_only_read_stays_its_readers(reads):
     ],
 )
 def test_a_failed_read_says_what_the_va_can_do(
-    reads, cookies, url, error, logged_out, said
+    reads,
+    cookies,
+    url,
+    error,
+    logged_out,
+    said,
 ):
     reads.answer = lambda u, _li: VideoInfo(
-        url=u, error=error, logged_out_error=logged_out
+        url=u,
+        error=error,
+        logged_out_error=logged_out,
     )
     c = client()
     if cookies:
@@ -267,7 +279,9 @@ def test_a_failed_read_says_what_the_va_can_do(
 
 def test_a_cover_is_kept_small_and_served_from_disk(reads):
     reads.answer = lambda url, _li: VideoInfo(
-        url=url, seconds=2.0, thumbnail=f"{CDN}/cover.jpg"
+        url=url,
+        seconds=2.0,
+        thumbnail=f"{CDN}/cover.jpg",
     )
     c = client()
 
@@ -281,7 +295,9 @@ def test_a_cover_is_kept_small_and_served_from_disk(reads):
 
 def test_a_cached_read_whose_cover_cannot_be_fetched_is_forgotten(reads):
     reads.answer = lambda url, _li: VideoInfo(
-        url=url, seconds=2.0, thumbnail=f"{CDN}/gone.png"
+        url=url,
+        seconds=2.0,
+        thumbnail=f"{CDN}/gone.png",
     )
     c = client()
 
@@ -340,12 +356,20 @@ def test_a_read_waits_for_a_free_slot_and_gives_up_at_its_deadline(reads, monkey
     slots.acquire()
 
     waited = preview_module.preview(
-        REEL, user.id, price, "/t", until=time.monotonic() + 0.2
+        REEL,
+        user.id,
+        price,
+        "/t",
+        until=time.monotonic() + 0.2,
     )
     asked_while_full = list(reads.asked)
     slots.release()
     read = preview_module.preview(
-        REEL, user.id, price, "/t", until=time.monotonic() + 5
+        REEL,
+        user.id,
+        price,
+        "/t",
+        until=time.monotonic() + 5,
     )
 
     assert waited.error == clone_links_constants().too_slow

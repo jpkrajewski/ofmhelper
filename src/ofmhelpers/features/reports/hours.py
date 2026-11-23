@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
@@ -21,7 +23,9 @@ class LastDay(BaseModel):
 
 def window_start(now: float) -> datetime:
     current = datetime.fromtimestamp(now, UTC).replace(
-        minute=0, second=0, microsecond=0
+        minute=0,
+        second=0,
+        microsecond=0,
     )
     return current - timedelta(hours=_HOURS - 1)
 
@@ -56,6 +60,7 @@ def last_day(links: list[ShortLink], owner: int, now: float) -> LastDay:
                 if hour.hour >= start
             ]
             found.counts[link.id] = DayCount(
-                views=sum(h.views for h in hours), clicks=sum(h.clicks for h in hours)
+                views=sum(h.views for h in hours),
+                clicks=sum(h.clicks for h in hours),
             )
     return found

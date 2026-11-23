@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 
 from ofmhelpers.config.retired import retired as retired_config
@@ -110,7 +112,7 @@ MANAGER = (
     Area.CHATTING,
 )
 PAGES: frozendict[Role, tuple[Area, ...]] = frozendict(
-    {Role.VA: VA, Role.USER: USER, Role.ADMIN: ADMIN, Role.MANAGER: MANAGER}
+    {Role.VA: VA, Role.USER: USER, Role.ADMIN: ADMIN, Role.MANAGER: MANAGER},
 )
 
 RETIRED = frozenset(Area(name) for name in retired_config().areas)
@@ -123,7 +125,7 @@ def _roles(area: Area) -> frozenset[Role]:
 
 
 ACCESS: frozendict[Area, frozenset[Role]] = frozendict(
-    {area: _roles(area) for area in Area}
+    {area: _roles(area) for area in Area},
 )
 
 ACTIONS: frozendict[Action, frozenset[Role]] = frozendict(
@@ -135,7 +137,7 @@ ACTIONS: frozendict[Action, frozenset[Role]] = frozendict(
         Action.HIDE: MEMBERS,
         Action.UPLOAD_HANDMADE: VAS,
         Action.CONNECT_CHATS: ADMINS,
-    }
+    },
 )
 
 

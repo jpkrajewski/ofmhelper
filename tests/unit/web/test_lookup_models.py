@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.devices.models import AccountPhones, Device, PhonesByAccount
 from ofmhelpers.db.drive_folders.schema import StoredFolder, StoredFolders
 
@@ -24,7 +26,7 @@ def test_phones_by_account_finds_an_accounts_phones():
         rows=[
             AccountPhones(account_id=7, phones=[_device("A"), _device("B")]),
             AccountPhones(account_id=9, phones=[_device("C")]),
-        ]
+        ],
     )
     assert [d.label for d in phones.of(7)] == ["A", "B"]
     assert [d.label for d in phones.of(9)] == ["C"]

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import zipfile
 from pathlib import Path
@@ -178,7 +180,11 @@ def test_the_most_played_ignores_reels_without_video_and_repeats():
 
 def test_plays_fall_back_to_views_and_hidden_counts_are_unknown():
     reel = ApifyReel(
-        shortCode="xxxxx", url="u", videoViewCount=40, likesCount=-1, commentsCount=3
+        shortCode="xxxxx",
+        url="u",
+        videoViewCount=40,
+        likesCount=-1,
+        commentsCount=3,
     )
     assert reel.plays == 40
     assert reel.likes is None
@@ -207,7 +213,7 @@ def test_a_picture_only_reel_gets_its_sound_back(tmp_path):
 
 def test_an_age_restricted_profile_says_so():
     item = DatasetItem.model_validate(
-        {"url": "https://www.instagram.com/shy", "error": "Restricted profile"}
+        {"url": "https://www.instagram.com/shy", "error": "Restricted profile"},
     )
 
     with pytest.raises(viral_service.ViralError) as refused:

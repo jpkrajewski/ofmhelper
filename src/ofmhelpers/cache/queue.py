@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 lazy from collections.abc import Callable
@@ -44,7 +46,7 @@ class QueueJob(BaseModel):
 
 
 _IN_LINE = frozenset(
-    {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED}
+    {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED},
 )
 _ONCE_FAILURE_TTL_S = 3600
 
@@ -100,7 +102,10 @@ class JobQueue(BaseModel, frozen=True):
         return rq_job
 
     def put_once(
-        self, key: str, fn: Callable[..., Any], args: tuple[Any, ...] = ()
+        self,
+        key: str,
+        fn: Callable[..., Any],
+        args: tuple[Any, ...] = (),
     ) -> bool:
         if not settings.infra.rq_async:
             fn(*args)
@@ -134,7 +139,10 @@ class JobQueue(BaseModel, frozen=True):
                 return True
         except Exception:
             logger.warning(
-                "could not drop %s from %s", job_id, self.name, exc_info=True
+                "could not drop %s from %s",
+                job_id,
+                self.name,
+                exc_info=True,
             )
         return False
 
@@ -207,7 +215,7 @@ def queue_loads() -> list[QueueLoad]:
                     waiting=queue.count,
                     failed=queue.failed_job_registry.count,
                     oldest_wait_s=_waited_s(queue),
-                )
+                ),
             )
     except Exception:
         logger.warning("could not read the queues", exc_info=True)
@@ -235,7 +243,10 @@ def enqueue(
     job_timeout: int | None = None,
 ) -> Job | None:
     return JobQueue(name=QueueName.DEFAULT).put(
-        fn, args, kwargs, job_timeout=job_timeout
+        fn,
+        args,
+        kwargs,
+        job_timeout=job_timeout,
     )
 
 
@@ -248,5 +259,9 @@ def enqueue_to(
     at_front: bool = False,
 ) -> Job | None:
     return JobQueue(name=queue).put(
-        fn, args, kwargs, job_timeout=job_timeout, at_front=at_front
+        fn,
+        args,
+        kwargs,
+        job_timeout=job_timeout,
+        at_front=at_front,
     )

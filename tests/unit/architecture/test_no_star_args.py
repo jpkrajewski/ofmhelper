@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 from textwrap import dedent
 
@@ -34,7 +36,7 @@ def test_no_function_takes_star_args_or_kwargs():
     allowed: set[str] = set()
     for name in found:
         if name == owner_allowed_function_2026_11_23 or name.startswith(
-            owner_allowed_file_2026_11_23
+            owner_allowed_file_2026_11_23,
         ):
             allowed.add(name)
     check(found - allowed, set())
@@ -48,7 +50,7 @@ def test_the_rule_sees_every_kind_of_function():
         class K:
             async def put(self, **kwargs): ...
         pick = lambda *items: items
-        """)
+        """),
     )
 
     assert star_args("m.py", tree) == {

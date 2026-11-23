@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import tempfile
 from pathlib import Path
@@ -48,5 +50,6 @@ def sample(path: Path, fps: float, timeout_s: int) -> Sampled:
     count = min(len(times), len(images))
     first = times[0] if times else 0.0
     return Sampled(
-        times=[round(t - first, 3) for t in times[:count]], images=images[:count]
+        times=[round(t - first, 3) for t in times[:count]],
+        images=images[:count],
     )

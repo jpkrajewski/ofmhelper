@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 import json
 import subprocess
@@ -51,12 +53,22 @@ def _clip(dest: Path) -> Path:
 def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
     profile = load_profile("iphone17")
     end = datetime.datetime(
-        2026, 10, 19, 15, 0, 1, tzinfo=datetime.timezone(datetime.timedelta(hours=-3))
+        2026,
+        10,
+        19,
+        15,
+        0,
+        1,
+        tzinfo=datetime.timezone(datetime.timedelta(hours=-3)),
     )
     dst = tmp_path / "out.mov"
 
     record(
-        _clip(tmp_path / "in.mp4"), dst, profile, Recording(end=end, duration_s=0), 120
+        _clip(tmp_path / "in.mp4"),
+        dst,
+        profile,
+        Recording(end=end, duration_s=0),
+        120,
     )
 
     out = subprocess.run(
@@ -87,7 +99,7 @@ def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
 
     dst = tmp_path / "repurposed.mov"
     Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
-        "iphone17"
+        "iphone17",
     ).run()
     out = subprocess.run(
         ["exiftool", "-j", "-G1", "-n", "-u", str(dst)],

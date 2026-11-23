@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import time
 from datetime import UTC, datetime
@@ -67,7 +69,7 @@ def _reconnects(now: float) -> list[Notification]:
                         text=f"Connect {platform.label} again",
                         url=f"/chatting/{platform.value}",
                         at=_moment(now),
-                    )
+                    ),
                 )
     return found
 
@@ -103,7 +105,7 @@ def _chat_events(now: float) -> list[Notification]:
                 text=_event_text(row),
                 url=row.platform.model_page(row.model_username),
                 at=_moment(row.at),
-            )
+            ),
         )
     return found
 
@@ -178,7 +180,9 @@ def changed(user_id: int | None = None) -> None:
         get_redis().publish(_CHANNEL, _CHATS if user_id is None else str(user_id))
     except RedisError:
         logger.warning(
-            "notifications change of %s not sent", user_id or _CHATS, exc_info=True
+            "notifications change of %s not sent",
+            user_id or _CHATS,
+            exc_info=True,
         )
 
 

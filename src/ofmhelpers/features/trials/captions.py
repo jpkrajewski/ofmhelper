@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -20,7 +22,8 @@ _RULES = (
 )
 
 _NOTES = """Watch this reel and answer as JSON:
-{"transcript": "<what is said, verbatim or empty>", "description": "<what happens, one or two plain sentences>"}"""
+{"transcript": "<what is said, verbatim or empty>", "description": "<what "
+    "happens, one or two plain sentences>"}"""
 
 _CAPTIONS = """A reel from a creator's phone: {description}
 Spoken: {transcript}

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, Field, computed_field
 
 from ofmhelpers.features.clone_links.links import (

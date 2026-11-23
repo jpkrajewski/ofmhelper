@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from redis.exceptions import RedisError
@@ -19,7 +21,9 @@ def limited(monkeypatch):
 
 def _guess(client, password="wrong"):
     return client.post(
-        "/login", data={"password": password, "next": "/"}, follow_redirects=False
+        "/login",
+        data={"password": password, "next": "/"},
+        follow_redirects=False,
     )
 
 

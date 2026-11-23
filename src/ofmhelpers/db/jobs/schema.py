@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum

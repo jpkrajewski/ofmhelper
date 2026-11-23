@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 
 from ofmhelpers.media.capcut import SourceInfo

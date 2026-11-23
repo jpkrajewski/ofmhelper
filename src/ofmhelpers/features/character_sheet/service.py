@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 from pathlib import Path
 lazy from collections.abc import Sequence
@@ -35,11 +37,14 @@ def upload_root() -> Path:
 
 
 def run_combine(
-    job_dir: str, files: list[str], assets_root: str | None = None
+    job_dir: str,
+    files: list[str],
+    assets_root: str | None = None,
 ) -> list[ResultFile]:
     directory = Path(job_dir)
     sheet = combine_side_by_side(
-        [directory / name for name in files], directory / SHEET_NAME
+        [directory / name for name in files],
+        directory / SHEET_NAME,
     )
     register_generated_asset(sheet, Path(assets_root) if assets_root else None)
     return [ResultFile(name=sheet.name, path=str(sheet))]

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -19,7 +21,8 @@ def test_a_preset_is_made_picked_and_run(va: Session, subject_images: list[Path]
     va.page.click("#preset-new")
     va.page.fill("#preset-name", "danewalker")
     va.page.fill(
-        "#preset-prompt", "refer guy from first and second image, recreate third"
+        "#preset-prompt",
+        "refer guy from first and second image, recreate third",
     )
     va.page.select_option("#preset-aspect", "3:4")
     va.page.set_input_files("#preset-images", [str(p) for p in subject_images])
@@ -52,6 +55,6 @@ def test_a_preset_is_made_picked_and_run(va: Session, subject_images: list[Path]
     card.locator(".menu summary").click()
     card.locator(".recreate-btn").click()
     expect(
-        va.page.locator('.file-picker[data-field="pictures"] .file-order-list li')
+        va.page.locator('.file-picker[data-field="pictures"] .file-order-list li'),
     ).to_have_count(1)
     assert va.js_errors == []

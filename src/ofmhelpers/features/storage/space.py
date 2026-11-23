@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, SkipValidation, ValidationError
 
 from ofmhelpers.cache import delete_text, get_text, set_text
@@ -76,7 +78,10 @@ class StorageServiceSpace(BaseModel, frozen=True, arbitrary_types_allowed=True):
             return _Read(reconnect=True)
         except (DriveError, SignInError) as exc:
             logger.warning(
-                "drive space of %s not read: %s", self.user_id, exc, exc_info=True
+                "drive space of %s not read: %s",
+                self.user_id,
+                exc,
+                exc_info=True,
             )
             return _Read()
 

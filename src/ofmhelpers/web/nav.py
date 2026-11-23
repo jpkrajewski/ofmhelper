@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 
 from pydantic import BaseModel

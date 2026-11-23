@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.db.drive_folders import store
@@ -42,13 +44,18 @@ class StorageServiceVaFolders(BaseModel, frozen=True, arbitrary_types_allowed=Tr
                 current = drive.folder(stored.folder_id)
             except FolderGoneError:
                 logger.warning(
-                    "drive: folder of VA %s is gone: made again", va.id, exc_info=True
+                    "drive: folder of VA %s is gone: made again",
+                    va.id,
+                    exc_info=True,
                 )
             else:
                 if current.name != name:
                     drive.rename(current.id, name)
                 folder = VaFolder(
-                    user_id=va.id, folder_id=current.id, name=name, root_folder_id=root
+                    user_id=va.id,
+                    folder_id=current.id,
+                    name=name,
+                    root_folder_id=root,
                 )
                 if stored != folder and not store.save_va_folder(folder):
                     logger.info("drive: VA %s gone meanwhile, skipped", va.id)
@@ -56,7 +63,10 @@ class StorageServiceVaFolders(BaseModel, frozen=True, arbitrary_types_allowed=Tr
                 return folder
         found = drive.find_folder(root, name) or drive.create_folder(root, name)
         folder = VaFolder(
-            user_id=va.id, folder_id=found.id, name=name, root_folder_id=root
+            user_id=va.id,
+            folder_id=found.id,
+            name=name,
+            root_folder_id=root,
         )
         if not store.save_va_folder(folder):
             logger.info("drive: VA %s gone meanwhile, folder left as it is", va.id)

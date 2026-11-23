@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from types import MappingProxyType
 lazy from collections.abc import Callable
@@ -27,7 +29,7 @@ RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(
     {
         trials_folder.TASK: trials_folder.restart,
         **{task: restart.again for task, restart in LOCAL_RESTARTS.items()},
-    }
+    },
 )
 
 
@@ -112,7 +114,8 @@ def _restarted(job: Job) -> bool:
 
 
 def fail_cut_off(
-    active: set[str] | None, remembered: set[str]
+    active: set[str] | None,
+    remembered: set[str],
 ) -> MappingProxyType[str, str]:
     outcomes: dict[str, str] = {}
     restarting = settings.web.restarting(settings.infra.production)
@@ -125,7 +128,8 @@ def fail_cut_off(
             continue
         if _restarted(job):
             logger.warning(
-                "recovery: job %s was cut off by a restart: started again", job.id
+                "recovery: job %s was cut off by a restart: started again",
+                job.id,
             )
             outcomes[job.id] = "restarted"
             continue

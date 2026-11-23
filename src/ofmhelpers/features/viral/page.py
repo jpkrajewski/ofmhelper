@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import zipfile
 from pathlib import Path
 lazy from collections.abc import Callable

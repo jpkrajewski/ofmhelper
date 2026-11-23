@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.web.access import (
     ACCESS,

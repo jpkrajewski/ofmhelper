@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from signin import make_user
 
@@ -93,7 +95,11 @@ def test_recovery_tells_a_request_that_failed_for_want_of_credits(sent, monkeypa
 
     monkeypatch.setattr(recovery, "get_provider", lambda *_a: Empty())
     part = tasks.ProviderTask(
-        job_id=job_id, provider="higgsfield", model="m", task_id="t", api_key="k"
+        job_id=job_id,
+        provider="higgsfield",
+        model="m",
+        task_id="t",
+        api_key="k",
     )
 
     assert recovery.settle_job([part], active=None) == "failed"

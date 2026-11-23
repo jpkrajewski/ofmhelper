@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, Field
 
 from ofmhelpers.media.repurpose.transformations.video import VideoSettings

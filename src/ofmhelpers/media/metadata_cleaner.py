@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from collections.abc import Collection
 from pathlib import Path

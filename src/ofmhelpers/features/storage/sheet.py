@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -41,7 +43,8 @@ class StorageServiceSheet(BaseModel, frozen=True, arbitrary_types_allowed=True):
     def _found_or_made(self, client: StorageClient, name: str) -> DriveFile:
         root = self.folders.ensure_root()
         with lock_held(
-            f"storage:sheet:{self.owner_id}", settings.storage.start_lock_s
+            f"storage:sheet:{self.owner_id}",
+            settings.storage.start_lock_s,
         ) as held:
             found = client.find_sheet(root, name)
             if found is not None:
@@ -67,7 +70,10 @@ class StorageServiceSheet(BaseModel, frozen=True, arbitrary_types_allowed=True):
                 raise RefusedError(str(exc)) from exc
             except DriveError as exc:
                 logger.warning(
-                    "drive sheet %r of %s not read", name, self.owner_id, exc_info=True
+                    "drive sheet %r of %s not read",
+                    name,
+                    self.owner_id,
+                    exc_info=True,
                 )
                 raise UnavailableError(self.constants.sheet_failed) from exc
         return Sheet(name=name, tabs=read.tabs)

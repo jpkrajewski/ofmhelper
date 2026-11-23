@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any, NoReturn
 lazy from collections.abc import Callable, Mapping
 
@@ -26,7 +28,8 @@ def _never_sent(exc: requests.RequestException) -> bool:
         return True
     cause = exc.args[0] if exc.args else None
     return isinstance(exc, requests.ConnectionError) and isinstance(
-        cause.reason if isinstance(cause, MaxRetryError) else cause, NewConnectionError
+        cause.reason if isinstance(cause, MaxRetryError) else cause,
+        NewConnectionError,
     )
 
 
@@ -64,7 +67,10 @@ def call(
 
 
 def parsed[M: BaseModel](
-    response: requests.Response, model: type[M], label: str, what: str = "answer"
+    response: requests.Response,
+    model: type[M],
+    label: str,
+    what: str = "answer",
 ) -> M:
     try:
         return model.model_validate(response.json())

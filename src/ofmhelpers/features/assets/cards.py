@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.db.downloads import store as downloads
@@ -34,7 +36,7 @@ def asset_card(
             update={
                 "removed_reason": error_reason(again_error),
                 "removed_error": again_error,
-            }
+            },
         )
     previewed = local and kind in ("image", "video")
     preview_url = f"{local_url}/preview" if previewed else None
@@ -59,7 +61,11 @@ def asset_card(
 
 
 def _removed_card(
-    name: str, index: int, local_url: str, job_id: str, source: str | None
+    name: str,
+    index: int,
+    local_url: str,
+    job_id: str,
+    source: str | None,
 ) -> AssetCard:
     kind = classify_kind(name)
     poster = kind == "video" and previews.poster_path(job_id, index).is_file()
@@ -119,6 +125,6 @@ def job_assets(job: Job, files_prefix: str) -> JobAssets:
                     job_id=job.id,
                     removed=len(assets) in removed,
                     again_error=r.again_error,
-                )
+                ),
             )
     return JobAssets(assets=assets, failed_sources=failed_sources)

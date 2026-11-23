@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import os
 import sys
@@ -63,7 +65,7 @@ def audit(event: HookEvent, verdicts: list[Verdict]) -> None:
         verdicts=[f"{v.guard}:{v.kind}" for v in verdicts],
         fields=sorted(event.model_extra or {}),
         background=json.dumps(
-            background_shape((event.model_extra or {}).get("background_tasks"))
+            background_shape((event.model_extra or {}).get("background_tasks")),
         )[:TARGET_LIMIT],
     )
     STATE.mkdir(parents=True, exist_ok=True)
@@ -84,7 +86,9 @@ def rotate_audit() -> None:
 
 class SpecificOutput(BaseModel):
     model_config = ConfigDict(
-        alias_generator=to_camel, serialize_by_alias=True, validate_by_name=True
+        alias_generator=to_camel,
+        serialize_by_alias=True,
+        validate_by_name=True,
     )
 
     hook_event_name: str
@@ -95,7 +99,9 @@ class SpecificOutput(BaseModel):
 
 class HookAnswer(BaseModel):
     model_config = ConfigDict(
-        alias_generator=to_camel, serialize_by_alias=True, validate_by_name=True
+        alias_generator=to_camel,
+        serialize_by_alias=True,
+        validate_by_name=True,
     )
 
     decision: str | None = None
@@ -115,15 +121,16 @@ def response(event: HookEvent, verdicts: list[Verdict]) -> HookAnswer | None:
                 hook_event_name=name,
                 permission_decision="deny",
                 permission_decision_reason=denied,
-            )
+            ),
         )
     if blocked := reasons(verdicts, "block"):
         return HookAnswer(decision="block", reason=blocked)
     if extra := reasons(verdicts, "context"):
         return HookAnswer(
             hook_specific_output=SpecificOutput(
-                hook_event_name=name, additional_context=extra
-            )
+                hook_event_name=name,
+                additional_context=extra,
+            ),
         )
     return None
 
@@ -137,7 +144,7 @@ def failed(where: str, outcome: str) -> None:
     except OSError as exc:
         sys.stderr.write(f"guard errors.log unwritable: {exc}\n")
     sys.stderr.write(
-        f"guard {where} failed, call {outcome}: {trace.splitlines()[-1]}\n"
+        f"guard {where} failed, call {outcome}: {trace.splitlines()[-1]}\n",
     )
 
 
@@ -149,12 +156,12 @@ def main() -> int:
         return 0
     try:
         verdicts = judged(event)
-    except Exception:
+    except Exception:  # noqa: BLE001
         failed("dispatcher", "allowed")
         return 0
     try:
         audit(event, verdicts)
-    except Exception:
+    except Exception:  # noqa: BLE001
         failed("audit", "judged unaudited")
     return answered(event, verdicts)
 
@@ -164,7 +171,7 @@ def answered(event: HookEvent, verdicts: list[Verdict]) -> int:
         answer = response(event, verdicts)
         if answer:
             print(answer.model_dump_json(exclude_none=True), flush=True)
-    except Exception:
+    except Exception:  # noqa: BLE001
         refused = reasons(verdicts, "deny") or reasons(verdicts, "block")
         failed("response", "refused by exit 2" if refused else "allowed")
         if refused:
@@ -179,13 +186,13 @@ def judged(event: HookEvent) -> list[Verdict]:
     for guard in GUARDS:
         try:
             verdict = guard.check(event) if guard.applies(event) else None
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             closed = guard.name in FAIL_CLOSED
             failed(guard.name, "denied" if closed else "allowed")
             if closed:
                 error = f"{type(exc).__name__}: {exc}"[:300]
                 verdicts.append(
-                    deny(guard.name, CRASHED.format(name=guard.name, error=error))
+                    deny(guard.name, CRASHED.format(name=guard.name, error=error)),
                 )
             continue
         if verdict:

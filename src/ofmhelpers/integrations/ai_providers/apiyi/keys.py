@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 
 from ofmhelpers.config import settings
@@ -17,7 +19,8 @@ GROUP_OF_PREFIX: tuple[tuple[str, str], ...] = (
 def group_of(model_id: str) -> str:
     name = model_id.lower()
     return next(
-        (g for prefix, g in GROUP_OF_PREFIX if name.startswith(prefix)), DEFAULT
+        (g for prefix, g in GROUP_OF_PREFIX if name.startswith(prefix)),
+        DEFAULT,
     )
 
 

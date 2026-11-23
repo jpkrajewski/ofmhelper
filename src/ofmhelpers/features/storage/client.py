@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 from collections.abc import Callable
 from functools import partial
@@ -55,7 +57,8 @@ _providers = MappingProxyType(
         StorageProvider.GDRIVE: _Provider(
             token=users.refresh_token,
             connect=lambda token, *, interactive: connect_as(
-                token, interactive=interactive
+                token,
+                interactive=interactive,
             ),
             constants=_google_constants,
         ),
@@ -64,7 +67,7 @@ _providers = MappingProxyType(
             connect=dropbox_connect_as,
             constants=_dropbox_constants,
         ),
-    }
+    },
 )
 
 
@@ -119,7 +122,10 @@ def access(user_id: int, interactive: bool) -> StorageAccess:
     bot = _bot_root(user_id) if provider is StorageProvider.GDRIVE else None
     if bot is None:
         return StorageAccess(
-            owner_id=user_id, client=None, constants=constants, read_live=live
+            owner_id=user_id,
+            client=None,
+            constants=constants,
+            read_live=live,
         )
     user = users.get_user(user_id)
     if user is not None and user.drive_root_id != bot.folder_id:
@@ -144,5 +150,5 @@ def saved_storage(user_id: int) -> StorageService:
             client=None,
             constants=_providers[_provider_of(user_id)].constants(),
             read_live=read_live(),
-        )
+        ),
     )

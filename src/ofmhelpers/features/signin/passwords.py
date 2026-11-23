@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import urlencode
 
 lazy from fastapi import Request
@@ -39,7 +41,9 @@ def login(request: Request, email: str | None, password: str, next_url: str) -> 
             client_id(request),
         )
         return Outcome(
-            next_url=next_url, error="Wrong email or password", status_code=401
+            next_url=next_url,
+            error="Wrong email or password",
+            status_code=401,
         )
     clear_failed_logins(request)
     return signed_in(user, next_url, "password")

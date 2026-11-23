@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
@@ -237,7 +239,7 @@ class SelfChart(BaseModel):
                     label=_tick_label(p.bucket, by_hour=by_hour),
                     views=p.views,
                     clicks=p.clicks,
-                )
+                ),
             )
         line = " ".join(f"{pt.x},{pt.y}" for pt in points)
         step = max(1, (n + 5) // 6)
@@ -251,7 +253,11 @@ class SelfChart(BaseModel):
             SelfAxisTick(label="0", at=100.0),
         ]
         return cls(
-            line=line, points=points, x_ticks=x_ticks, y_ticks=y_ticks, y_max=y_max
+            line=line,
+            points=points,
+            x_ticks=x_ticks,
+            y_ticks=y_ticks,
+            y_max=y_max,
         )
 
 

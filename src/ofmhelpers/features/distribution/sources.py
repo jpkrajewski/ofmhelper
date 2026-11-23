@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 
 from pydantic import BaseModel, ConfigDict
@@ -29,7 +31,11 @@ def _made(f: DriveFile) -> datetime.datetime:
 def _posts(files: list[DriveFile], source: PostSource, preset: str) -> list[NewPost]:
     return [
         NewPost(
-            file_id=f.id, name=f.name, kind=_KINDS[f.kind], source=source, preset=preset
+            file_id=f.id,
+            name=f.name,
+            kind=_KINDS[f.kind],
+            source=source,
+            preset=preset,
         )
         for f in sorted(files, key=_made)
         if f.kind in _KINDS
@@ -97,7 +103,9 @@ class Sources(BaseModel):
 
 
 def _threads_folder(
-    review: StorageServiceReview, place: ReviewPlace, account_folder_id: str
+    review: StorageServiceReview,
+    place: ReviewPlace,
+    account_folder_id: str,
 ) -> str | None:
     drive = place.drive
     parent: str | None = account_folder_id

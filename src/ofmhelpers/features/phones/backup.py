@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,7 +48,7 @@ def dump(*, always: bool = False) -> DumpWritten:
     now = datetime.now(tz=UTC)
     states = store.history()
     sealed = encrypt(
-        PhoneDump(taken_at=now, newest=newest, states=states).model_dump_json()
+        PhoneDump(taken_at=now, newest=newest, states=states).model_dump_json(),
     )
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{_PREFIX}{now.date().isoformat()}{_SUFFIX}"

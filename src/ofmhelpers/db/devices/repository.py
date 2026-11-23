@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from contextlib import contextmanager
 from typing import Any
@@ -74,14 +76,16 @@ def _login_columns() -> list[SQLColumnExpression[Any]]:
 
 
 def _devices(
-    s: Session, logins: dict[int, DeviceLogin], owner: int | None
+    s: Session,
+    logins: dict[int, DeviceLogin],
+    owner: int | None,
 ) -> list[Device]:
     devices = list(
         s.execute(
             select(DeviceRow)
             .where(*mine(DeviceRow.user_id, owner))
-            .order_by(DeviceRow.label, DeviceRow.id)
-        ).scalars()
+            .order_by(DeviceRow.label, DeviceRow.id),
+        ).scalars(),
     )
     labels = {d.id: d.label for d in devices}
     links = [
@@ -90,7 +94,7 @@ def _devices(
             select(DeviceLoginRow.device_id, DeviceLoginRow.login_id)
             .join(DeviceRow, DeviceRow.id == DeviceLoginRow.device_id)
             .where(*mine(DeviceRow.user_id, owner))
-            .order_by(DeviceLoginRow.created_at, DeviceLoginRow.login_id)
+            .order_by(DeviceLoginRow.created_at, DeviceLoginRow.login_id),
         ).all()
         if device_id in labels and login_id in logins
     ]
@@ -100,7 +104,7 @@ def _devices(
     per_device: dict[int, list[DeviceLogin]] = {}
     for device_id, login_id in links:
         per_device.setdefault(device_id, []).append(
-            logins[login_id].model_copy(update={"on": list(on[login_id])})
+            logins[login_id].model_copy(update={"on": list(on[login_id])}),
         )
     return [_device(d, per_device.get(d.id, [])) for d in devices]
 
@@ -110,7 +114,7 @@ def _touch(s: Session, device_ids: list[int]) -> None:
         s.execute(
             update(DeviceRow)
             .where(DeviceRow.id.in_(device_ids))
-            .values(updated_at=func.now())
+            .values(updated_at=func.now()),
         )
 
 
@@ -119,8 +123,8 @@ def _phones_of(s: Session, login_ids: list[int]) -> list[int]:
         s.execute(
             select(DeviceLoginRow.device_id)
             .where(DeviceLoginRow.login_id.in_(login_ids))
-            .distinct()
-        ).scalars()
+            .distinct(),
+        ).scalars(),
     )
 
 
@@ -128,8 +132,10 @@ def _drop_orphans(s: Session, owner_id: int) -> None:
     linked = exists().where(DeviceLoginRow.login_id == LoginRow.id)
     s.execute(
         delete(LoginRow).where(
-            ~linked, LoginRow.archived_at.is_(None), LoginRow.user_id == owner_id
-        )
+            ~linked,
+            LoginRow.archived_at.is_(None),
+            LoginRow.user_id == owner_id,
+        ),
     )
 
 
@@ -141,8 +147,9 @@ class DeviceRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 select(*_login_columns()).where(
-                    *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_(None)
-                )
+                    *mine(LoginRow.user_id, owner),
+                    LoginRow.archived_at.is_(None),
+                ),
             ).mappings()
             return _devices(s, {r["id"]: DeviceLogin(**r) for r in rows}, owner)
 
@@ -158,7 +165,7 @@ class DeviceRepository(CachedRepository):
                     DeviceLoginRow.device_id == device_id,
                     LoginRow.archived_at.is_(None),
                 )
-                .order_by(DeviceLoginRow.created_at, DeviceLoginRow.login_id)
+                .order_by(DeviceLoginRow.created_at, DeviceLoginRow.login_id),
             ).mappings()
             return _device(row, [DeviceLogin(**r) for r in logins])
 
@@ -181,8 +188,9 @@ class DeviceRepository(CachedRepository):
                     select(LoginRow)
                     .options(undefer_group("secret"))
                     .where(
-                        *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_(None)
-                    )
+                        *mine(LoginRow.user_id, owner),
+                        LoginRow.archived_at.is_(None),
+                    ),
                 ).scalars()
             }
             return _devices(s, logins, owner)
@@ -209,20 +217,27 @@ class DeviceRepository(CachedRepository):
 
     @invalidates_cache
     def update_device(
-        self, device_id: int, fields: dict, owner: int | None = None
+        self,
+        device_id: int,
+        fields: dict,
+        owner: int | None = None,
     ) -> bool:
         with _writing(fields), session_scope() as s:
             updated = s.execute(
                 update(DeviceRow)
                 .where(DeviceRow.id == device_id, *mine(DeviceRow.user_id, owner))
                 .values(**fields)
-                .returning(DeviceRow.id)
+                .returning(DeviceRow.id),
             )
             return updated.scalar_one_or_none() is not None
 
     @invalidates_cache
     def set_retired(
-        self, device_id: int, *, retired: bool, owner: int | None = None
+        self,
+        device_id: int,
+        *,
+        retired: bool,
+        owner: int | None = None,
     ) -> bool:
         now = time.time()
         with session_scope() as s:
@@ -230,7 +245,7 @@ class DeviceRepository(CachedRepository):
                 update(DeviceRow)
                 .where(DeviceRow.id == device_id, *mine(DeviceRow.user_id, owner))
                 .values(retired_at=now if retired else None)
-                .returning(DeviceRow.id)
+                .returning(DeviceRow.id),
             )
             return updated.scalar_one_or_none() is not None
 
@@ -248,7 +263,10 @@ class DeviceRepository(CachedRepository):
 
     @invalidates_cache
     def add_login(
-        self, device_id: int, fields: dict, owner: int | None = None
+        self,
+        device_id: int,
+        fields: dict,
+        owner: int | None = None,
     ) -> AddedLogin | None:
         with _writing(fields), session_scope() as s:
             device = s.get(DeviceRow, device_id)
@@ -260,7 +278,7 @@ class DeviceRepository(CachedRepository):
                     LoginRow.provider == fields["provider"],
                     LoginRow.username == fields["username"],
                     LoginRow.user_id == device.user_id,
-                )
+                ),
             ).scalar_one_or_none()
             existed = row is not None
             revived = row is not None and row.archived_at is not None
@@ -277,7 +295,10 @@ class DeviceRepository(CachedRepository):
                     ("backup codes", codes, row.backup_codes),
                 ):
                     if typed and saved and typed != saved:
-                        msg = f"{row.username} is already saved with other {what}: edit it instead"
+                        msg = (
+                            f"{row.username} is already saved "
+                            f"with other {what}: edit it instead"
+                        )
                         raise DuplicateError(msg)
                 if password and not row.password:
                     row.password = password
@@ -287,7 +308,7 @@ class DeviceRepository(CachedRepository):
                 insert(DeviceLoginRow)
                 .values(device_id=device_id, login_id=row.id)
                 .on_conflict_do_nothing()
-                .returning(DeviceLoginRow.login_id)
+                .returning(DeviceLoginRow.login_id),
             ).scalar_one_or_none()
             if linked is None and not revived:
                 msg = f"{row.username} is already on this phone"
@@ -309,7 +330,7 @@ class DeviceRepository(CachedRepository):
                     LoginRow.archived_at.is_(None),
                 )
                 .values(archived_at=now)
-                .returning(LoginRow.id)
+                .returning(LoginRow.id),
             ).scalars()
             ids = list(done)
             if ids:
@@ -318,7 +339,9 @@ class DeviceRepository(CachedRepository):
 
     @invalidates_cache
     def restore_login(
-        self, login_id: int, owner: int | None = None
+        self,
+        login_id: int,
+        owner: int | None = None,
     ) -> ArchivedLogin | None:
         with session_scope() as s:
             row = s.get(LoginRow, login_id)
@@ -331,7 +354,9 @@ class DeviceRepository(CachedRepository):
             row.archived_at = None
             _touch(s, _phones_of(s, [login_id]))
             return ArchivedLogin(
-                id=login_id, service=row.service, username=row.username
+                id=login_id,
+                service=row.service,
+                username=row.username,
             )
 
     def archived(self, owner: int | None = None) -> list[ArchivedLogin]:
@@ -347,9 +372,10 @@ class DeviceRepository(CachedRepository):
                 .outerjoin(DeviceLoginRow, DeviceLoginRow.login_id == LoginRow.id)
                 .outerjoin(DeviceRow, DeviceRow.id == DeviceLoginRow.device_id)
                 .where(
-                    *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_not(None)
+                    *mine(LoginRow.user_id, owner),
+                    LoginRow.archived_at.is_not(None),
                 )
-                .order_by(LoginRow.archived_at.desc(), LoginRow.id, DeviceRow.label)
+                .order_by(LoginRow.archived_at.desc(), LoginRow.id, DeviceRow.label),
             )
             found: dict[int, ArchivedLogin] = {}
             for login_id, service, username, archived_at, label in rows:
@@ -369,7 +395,10 @@ class DeviceRepository(CachedRepository):
 
     @invalidates_cache
     def update_login(
-        self, login_id: int, fields: dict, owner: int | None = None
+        self,
+        login_id: int,
+        fields: dict,
+        owner: int | None = None,
     ) -> bool:
         with _writing(fields), session_scope() as s:
             row = s.get(LoginRow, login_id)
@@ -383,7 +412,10 @@ class DeviceRepository(CachedRepository):
 
     @invalidates_cache
     def unlink_login(
-        self, device_id: int, login_id: int, owner: int | None = None
+        self,
+        device_id: int,
+        login_id: int,
+        owner: int | None = None,
     ) -> bool:
         with session_scope() as s:
             device = s.get(DeviceRow, device_id)
@@ -395,7 +427,7 @@ class DeviceRepository(CachedRepository):
                     DeviceLoginRow.device_id == device_id,
                     DeviceLoginRow.login_id == login_id,
                 )
-                .returning(DeviceLoginRow.login_id)
+                .returning(DeviceLoginRow.login_id),
             ).scalar_one_or_none()
             if removed is None:
                 return False

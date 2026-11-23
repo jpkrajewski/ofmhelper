@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 from pathlib import Path
 from urllib.parse import quote
@@ -19,7 +21,7 @@ HOSTED_PATH = "/files/ai"
 _PREFIX = "aigen:hosted:"
 _TOKEN_BYTES = 32
 _TOKEN_CHARS = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-",
 )
 _TOKEN_MAX = 64
 

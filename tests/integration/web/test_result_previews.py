@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import subprocess
 lazy from pathlib import Path
@@ -129,7 +131,11 @@ def test_a_local_image_offers_a_preview_and_no_poster():
 
 def test_a_remote_only_result_offers_neither():
     card = asset_card(
-        "out.mp4", 0, f"{PREFIX}/files/j1", remote_url="https://x/o.mp4", local=False
+        "out.mp4",
+        0,
+        f"{PREFIX}/files/j1",
+        remote_url="https://x/o.mp4",
+        local=False,
     )
     assert card.preview_url is None
     assert card.poster_url is None
@@ -188,7 +194,10 @@ def test_a_preview_that_cannot_be_made_serves_the_original(client, tmp_path):
 
 
 def test_a_video_whose_preview_is_not_made_yet_plays_the_original_now(
-    client, tmp_path, no_warming, monkeypatch
+    client,
+    tmp_path,
+    no_warming,
+    monkeypatch,
 ):
     clip = tmp_path / "long.mp4"
     clip.write_bytes(b"original video bytes")
@@ -232,7 +241,8 @@ def test_originals_are_cached_for_good(client, tmp_path):
 
 
 def test_a_finished_job_queues_its_previews_on_the_previews_queue(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     queued = []
     monkeypatch.setattr(
@@ -245,7 +255,7 @@ def test_a_finished_job_queues_its_previews_on_the_previews_queue(
     job_id = _done_job(pic)
 
     assert queued == [
-        (QueueName.PREVIEWS, previews.warm_previews, (job_id, [str(pic)]))
+        (QueueName.PREVIEWS, previews.warm_previews, (job_id, [str(pic)])),
     ]
 
 
@@ -277,7 +287,9 @@ def test_warmed_previews_are_what_the_route_serves(client, tmp_path, monkeypatch
 
 
 def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
-    tmp_path, monkeypatch, no_warming
+    tmp_path,
+    monkeypatch,
+    no_warming,
 ):
     tries: list[Path] = []
 
@@ -288,7 +300,9 @@ def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
 
     monkeypatch.setattr(previews, "write_video_preview", times_out)
     monkeypatch.setattr(
-        previews, "write_video_thumb", lambda _s, dest, _px: dest.write_bytes(b"jpg")
+        previews,
+        "write_video_thumb",
+        lambda _s, dest, _px: dest.write_bytes(b"jpg"),
     )
     clip = tmp_path / "frank.mp4"
     clip.write_bytes(b"61 MB that never encodes")
@@ -313,7 +327,9 @@ def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
 
 
 def test_a_poster_that_cannot_be_made_stops_the_backfill_too(
-    tmp_path, monkeypatch, no_warming
+    tmp_path,
+    monkeypatch,
+    no_warming,
 ):
     monkeypatch.setattr(
         previews,
@@ -340,7 +356,10 @@ def test_a_poster_that_cannot_be_made_stops_the_backfill_too(
 
 
 def test_an_image_that_cannot_be_previewed_is_not_decoded_on_every_load(
-    client, tmp_path, no_warming, monkeypatch
+    client,
+    tmp_path,
+    no_warming,
+    monkeypatch,
 ):
     pic = tmp_path / "r.png"
     pic.write_bytes(b"not a png")
@@ -391,7 +410,8 @@ def test_backfill_makes_the_previews(tmp_path, no_warming):
 
 
 @pytest.mark.parametrize(
-    "endpoint", ["/generate/gallery/latest", "/clone/gallery/latest"]
+    "endpoint",
+    ["/generate/gallery/latest", "/clone/gallery/latest"],
 )
 def test_an_unchanged_live_gallery_answers_304(client, tmp_path, endpoint):
     _done_job(_picture(tmp_path / "r.png", 8, 8))

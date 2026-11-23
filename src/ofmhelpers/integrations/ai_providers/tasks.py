@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from pydantic import BaseModel, Field
@@ -63,8 +65,8 @@ def settle(job_id: str, part: int, state: str, cost_usd: float | None) -> None:
                 "state": state,
                 "cost_usd": cost_usd,
                 "seconds": round(task.age_s, 1),
-            }
-        )
+            },
+        ),
     )
 
 
@@ -124,7 +126,9 @@ def remember_sent(task: ProviderTask) -> None:
         )
     except RedisError:
         logger.warning(
-            "could not note the submit of job %s", task.job_id, exc_info=True
+            "could not note the submit of job %s",
+            task.job_id,
+            exc_info=True,
         )
 
 

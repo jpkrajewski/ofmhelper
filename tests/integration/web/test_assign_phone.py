@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
@@ -35,7 +37,7 @@ def client(drive) -> TestClient:
 
 def _phone(label: str) -> int:
     return devices.add_device(
-        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner="Anna")
+        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner="Anna"),
     )
 
 
@@ -47,7 +49,8 @@ def _account(client: TestClient, handle: str) -> int:
 
 def _assign(client: TestClient, phone: int, account: int, **extra):
     return client.post(
-        f"/phones/{phone}/accounts", json={"account_id": account, **extra}
+        f"/phones/{phone}/accounts",
+        json={"account_id": account, **extra},
     )
 
 
@@ -102,7 +105,8 @@ def test_a_phone_that_has_an_account_refuses_until_replace(client, drive):
 
 
 def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     phone = _phone("Phone 07")
     old = _account(client, "sheep_love33")
@@ -156,7 +160,8 @@ def test_an_account_assigned_twice_to_its_phone_is_on_it_once(client, drive):
 
 
 def test_a_replace_that_fails_half_way_loses_nothing_and_finishes_when_sent_again(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     phone = _phone("Phone 07")
     old = _account(client, "sheep_love33")

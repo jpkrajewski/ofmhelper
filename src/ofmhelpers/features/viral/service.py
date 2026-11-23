@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from concurrent.futures import ThreadPoolExecutor
 lazy from pathlib import Path
 
@@ -59,7 +61,10 @@ def parse(username: str, items: list[DatasetItem]) -> list[ApifyReel]:
                 reels.append(item.read(ApifyReel))
         except ValidationError:
             logger.warning(
-                "viral @%s: unreadable item %s", username, item, exc_info=True
+                "viral @%s: unreadable item %s",
+                username,
+                item,
+                exc_info=True,
             )
     if reels:
         return reels
@@ -119,7 +124,9 @@ def find_viral(username: str, folder: Path) -> ViralFind:
     config = settings.viral
     client = richest(config.api_keys)
     run = client.run(
-        config.actor, reel_input(username, config.scan), config.run_timeout_s
+        config.actor,
+        reel_input(username, config.scan),
+        config.run_timeout_s,
     )
     if run.status != RunStatus.SUCCEEDED:
         msg = f"Apify run {run.status}: {run.status_message or 'no reason given'}"

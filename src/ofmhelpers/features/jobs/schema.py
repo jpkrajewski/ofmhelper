@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from functools import lru_cache
 from typing import Any
@@ -59,11 +61,13 @@ REASONS = (
     ),
     ErrorReason(label="Timed out", pattern=r"time ?out|timed out"),
     ErrorReason(
-        label="Input out of range", pattern=r"out of range|must be between|\b422\b"
+        label="Input out of range",
+        pattern=r"out of range|must be between|\b422\b",
     ),
     ErrorReason(
         label="Bad input file",
-        pattern=r"cannot identify|not supported|unsupported|invalid (input|image|video)",
+        pattern=r"cannot identify|not "
+        r"supported|unsupported|invalid (input|image|video)",
     ),
     ErrorReason(
         label="Provider error",
@@ -139,7 +143,9 @@ def error_text(error: str | None) -> ErrorText:
         said = said[len(refusal.reason) :].lstrip(" ,:;.-")
     head = f"{refusal.who}: {refusal.reason}" if refusal.who else refusal.reason
     return ErrorText(
-        head=head, said=_capped(said), about_keys=refusal.reason in _KEY_REASONS
+        head=head,
+        said=_capped(said),
+        about_keys=refusal.reason in _KEY_REASONS,
     )
 
 
@@ -171,7 +177,8 @@ DOWNLOAD_REASONS = (
     ),
     ErrorReason(
         label="Post deleted or profile banned",
-        pattern=r"empty media response|video unavailable|this video is (private|unavailable)"
+        pattern=r"empty media response|video "
+        r"unavailable|this video is (private|unavailable)"
         r"|content isn.t available|has been (removed|deleted|terminated)",
     ),
     ErrorReason(

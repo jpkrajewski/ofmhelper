@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 lazy from pathlib import Path
 
@@ -48,10 +50,15 @@ def test_each_file_is_a_card_and_clones_itself(va: Session, tmp_path: Path):
 
 
 def test_download_fetches_a_removed_video_again(
-    va: Session, tmp_path: Path, app_dir: Path
+    va: Session,
+    tmp_path: Path,
+    app_dir: Path,
 ):
     removed = removed_download(
-        tmp_path, app_dir / "uploads", VA_ID, "https://www.example.com/watch/again"
+        tmp_path,
+        app_dir / "uploads",
+        VA_ID,
+        "https://www.example.com/watch/again",
     )
 
     va.goto("/download-assets")
@@ -63,7 +70,8 @@ def test_download_fetches_a_removed_video_again(
     expect(cards.locator(".send-to-clone")).to_have_count(0)
     cards.locator(".download-again").click()
     expect(cards.locator("video.result-video")).to_have_count(
-        1, timeout=RESULT_TIMEOUT_MS
+        1,
+        timeout=RESULT_TIMEOUT_MS,
     )
     expect(cards).to_have_count(1)
     expect(cards.locator(".send-to-clone")).to_have_count(1)
@@ -89,7 +97,7 @@ def test_a_key_is_kept_until_its_own_jobs_settle(va: Session):
             settle('mine');
             const done = Idempotency.keyFor(form, data) !== first;
             return [waiting, running, done];
-        }"""
+        }""",
     )
 
     assert kept == [True, True, True]
@@ -161,14 +169,16 @@ def test_an_html_answer_shows_plain_words_on_a_download_card(va: Session):
     page.route(
         "**/download-media/run",
         lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><p>login</p>"
+            status=200,
+            content_type="text/html",
+            body="<!doctype html><p>login</p>",
         ),
     )
     page.locator("#dl-urls").fill("https://www.example.com/watch/html-answer")
     page.locator('#download-assets-form [type="submit"]').click()
 
     expect(page.locator(".generation-error")).to_have_text(
-        "Something went wrong. Try again."
+        "Something went wrong. Try again.",
     )
     card = page.locator("#results-panel .results > .result-item").first
     expect(card).to_contain_text("Download")
@@ -184,7 +194,9 @@ def test_a_click_after_an_html_refusal_sends_a_new_key(va: Session):
     def refuse(route) -> None:
         keys.append(route.request.headers.get("idempotency-key"))
         route.fulfill(
-            status=400, content_type="text/html", body="<!doctype html><p>no</p>"
+            status=400,
+            content_type="text/html",
+            body="<!doctype html><p>no</p>",
         )
 
     page.route("**/download-media/run", refuse)
@@ -237,7 +249,8 @@ def test_a_request_still_being_handled_is_asked_again_four_times_at_most(
     page.locator('#download-assets-form [type="submit"]').click()
 
     expect(page.locator(".generation-error")).to_have_text(
-        "This request is still being handled", timeout=RESULT_TIMEOUT_MS
+        "This request is still being handled",
+        timeout=RESULT_TIMEOUT_MS,
     )
     assert len(keys) == 5
     assert len(set(keys)) == 1
@@ -254,19 +267,21 @@ def test_a_link_pasted_again_moves_its_card_first_and_downloads_nothing(va: Sess
     def paste(link: str) -> dict:
         box.fill(link)
         with page.expect_response(
-            lambda r: r.url.endswith("/download-media/run")
+            lambda r: r.url.endswith("/download-media/run"),
         ) as answer:
             run.click()
         return answer.value.json()
 
     first = paste("https://www.example.com/watch/first")["job_id"]
     expect(page.locator(f'[data-job-id="{first}"] video')).to_have_count(
-        1, timeout=RESULT_TIMEOUT_MS
+        1,
+        timeout=RESULT_TIMEOUT_MS,
     )
     page.wait_for_timeout(3_100)
     second = paste("https://www.example.com/watch/second")["job_id"]
     expect(page.locator(f'[data-job-id="{second}"] video')).to_have_count(
-        1, timeout=RESULT_TIMEOUT_MS
+        1,
+        timeout=RESULT_TIMEOUT_MS,
     )
     expect(cards.first).to_have_attribute("data-job-id", second)
     page.wait_for_timeout(3_100)
@@ -341,7 +356,7 @@ def test_the_download_tool_runs_with_the_clean_picker_left_empty(va: Session):
     page.locator('#download-assets-form [type="submit"]').click()
 
     expect(page.locator("#results-panel .results > .result-item").first).to_be_visible(
-        timeout=RESULT_TIMEOUT_MS
+        timeout=RESULT_TIMEOUT_MS,
     )
     assert va.js_errors == []
 

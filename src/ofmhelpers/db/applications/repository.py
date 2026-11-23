@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 import uuid
 
@@ -41,7 +43,7 @@ class ApplicationRepository(CachedRepository):
         with session_scope() as s:
             rows = (
                 s.execute(
-                    select(ApplicationRow).order_by(ApplicationRow.created_at.desc())
+                    select(ApplicationRow).order_by(ApplicationRow.created_at.desc()),
                 )
                 .scalars()
                 .all()

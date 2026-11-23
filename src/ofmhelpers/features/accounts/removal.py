@@ -1,3 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Callable
+
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.catalog import services
 from ofmhelpers.db.tracked_accounts.store import untrack
@@ -20,7 +24,10 @@ def _drive_logins(logins: list[DeviceLogin]) -> list[DeviceLogin]:
     ]
 
 
-def _unique(phones: list[Device], wanted) -> list[DeviceLogin]:
+def _unique(
+    phones: list[Device],
+    wanted: Callable[[Device, DeviceLogin], bool],
+) -> list[DeviceLogin]:
     seen: dict[int, DeviceLogin] = {}
     for phone in phones:
         for login in phone.logins:
@@ -30,7 +37,9 @@ def _unique(phones: list[Device], wanted) -> list[DeviceLogin]:
 
 
 def remove_accounts(
-    account_ids: list[int], owner: int, folders: StorageServiceFolders
+    account_ids: list[int],
+    owner: int,
+    folders: StorageServiceFolders,
 ) -> int:
     wanted = set(account_ids)
     logins = _unique(
@@ -63,7 +72,7 @@ def logins_leaving(
                 and (login_id is None or login.id == login_id)
                 and count[login.id] == 1
             ),
-        )
+        ),
     )
     if not leaving:
         return

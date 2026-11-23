@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.features.events.dispatch import dispatch
@@ -20,7 +22,8 @@ def emit(event: Event) -> None:
             msg = f"emit takes an Event, not {type(event).__name__}"
             raise TypeError(msg)  # noqa: TRY301
         JobQueue(name=QueueName.EVENTS).put(
-            dispatch, (_absolute(event).model_dump(mode="json"),)
+            dispatch,
+            (_absolute(event).model_dump(mode="json"),),
         )
     except Exception:
         logger.warning(

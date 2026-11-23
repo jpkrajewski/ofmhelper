@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -119,11 +121,16 @@ def upgrade() -> None:
         sa.Column("change", sa.Text(), nullable=False),
         sa.Column("snapshot", JSONB(), nullable=False),
         sa.UniqueConstraint(
-            "user_id", "txid", "created_at", name="uq_phone_revisions_transaction"
+            "user_id",
+            "txid",
+            "created_at",
+            name="uq_phone_revisions_transaction",
         ),
     )
     op.create_index(
-        "ix_phone_revisions_user_id_id", "phone_revisions", ["user_id", "id"]
+        "ix_phone_revisions_user_id_id",
+        "phone_revisions",
+        ["user_id", "id"],
     )
     op.execute(_STATE)
     op.execute(_RECORD)
@@ -132,16 +139,16 @@ def upgrade() -> None:
     for table in _PHONE_TABLES:
         op.execute(
             f"CREATE TRIGGER {table}_revision AFTER INSERT OR UPDATE OR DELETE "
-            f"ON {table} FOR EACH ROW EXECUTE FUNCTION phone_revision()"
+            f"ON {table} FOR EACH ROW EXECUTE FUNCTION phone_revision()",
         )
     op.execute(
         "CREATE TRIGGER phone_revisions_append_only BEFORE UPDATE OR DELETE "
-        "ON phone_revisions FOR EACH ROW EXECUTE FUNCTION phone_revisions_guard()"
+        "ON phone_revisions FOR EACH ROW EXECUTE FUNCTION phone_revisions_guard()",
     )
     op.execute(
         "CREATE TRIGGER phone_revisions_no_truncate BEFORE TRUNCATE "
         "ON phone_revisions FOR EACH STATEMENT "
-        "EXECUTE FUNCTION phone_revisions_guard()"
+        "EXECUTE FUNCTION phone_revisions_guard()",
     )
 
 

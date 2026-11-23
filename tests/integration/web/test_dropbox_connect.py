@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
@@ -39,7 +41,10 @@ def _state(client: TestClient) -> str:
 def _sync_jobs(user_id: int) -> int:
     with session_scope() as session:
         rows = session.scalars(
-            select(JobRow).where(JobRow.task == "drive_sync", JobRow.user_id == user_id)
+            select(JobRow).where(
+                JobRow.task == "drive_sync",
+                JobRow.user_id == user_id,
+            ),
         ).all()
     return len(rows)
 
@@ -115,7 +120,9 @@ def test_a_second_connect_clears_the_root_and_queues_another_sync(client):
 
 
 def test_a_failure_after_the_token_exchange_is_logged_and_sent_back_not_a_500(
-    client, monkeypatch, caplog
+    client,
+    monkeypatch,
+    caplog,
 ):
     def broken(*_):
         msg = "database down"
@@ -132,7 +139,9 @@ def test_a_failure_after_the_token_exchange_is_logged_and_sent_back_not_a_500(
 
 
 def test_a_failure_choosing_dropbox_after_it_is_stored_is_not_a_connect(
-    client, monkeypatch, caplog
+    client,
+    monkeypatch,
+    caplog,
 ):
     def broken(*_):
         msg = "database down"

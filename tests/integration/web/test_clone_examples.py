@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 lazy from pathlib import Path
 
@@ -57,7 +59,9 @@ def _clone(tmp_path: Path, clip: Path, owner: int, status: str = "done") -> str:
         out = tmp_path / f"{job_id}.mp4"
         out.write_bytes(clip.read_bytes())
         JobRepository().update_status(
-            job_id, "done", result=[{"name": out.name, "path": str(out)}]
+            job_id,
+            "done",
+            result=[{"name": out.name, "path": str(out)}],
         )
     return job_id
 
@@ -74,7 +78,9 @@ def owner() -> int:
 
 
 def test_an_example_shows_its_frame_result_and_prompt_to_everyone(
-    tmp_path, clip, owner
+    tmp_path,
+    clip,
+    owner,
 ):
     example = examples.add(_clone(tmp_path, clip, owner), "Remove tattoos")
     va = _client(VA, Role.VA)
@@ -104,7 +110,7 @@ def test_an_example_outlives_its_run_and_its_source_video(tmp_path, clip, owner)
     va = _client(VA, Role.VA)
 
     assert [(e.title, e.prompt, e.job_id) for e in store.every()] == [
-        ("Simple replacement", PROMPT, None)
+        ("Simple replacement", PROMPT, None),
     ]
     assert PROMPT in va.get("/clone/examples").text
     assert va.get(f"/clone/examples/{example.id}/video").status_code == 200
@@ -112,7 +118,9 @@ def test_an_example_outlives_its_run_and_its_source_video(tmp_path, clip, owner)
 
 
 def test_the_same_run_added_again_is_one_example_in_the_order_added(
-    tmp_path, clip, owner
+    tmp_path,
+    clip,
+    owner,
 ):
     first = _clone(tmp_path, clip, owner)
     second = _clone(tmp_path, clip, owner)

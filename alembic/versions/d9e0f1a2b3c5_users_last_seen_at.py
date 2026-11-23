@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -20,7 +22,7 @@ def upgrade() -> None:
         WHERE jobs.user_id = users.id
           AND users.role = 'va'
           AND jobs.hidden_at IS NOT NULL
-        """
+        """,
     )
 
 

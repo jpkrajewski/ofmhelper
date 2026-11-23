@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -41,8 +43,8 @@ def upgrade() -> None:
             "UPDATE jobs SET"
             " params = regexp_replace(params::text, :key, '[REDACTED]', 'g')::jsonb,"
             " result = regexp_replace(result::text, :key, '[REDACTED]', 'g')::jsonb"
-            " WHERE params::text ~ :key OR result::text ~ :key"
-        ).bindparams(key=_HIGGSFIELD_KEY)
+            " WHERE params::text ~ :key OR result::text ~ :key",
+        ).bindparams(key=_HIGGSFIELD_KEY),
     )
     op.execute("UPDATE jobs SET preview = NULL WHERE status <> 'running'")
 
@@ -90,7 +92,9 @@ def downgrade() -> None:
         "instagram_accounts",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
-            "model_id", sa.String(), sa.ForeignKey("models.id", ondelete="CASCADE")
+            "model_id",
+            sa.String(),
+            sa.ForeignKey("models.id", ondelete="CASCADE"),
         ),
         sa.Column("url", sa.Text()),
         sa.Column("created_at", sa.Float(precision=53)),
@@ -117,7 +121,9 @@ def downgrade() -> None:
         "model_contacts",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
-            "model_id", sa.String(), sa.ForeignKey("models.id", ondelete="CASCADE")
+            "model_id",
+            sa.String(),
+            sa.ForeignKey("models.id", ondelete="CASCADE"),
         ),
         sa.Column("type", sa.Text()),
         sa.Column("value", sa.Text()),
@@ -127,7 +133,9 @@ def downgrade() -> None:
         "competitor_profiles",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
-            "model_id", sa.String(), sa.ForeignKey("models.id", ondelete="CASCADE")
+            "model_id",
+            sa.String(),
+            sa.ForeignKey("models.id", ondelete="CASCADE"),
         ),
         sa.Column("url", sa.Text()),
         sa.Column("created_at", sa.Float(precision=53)),
@@ -136,9 +144,13 @@ def downgrade() -> None:
     op.create_index("ix_approval_tokens_expires_at", "approval_tokens", ["expires_at"])
     op.create_index("ix_models_created_at", "models", ["created_at"])
     op.create_index(
-        "ix_instagram_accounts_model_id", "instagram_accounts", ["model_id"]
+        "ix_instagram_accounts_model_id",
+        "instagram_accounts",
+        ["model_id"],
     )
     op.create_index("ix_model_contacts_model_id", "model_contacts", ["model_id"])
     op.create_index(
-        "ix_competitor_profiles_model_id", "competitor_profiles", ["model_id"]
+        "ix_competitor_profiles_model_id",
+        "competitor_profiles",
+        ["model_id"],
     )

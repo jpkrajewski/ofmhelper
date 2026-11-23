@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 
 from pydantic import BaseModel, computed_field
@@ -58,7 +60,8 @@ def report(days: int, owner: int | None = None) -> Report:
     }
     for pins in repo.pins_by_day(list(per_account), start):
         row = by_day.setdefault(
-            (pins.day, pins.preset), ModelDay(day=pins.day, model=pins.preset)
+            (pins.day, pins.preset),
+            ModelDay(day=pins.day, model=pins.preset),
         )
         row.pins += pins.published
         row.ig_pins += pins.ig
@@ -72,7 +75,8 @@ def report(days: int, owner: int | None = None) -> Report:
         model = links[link.link_id]
         for hit in link.days:
             row = by_day.setdefault(
-                (hit.day, model), ModelDay(day=hit.day, model=model)
+                (hit.day, model),
+                ModelDay(day=hit.day, model=model),
             )
             row.link_views += hit.views
             row.link_clicks += hit.clicks

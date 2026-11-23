@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from typing import Annotated
 
@@ -34,7 +36,7 @@ __all__ = [
 ]
 
 _DASH_DURATION = re.compile(
-    r'mediaPresentationDuration="PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?"'
+    r'mediaPresentationDuration="PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?"',
 )
 
 _ID_EPOCH_S = 1314220021.721
@@ -195,7 +197,8 @@ class _TimelineConnection(_Base):
 
 class _TimelineData(_Base):
     feed: _TimelineConnection | None = Field(
-        default=None, alias="xdt_api__v1__feed__user_timeline_graphql_connection"
+        default=None,
+        alias="xdt_api__v1__feed__user_timeline_graphql_connection",
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
@@ -23,7 +25,8 @@ def landing(request: Request) -> Response:
 
 @router.post("/apply")
 def submit_application(
-    request: Request, posted: Annotated[Submitted, Form()]
+    request: Request,
+    posted: Annotated[Submitted, Form()],
 ) -> Response:
     submit(posted, client_id(request))
     return see_other(_THANKS)

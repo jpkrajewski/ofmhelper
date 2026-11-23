@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 import time
 import uuid
@@ -31,7 +33,9 @@ def _frame(prompt: str) -> Image.Image:
     draw = ImageDraw.Draw(img)
     draw.text((24, 24), "FAKE AI MODEL", fill=(255, 255, 255))
     draw.text(
-        (24, 60), "(this is a placeholder, not a real generation)", fill=(190, 190, 220)
+        (24, 60),
+        "(this is a placeholder, not a real generation)",
+        fill=(190, 190, 220),
     )
     draw.multiline_text((24, 110), prompt[:500], fill=(255, 255, 255))
     return img
@@ -73,7 +77,7 @@ class FakeProvider(Provider):
         time.sleep(float(payload.get("delay") or 0))  # type: ignore[arg-type]
         if payload.get("outcome") == "error":
             raise ProviderGenerationError(
-                str(payload.get("error_message") or "Fake AI: simulated failure")
+                str(payload.get("error_message") or "Fake AI: simulated failure"),
             )
         task_id = uuid.uuid4().hex[:12]
         frame = _frame(str(payload.get("prompt", "")))

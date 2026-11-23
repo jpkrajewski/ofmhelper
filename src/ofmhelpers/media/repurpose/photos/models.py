@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 from fractions import Fraction
 from functools import lru_cache

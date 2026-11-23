@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 from pathlib import Path
 
@@ -13,7 +15,9 @@ def _no_kvs_site(monkeypatch):
         kvs,
         "download",
         lambda url, output_dir=None: DownloadResult(
-            url=url, success=False, error="Unsupported URL: no KVS player"
+            url=url,
+            success=False,
+            error="Unsupported URL: no KVS player",
         ),
     )
 
@@ -25,7 +29,9 @@ def _no_saver_sites(monkeypatch):
         savers,
         "download",
         lambda url, output_dir, *, single=False: DownloadResult(
-            url=url, success=False, error="Unsupported URL: not an Instagram post"
+            url=url,
+            success=False,
+            error="Unsupported URL: not an Instagram post",
         ),
     )
     return original
@@ -113,12 +119,16 @@ def test_a_tool_that_does_not_know_the_site_does_not_hide_the_real_reason(
 
     def fails(error):
         return lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=False, error=error
+            url=url,
+            success=False,
+            error=error,
         )
 
     monkeypatch.setattr(media.generic, "download", fails("HTTP Error 403: Forbidden"))
     monkeypatch.setattr(
-        media.images, "download", fails("[gallery-dl][error] Unsupported URL 'x'")
+        media.images,
+        "download",
+        fails("[gallery-dl][error] Unsupported URL 'x'"),
     )
     assert (
         media.download("https://x.test/v").error == "video: HTTP Error 403: Forbidden"
@@ -187,7 +197,8 @@ def _real_video(path: Path) -> Path:
 
 
 def test_a_web_page_saved_as_mp4_is_no_download_and_the_next_tool_runs(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     page = tmp_path / "NA_clip-1NA.mp4"
     page.write_text("<!DOCTYPE html><html>a web page</html>")
@@ -196,14 +207,18 @@ def test_a_web_page_saved_as_mp4_is_no_download_and_the_next_tool_runs(
         generic,
         "download",
         lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=True, output_paths=[page]
+            url=url,
+            success=True,
+            output_paths=[page],
         ),
     )
     monkeypatch.setattr(
         kvs,
         "download",
         lambda url, output_dir=None: DownloadResult(
-            url=url, success=True, output_paths=[video]
+            url=url,
+            success=True,
+            output_paths=[video],
         ),
     )
 
@@ -225,7 +240,9 @@ def test_when_every_tool_gets_a_web_page_it_fails_saying_so(monkeypatch, tmp_pat
         images,
         "download",
         lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=False, error="no"
+            url=url,
+            success=False,
+            error="no",
         ),
     )
 
@@ -242,7 +259,9 @@ def test_a_real_video_passes_the_check(monkeypatch, tmp_path):
         generic,
         "download",
         lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=True, output_paths=[video]
+            url=url,
+            success=True,
+            output_paths=[video],
         ),
     )
     assert media.download("https://example.com/v").output_paths == [video]
@@ -266,7 +285,9 @@ def configs(monkeypatch) -> dict[str, object]:
 
 
 def test_a_single_download_asks_both_tools_for_the_linked_post_only(
-    configs, monkeypatch, tmp_path
+    configs,
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
 
@@ -312,7 +333,8 @@ def _writes(name: str, *, ok: bool):
 
 
 def test_downloaded_files_exist_in_the_block_and_their_folder_goes_after(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
     monkeypatch.setattr(images, "download", _writes("images", ok=True))
@@ -392,7 +414,9 @@ def test_savers_run_last_after_every_other_tool(monkeypatch):
             tool,
             "download",
             lambda url, config=None, cookiefile=None, _n=tool.__name__: DownloadResult(
-                url=url, success=False, error=f"{_n} refused"
+                url=url,
+                success=False,
+                error=f"{_n} refused",
             ),
         )
 
@@ -402,7 +426,10 @@ def test_savers_run_last_after_every_other_tool(monkeypatch):
 
 
 def test_a_login_walled_instagram_post_is_rescued_by_savers(
-    monkeypatch, tmp_path, fake_externals, _no_saver_sites
+    monkeypatch,
+    tmp_path,
+    fake_externals,
+    _no_saver_sites,
 ):
     walled = "content isn't available to everyone"
     monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
@@ -417,7 +444,9 @@ def test_a_login_walled_instagram_post_is_rescued_by_savers(
         kvs,
         "download",
         lambda url, output_dir=None: DownloadResult(
-            url=url, success=False, error="Unsupported URL: no KVS player"
+            url=url,
+            success=False,
+            error="Unsupported URL: no KVS player",
         ),
     )
 
@@ -436,7 +465,9 @@ def test_the_savers_failure_is_part_of_the_error(monkeypatch):
         generic,
         "download",
         lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=False, error="login required"
+            url=url,
+            success=False,
+            error="login required",
         ),
     )
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from http import HTTPStatus
 
@@ -18,7 +20,8 @@ logger = get_logger(__name__)
 
 ROOT = "https://www.snapchat.com"
 _NEXT_DATA = re.compile(
-    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.DOTALL
+    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+    re.DOTALL,
 )
 
 
@@ -72,7 +75,8 @@ class SnapchatClient:
 
     def profile(self, username: str) -> SnapchatProfile:
         r = self._session.get(
-            f"{ROOT}/@{username}", timeout=settings.snapchat.timeout_s
+            f"{ROOT}/@{username}",
+            timeout=settings.snapchat.timeout_s,
         )
         if r.status_code == HTTPStatus.NOT_FOUND:
             msg = f"@{username} is not on Snapchat"

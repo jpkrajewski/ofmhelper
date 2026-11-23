@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import threading
 from functools import lru_cache
@@ -81,7 +83,8 @@ class FakeHiggsfield:
             done = found["polls"] > self.polls_until_done
         if not done:
             return httpx.Response(
-                200, json={"status": "queued", "request_id": request_id}
+                200,
+                json={"status": "queued", "request_id": request_id},
             )
         video = "video" in found["model"]
         output = (
@@ -90,7 +93,8 @@ class FakeHiggsfield:
             else {"images": [{"url": f"https://{FILES_HOST}/results/{request_id}.png"}]}
         )
         return httpx.Response(
-            200, json={"status": "completed", "request_id": request_id, **output}
+            200,
+            json={"status": "completed", "request_id": request_id, **output},
         )
 
     def transport(self) -> httpx.MockTransport:
@@ -114,7 +118,8 @@ def install(client: SyncClient) -> None:
         },
     )
     client._upload_client = httpx.Client(  # noqa: SLF001
-        transport=transport, timeout=client.timeout
+        transport=transport,
+        timeout=client.timeout,
     )
 
 
@@ -123,7 +128,8 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
     if path.endswith(".mp4"):
         return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
     return FakeReply(
-        body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+        body=fake_media.image(fmt="PNG"),
+        headers={"Content-Type": "image/png"},
     )
 
 

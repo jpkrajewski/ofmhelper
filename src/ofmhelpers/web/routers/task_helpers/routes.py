@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from collections.abc import Callable
 
@@ -63,7 +65,10 @@ def add_job_routes(
 
     @router.get("/files/{job_id}/{index}")
     def download_file(
-        job_id: str, index: int, actors: Actors, dl: Annotated[int, Query()] = 0
+        job_id: str,
+        index: int,
+        actors: Actors,
+        dl: Annotated[int, Query()] = 0,
     ) -> Response:
         return serve_job_file(own.find(job_id, actors), index, as_attachment=bool(dl))
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 
 from ofmhelpers.integrations.downloaders import images

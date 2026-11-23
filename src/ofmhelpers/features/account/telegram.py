@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 import time
 
@@ -88,7 +90,8 @@ def link(start: Start) -> bool:
         ended is not None and ended >= pending.issued_at
     ):
         logger.info(
-            "telegram: a /start link of user %s from before a sign-out", user_id
+            "telegram: a /start link of user %s from before a sign-out",
+            user_id,
         )
         deliver_to(SENDER, start.chat_id, _old_link())
         return False

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import re
 import sys
@@ -196,7 +198,9 @@ def loose_name(alias: str, name: str, seen: frozenset[tuple[str, str]]) -> bool:
 
 
 def loose(
-    annotation: ast.expr, name: str, seen: frozenset[tuple[str, str]] = frozenset()
+    annotation: ast.expr,
+    name: str,
+    seen: frozenset[tuple[str, str]] = frozenset(),
 ) -> bool:
     if LOOSE.search(ast.unparse(annotation)):
         return True
@@ -225,7 +229,8 @@ def queued_function(call: ast.Call) -> ast.expr | None:
         case ast.Name(id="enqueue_to") if len(call.args) > 1:
             return call.args[1]
         case ast.Attribute(
-            attr="put", value=ast.Call(func=ast.Name(id="JobQueue"))
+            attr="put",
+            value=ast.Call(func=ast.Name(id="JobQueue")),
         ) if call.args:
             return call.args[0]
     return None
@@ -337,7 +342,7 @@ def test_the_web_rule_lets_shapes_through_and_nothing_else():
             from ofmhelpers.db.users import store
             from ofmhelpers.db.session import session_scope
             from ofmhelpers.integrations.storage.gdrive import connect_as
-        """)
+        """),
     )
 
     assert reaches_past_features(tree) == {
@@ -463,7 +468,7 @@ def test_the_return_rule_reads_every_function(monkeypatch):
                 def __iter__(self) -> object: ...
                 @field_validator("x", mode="before")
                 def _raw(cls, value: object) -> object: ...
-        """)
+        """),
     )
     monkeypatch.setattr(sys.modules[__name__], "trees", lambda: {"m.py": tree})
     scope.cache_clear()
@@ -557,7 +562,7 @@ def test_the_disguise_rule_reads_each_class():
             class View(BaseModel):
                 rows: list[int]
                 def all(self) -> list[int]: ...
-        """)
+        """),
     )
 
     assert disguised(tree) == {"Registry"}

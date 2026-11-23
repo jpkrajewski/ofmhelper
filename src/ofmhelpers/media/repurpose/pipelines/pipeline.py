@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from itertools import repeat
 from pathlib import Path
 from typing import Self
@@ -69,7 +71,7 @@ class Pipeline:
                 tries_per_attempt=tries_per_attempt,
                 strength_increase=strength_increase,
                 video=video,
-            )
+            ),
         )
         return self
 
@@ -128,7 +130,10 @@ class Pipeline:
     def _maker(self, planned: PlannedTry, number: int) -> Repurpose:
         seed = None if self.first_seed is None else self.first_seed + number - 1
         maker = Repurpose(
-            self.source, self.output, seed=seed, timeout_s=self.timeout_s
+            self.source,
+            self.output,
+            seed=seed,
+            timeout_s=self.timeout_s,
         ).apply_json_preset(planned.stage.preset)
         if self.spec.device:
             maker.apply_device_preset(self.spec.device)
@@ -148,7 +153,8 @@ class Pipeline:
         )
         if report is not None and not report.unique:
             logger.warning(
-                "repurpose pipeline: try %s (%s at strength %s) still matches its source: %s",
+                "repurpose pipeline: try %s (%s at strength "
+                "%s) still matches its source: %s",
                 number,
                 planned.stage.preset,
                 planned.strength,

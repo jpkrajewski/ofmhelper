@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from guards import (
     baseline,
     context_size,

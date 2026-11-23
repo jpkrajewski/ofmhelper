@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from typing import Any, Self
 
@@ -113,7 +115,7 @@ class TaskCard(JobCard):
                 update={
                     "assets": [asset],
                     "failed_sources": self.failed_sources if i == 0 else [],
-                }
+                },
             )
             for i, asset in enumerate(self.assets)
         ]
@@ -139,7 +141,10 @@ class CloneLinksCard(TaskCard):
         paths = job.local_paths()
         saved = bool(paths) and paths[0] is not None
         return super().from_job(
-            job, assets, failed_sources, {"saved_here": saved, **(extra or {})}
+            job,
+            assets,
+            failed_sources,
+            {"saved_here": saved, **(extra or {})},
         )
 
     @property

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -139,6 +141,9 @@ class SheetDownloads(BaseModel, frozen=True):
             clicker.unclaim(day, fresh)
             raise
         logger.info(
-            "drive sheet: %d new link(s) of %s queued as %s", len(fresh), day, job_id
+            "drive sheet: %d new link(s) of %s queued as %s",
+            len(fresh),
+            day,
+            job_id,
         )
         return answer.model_copy(update={"job_id": job_id})

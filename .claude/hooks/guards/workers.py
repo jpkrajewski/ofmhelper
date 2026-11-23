@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 
@@ -36,11 +38,13 @@ COMPOSE_VALUE_FLAGS = frozenset(
         "--scale",
         "--pull",
         "--wait-timeout",
-    }
+    },
 )
 UNCHECKED = (
-    "The files this shell call wrote could not be checked for worker code (git was slow or failed). "
-    "If you changed code under src/ofmhelpers (not web/), restart the dev workers and sweeps."
+    "The files this shell call wrote could not be checked "
+    "for worker code (git was slow or failed). "
+    "If you changed code under src/ofmhelpers (not "
+    "web/), restart the dev workers and sweeps."
 )
 REDIS_CONTAINER = "ofmhelpers-redis"
 REDIS_TIMEOUT_S = 5
@@ -55,15 +59,21 @@ SERVICE_NAMES = frozenset(service for service, _ in SERVICE_QUEUES)
 RESTARTED = "restarted-"
 QUEUES = tuple(queue for _, queues in SERVICE_QUEUES for queue in queues)
 RESTART_FIRST = (
-    "CLAUDE.local: dev workers and sweeps have no reloader, so they still run the old code you changed. "
-    "Restart them before calling it done: docker compose -f docker-compose.yml -f docker-compose.dev.yml "
-    "restart {services}, then read their logs for a traceback. Right before restarting, re-check that "
-    "no job runs (docker exec ofmhelpers-redis redis-cli zcard rq:wip:<queue> is 0): the answer above "
+    "CLAUDE.local: dev workers and sweeps have no reloader, "
+    "so they still run the old code you changed. "
+    "Restart them before calling it done: docker compose "
+    "-f docker-compose.yml -f docker-compose.dev.yml "
+    "restart {services}, then read their logs for a "
+    "traceback. Right before restarting, re-check that "
+    "no job runs (docker exec ofmhelpers-redis redis-cli "
+    "zcard rq:wip:<queue> is 0): the answer above "
     "is from the moment the code changed."
 )
 NOT_NOW = (
-    " Do NOT restart {services}: a job is running there, or the queue could not be read, and a "
-    "restart cuts the job (dev recovery leaves its row running forever). Say in your report that "
+    " Do NOT restart {services}: a job is running "
+    "there, or the queue could not be read, and a "
+    "restart cuts the job (dev recovery leaves its "
+    "row running forever). Say in your report that "
     "they still run the old code; the main session restarts them once no job runs."
 )
 
@@ -185,7 +195,7 @@ def check(event: HookEvent) -> Verdict | None:
             return context(NAME, UNCHECKED)
         if code_changed:
             note_due = markers.since("restart-noted") <= markers.since(
-                "workers-restarted"
+                "workers-restarted",
             )
             markers.set("worker-code")
             ready, held = restart_plan() if note_due else ([], [])

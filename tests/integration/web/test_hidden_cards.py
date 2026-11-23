@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -85,14 +87,16 @@ def _ids(html: str) -> list[str]:
 
 def _hidden_ids(html: str) -> list[str]:
     return re.findall(
-        r'class="result-item" data-job-id="([^"]+)"[^>]*data-params=\'[^\']*\' data-hidden',
+        r'class="result-item" '
+        r'data-job-id="([^"]+)"[^>]*data-params=\'[^\']*\' data-hidden',
         html,
     )
 
 
 def _tools(html: str) -> str:
     found = re.search(
-        r'<div class="ph-toolbar"[^>]*>.*?<div class="toolbar-actions">.*?</div>\s*</div>',
+        r'<div class="ph-toolbar"[^>]*>.*?<div '
+        r'class="toolbar-actions">.*?</div>\s*</div>',
         html,
         re.DOTALL,
     )
@@ -162,7 +166,7 @@ def test_hidden_cards_carry_unhide_and_shown_ones_hide(ann, tmp_path):
             r'data-job-id="([^"]+)".*?(<div class="result-actions">.*?</details>)',
             html,
             re.DOTALL,
-        )
+        ),
     )
     assert re.search(r'class="menu-item hide-btn" hidden>', cards[done])
     assert re.search(r'class="menu-item unhide-btn">', cards[done])

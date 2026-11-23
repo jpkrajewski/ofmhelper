@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import threading
 import time
@@ -36,7 +38,8 @@ class _Stored(BaseModel):
 class FakeItemError(_Stored):
     url: str
     request_error_messages: list[str] | None = Field(
-        default=None, serialization_alias="requestErrorMessages"
+        default=None,
+        serialization_alias="requestErrorMessages",
     )
     error: str
     error_description: str = Field(serialization_alias="errorDescription")
@@ -113,18 +116,18 @@ def tweet_items(handle: str, since: float) -> list[FakeTweetItem | FakeMockItem]
             if posted < since:
                 continue
             post_id = str(
-                (int(posted * 1000) - SNOWFLAKE_EPOCH_MS) << SNOWFLAKE_TIME_SHIFT
+                (int(posted * 1000) - SNOWFLAKE_EPOCH_MS) << SNOWFLAKE_TIME_SHIFT,
             )
             found.append(
                 FakeTweetItem(
                     id=post_id,
                     url=f"https://x.com/{profile.username}/status/{post_id}",
                     created_at=datetime.fromtimestamp(posted, UTC).strftime(
-                        "%a %b %d %H:%M:%S +0000 %Y"
+                        "%a %b %d %H:%M:%S +0000 %Y",
                     ),
                     view_count=post.views,
                     author=author,
-                )
+                ),
             )
     return found + [FakeMockItem() for _ in range(max(X_MIN_ROWS - len(found), 0))]
 
@@ -164,12 +167,14 @@ class FakeApify:
                 verified=profile.is_verified,
                 avatar_url=f"{CDN}/avatar-{profile.username}.jpg",
                 avatar_url_hd=f"{CDN}/avatar-{profile.username}.jpg",
-            )
+            ),
         ]
 
     @staticmethod
     def reel_items(
-        username: str, limit: int, newer_than_s: float | None = None
+        username: str,
+        limit: int,
+        newer_than_s: float | None = None,
     ) -> list[FakeReelItem | FakeItemError]:
         profile = fake_instagram().profiles.get(username)
         if profile is None:
@@ -181,7 +186,7 @@ class FakeApify:
                     request_error_messages=[],
                     error="no_items",
                     error_description="Empty or private data for provided input",
-                )
+                ),
             ]
         rows = [
             row
@@ -224,8 +229,8 @@ class FakeApify:
                     "data": {
                         "limits": {"maxMonthlyUsageUsd": CREDIT_USD},
                         "current": {"monthlyUsageUsd": used},
-                    }
-                }
+                    },
+                },
             )
         if request.method == "POST" and path.startswith("/v2/acts/"):
             return self._start(path.split("/")[3], token, request.body)
@@ -255,7 +260,7 @@ class FakeApify:
                 tweet_items(
                     str(run_input.get("from", "")),
                     float(run_input.get("since_time") or 0),
-                )
+                ),
             )
         elif actor == PROFILE_SCRAPER:
             stored = [
@@ -269,7 +274,9 @@ class FakeApify:
                 item
                 for username in run_input.get("username", [])
                 for item in self.reel_items(
-                    username, int(run_input.get("resultsLimit", 10)), newer
+                    username,
+                    int(run_input.get("resultsLimit", 10)),
+                    newer,
                 )
             ]
         items = [i.model_dump(by_alias=True, exclude_none=True) for i in stored]
@@ -292,7 +299,7 @@ class FakeApify:
                     "actorChargeEvents": {
                         "reel": {"eventPriceUsd": USD_PER_REEL},
                         "actor-start": {"eventPriceUsd": START_USD},
-                    }
+                    },
                 },
             },
         }
@@ -309,7 +316,7 @@ class FakeApify:
                 return _error(404, "record-not-found", "Actor run was not found")
             run["status"] = run["_final"]
             return FakeReply.json_body(
-                {"data": {k: v for k, v in run.items() if k != "_final"}}
+                {"data": {k: v for k, v in run.items() if k != "_final"}},
             )
 
 

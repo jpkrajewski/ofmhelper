@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -104,11 +106,15 @@ def test_a_page_that_is_not_theirs_sends_the_browser_home():
     va = _client(VA, Role.VA)
 
     page = va.get(
-        "/accounts", headers={"sec-fetch-mode": "navigate"}, follow_redirects=False
+        "/accounts",
+        headers={"sec-fetch-mode": "navigate"},
+        follow_redirects=False,
     )
     call = va.get("/accounts", headers={"sec-fetch-mode": "cors"})
     write = va.post(
-        "/accounts/delete", headers={"sec-fetch-mode": "navigate"}, json={"ids": []}
+        "/accounts/delete",
+        headers={"sec-fetch-mode": "navigate"},
+        json={"ids": []},
     )
 
     assert (page.status_code, page.headers["location"]) == (303, "/home")
@@ -155,7 +161,9 @@ def test_a_va_has_no_account_page():
     va = _client(VA, Role.VA)
 
     load = va.get(
-        "/account", headers={"sec-fetch-mode": "navigate"}, follow_redirects=False
+        "/account",
+        headers={"sec-fetch-mode": "navigate"},
+        follow_redirects=False,
     )
     space = va.get("/account/drive-space")
     home = va.get("/home").text
@@ -216,7 +224,11 @@ def test_a_va_without_an_owner_has_no_key_and_never_an_env_one(monkeypatch):
 def test_a_vas_successful_run_saves_no_key():
     owner, va = _va_of()
     made = tasks.ProviderTask(
-        job_id="j", provider="kie", model=KIE, task_id="t", api_key="typed-key-99999"
+        job_id="j",
+        provider="kie",
+        model=KIE,
+        task_id="t",
+        api_key="typed-key-99999",
     )
 
     keep_used(va.id, [made])
@@ -293,7 +305,8 @@ def test_an_owner_picked_for_a_user_is_ignored():
     owner = make_user(OWNER)
 
     admin.post(
-        "/users", data={"email": OTHER, "role": "user", "owner_id": str(owner.id)}
+        "/users",
+        data={"email": OTHER, "role": "user", "owner_id": str(owner.id)},
     )
 
     added = users.by_email(OTHER)
@@ -372,7 +385,9 @@ def test_an_admin_viewing_as_their_own_va_also_acts_as_the_va():
     )
 
     started = admin.post(
-        "/download-media/run", data={"urls": ""}, headers={"sec-fetch-mode": "cors"}
+        "/download-media/run",
+        data={"urls": ""},
+        headers={"sec-fetch-mode": "cors"},
     )
 
     assert (viewer.acts, viewer.read_only, viewer.keys_of) == (True, False, me.id)
@@ -544,7 +559,8 @@ def test_a_vas_password_opens_no_other_way_in():
 
     for email in (VA, OWNER):
         r = client.post(
-            "/login", data={"email": email, "password": VA_PASSWORD, "next": "/"}
+            "/login",
+            data={"email": email, "password": VA_PASSWORD, "next": "/"},
         )
         assert r.status_code == 401
     assert _big_g(client, VA_PASSWORD).status_code == 401

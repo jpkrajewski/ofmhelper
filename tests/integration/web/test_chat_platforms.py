@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -214,7 +216,7 @@ def test_a_fan_left_waiting_is_sent_to_an_open_notifications_at_once(client, sid
 
         lines = next_lines(socket)
     assert [(n["title"], n["text"]) for n in lines] == [
-        (f"@{side.model}", "Chats unanswered (1)")
+        (f"@{side.model}", "Chats unanswered (1)"),
     ]
 
 
@@ -287,7 +289,9 @@ def test_a_destination_at_a_longer_address_is_heard(client, side):
     raw, headers = side.signed(body)
 
     answer = client.post(
-        f"/events/{side.platform.value}/creator-events", content=raw, headers=headers
+        f"/events/{side.platform.value}/creator-events",
+        content=raw,
+        headers=headers,
     )
 
     assert answer.status_code == HTTPStatus.OK
@@ -299,7 +303,9 @@ def test_a_longer_address_does_not_get_around_the_signature(client, side):
     raw, headers = side.signed(body, secret=side.secret[:-4] + "AAA=")
 
     answer = client.post(
-        f"/events/{side.platform.value}/creator-events", content=raw, headers=headers
+        f"/events/{side.platform.value}/creator-events",
+        content=raw,
+        headers=headers,
     )
 
     assert answer.status_code == HTTPStatus.UNAUTHORIZED
@@ -438,7 +444,9 @@ def test_a_model_with_nothing_delivered_is_read_every_minute(side):
 
 
 def test_a_delivered_reply_lets_the_sync_rest_but_a_waiting_fan_does_not(
-    client, side, monkeypatch
+    client,
+    side,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CHATTING_WEBHOOK_BASE_URL", "https://example.invalid/")
     url = f"https://example.invalid/events/{side.platform.value}"

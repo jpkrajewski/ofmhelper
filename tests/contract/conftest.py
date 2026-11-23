@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Iterator
 
 import pytest
@@ -111,7 +113,7 @@ def backend(request, monkeypatch, tmp_path) -> Iterator[str]:
 
 
 @pytest.fixture(
-    params=[FAKE, pytest.param(REAL, marks=[pytest.mark.live, pytest.mark.paid])]
+    params=[FAKE, pytest.param(REAL, marks=[pytest.mark.live, pytest.mark.paid])],
 )
 def paid_backend(request, monkeypatch, tmp_path) -> Iterator[str]:
     yield from _switched(request.param, monkeypatch, tmp_path)

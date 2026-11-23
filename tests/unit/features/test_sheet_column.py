@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date
 
 from ofmhelpers.features.storage.models import Sheet, SheetColumn
@@ -38,7 +40,7 @@ def test_no_column_for_the_day_is_none_not_an_empty_day():
     assert _sheet(SheetTab(name="Empty")).column(TODAY) is None
     assert _sheet().column(TODAY) is None
     assert _sheet(SheetTab(name="s", rows=[[TODAY]])).column(TODAY) == SheetColumn(
-        links=[]
+        links=[],
     )
 
 
@@ -67,7 +69,7 @@ def test_a_link_without_its_scheme_gets_it():
     tab = SheetTab(name="Sheet1", rows=[[TODAY], ["instagram.com/reel/aaa/"]])
 
     assert _sheet(tab).column(TODAY) == SheetColumn(
-        links=["https://instagram.com/reel/aaa/"]
+        links=["https://instagram.com/reel/aaa/"],
     )
 
 

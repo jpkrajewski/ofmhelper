@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import list_finished_jobs
@@ -11,7 +13,10 @@ GUARD_KEY = "previews:backfill"
 
 def backfill() -> int:
     if not get_redis().set(
-        GUARD_KEY, "1", nx=True, ex=settings.web.preview_backfill_guard_s
+        GUARD_KEY,
+        "1",
+        nx=True,
+        ex=settings.web.preview_backfill_guard_s,
     ):
         return 0
     queued = 0

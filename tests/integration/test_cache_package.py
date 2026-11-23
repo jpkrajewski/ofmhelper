@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 
 import pytest
@@ -72,6 +74,9 @@ def test_inline_mode_never_hands_the_time_limit_to_the_function(monkeypatch):
     monkeypatch.setenv("OFM_RQ_ASYNC", "false")
     seen = []
     queue_module.enqueue(
-        lambda *a, **k: seen.append((a, k)), (1,), {"x": 2}, job_timeout=9
+        lambda *a, **k: seen.append((a, k)),
+        (1,),
+        {"x": 2},
+        job_timeout=9,
     )
     assert seen == [((1,), {"x": 2})]

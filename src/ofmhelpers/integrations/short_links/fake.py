@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import fcntl
 import json
 import re
@@ -135,7 +137,8 @@ class _Fake:
 
     def _fresh(self) -> FakeAccount:
         return FakeAccount(
-            limit=self.default_limit, active_limit=self.default_active_limit
+            limit=self.default_limit,
+            active_limit=self.default_active_limit,
         )
 
     @contextmanager
@@ -160,7 +163,11 @@ class _Fake:
             state.traffic[f"{link_id}|{day.isoformat()}"] = [views, clicks]
 
     def set_hour_traffic(
-        self, link_id: str, hour: datetime, views: int, clicks: int
+        self,
+        link_id: str,
+        hour: datetime,
+        views: int,
+        clicks: int,
     ) -> None:
         at = hour.astimezone(UTC)
         with self._state() as state:
@@ -196,7 +203,7 @@ class FakeOopsie(_Fake):
                 {
                     slug: OopsiePage.model_validate(page)
                     for slug, page in state.links.items()
-                }
+                },
             )
 
     @staticmethod
@@ -245,7 +252,7 @@ class FakeOopsie(_Fake):
                         "pages_used": len(state.links),
                         "effective_limit": state.limit,
                         "is_unlimited": False,
-                    }
+                    },
                 )
             if path == "/api/analytics/activity":
                 return self._activity(state, _body(request, OopsieActivityRequest))
@@ -311,7 +318,7 @@ class FakeOopsie(_Fake):
             labels = [d.strftime("%m-%d") for d in days]
             interval = "day"
         return self._ok(
-            {"perSlug": {"labels": labels, "interval": interval, "series": series}}
+            {"perSlug": {"labels": labels, "interval": interval, "series": series}},
         )
 
 
@@ -327,7 +334,7 @@ class FakeBouncy(_Fake):
                 {
                     link_id: BouncyLink.model_validate(link)
                     for link_id, link in state.links.items()
-                }
+                },
             )
 
     @property
@@ -337,7 +344,10 @@ class FakeBouncy(_Fake):
 
     @staticmethod
     def _new(
-        state: FakeAccount, slug: str, destination: str, domain: str
+        state: FakeAccount,
+        slug: str,
+        destination: str,
+        domain: str,
     ) -> BouncyLink:
         active = sum(x["isActive"] for x in state.links.values()) < (
             state.active_limit or 0
@@ -363,7 +373,8 @@ class FakeBouncy(_Fake):
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         if request.headers.get("Authorization") != f"Bearer {BOUNCY_FAKE_KEY}":
             return FakeReply.json_body(
-                {"error": "Unauthorized", "message": "Invalid API key"}, 401
+                {"error": "Unauthorized", "message": "Invalid API key"},
+                401,
             )
         method, path = request.method or "GET", _path(request).removeprefix("/v1")
         with self._state() as state:
@@ -403,7 +414,7 @@ class FakeBouncy(_Fake):
                     "totalCount": len(items),
                     "hasMore": page * limit < len(items),
                 },
-            }
+            },
         )
 
     def _create(self, state: FakeAccount, body: BouncyCreate) -> FakeReply:
@@ -413,7 +424,8 @@ class FakeBouncy(_Fake):
             x["slug"] == slug and x["domain"] == domain for x in state.links.values()
         ):
             return FakeReply.json_body(
-                {"error": "Custom slug or domain already taken"}, 400
+                {"error": "Custom slug or domain already taken"},
+                400,
             )
         if len(state.links) >= state.limit:
             return FakeReply.json_body(
@@ -425,7 +437,8 @@ class FakeBouncy(_Fake):
             )
         link = self._new(state, slug, body.url, domain)
         return FakeReply.json_body(
-            {"success": True, "data": link.model_dump(by_alias=True)}, 201
+            {"success": True, "data": link.model_dump(by_alias=True)},
+            201,
         )
 
     def _link(
@@ -437,7 +450,8 @@ class FakeBouncy(_Fake):
     ) -> FakeReply:
         if link_id not in state.links:
             return FakeReply.json_body(
-                {"error": "Not Found", "message": "Deeplink not found"}, 404
+                {"error": "Not Found", "message": "Deeplink not found"},
+                404,
             )
         if method == "DELETE":
             del state.links[link_id]
@@ -458,7 +472,7 @@ class FakeBouncy(_Fake):
                     "success": True,
                     "id": link_id,
                     "updatedFields": sorted(known & set(body)),
-                }
+                },
             )
         return FakeReply.json_body({"success": True, "data": state.links[link_id]})
 

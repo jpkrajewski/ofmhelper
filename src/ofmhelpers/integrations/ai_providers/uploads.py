@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 from pathlib import Path
 lazy from collections.abc import Callable
@@ -19,7 +21,10 @@ COPYABLE_SUFFIXES = CONVERTIBLE_SUFFIXES | FITTABLE_SUFFIXES
 
 
 def upload_cache_key(
-    prefix: str, api_key: str, path: Path | str, max_bytes: int | None = None
+    prefix: str,
+    api_key: str,
+    path: Path | str,
+    max_bytes: int | None = None,
 ) -> str:
     account = hashlib.sha256(api_key.encode()).hexdigest()[:16]
     key = f"{prefix}:upload:{account}:{path}"

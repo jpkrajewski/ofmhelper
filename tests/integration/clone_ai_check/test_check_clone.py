@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 import time
 lazy from pathlib import Path
@@ -47,7 +49,8 @@ class _Clock:
 
 
 @pytest.mark.parametrize(
-    ("seconds", "stills"), [(0.4, 2), (2.0, 3), (15.0, 16), (40.0, 16)]
+    ("seconds", "stills"),
+    [(0.4, 2), (2.0, 3), (15.0, 16), (40.0, 16)],
 )
 def test_one_still_a_second_both_ends_included_at_most_16(seconds, stills):
     assert still_count(seconds) == stills
@@ -92,7 +95,7 @@ def test_minor_glitches_the_model_is_sure_of_go_to_trial_reels(video):
             "reasoning": "Small hand and shirt problems add up.",
             "glitches": [{"at_s": 1.0, "what": "hand", "severity": "minor"}],
             "glitch_percent": 90,
-        }
+        },
     )
 
     found = check_clone(video)
@@ -103,7 +106,7 @@ def test_minor_glitches_the_model_is_sure_of_go_to_trial_reels(video):
 
 def test_no_glitch_and_zero_percent_is_good_reels(video):
     fake_gemini().answer_next(
-        {"reasoning": "Clean.", "glitches": [], "glitch_percent": 0}
+        {"reasoning": "Clean.", "glitches": [], "glitch_percent": 0},
     )
 
     found = check_clone(video)
@@ -190,7 +193,8 @@ def test_a_key_out_of_quota_hands_the_same_model_to_the_next_key(video, monkeypa
 
 
 def test_an_overloaded_model_goes_to_the_next_model_not_the_next_key(
-    video, monkeypatch
+    video,
+    monkeypatch,
 ):
     monkeypatch.setenv("GEMINI_API_KEY", f"{FAKE_KEY},{FAKE_KEY_2}")
     fake_gemini().fail_next(503, "UNAVAILABLE", "This model is overloaded")
@@ -213,7 +217,9 @@ def test_a_rejected_key_hands_over_to_the_next_key(video, monkeypatch):
 
 
 def test_every_gemini_out_of_quota_is_an_error_and_groq_never_judges(
-    video, monkeypatch, caplog
+    video,
+    monkeypatch,
+    caplog,
 ):
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
     for _ in range(4):

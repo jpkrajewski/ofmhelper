@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy import random
 
 from pydantic import BaseModel, Field
@@ -47,14 +49,14 @@ class AdjustDraws(BaseModel, frozen=True):
     @classmethod
     def sample(cls, s: AdjustSettings, rng: random.Random) -> AdjustDraws:
         return cls(
-            **{name: draw(value, rng) for name, value in s if name in cls.model_fields}
+            **{name: draw(value, rng) for name, value in s if name in cls.model_fields},
         )
 
     def colour(self, c: AdjustConstants) -> list[str]:
         chain = []
         if self.temp:
             chain.append(
-                f"colortemperature=temperature={c.neutral_k - self.temp * c.temp_k_per_unit:.0f}"
+                f"colortemperature=temperature={c.neutral_k - self.temp * c.temp_k_per_unit:.0f}",  # noqa: E501
             )
         if self.tint:
             g = -self.tint * c.tint_per_unit
@@ -76,7 +78,7 @@ class AdjustDraws(BaseModel, frozen=True):
         brightness = (self.lightness or 0.0) * c.lightness_per_unit
         if (saturation, gamma, brightness) == (1, 1, 0):
             return None
-        return f"eq=saturation={saturation:.4f}:gamma={gamma:.4f}:brightness={brightness:.4f}"
+        return f"eq=saturation={saturation:.4f}:gamma={gamma:.4f}:brightness={brightness:.4f}"  # noqa: E501
 
     def _curve(self, c: AdjustConstants) -> str | None:
         knobs = (
@@ -128,11 +130,11 @@ class AdjustDraws(BaseModel, frozen=True):
         if self.clarity:
             size = c.clarity_size
             chain.append(
-                f"unsharp={size}:{size}:{self.clarity * c.clarity_per_unit:.4f}"
+                f"unsharp={size}:{size}:{self.clarity * c.clarity_per_unit:.4f}",
             )
         if self.particles:
             grain = self.particles * c.particles_grain_per_unit
             chain.append(
-                f"format=yuv420p,noise=alls={grain:.2f}:allf=t:all_seed={seed}"
+                f"format=yuv420p,noise=alls={grain:.2f}:allf=t:all_seed={seed}",
             )
         return chain

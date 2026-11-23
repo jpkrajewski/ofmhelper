@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from guards.event import Guard, HookEvent, Markers, Verdict, block
@@ -9,17 +11,25 @@ AGENTS = {"Agent", "Task"}
 SHELLS = {"Bash", "PowerShell"}
 REVIEWER_AGENT = "caveman:cavecrew-reviewer"
 KIMI_RUN = re.compile(
-    r"kimi[/\\]ask\.py\s+review|kimi\.exe|(^|[;&|(]\s*)kimi\s+(-p|-r)\b", re.MULTILINE
+    r"kimi[/\\]ask\.py\s+review|kimi\.exe|(^|[;&|(]\s*)kimi\s+(-p|-r)\b",
+    re.MULTILINE,
 )
 REVIEWER_FIRST = (
-    "Owner (2026-11-20): before calling a feature done, an independent reviewer checks it for failures, "
-    "races, scale and safety, and you fix what it finds. The reviewer is the cavecrew reviewer: the Agent "
+    "Owner (2026-11-20): before calling a feature done, "
+    "an independent reviewer checks it for failures, "
+    "races, scale and safety, and you fix what it finds. "
+    "The reviewer is the cavecrew reviewer: the Agent "
     "tool with subagent_type caveman:cavecrew-reviewer on the diff. Brief it with "
-    ".claude/skills/failure-modes/SKILL.md and the .claude/rules files that match the changed paths, and "
-    "ask for every finding in one pass. Then one fix round, then one review of the fixes only. Every "
-    "finding that breaks the feature's contract is fixed; none is deferred. Only if the reviewer fails "
-    "or times out, Kimi as backup: python .claude/skills/kimi/ask.py review <task.md> <name> (say why "
-    "the reviewer failed). If this stop is a question to the owner, not done, say so and stop again."
+    ".claude/skills/failure-modes/SKILL.md and the "
+    ".claude/rules files that match the changed paths, and "
+    "ask for every finding in one pass. Then one fix "
+    "round, then one review of the fixes only. Every "
+    "finding that breaks the feature's contract is fixed; "
+    "none is deferred. Only if the reviewer fails "
+    "or times out, Kimi as backup: python "
+    ".claude/skills/kimi/ask.py review <task.md> <name> (say why "
+    "the reviewer failed). If this stop is a question "
+    "to the owner, not done, say so and stop again."
 )
 
 

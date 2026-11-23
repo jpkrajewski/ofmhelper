@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 import subprocess
 import time
@@ -151,11 +153,14 @@ def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
             reason = _why_not(result.error or "", has_cookies=bool(cookies))
             raise LinkFetchError(reason)
         video = next(
-            (p for p in result.output_paths if classify_kind(p.name) == "video"), None
+            (p for p in result.output_paths if classify_kind(p.name) == "video"),
+            None,
         )
         if video is None:
             logger.info(
-                "clone-links: %s has no video (%d files)", url, len(result.output_paths)
+                "clone-links: %s has no video (%d files)",
+                url,
+                len(result.output_paths),
             )
             raise LinkFetchError(clone_links_constants().no_video)
         kept = register_generated_asset(video, Path(assets_root))
@@ -223,14 +228,18 @@ def _hosted_dest(provider: str, job_id: str, url: str, index: int) -> Path:
 def _fetched(client: Provider, url: str, dest: Path) -> Path:
     last: Exception | None = None
     for attempt, wait in enumerate(
-        [*settings.aigen.download_retry_waits_s, None], start=1
+        [*settings.aigen.download_retry_waits_s, None],
+        start=1,
     ):
         try:
             return client.download(url, dest)
         except (ProviderUnavailableError, OSError) as exc:
             last = exc
             logger.warning(
-                "clone-links: %s not saved (try %d)", url, attempt, exc_info=True
+                "clone-links: %s not saved (try %d)",
+                url,
+                attempt,
+                exc_info=True,
             )
         if wait is not None:
             time.sleep(wait)
@@ -312,8 +321,14 @@ def run_clone_link(
     duration = clip_duration(target.spec, seconds)
     target.spec.check(
         clone_values(
-            target, prompt, resolution, duration, audio, reference_images, video
-        ).model_dump()
+            target,
+            prompt,
+            resolution,
+            duration,
+            audio,
+            reference_images,
+            video,
+        ).model_dump(),
     )
     _refuse_if_stopped(job_id, batch)
     try:

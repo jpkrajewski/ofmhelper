@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 from collections.abc import Callable
@@ -75,7 +77,11 @@ def _shown_name(path: str) -> str:
 
 
 def check_choices(
-    provider: str, api_key: str, export: str, resolution: str, owner: int
+    provider: str,
+    api_key: str,
+    export: str,
+    resolution: str,
+    owner: int,
 ) -> RunChoices:
     provider = provider or settings.aigen.default_provider
     target = clone_targets().get(provider)
@@ -158,8 +164,14 @@ def plan_runs(
         for video, duration in zip(videos, durations, strict=True):
             target.spec.check(
                 clone_values(
-                    target, prompt, choices.resolution, duration, audio, images, video
-                ).model_dump()
+                    target,
+                    prompt,
+                    choices.resolution,
+                    duration,
+                    audio,
+                    images,
+                    video,
+                ).model_dump(),
             )
     except InvalidInputError as exc:
         raise CloneRefusedError(str(exc)) from None
@@ -205,7 +217,10 @@ class Submit(BaseModel):
 
     def _picked(self, manifest: str, files: list[UploadFile]) -> list[str]:
         return build_ordered_paths(
-            manifest, files, self.assets_root, user_id=self.owner
+            manifest,
+            files,
+            self.assets_root,
+            user_id=self.owner,
         )
 
     def _queue(self, run: CloneRun, api_key: str) -> str:
@@ -220,7 +235,11 @@ class Submit(BaseModel):
 
     def start(self, form: Submitted) -> list[str]:
         choices = check_choices(
-            form.provider, form.api_key, form.export, form.resolution, self.owner
+            form.provider,
+            form.api_key,
+            form.export,
+            form.resolution,
+            self.owner,
         )
         runs = plan_runs(
             choices,
@@ -277,7 +296,7 @@ def cards(jobs: list[Job]) -> list[CloneCard]:
 
 def cards_of(job_ids: list[str], actor: str) -> list[CloneCard]:
     return cards(
-        [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
+        [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None],
     )
 
 
@@ -300,14 +319,20 @@ class SubjectPicks(BaseModel):
 def subject_picks(actor: str | frozenset[str], assets_root: Path) -> SubjectPicks:
     web = settings.web
     subjects = ParamHistory(
-        tasks=frozenset(SUBJECT_TASKS), actor=actor, field="reference_images"
+        tasks=frozenset(SUBJECT_TASKS),
+        actor=actor,
+        field="reference_images",
     )
     return SubjectPicks(
         last_used=_stored(
-            subjects.last_used_firsts, assets_root, web.clone_last_subjects
+            subjects.last_used_firsts,
+            assets_root,
+            web.clone_last_subjects,
         ),
         most_used=_stored(
-            subjects.most_used_firsts, assets_root, web.clone_top_subjects
+            subjects.most_used_firsts,
+            assets_root,
+            web.clone_top_subjects,
         ),
     )
 
@@ -332,7 +357,9 @@ def _stored(
 
 def _stored_copy(path: str, assets_root: Path) -> str | None:
     if kept := keep_files(
-        [path, str(assets_root / Path(path).name)], assets_root, "image"
+        [path, str(assets_root / Path(path).name)],
+        assets_root,
+        "image",
     ):
         return kept[0]
     digest = _digest(path)
@@ -343,8 +370,11 @@ def _stored_copy(path: str, assets_root: Path) -> str | None:
 
 
 def upload_states(
-    job_ids: list[str], actors: Readers, team: frozenset[int]
+    job_ids: list[str],
+    actors: Readers,
+    team: frozenset[int],
 ) -> list[DriveUpload]:
     return upload_store.for_jobs(
-        [j for j in job_ids if get_job(j, actors) is not None], team
+        [j for j in job_ids if get_job(j, actors) is not None],
+        team,
     )

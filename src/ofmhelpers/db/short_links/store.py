@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, timedelta
 from functools import lru_cache
 lazy from collections.abc import Collection
@@ -51,7 +53,8 @@ def links_by_account(owner: int | None = None) -> list[AccountLinks]:
     for link in list_links(owner):
         if link.account_id is not None and link.status in ("active", "inactive"):
             found.setdefault(
-                link.account_id, AccountLinks(account_id=link.account_id, links=[])
+                link.account_id,
+                AccountLinks(account_id=link.account_id, links=[]),
             ).links.append(link)
     return list(found.values())
 
@@ -70,7 +73,7 @@ def _local_usage(usage: Usage | None, links: list[ShortLink]) -> Usage | None:
                 if usage.active is not None
                 else None
             ),
-        }
+        },
     )
 
 
@@ -96,7 +99,7 @@ def provider_states(user_id: int, keyed: Collection[str]) -> list[ProviderState]
                     sync.usage if sync else None,
                     [x for x in links if x.provider == key],
                 ),
-            )
+            ),
         )
     return states
 
@@ -106,7 +109,9 @@ def account_slug(provider: str, handle: str) -> str:
 
 
 def plan(
-    user_id: int, form: GenerateLinks, accounts: list[TrackedAccount]
+    user_id: int,
+    form: GenerateLinks,
+    accounts: list[TrackedAccount],
 ) -> list[PlannedLink]:
     rules = provider_infos()[form.provider].slug
     taken = taken_slugs(user_id, form.provider, form.domain)
@@ -126,7 +131,7 @@ def plan(
                 target=form.target,
                 account_id=account.id,
                 creator=form.creator,
-            )
+            ),
         )
     return planned
 
@@ -171,7 +176,9 @@ def removed(link_ids: list[int]) -> None:
 
 
 def assign_creator(
-    link_ids: list[int], creator: str | None, owner: int | None = None
+    link_ids: list[int],
+    creator: str | None,
+    owner: int | None = None,
 ) -> int:
     return _repository().set_creator(link_ids, creator, owner)
 
@@ -204,10 +211,16 @@ def mark_due(user_id: int, provider: str | None = None) -> None:
 
 
 def finish_sync(
-    user_id: int, provider: str, usage: Usage | None, error: str | None
+    user_id: int,
+    provider: str,
+    usage: Usage | None,
+    error: str | None,
 ) -> None:
     _repository().finish_sync(
-        user_id, provider, usage.model_dump() if usage else None, error
+        user_id,
+        provider,
+        usage.model_dump() if usage else None,
+        error,
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, UploadFile
@@ -17,7 +19,9 @@ router = APIRouter(
 
 
 def _distribution(
-    user: CurrentUser, scope: Scope, storage: Storage
+    user: CurrentUser,
+    scope: Scope,
+    storage: Storage,
 ) -> service.Distribution:
     return service.Distribution(uid=user.id, scope=scope, storage=storage)
 
@@ -33,10 +37,15 @@ Uploads = Annotated[list[service.Upload], Depends(_uploads)]
 
 
 def _page(
-    request: Request, page: service.DistributionPage, status_code: int = 200
+    request: Request,
+    page: service.DistributionPage,
+    status_code: int = 200,
 ) -> Response:
     response = render(
-        request, "distribution.html", {"page": page}, status_code=status_code
+        request,
+        "distribution.html",
+        {"page": page},
+        status_code=status_code,
     )
     response.headers.update(NO_STORE)
     return response

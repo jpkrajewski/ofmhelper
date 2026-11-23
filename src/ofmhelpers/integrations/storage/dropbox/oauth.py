@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from http import HTTPStatus
 from urllib.parse import urlencode
 
@@ -29,7 +31,7 @@ def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
-        }
+        },
     )
     return f"{dropbox_constants().authorize_url}?{query}"
 

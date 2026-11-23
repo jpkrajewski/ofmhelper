@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from functools import lru_cache
 
@@ -57,7 +59,9 @@ def track(
 
 
 def assign_creator(
-    account_ids: list[int], creator: str | None, owner: int | None = None
+    account_ids: list[int],
+    creator: str | None,
+    owner: int | None = None,
 ) -> int:
     return _repository().set_creator(account_ids, creator, owner)
 
@@ -80,14 +84,18 @@ def make_due(owner: int) -> list[int]:
 
 
 def claim_due(
-    interval_s: float, claim_ttl_s: float, max_interval_s: float | None = None
+    interval_s: float,
+    claim_ttl_s: float,
+    max_interval_s: float | None = None,
 ) -> list[int]:
     ceiling = interval_s if max_interval_s is None else max_interval_s
     return _repository().claim_due(interval_s, claim_ttl_s, ceiling)
 
 
 def record_scan(
-    account_id: int, stats: AccountStats | None, error: str | None = None
+    account_id: int,
+    stats: AccountStats | None,
+    error: str | None = None,
 ) -> None:
     retention = settings.accounts.post_retention_days
     if stats is None:

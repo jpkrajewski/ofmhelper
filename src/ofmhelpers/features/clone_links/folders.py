@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links.ai_check.models import Verdict
 lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck

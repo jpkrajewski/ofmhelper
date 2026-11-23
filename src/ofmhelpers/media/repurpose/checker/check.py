@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -34,7 +36,7 @@ class _SourceHashes(BaseModel):
 def _usable(sampled: frames.Sampled) -> _Usable:
     images = sampled.images
     picked = [i for i, f in enumerate(images) if not is_flat(f)] or list(
-        range(len(images))
+        range(len(images)),
     )
     times = np.array([sampled.times[i] for i in picked])
     return _Usable(images=[normalize(images[i]) for i in picked], times=times)
@@ -67,7 +69,12 @@ def check(
     copy_frames, copy_t = copy_usable.images, copy_usable.times
     hashes = [
         visual.score(
-            kind, stored.kept[kind], stored.times, copy_frames, copy_t, 1 / fps
+            kind,
+            stored.kept[kind],
+            stored.times,
+            copy_frames,
+            copy_t,
+            1 / fps,
         )
         for kind in HashKind
     ]
@@ -80,7 +87,8 @@ def check(
     sound = None
     if probe(source, timeout_s).has_audio and probe(copy, timeout_s).has_audio:
         sound = audio.compare(
-            audio.fingerprint(source, timeout_s), audio.fingerprint(copy, timeout_s)
+            audio.fingerprint(source, timeout_s),
+            audio.fingerprint(copy, timeout_s),
         )
     return CheckReport(
         source_file=source,

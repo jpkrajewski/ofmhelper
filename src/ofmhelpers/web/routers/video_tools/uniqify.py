@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from pathlib import Path
 
@@ -17,7 +19,9 @@ from ofmhelpers.web.routers.task_helpers import add_job_routes, uploads_root
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/uniqify", tags=["uniqify"], dependencies=[Access(Area.UNIQIFY)]
+    prefix="/uniqify",
+    tags=["uniqify"],
+    dependencies=[Access(Area.UNIQIFY)],
 )
 
 

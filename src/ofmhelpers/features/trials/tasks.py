@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 import zlib
 from functools import partial
@@ -132,7 +134,7 @@ def _draws(ran: RepurposeResult | None) -> Draws | None:
         {
             **ran.step.model_dump(mode="json", exclude={"command"}),
             "seconds": ran.seconds,
-        }
+        },
     )
 
 
@@ -200,7 +202,9 @@ class Folder(BaseModel, frozen=True):
             found = self.review.target()
         except DriveError:
             logger.warning(
-                "trials: Drive of user %s unreachable", self.user_id, exc_info=True
+                "trials: Drive of user %s unreachable",
+                self.user_id,
+                exc_info=True,
             )
             self._change(lambda s: s.report(DRIVE_PROBLEM))
             return None
@@ -252,7 +256,9 @@ class Folder(BaseModel, frozen=True):
             return False
         except DriveError:
             logger.warning(
-                "trials: POSTED of %s unreadable", self.login_id, exc_info=True
+                "trials: POSTED of %s unreadable",
+                self.login_id,
+                exc_info=True,
             )
             self._change(lambda s: s.report(DRIVE_PROBLEM))
             return False
@@ -312,12 +318,15 @@ class Folder(BaseModel, frozen=True):
             making.parent.mkdir(parents=True, exist_ok=True)
             with logfire.span("trials pipeline {key}", key=key):
                 ran = pipeline_run(
-                    src, making, caption=recipe.caption, seed=recipe.seed
+                    src,
+                    making,
+                    caption=recipe.caption,
+                    seed=recipe.seed,
                 )
             if not restore:
                 drew = _draws(ran)
                 recipe = recipe.model_copy(
-                    update={"draws": drew.model_dump() if drew else None}
+                    update={"draws": drew.model_dump() if drew else None},
                 )
             making.replace(out)
             with logfire.span("trials page media {key}", key=key):
@@ -351,7 +360,9 @@ class Folder(BaseModel, frozen=True):
     def _trials_folder(self, place: ReviewPlace, account_folder_id: str) -> str:
         with locked(self.user_id, self.login_id, "trials-folder", _FOLDER_LOCK_S):
             return self.review.account_subfolder(
-                place, account_folder_id, AccountFolder.TRIALS
+                place,
+                account_folder_id,
+                AccountFolder.TRIALS,
             )
 
     def _open_trials(self, account_folder_id: str) -> _Trials | None:
@@ -363,11 +374,15 @@ class Folder(BaseModel, frozen=True):
             trials_id = self._trials_folder(found, account_folder_id)
             self._change(lambda s: s.remember_trials_folder(trials_id))
             return _Trials(
-                drive=drive, folder_id=trials_id, files=drive.children(trials_id)
+                drive=drive,
+                folder_id=trials_id,
+                files=drive.children(trials_id),
             )
         except DriveError:
             logger.warning(
-                "trials: TRIALS folder for %s failed", self.login_id, exc_info=True
+                "trials: TRIALS folder for %s failed",
+                self.login_id,
+                exc_info=True,
             )
             self._change(lambda s: s.report(DRIVE_PROBLEM))
             return None

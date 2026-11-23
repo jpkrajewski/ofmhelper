@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from collections.abc import Iterator
 
@@ -40,14 +42,17 @@ VAULT_REASON = [Depends(_vault_reason)]
 def _own_eyes(viewer: Viewing) -> None:
     if viewer.by is not None:
         raise HTTPException(
-            status_code=403, detail="Passwords are shown only to their owner"
+            status_code=403,
+            detail="Passwords are shown only to their owner",
         )
 
 
 SECRET = [Depends(_own_eyes), *VAULT_REASON]
 
 router = APIRouter(
-    prefix="/phones", tags=["phones"], dependencies=[Access(Area.PHONES)]
+    prefix="/phones",
+    tags=["phones"],
+    dependencies=[Access(Area.PHONES)],
 )
 
 
@@ -73,7 +78,9 @@ class _Done(BaseModel):
 
 @router.get("")
 def index(
-    request: Request, query: Annotated[PhoneQuery, Query()], scope: Scope
+    request: Request,
+    query: Annotated[PhoneQuery, Query()],
+    scope: Scope,
 ) -> Response:
     view = service.page_view(query, scope)
     return render(request, "phones.html", {"query": query, **dict(view)})

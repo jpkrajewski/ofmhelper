@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import hashlib
 import json
@@ -108,7 +110,8 @@ class Searcher:
             ),
         }
         self.open: dict[
-            tuple[Part, int], tuple[optuna.Trial, list[Measurement], int]
+            tuple[Part, int],
+            tuple[optuna.Trial, list[Measurement], int],
         ] = {}
 
     def jobs(self) -> Iterator[Job]:
@@ -187,7 +190,8 @@ class Searcher:
                     on = k.name in strengths
                     params[f"{k.name}_on"] = on
                     params[k.name] = min(
-                        max(strengths.get(k.name, 0.5 * k.cap), 0.15 * k.cap), k.cap
+                        max(strengths.get(k.name, 0.5 * k.cap), 0.15 * k.cap),
+                        k.cap,
                     )
                 self.studies[part].enqueue_trial(params)
                 count += 1
@@ -219,7 +223,12 @@ class Runner:
 
     def submit(self, job: Job) -> None:
         future = self.pool.submit(
-            measure, job.trial, job.strengths, job.part, Path(job.sample), job.seed
+            measure,
+            job.trial,
+            job.strengths,
+            job.part,
+            Path(job.sample),
+            job.seed,
         )
         self.inflight[future] = job
 
@@ -227,7 +236,9 @@ class Runner:
         if not self.inflight:
             return
         finished, _ = wait(
-            self.inflight, timeout=None if block else 0, return_when=FIRST_COMPLETED
+            self.inflight,
+            timeout=None if block else 0,
+            return_when=FIRST_COMPLETED,
         )
         with self.results.open("a", encoding="utf-8") as out:
             for future in finished:
@@ -269,10 +280,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument(
-        "--calibrate-only", action="store_true", help="only the cross-pair check"
+        "--calibrate-only",
+        action="store_true",
+        help="only the cross-pair check",
     )
     parser.add_argument(
-        "--phases", default="ablation,random,search", help="comma list, in order"
+        "--phases",
+        default="ablation,random,search",
+        help="comma list, in order",
     )
     args = parser.parse_args(argv)
     clips = sorted(args.clips.glob("*.mp4"))
@@ -306,7 +321,8 @@ def main(argv: list[str] | None = None) -> None:
         searcher.done(job, result)
         if runner.count % 25 == 0:
             print(
-                f"{time.monotonic() - started:6.0f}s  {runner.count} measured  ({job.phase})",
+                f"{time.monotonic() - started:6.0f}s  "
+                f"{runner.count} measured  ({job.phase})",
                 flush=True,
             )
 

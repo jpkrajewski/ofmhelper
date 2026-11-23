@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 import re
 from typing import Any, NoReturn
@@ -27,7 +29,7 @@ logger = get_logger(__name__)
 
 API = "/v1"
 ACCEPTED_SUFFIXES = frozenset(
-    {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mp3", ".wav"}
+    {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mp3", ".wav"},
 )
 _KEY_UNSAFE = re.compile(r"[^\x21-\x7e]")
 _KEY_MAX = 255
@@ -110,7 +112,9 @@ class ElyumClient:
         content_type = mimetypes.guess_type(sent.name)[0] or "application/octet-stream"
         with sent.open("rb") as fh:
             response = self._call(
-                "POST", "files", files={"file": (sent.name, fh, content_type)}
+                "POST",
+                "files",
+                files={"file": (sent.name, fh, content_type)},
             )
         file_id = parsed(response, ElyumFile, PROVIDER, "upload answer").id
         logger.info("elyum upload %s -> %s", path.name, file_id)

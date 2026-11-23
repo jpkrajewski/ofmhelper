@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import re
@@ -77,7 +79,8 @@ _PARENTS_PER_QUERY = 40
 def _credentials(key_json: str) -> service_account.Credentials:
     try:
         return service_account.Credentials.from_service_account_info(
-            json.loads(key_json), scopes=SCOPES
+            json.loads(key_json),
+            scopes=SCOPES,
         )
     except (ValueError, KeyError, GoogleAuthError) as exc:
         msg = "OFM_GDRIVE_SERVICE_ACCOUNT is not a service account key (JSON)"
@@ -121,7 +124,7 @@ def _quoted(value: str) -> str:
 
 
 _SCOPE_REASONS = frozenset(
-    {"insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT", "authError"}
+    {"insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT", "authError"},
 )
 _FULL_REASON = "storageQuotaExceeded"
 
@@ -139,7 +142,7 @@ def _auth_refused(exc: Exception) -> bool:
     if exc.resp.status == HTTPStatus.UNAUTHORIZED:
         return True
     return exc.resp.status == HTTPStatus.FORBIDDEN and bool(
-        _reasons(exc) & _SCOPE_REASONS
+        _reasons(exc) & _SCOPE_REASONS,
     )
 
 
@@ -194,7 +197,7 @@ class Drive:
     ) -> M:
         try:
             raw = request.execute(
-                num_retries=self._retries if retries is None else retries
+                num_retries=self._retries if retries is None else retries,
             )
         except (
             GoogleApiError,
@@ -248,7 +251,10 @@ class Drive:
                 return items
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]:
         query = f"'{_quoted(parent_id)}' in parents and trashed = false"
         if folders_only:
@@ -272,7 +278,7 @@ class Drive:
                     if parent in found:
                         found[parent].append(item)
         return DriveListing(
-            folders=[FolderItems(folder_id=p, items=found[p]) for p in found]
+            folders=[FolderItems(folder_id=p, items=found[p]) for p in found],
         )
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
@@ -343,7 +349,7 @@ class Drive:
         what = f"Sheet {file_id}"
         try:
             content = self._files.export(fileId=file_id, mimeType=XLSX_MIME).execute(
-                num_retries=self._retries
+                num_retries=self._retries,
             )
         except (
             GoogleApiError,
@@ -391,13 +397,16 @@ class Drive:
         url = _THUMB_SIZE.sub(f"=s{px}", item.thumbnail_link)
         try:
             response = AuthorizedSession(self._credentials).get(
-                url, timeout=_THUMB_TIMEOUT_S
+                url,
+                timeout=_THUMB_TIMEOUT_S,
             )
         except (GoogleAuthError, OSError) as exc:
             raise _failure(exc, f"Preview of {item.id}") from exc
         if response.status_code != HTTPStatus.OK:
             logger.warning(
-                "drive: preview of %s answered %s", item.id, response.status_code
+                "drive: preview of %s answered %s",
+                item.id,
+                response.status_code,
             )
             return None
         return DriveThumb(
@@ -422,13 +431,22 @@ class Drive:
         return DriveDownload(content=response.content, name=item.name)
 
     def upload(
-        self, parent_id: str, path: Path, name: str, mime_type: str
+        self,
+        parent_id: str,
+        path: Path,
+        name: str,
+        mime_type: str,
     ) -> DriveFile:
         media = MediaFileUpload(
-            str(path), mimetype=mime_type, resumable=True, chunksize=_UPLOAD_CHUNK
+            str(path),
+            mimetype=mime_type,
+            resumable=True,
+            chunksize=_UPLOAD_CHUNK,
         )
         with logfire.span(
-            "drive upload {name}", name=name, size_bytes=path.stat().st_size
+            "drive upload {name}",
+            name=name,
+            size_bytes=path.stat().st_size,
         ):
             made = self._run(
                 self._files.create(
@@ -488,7 +506,9 @@ def connect(*, interactive: bool = False) -> StorageClient:
     drives = _THREAD.drives
     if cache_key not in drives:
         drives[cache_key] = Drive(
-            _credentials(key), timeout_s=timeout_s, retries=retries
+            _credentials(key),
+            timeout_s=timeout_s,
+            retries=retries,
         )
     return drives[cache_key]
 
@@ -506,6 +526,8 @@ def connect_as(refresh_token: str, *, interactive: bool = False) -> StorageClien
     key = (refresh_token, timeout_s, retries, s.retries)
     if key not in drives:
         drives[key] = Drive(
-            drive_credentials(refresh_token), timeout_s=timeout_s, retries=retries
+            drive_credentials(refresh_token),
+            timeout_s=timeout_s,
+            retries=retries,
         )
     return drives[key]

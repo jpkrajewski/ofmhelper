@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -41,7 +43,9 @@ def _tweet(post_id: str, hours: float, views: int, **extra: Any) -> dict[str, An
         "viewCount": views,
         "author": AUTHOR,
         "extendedEntities": {
-            "media": [{"media_url_https": f"https://pbs.twimg.com/media/{post_id}.jpg"}]
+            "media": [
+                {"media_url_https": f"https://pbs.twimg.com/media/{post_id}.jpg"},
+            ],
         },
         **extra,
     }
@@ -106,8 +110,8 @@ def test_a_read_keeps_own_posts_and_drops_mock_rows_and_reposts(keyed):
                 _tweet("2123000000000000001", 5, 99, retweeted_tweet={"id": "1"}),
                 MOCK,
                 MOCK,
-            ]
-        }
+            ],
+        },
     )
     keyed(client)
     before = time.time()
@@ -164,7 +168,7 @@ def test_a_run_that_did_not_succeed_keeps_nothing(keyed):
         _Client(
             {"danewalkerj": [_tweet("2123809704598200564", 1, 5)]},
             status=RunStatus.ABORTED,
-        )
+        ),
     )
     assert ApifyXSource().scan([ScanTarget(key="7", handle="danewalkerj")]).stats == {}
 
@@ -199,14 +203,14 @@ def test_a_failed_run_leaves_that_account_and_reads_the_next(keyed):
             {
                 "good_one": [
                     _tweet("2123809704598200564", 1, 5).copy()
-                    | {"author": AUTHOR | {"userName": "good_one"}}
-                ]
+                    | {"author": AUTHOR | {"userName": "good_one"}},
+                ],
             },
             fail=frozenset({"bad_one"}),
-        )
+        ),
     )
     answers = ApifyXSource().scan(
-        [ScanTarget(key="1", handle="bad_one"), ScanTarget(key="2", handle="good_one")]
+        [ScanTarget(key="1", handle="bad_one"), ScanTarget(key="2", handle="good_one")],
     )
     assert list(answers.stats) == ["2"]
 
@@ -226,7 +230,7 @@ def test_one_handle_tracked_by_two_users_is_read_once(keyed):
         [
             ScanTarget(key="1", handle="danewalkerj"),
             ScanTarget(key="2", handle="danewalkerj"),
-        ]
+        ],
     )
     assert set(answers.stats) == {"1", "2"}
     assert len(client.inputs) == 1
@@ -245,10 +249,10 @@ def test_a_crash_mid_batch_keeps_the_reads_already_paid(keyed):
         _Client(
             {
                 "first_one": [
-                    _tweet("2123809704598200564", 1, 5, author=_author("first_one"))
-                ]
-            }
-        )
+                    _tweet("2123809704598200564", 1, 5, author=_author("first_one")),
+                ],
+            },
+        ),
     )
     saved: list[str] = []
     targets = [
@@ -267,13 +271,13 @@ def test_an_unexpected_error_skips_only_that_account(keyed):
         _Client(
             {
                 "after_it": [
-                    _tweet("2123809704598200564", 1, 5, author=_author("after_it"))
-                ]
-            }
-        )
+                    _tweet("2123809704598200564", 1, 5, author=_author("after_it")),
+                ],
+            },
+        ),
     )
     answers = ApifyXSource().scan(
-        [ScanTarget(key="1", handle="garbled"), ScanTarget(key="2", handle="after_it")]
+        [ScanTarget(key="1", handle="garbled"), ScanTarget(key="2", handle="after_it")],
     )
     assert list(answers.stats) == ["2"]
 
@@ -283,7 +287,7 @@ def test_a_timed_out_run_keeps_its_posts_without_claiming_the_window(keyed):
         _Client(
             {"danewalkerj": [_tweet("2123809704598200564", 1, 5)]},
             status=RunStatus.TIMED_OUT,
-        )
+        ),
     )
     stats = ApifyXSource().scan([ScanTarget(key="7", handle="danewalkerj")]).stats["7"]
     assert stats.since is None

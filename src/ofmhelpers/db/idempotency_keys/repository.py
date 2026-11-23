@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from datetime import datetime
 
 from sqlalchemy import ColumnElement, delete, func, select, update
@@ -38,11 +40,12 @@ class IdempotencyKeyRepository(CachedRepository):
                 insert(row)
                 .values(user_id=asked.user_id, key=asked.key, status=STARTED, **fresh)
                 .on_conflict_do_nothing(index_elements=[row.user_id, row.key])
-                .returning(row.created_at)
+                .returning(row.created_at),
             ).scalar_one_or_none()
             if taken is not None:
                 return Claimed(
-                    outcome=Outcome.NEW, held=Held(asked=asked, claimed_at=taken)
+                    outcome=Outcome.NEW,
+                    held=Held(asked=asked, claimed_at=taken),
                 )
             found = s.execute(select(row).where(*_same(asked))).scalar_one_or_none()
             if found is None:
@@ -68,7 +71,7 @@ class IdempotencyKeyRepository(CachedRepository):
                     response_status=status,
                     response_body=body,
                     finished_at=func.now(),
-                )
+                ),
             )
 
     def release(self, held: Held) -> None:
@@ -80,6 +83,6 @@ class IdempotencyKeyRepository(CachedRepository):
             gone = s.execute(
                 delete(IdempotencyKeyRow)
                 .where(IdempotencyKeyRow.created_at < before)
-                .returning(IdempotencyKeyRow.key)
+                .returning(IdempotencyKeyRow.key),
             )
             return len(gone.all())

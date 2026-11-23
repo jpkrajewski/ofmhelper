@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import os
 import re
@@ -170,7 +172,10 @@ def open_video(video: str, assets_root: Path) -> EditVideo:
 
 
 def upload(
-    file: UploadFile, assets_root: Path, actor: str, run: Callable[..., Any]
+    file: UploadFile,
+    assets_root: Path,
+    actor: str,
+    run: Callable[..., Any],
 ) -> EditVideo:
     if classify_kind(file.filename or "") != "video":
         msg = "Pick a video file"
@@ -277,7 +282,10 @@ def _in_line(job_id: str) -> Prepared:
 
 
 def queue_prepare(
-    path: Path, assets_root: Path, actor: str, run: Callable[..., Any]
+    path: Path,
+    assets_root: Path,
+    actor: str,
+    run: Callable[..., Any],
 ) -> Prepared:
     ready = _ready(path)
     if ready is not None:
@@ -302,7 +310,10 @@ def queue_prepare(
 
 
 def _queue_prepare_quietly(
-    path: Path, assets_root: Path, actor: str, run: Callable[..., Any]
+    path: Path,
+    assets_root: Path,
+    actor: str,
+    run: Callable[..., Any],
 ) -> Prepared:
     try:
         return queue_prepare(path, assets_root, actor, run)
@@ -521,7 +532,12 @@ def cut_timeout_s(params: dict[str, Any]) -> int:
 
 
 def _make_cut(
-    path: Path, start: float, end: float, framing: Framing, speed: float, root: Path
+    path: Path,
+    start: float,
+    end: float,
+    framing: Framing,
+    speed: float,
+    root: Path,
 ) -> Path:
     web = settings.web
     work = Path(settings.infra.uploads_root) / STAGING
@@ -610,7 +626,7 @@ def run_cut(
             "scale": scale,
             "x": x,
             "y": y,
-        }
+        },
     )
     try:
         if clips:
@@ -637,5 +653,6 @@ def cut_state(job_id: str, actor: str) -> CutState:
     if job.status == "failed":
         return CutState(status="failed", error=job.error or "Could not cut: try again")
     return CutState(
-        status="running", ahead=JobQueue(name=QueueName.EDIT).line().ahead(job_id)
+        status="running",
+        ahead=JobQueue(name=QueueName.EDIT).line().ahead(job_id),
     )

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
@@ -9,7 +11,9 @@ from ofmhelpers.web.dependencies import Access, CurrentUser, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/threads", tags=["threads"], dependencies=[Access(Area.THREADS)]
+    prefix="/threads",
+    tags=["threads"],
+    dependencies=[Access(Area.THREADS)],
 )
 
 
@@ -30,7 +34,9 @@ IndexCards = Annotated[service.PhoneCards, Depends(_index_cards)]
 @router.get("")
 def threads_page(request: Request, cards: IndexCards) -> Response:
     return render(
-        request, "threads.html", {"board": cards.board, "progress": cards.progress}
+        request,
+        "threads.html",
+        {"board": cards.board, "progress": cards.progress},
     )
 
 
@@ -43,7 +49,8 @@ def folder_page(request: Request, threads: Threads) -> Response:
 def make_pictures(threads: Threads, key: str) -> RedirectResponse:
     threads.start(key)
     return RedirectResponse(
-        f"/threads/{threads.login_id}", status_code=status.HTTP_303_SEE_OTHER
+        f"/threads/{threads.login_id}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 

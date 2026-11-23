@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import time
 lazy from pathlib import Path
@@ -53,7 +55,8 @@ def _client(email: str, *, google: bool = True) -> TestClient:
 def _account_folder(client: TestClient, handle: str = "ann.ig") -> int:
     phone = client.post("/phones/add", json=PHONE).json()["id"]
     login = client.post(
-        f"/phones/{phone}/logins", json={"service": "instagram", "username": handle}
+        f"/phones/{phone}/logins",
+        json={"service": "instagram", "username": handle},
     ).json()["id"]
     storage_jobs.sync()
     return login
@@ -108,7 +111,8 @@ def test_a_run_uploads_into_the_account_folder_once(drive, tmp_path):
     assert drive.item(file_id).owner == "ann@example.com"
 
     again = ann.post(
-        "/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]}
+        "/clone/drive-upload",
+        json={"job_ids": [job], "login_ids": [login]},
     )
     assert again.json()["queued"] == 0
     assert len(_files_in(drive, "ann.ig - Anna")) == 1
@@ -133,11 +137,13 @@ def test_nobody_uploads_into_anothers_folder_or_anothers_run(drive, tmp_path):
     bob_job = _finished_run("bob@example.com", tmp_path, "b.mp4")
 
     r = bob.post(
-        "/clone/drive-upload", json={"job_ids": [bob_job], "login_ids": [ann_login]}
+        "/clone/drive-upload",
+        json={"job_ids": [bob_job], "login_ids": [ann_login]},
     )
     assert r.status_code == 400
     r = ann.post(
-        "/clone/drive-upload", json={"job_ids": [bob_job], "login_ids": [ann_login]}
+        "/clone/drive-upload",
+        json={"job_ids": [bob_job], "login_ids": [ann_login]},
     )
     assert r.json()["uploads"] == []
     assert bob.get("/clone/drive-uploads", params={"job": ann_job}).json() == []
@@ -166,7 +172,8 @@ def test_a_failed_upload_says_why_and_can_be_retried(drive, tmp_path, monkeypatc
 
     monkeypatch.setattr(drive_client, "connect_as", working)
     retry = ann.post(
-        "/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]}
+        "/clone/drive-upload",
+        json={"job_ids": [job], "login_ids": [login]},
     )
     assert retry.status_code == 200
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
@@ -194,7 +201,8 @@ def test_queueing_into_several_folders_at_once(drive, tmp_path):
     first = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path, "a.mp4")
     r = ann.post(
-        "/clone/drive-upload", json={"job_ids": [job], "login_ids": [first, 999]}
+        "/clone/drive-upload",
+        json={"job_ids": [job], "login_ids": [first, 999]},
     )
     assert r.status_code == 400
     r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [first]})
@@ -209,7 +217,8 @@ def test_queueing_returns_only_the_users_own_runs(drive, tmp_path):
     ann_job = _finished_run("ann@example.com", tmp_path, "a.mp4")
     bob_job = _finished_run("bob@example.com", tmp_path, "b.mp4")
     bob.post(
-        "/clone/drive-upload", json={"job_ids": [bob_job], "login_ids": [bob_login]}
+        "/clone/drive-upload",
+        json={"job_ids": [bob_job], "login_ids": [bob_login]},
     )
 
     r = ann.post(
@@ -222,7 +231,9 @@ def test_queueing_returns_only_the_users_own_runs(drive, tmp_path):
 
 
 def test_an_upload_that_cannot_be_queued_fails_and_can_be_retried(
-    drive, tmp_path, monkeypatch
+    drive,
+    tmp_path,
+    monkeypatch,
 ):
     ann = _client("ann@example.com")
     login = _account_folder(ann)
@@ -248,7 +259,9 @@ def test_an_upload_that_cannot_be_queued_fails_and_can_be_retried(
 
 
 def test_a_stranded_queued_upload_is_queued_again_once_stale(
-    drive, tmp_path, monkeypatch
+    drive,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_GDRIVE_UPLOAD_STALE_S", "60")
     ann = _client("ann@example.com")
@@ -297,7 +310,9 @@ def test_dev_never_uploads_into_a_live_root_kept_from_a_prod_copy(drive, tmp_pat
     job = _finished_run("ann@example.com", tmp_path)
     ann_id = users.by_email("ann@example.com").id
     live = drive.seed_folder(
-        "ALL ACCOUNTS", "mydrive-ann@example.com", owner="ann@example.com"
+        "ALL ACCOUNTS",
+        "mydrive-ann@example.com",
+        owner="ann@example.com",
     )
     live_account = drive.seed_folder("ann.ig - Anna", live, owner="ann@example.com")
     folder_store.save_account_folder(login, live_account, "ann.ig - Anna", live)
@@ -342,7 +357,8 @@ def _upload(client: TestClient, job: str, login: int) -> dict:
 
 
 def test_a_video_put_in_the_wrong_folder_is_taken_back_out_from_the_card(
-    drive, tmp_path
+    drive,
+    tmp_path,
 ):
     ann = _client("ann@example.com")
     login = _account_folder(ann)
@@ -389,7 +405,9 @@ def test_an_upload_already_gone_in_drive_is_removed_quietly(drive, tmp_path):
 
 
 def test_a_revoked_google_token_refuses_the_remove_with_a_reason(
-    drive, tmp_path, monkeypatch
+    drive,
+    tmp_path,
+    monkeypatch,
 ):
     ann = _client("ann@example.com")
     login = _account_folder(ann)
@@ -417,7 +435,9 @@ def test_an_upload_leaves_a_job_row_naming_what_went_up(drive, tmp_path):
 
 
 def test_drive_failing_the_remove_is_a_502_in_our_words_and_keeps_the_upload(
-    drive, tmp_path, monkeypatch
+    drive,
+    tmp_path,
+    monkeypatch,
 ):
     ann = _client("ann@example.com")
     login = _account_folder(ann)
@@ -430,7 +450,9 @@ def test_drive_failing_the_remove_is_a_502_in_our_words_and_keeps_the_upload(
             raise DriveError(msg)
 
     monkeypatch.setattr(
-        drive_client, "connect_as", lambda _token, **_options: Failing()
+        drive_client,
+        "connect_as",
+        lambda _token, **_options: Failing(),
     )
 
     r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
@@ -444,7 +466,8 @@ def test_drive_failing_the_remove_is_a_502_in_our_words_and_keeps_the_upload(
 
 
 def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
-    drive, tmp_path
+    drive,
+    tmp_path,
 ):
     ann = _client("ann@example.com")
     login = _account_folder(ann)
@@ -462,7 +485,8 @@ def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
     by_job = {
         s["job_id"]: s
         for s in ann.get(
-            "/clone/drive-uploads", params={"job": [posted_job, deleted_job]}
+            "/clone/drive-uploads",
+            params={"job": [posted_job, deleted_job]},
         ).json()
     }
     file_of = {
@@ -478,7 +502,8 @@ def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
     states = {
         s["job_id"]: s["status"]
         for s in ann.get(
-            "/clone/drive-uploads", params={"job": [posted_job, deleted_job]}
+            "/clone/drive-uploads",
+            params={"job": [posted_job, deleted_job]},
         ).json()
     }
     assert states == {posted_job: "done", deleted_job: "removed"}
@@ -748,7 +773,8 @@ def test_a_spoofed_copy_for_a_va_lands_in_the_vas_folder_itself(drive, tmp_path)
     assert _spoof_state(ann, job) == "done"
     owner_id = users.by_email("ann@example.com").id
     (vas_folder,) = drive_client.storage_of(
-        owner_id, interactive=False
+        owner_id,
+        interactive=False,
     ).va_folders.of_owner()
     assert len(drive.names_in(vas_folder.folder_id)) == 1
     assert drive.named("SPOOFED", vas_folder.folder_id) == []

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from pathlib import Path
 
@@ -55,7 +57,7 @@ def problems(box: Host, queues: list[QueueLoad], jobs: list[RunningJob]) -> list
         found.append(f"CPU {box.cpu_percent:.0f}% busy")
     if box.load[0] > box.cpus:
         found.append(
-            f"Load {box.load[0]:.1f} on {box.cpus} CPUs: work is waiting for CPU"
+            f"Load {box.load[0]:.1f} on {box.cpus} CPUs: work is waiting for CPU",
         )
     if box.memory.percent >= cfg.warn_percent:
         found.append(f"RAM {box.memory.percent:.0f}% used")
@@ -67,13 +69,13 @@ def problems(box: Host, queues: list[QueueLoad], jobs: list[RunningJob]) -> list
         elif q.oldest_wait_s is not None and q.oldest_wait_s >= cfg.wait_warn_s:
             found.append(
                 f"Queue {q.name}: {q.waiting} waiting, first one for "
-                f"{duration(q.oldest_wait_s)}"
+                f"{duration(q.oldest_wait_s)}",
             )
     slow = [j for j in jobs if j.running_s >= cfg.run_warn_s]
     if slow:
         found.append(
             f"{len(slow)} job{'s' if len(slow) > 1 else ''} running over "
-            f"{duration(cfg.run_warn_s)}"
+            f"{duration(cfg.run_warn_s)}",
         )
     return found
 

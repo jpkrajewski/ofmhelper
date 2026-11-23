@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from typing import Any
 lazy from pathlib import Path
@@ -112,6 +114,7 @@ def wire_body(spec: ModelSpec, payload: Payload) -> Body:
         inputs += [_input(role, str(v)) for v in values if v]
     if isinstance(given.get("prompt"), str):
         given["prompt"] = _CITE.sub(
-            lambda m: f"@{m.group(1).lower()}{m.group(2)}", given["prompt"]
+            lambda m: f"@{m.group(1).lower()}{m.group(2)}",
+            given["prompt"],
         )
     return Body(model=spec.model_id, settings=given, inputs=inputs)

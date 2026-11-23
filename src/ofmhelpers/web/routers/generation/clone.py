@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -106,7 +108,10 @@ def _video_seconds(path: str) -> float:
 
 
 def _rendered_cards(
-    request: Request, job_ids: list[str], actor: str, uploads: StorageServiceUploads
+    request: Request,
+    job_ids: list[str],
+    actor: str,
+    uploads: StorageServiceUploads,
 ) -> str:
     picker = dict(drive_picker(uploads))
     return "".join(
@@ -162,7 +167,10 @@ def gallery_page(
 
 @router.get("/gallery/latest")
 def gallery_latest(
-    request: Request, viewer: Viewing, storage: Storage, query: GalleryParams
+    request: Request,
+    viewer: Viewing,
+    storage: Storage,
+    query: GalleryParams,
 ) -> Response:
     return render_polled(
         request,
@@ -177,7 +185,9 @@ def gallery_latest(
 
 @router.post("/drive-upload", dependencies=[Can(Action.DRIVE_UPLOAD)])
 def drive_upload(
-    storage: Storage, actors: Actors, body: UploadRequest
+    storage: Storage,
+    actors: Actors,
+    body: UploadRequest,
 ) -> UploadsQueued:
     return storage.uploads.queue(body.job_ids, body.login_ids, actors, body.va_ids)
 
@@ -194,17 +204,22 @@ def handoff(
 
 
 @router.post(
-    "/drive-uploads/{upload_id}/remove", dependencies=[Can(Action.DRIVE_UPLOAD)]
+    "/drive-uploads/{upload_id}/remove",
+    dependencies=[Can(Action.DRIVE_UPLOAD)],
 )
 def drive_upload_remove(
-    storage: Storage, actors: Actors, upload_id: int
+    storage: Storage,
+    actors: Actors,
+    upload_id: int,
 ) -> DriveUpload:
     return storage.uploads.remove(upload_id, actors)
 
 
 @router.get("/drive-uploads")
 def drive_upload_states(
-    viewer: Viewing, actors: Actors, job: Annotated[list[str], Query(max_length=200)]
+    viewer: Viewing,
+    actors: Actors,
+    job: Annotated[list[str], Query(max_length=200)],
 ) -> list[DriveUpload]:
     return upload_states(job, actors, viewer.team_ids)
 
@@ -227,7 +242,8 @@ def run(
     )
     job_ids = submit.start(form)
     return CloneQueued(
-        job_ids=job_ids, html=_rendered_cards(request, job_ids, actor, storage.uploads)
+        job_ids=job_ids,
+        html=_rendered_cards(request, job_ids, actor, storage.uploads),
     )
 
 

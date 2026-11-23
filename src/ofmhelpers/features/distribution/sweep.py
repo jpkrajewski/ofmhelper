@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 import time
 from itertools import groupby
@@ -99,7 +101,9 @@ def _fill(sources: Sources, channels: list[Channel]) -> int:
             continue
         if new:
             logger.info(
-                "distribution: @%s queued %s new file(s)", channel.account_name, new
+                "distribution: @%s queued %s new file(s)",
+                channel.account_name,
+                new,
             )
         added += new
     return added

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -14,7 +16,10 @@ def upgrade() -> None:
     op.add_column(
         "chat_accounts",
         sa.Column(
-            "connected_from", sa.String(length=2048), nullable=False, server_default=""
+            "connected_from",
+            sa.String(length=2048),
+            nullable=False,
+            server_default="",
         ),
     )
     op.create_index(

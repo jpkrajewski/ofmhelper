@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from types import MappingProxyType
 
@@ -61,7 +63,10 @@ def _delete(paths: list[Path]) -> int:
 
 
 def _due(
-    uid: int, login_id: int, state: FolderState, now: float
+    uid: int,
+    login_id: int,
+    state: FolderState,
+    now: float,
 ) -> MappingProxyType[str, int]:
     due: dict[str, int] = {}
     for reel in state.ready:
@@ -103,7 +108,10 @@ class _Batch(BaseModel, frozen=True):
 
 
 def _clean_batch(
-    uid: int, login_id: int, now: float, due: MappingProxyType[str, int]
+    uid: int,
+    login_id: int,
+    now: float,
+    due: MappingProxyType[str, int],
 ) -> _Batch:
     freed = cleaned = 0
 
@@ -118,7 +126,7 @@ def _clean_batch(
             ):
                 continue
             freed += _delete(
-                [copy, media.preview_path(copy), *_source_files(uid, login_id, reel)]
+                [copy, media.preview_path(copy), *_source_files(uid, login_id, reel)],
             )
             reel.cleaned()
             cleaned += 1

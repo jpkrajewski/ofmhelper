@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.db.encrypted import VaultError
@@ -29,7 +31,11 @@ def refresh_token(user_id: int, provider: StorageProvider) -> str | None:
         return _repository().refresh_token(user_id, provider)
     except VaultError as exc:
         logger.warning(
-            "user %s: %s token unreadable: %s", user_id, provider, exc, exc_info=True
+            "user %s: %s token unreadable: %s",
+            user_id,
+            provider,
+            exc,
+            exc_info=True,
         )
         return None
 

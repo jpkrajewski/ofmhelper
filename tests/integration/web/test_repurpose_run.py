@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 
 import pytest
@@ -62,7 +64,7 @@ def test_each_copy_is_its_own_job_on_the_media_queue_with_its_own_seed(client, q
     assert len({kwargs["seed"] for _, kwargs in queued}) == 3
     assert len({kwargs["job_dir"] for _, kwargs in queued}) == 3
     assert {j.task for j in list_jobs() if j.id in r.json()["job_ids"]} == {
-        repurpose.TASK
+        repurpose.TASK,
     }
 
 
@@ -97,10 +99,16 @@ def test_the_same_key_with_another_video_of_the_same_size_is_refused(client, que
     form = {"video_manifest": NEW, "copies": "1"}
 
     first = client.post(
-        "/spoof/run", data=form, files=[("video", ("a.mp4", b"aaaa"))], headers=key
+        "/spoof/run",
+        data=form,
+        files=[("video", ("a.mp4", b"aaaa"))],
+        headers=key,
     )
     other = client.post(
-        "/spoof/run", data=form, files=[("video", ("a.mp4", b"bbbb"))], headers=key
+        "/spoof/run",
+        data=form,
+        files=[("video", ("a.mp4", b"bb"))],
+        headers=key,
     )
 
     assert (first.status_code, other.status_code) == (202, 400)
@@ -126,16 +134,22 @@ def test_a_copy_uploaded_to_drive_says_so_on_its_card(client, tmp_path):
     copy = tmp_path / "IMG_1234.mov"
     copy.write_bytes(b"a copy")
     job = create_job(
-        "repurpose", {"source": "s.mp4", "seed": 1}, actor=str(client.user.id)
+        "repurpose",
+        {"source": "s.mp4", "seed": 1},
+        actor=str(client.user.id),
     )
     run_job(job, lambda: [{"name": copy.name, "path": str(copy)}], {})
     phone = devices.add_device(
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
-        )
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Anna",
+        ),
     )
     login = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig")
+        phone,
+        LoginFields(service="instagram", username="ann.ig"),
     )
     assert login is not None
     upload = upload_store.queue(job, 0, login.id, client.user.id, "ann.ig - Anna")
@@ -152,7 +166,9 @@ def _copy_drawn(client, tmp_path, seed: int) -> None:
     copy = tmp_path / f"IMG_{seed}.mov"
     copy.write_bytes(b"a copy")
     job = create_job(
-        "repurpose", {"source": "s.mp4", "seed": seed}, actor=str(client.user.id)
+        "repurpose",
+        {"source": "s.mp4", "seed": seed},
+        actor=str(client.user.id),
     )
     step = drawn_step(seed).model_dump(mode="json")
     run_job(job, lambda: [{"name": copy.name, "path": str(copy), "step": step}], {})

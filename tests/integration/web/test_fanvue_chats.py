@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 import re
 import time
@@ -131,7 +133,7 @@ def test_a_sale_says_what_sold(client, side):
             f"Sold $50.01 tip: @{HANDLE}",
             f"Sold $120 renewal: @{HANDLE}",
             f"Sold EUR 90 message: @{HANDLE}",
-        ]
+        ],
     )
 
 
@@ -177,7 +179,11 @@ def test_the_events_tab_extras_are_answered_and_do_nothing(client, side, kind):
     ids=["flat event", "message without its parties"],
 )
 def test_a_delivery_not_understood_is_named_by_type_and_fields_never_values(
-    client, side, caplog, body, said
+    client,
+    side,
+    caplog,
+    body,
+    said,
 ):
     with caplog.at_level(logging.WARNING):
         assert _post(client, side, body).status_code == HTTPStatus.OK
@@ -399,7 +405,11 @@ def test_a_mass_message_answers_only_once_a_full_round_has_read_it(client, side)
     assert get_text(sync_done_key(PLATFORM)) == "1"
 
     side.fake.add_message(
-        side.model_id, "ann", from_fan=False, at=now - 60, message_type="BROADCAST"
+        side.model_id,
+        "ann",
+        from_fan=False,
+        at=now - 60,
+        message_type="BROADCAST",
     )
     assert _post(client, side, side.mass("mass-1")).status_code == HTTPStatus.OK
     assert get_text(mass_pending_key(PLATFORM)) == "1"
@@ -450,7 +460,8 @@ def test_a_chat_fanvue_will_not_open_does_not_stop_the_round(side):
     side.fan_writes("ann", time.time() - LATE)
     side.fan_writes("bob", time.time() - LATE)
     refused = FakeReply.json_body(
-        {"error": "Invalid user UUID"}, HTTPStatus.BAD_REQUEST
+        {"error": "Invalid user UUID"},
+        HTTPStatus.BAD_REQUEST,
     )
     real = side.fake.handle
 

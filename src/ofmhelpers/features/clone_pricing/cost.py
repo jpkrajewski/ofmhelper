@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from decimal import Decimal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
@@ -16,7 +18,8 @@ class _PricedRun(BaseModel):
     model: str
     resolution: str
     seconds: float = Field(
-        gt=0, validation_alias=AliasChoices("seconds", "source_seconds", "duration")
+        gt=0,
+        validation_alias=AliasChoices("seconds", "source_seconds", "duration"),
     )
 
 

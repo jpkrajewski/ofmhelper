@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Rebuild `integrations/ai_providers/kie/catalog.json` from kie.ai's docs.
 
 kie.ai lists every documented endpoint in `https://docs.kie.ai/llms.txt`;
@@ -87,7 +89,7 @@ CURATED = frozenset(
         "seedream/5-pro-text-to-image",
         "seedream/5-pro-image-to-image",
         "gpt-image-2-5-flare-image-to-image",
-    }
+    },
 )
 # Field names /ai/run uses itself (`AiRunForm`): a model input of that name
 # would collide with them, so it is sent fixed instead.
@@ -123,7 +125,7 @@ _KEEP = frozenset(
         "properties",
         "required",
         "anyOf",
-    }
+    },
 )
 _MEDIA_WORDS = (
     ("video", "video"),
@@ -137,7 +139,7 @@ _MEDIA_WORDS = (
     ("file", "image"),
 )
 _BARE_MEDIA = frozenset(
-    {"image", "input_image", "reference_image", "reference_video", "first_frame"}
+    {"image", "input_image", "reference_image", "reference_video", "first_frame"},
 )
 _NOT_MEDIA = frozenset({"reference_link_urls", "reference_file_urls"})
 _SCALAR_OF = {str: "string", bool: "boolean", int: "integer", float: "number"}
@@ -185,7 +187,7 @@ def _pages(skipped: list[str]) -> list[Page]:
             continue
         family = m["group"].split(">")[0].strip().removesuffix(" API").strip()
         pages.append(
-            Page(kind=KINDS[m["cat"]], family=family, title=title, url=m["url"])
+            Page(kind=KINDS[m["cat"]], family=family, title=title, url=m["url"]),
         )
     skipped.extend(
         f"{count} {cat} pages: output is not image/video"
@@ -254,7 +256,9 @@ def _openapi_30(node: dict[str, Any], out: dict[str, Any]) -> None:
 
 
 def _properties(
-    props: dict[str, Any], required: list[str], components: dict[str, Any]
+    props: dict[str, Any],
+    required: list[str],
+    components: dict[str, Any],
 ) -> dict[str, Any]:
     """Deprecated properties are left out unless required."""
     return {
@@ -451,7 +455,8 @@ def main() -> int:
     )
     catalog = [fresh.get(mid, e) for mid, e in current.items()] + added
     OUT.write_text(
-        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     print(f"{len(catalog)} models ({len(added)} new) from {len(pages)} pages -> {OUT}")
     for line in skipped:

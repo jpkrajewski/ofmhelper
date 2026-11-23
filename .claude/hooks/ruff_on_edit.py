@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Claude Code PostToolUse hook: `ruff format` + safe `ruff check --fix` on
 the one .py file an Edit/Write just touched, so "would reformat" never
 reaches pre-commit or CI.
@@ -36,7 +38,11 @@ def main() -> None:
         ["check", "--fix", "--quiet", "--unfixable", _KEEP, "--exit-zero", str(path)],
     ):
         result = subprocess.run(
-            [*ruff, *args], cwd=ROOT, capture_output=True, text=True, check=False
+            [*ruff, *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if result.returncode != 0:
             print(

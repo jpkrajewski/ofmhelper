@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -25,7 +27,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_applications_created_at", "applications", ["created_at"], unique=False
+        "ix_applications_created_at",
+        "applications",
+        ["created_at"],
+        unique=False,
     )
 
 

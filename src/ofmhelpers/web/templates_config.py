@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 from functools import lru_cache
@@ -42,7 +44,9 @@ class TemplateSource(BaseModel):
 
 class TemplateFiles(FileSystemLoader):
     def get_source(  # type: ignore[override]
-        self, environment: Environment, template: str
+        self,
+        environment: Environment,
+        template: str,
     ) -> TemplateSource:
         source, filename, uptodate = super().get_source(environment, template)
         checked_at = time.monotonic()
@@ -143,12 +147,17 @@ def render(
     status_code: int = 200,
 ) -> HTMLResponse:
     return get_templates().TemplateResponse(
-        request, name, context or {}, status_code=status_code
+        request,
+        name,
+        context or {},
+        status_code=status_code,
     )
 
 
 def render_polled(
-    request: Request, name: str, context: dict[str, Any] | None = None
+    request: Request,
+    name: str,
+    context: dict[str, Any] | None = None,
 ) -> Response:
     response = render(request, name, context)
     nonce = csp_nonce(request).encode()

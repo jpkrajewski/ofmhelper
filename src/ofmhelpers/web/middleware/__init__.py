@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.web.middleware.auth import AuthMiddleware
 from ofmhelpers.web.middleware.bridge import BridgeMiddleware
 from ofmhelpers.web.middleware.canonical_host import CanonicalHostMiddleware

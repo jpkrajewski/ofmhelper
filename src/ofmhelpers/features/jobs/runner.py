@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any
 lazy from collections.abc import Callable
 
@@ -91,7 +93,9 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
         return
     if _actor_deactivated(header.actor):
         logger.warning(
-            "job %s: actor %s was deactivated: not run", job_id, header.actor
+            "job %s: actor %s was deactivated: not run",
+            job_id,
+            header.actor,
         )
         store.record_failure(job_id, DEACTIVATED)
         tasks.forget(job_id)
@@ -228,14 +232,16 @@ def _keep_cost(job_id: str) -> None:
                 {
                     **task.model_dump(exclude={"api_key"}),
                     "key_tail": key_tail(task.api_key),
-                }
+                },
             )
             for task in tasks.of_job(job_id)
         ]
         job = store.get_job(job_id)
         if made and job is not None:
             store.keep_cost(
-                job_id, JobMeta(generations=made), cost_of(job.params, made)
+                job_id,
+                JobMeta(generations=made),
+                cost_of(job.params, made),
             )
     except Exception:
         logger.warning("could not keep the cost of job %s", job_id, exc_info=True)

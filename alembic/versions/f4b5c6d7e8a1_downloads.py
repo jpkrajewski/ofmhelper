@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -62,7 +64,10 @@ def upgrade() -> None:
         sa.Column("file_path", sa.Text(), nullable=False),
         sa.Column("asset_path", sa.Text(), nullable=True),
         sa.Column(
-            "stored", sa.Boolean(), nullable=False, server_default=sa.text("true")
+            "stored",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("true"),
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=False),
@@ -71,7 +76,9 @@ def upgrade() -> None:
     )
     op.create_index("ix_downloads_user_id_url", "downloads", ["user_id", "url"])
     op.create_index(
-        "ix_downloads_stored_last_used_at", "downloads", ["stored", "last_used_at"]
+        "ix_downloads_stored_last_used_at",
+        "downloads",
+        ["stored", "last_used_at"],
     )
     op.execute(_BACKFILL)
 

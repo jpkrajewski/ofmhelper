@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import io
 import json
@@ -166,7 +168,10 @@ def test_a_video_goes_as_a_note_and_one_contact_sheet(fake, tmp_path):
 
 
 def test_more_images_than_the_vendor_takes_are_refused_before_sending(
-    vendor, fake, label, tmp_path
+    vendor,
+    fake,
+    label,
+    tmp_path,
 ):
     cap = VENDORS[vendor][4]
     photos = []
@@ -221,7 +226,10 @@ def test_an_answer_in_another_shape_twice_is_an_output_error(fake, label):
 
 
 def test_an_outage_that_outlasts_the_retries_is_unavailable(
-    fake, label, waits, monkeypatch
+    fake,
+    label,
+    waits,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_LLM_RETRIES", "1")
     fake.fail_next(500, "boom")
@@ -241,7 +249,8 @@ def test_an_answer_failing_the_vendors_schema_check_is_an_output_error(fake, lab
     fake.misanswer_next("Hola")
     fake.misanswer_next("Hola")
     with pytest.raises(
-        LLMOutputError, match=f"{label} answered in the wrong shape"
+        LLMOutputError,
+        match=f"{label} answered in the wrong shape",
     ) as err:
         _ask(Prompt.of(["Say hi"]))
     assert "generated: Hola" in err.value.detail

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 from pydantic import BaseModel
@@ -105,11 +107,17 @@ class VideoTools:
         )
         n = max(1, len(raw) // 3)
         return _Rgb(
-            red=sum(raw[0::3]) / n, green=sum(raw[1::3]) / n, blue=sum(raw[2::3]) / n
+            red=sum(raw[0::3]) / n,
+            green=sum(raw[1::3]) / n,
+            blue=sum(raw[2::3]) / n,
         )
 
     def _colour_matched(
-        self, parts: list[Path], dests: list[Path], *, audio: bool
+        self,
+        parts: list[Path],
+        dests: list[Path],
+        *,
+        audio: bool,
     ) -> list[Path]:
         ref = self._mean_rgb(parts[0])
         keep = ["-c:a", "copy"] if audio else ["-an"]
@@ -207,9 +215,9 @@ class _Rgb(BaseModel, frozen=True):
 
     def gains_to(self, other: _Rgb) -> str:
         pairs = (
-            ("rr", self.red, other.red),
+            ("r", self.red, other.red),
             ("gg", self.green, other.green),
-            ("bb", self.blue, other.blue),
+            ("b", self.blue, other.blue),
         )
         return ":".join(f"{c}={_gain(ref, m):.4f}" for c, ref, m in pairs)
 

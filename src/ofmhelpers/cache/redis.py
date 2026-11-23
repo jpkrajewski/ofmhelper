@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 from redis.exceptions import RedisError
@@ -37,7 +39,9 @@ def get_text(key: str) -> str | None:
         raw = get_redis().get(key)
     except RedisError:
         logger.warning(
-            "cache read unavailable for %s, treating as miss", key, exc_info=True
+            "cache read unavailable for %s, treating as miss",
+            key,
+            exc_info=True,
         )
         return None
     if raw is None:

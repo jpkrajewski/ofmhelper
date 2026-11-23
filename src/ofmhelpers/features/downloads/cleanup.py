@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -171,7 +173,9 @@ def _keeps_asset(seen: _Judged, now: datetime) -> bool:
 
 def _thumbnail(seen: _Judged) -> None:
     shown = previews.ResultPreview(
-        source=seen.path, job_id=seen.file.job_id, index=seen.file.position
+        source=seen.path,
+        job_id=seen.file.job_id,
+        index=seen.file.position,
     )
     kind = classify_kind(seen.path.name)
     if kind == "video":
@@ -211,7 +215,7 @@ def _delete_files(seen: _Judged, now: datetime) -> int:
         folder.rmdir()
     if classify_kind(seen.path.name) == "video":
         previews.preview_path(file.job_id, file.position, "video").unlink(
-            missing_ok=True
+            missing_ok=True,
         )
         previews.failed_path(file.job_id, file.position).unlink(missing_ok=True)
     if not _keeps_asset(seen, now):

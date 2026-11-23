@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 from functools import lru_cache
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -98,6 +100,7 @@ def removed(job_id: str, position: int) -> bool:
 
 def _why_not(job: Job, link: str) -> str:
     failed = next(
-        (r.again_error for r in job.download_results() if r.url == link), None
+        (r.again_error for r in job.download_results() if r.url == link),
+        None,
     )
     return error_reason(failed) if failed else NOT_HERE

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 from typing import Annotated
 
@@ -24,7 +26,8 @@ from ofmhelpers.db.devices.schema import PhoneSort, drawing_url, followers_text
 
 _Text = Annotated[str, StringConstraints(max_length=5000)]
 _Label = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=32)
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=32),
 ]
 _Name = Annotated[str, StringConstraints(strip_whitespace=True, max_length=64)]
 _Number = Annotated[str, StringConstraints(strip_whitespace=True, max_length=32)]
@@ -146,7 +149,7 @@ class Device(BaseModel):
 
     def accounts_of(self, service: str) -> MappingProxyType[str, DeviceLogin]:
         return MappingProxyType(
-            {x.username: x for x in self.logins if x.service == service}
+            {x.username: x for x in self.logins if x.service == service},
         )
 
     @property

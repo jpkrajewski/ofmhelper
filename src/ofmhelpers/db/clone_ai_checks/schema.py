@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 from typing import Literal
 
@@ -13,12 +15,12 @@ class Verdict(StrEnum):
 
 class Glitch(BaseModel):
     at_s: float = Field(
-        description="When it shows: the time label of the still, in seconds."
+        description="When it shows: the time label of the still, in seconds.",
     )
     what: str = Field(description="What is wrong, a few words, e.g. 'no belly button'.")
     severity: Literal["minor", "blocking"] = Field(
         description="blocking: stops the reel from being posted; minor: noticeable"
-        " but postable."
+        " but postable.",
     )
 
 
@@ -64,7 +66,7 @@ class ReviewReason(StrEnum):
     @classmethod
     def final(cls) -> frozenset[ReviewReason]:
         return frozenset(
-            {cls.NOT_CONNECTED, cls.NOT_SAVED, cls.VIDEO_GONE, cls.CUT_OFF}
+            {cls.NOT_CONNECTED, cls.NOT_SAVED, cls.VIDEO_GONE, cls.CUT_OFF},
         )
 
 

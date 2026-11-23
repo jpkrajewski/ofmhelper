@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import contextvars
 import gc
 import os
@@ -98,7 +100,7 @@ _LOGGED_ARGUMENTS = frozenset(
         "user_id",
         "video_manifest",
         "videos_manifest",
-    }
+    },
 )
 _HIDDEN = "[hidden]"
 
@@ -191,13 +193,15 @@ def instrument_app(app: FastAPI) -> None:
         app,
         excluded_urls="/health,/static/.*,/chatting/fanvue/callback",
         request_attributes_mapper=lambda request, attributes: _request_attributes(
-            request, attributes
+            request,
+            attributes,
         ).model_dump(),
     )
 
 
 def _request_attributes(
-    _request: Request | WebSocket, attributes: dict[str, Any]
+    _request: Request | WebSocket,
+    attributes: dict[str, Any],
 ) -> SpanAttributes:
     values = attributes.get("values") or {}
     errors = attributes.get("errors") or []
@@ -209,7 +213,7 @@ def _request_attributes(
                 {key: value for key, value in error.items() if key != "input"}
                 for error in errors
             ],
-        }
+        },
     )
 
 
@@ -241,7 +245,7 @@ def _masked[T](value: T) -> T:
 
 def _masked_attributes(attributes: Mapping[str, Any] | None) -> SpanAttributes:
     return SpanAttributes(
-        values={name: _masked(value) for name, value in (attributes or {}).items()}
+        values={name: _masked(value) for name, value in (attributes or {}).items()},
     )
 
 

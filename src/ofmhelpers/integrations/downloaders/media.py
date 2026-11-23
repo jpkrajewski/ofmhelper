@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 import shutil
 import subprocess
@@ -72,7 +74,9 @@ class _Download(BaseModel):
         except egress.NotPublicError:
             logger.warning("download %s refused: not public", url, exc_info=True)
             return DownloadResult(
-                url=url, success=False, error="This link is not on the public internet"
+                url=url,
+                success=False,
+                error="This link is not on the public internet",
             )
         errors: list[str] = []
         for tool in self.order():
@@ -83,7 +87,10 @@ class _Download(BaseModel):
             if reason is not None:
                 result = DownloadResult(url=url, success=False, error=reason)
             logger.info(
-                "download %s: %s gave nothing: %s", url, tool.name, result.error
+                "download %s: %s gave nothing: %s",
+                url,
+                tool.name,
+                result.error,
             )
             errors.append(f"{tool.name}: {result.error or 'no files'}")
         known = [e for e in errors if "unsupported url" not in e.lower()]
@@ -99,7 +106,10 @@ def _broken_video(result: DownloadResult) -> str | None:
             duration_s(path, settings.downloaders.probe_timeout_s)
         except OSError, RuntimeError, ValueError, subprocess.SubprocessError:
             logger.warning(
-                "download %s: %s is not a video", result.url, path.name, exc_info=True
+                "download %s: %s is not a video",
+                result.url,
+                path.name,
+                exc_info=True,
             )
             path.unlink(missing_ok=True)
             broken.append(path.name)
@@ -115,7 +125,10 @@ def download(url: str, cookiefile: str | None = None) -> DownloadResult:
 
 @contextmanager
 def downloaded(
-    url: str, cookiefile: str | None = None, *, single: bool = False
+    url: str,
+    cookiefile: str | None = None,
+    *,
+    single: bool = False,
 ) -> Iterator[DownloadResult]:
     out = _OUTPUT_ROOT / secrets.token_hex(8)
     try:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable, Collection, Mapping
 from datetime import date, datetime, time, timedelta
 from typing import Annotated, Any, Self
@@ -133,7 +135,7 @@ class Gallery:
                 by_use=self.by_use,
                 created=asked.created,
                 not_uploaded=asked.not_uploaded,
-            )
+            ),
         )
 
     def hidden_count(self, viewer: Viewer) -> int:

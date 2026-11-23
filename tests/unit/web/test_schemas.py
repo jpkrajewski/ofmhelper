@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.jobs.schema import ResultFile
 from ofmhelpers.db.jobs.store import _stored
 from ofmhelpers.web.routers import ROUTERS

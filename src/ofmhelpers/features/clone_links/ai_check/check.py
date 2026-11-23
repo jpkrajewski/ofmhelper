@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 import tempfile
 import time
@@ -50,7 +52,11 @@ def still_count(seconds: float) -> int:
 
 
 def prompt_text(
-    video: Path, seconds: float, stills: int, *, mirrored: bool = False
+    video: Path,
+    seconds: float,
+    stills: int,
+    *,
+    mirrored: bool = False,
 ) -> str:
     return (
         f"Contact sheet of {video.name} ({seconds:.1f} s, {stills} stills)."
@@ -60,7 +66,11 @@ def prompt_text(
 
 
 def unanswered(
-    video: Path, error: str, kind: ErrorKind = "failed", *, detail: str | None = None
+    video: Path,
+    error: str,
+    kind: ErrorKind = "failed",
+    *,
+    detail: str | None = None,
 ) -> CloneAiCheck:
     s = settings.clone_ai_check
     return CloneAiCheck(
@@ -108,7 +118,7 @@ def check_clone(video: Path, *, mirrored: bool = False) -> CloneAiCheck:
             update={
                 "stills_at": still_times(seconds, count),
                 "sheet_s": round(time.monotonic() - started, 3),
-            }
+            },
         )
         asked_at = time.monotonic()
         asked = _ask(prompt, deadline)
@@ -130,7 +140,7 @@ def check_clone(video: Path, *, mirrored: bool = False) -> CloneAiCheck:
             "input_tokens": asked.input_tokens,
             "thinking_tokens": asked.thinking_tokens,
             "output_tokens": asked.output_tokens,
-        }
+        },
     )
 
 
@@ -142,13 +152,18 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
 
     def none_answered(error: LLMError, reason: str) -> _NoAnswer:
         return _NoAnswer(
-            error=error, reason=reason, said=said, provider=provider, model=model
+            error=error,
+            reason=reason,
+            said=said,
+            provider=provider,
+            model=model,
         )
 
     for name in settings.llm.video_chain:
         if time.monotonic() >= deadline:
             return none_answered(
-                LLMUnavailableError(constants.too_long), constants.too_long
+                LLMUnavailableError(constants.too_long),
+                constants.too_long,
             )
         kind, _, named = name.partition(":")
         try:
@@ -166,24 +181,33 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
         for number, key in enumerate(keys, start=1):
             if time.monotonic() >= deadline:
                 return none_answered(
-                    LLMUnavailableError(constants.too_long), constants.too_long
+                    LLMUnavailableError(constants.too_long),
+                    constants.too_long,
                 )
             entry = f"{name} (key {number} of {len(keys)})" if len(keys) > 1 else name
             try:
                 return get_llm(LLMUse.VIDEO, provider=name, api_key=key).answered(
-                    prompt, CloneAiVerdict, deadline=deadline
+                    prompt,
+                    CloneAiVerdict,
+                    deadline=deadline,
                 )
             except LLMQuotaError as exc:
                 said.append(_said(entry, exc))
                 unavailable = True
                 logger.warning(
-                    "AI check: %s out of quota (%s)", entry, exc, exc_info=True
+                    "AI check: %s out of quota (%s)",
+                    entry,
+                    exc,
+                    exc_info=True,
                 )
             except LLMUnavailableError as exc:
                 said.append(_said(entry, exc))
                 unavailable = True
                 logger.warning(
-                    "AI check: %s unavailable (%s)", entry, exc, exc_info=True
+                    "AI check: %s unavailable (%s)",
+                    entry,
+                    exc,
+                    exc_info=True,
                 )
                 break
             except LLMAuthError as exc:
@@ -202,13 +226,15 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
                 return none_answered(exc, _reason(exc))
     if time.monotonic() >= deadline:
         return none_answered(
-            LLMUnavailableError(constants.too_long), constants.too_long
+            LLMUnavailableError(constants.too_long),
+            constants.too_long,
         )
     if not provider:
         return none_answered(LLMConfigError(constants.no_model), constants.no_model)
     if unavailable:
         return none_answered(
-            LLMUnavailableError(constants.no_answer), constants.no_answer
+            LLMUnavailableError(constants.no_answer),
+            constants.no_answer,
         )
     return none_answered(LLMConfigError(constants.no_answer), constants.no_answer)
 
@@ -243,7 +269,9 @@ def _reason(exc: LLMError) -> str:
 
 
 def _unanswered_check(
-    found: CloneAiCheck, asked: _NoAnswer, llm_s: float
+    found: CloneAiCheck,
+    asked: _NoAnswer,
+    llm_s: float,
 ) -> CloneAiCheck:
     kind = _kind(asked.error)
     detail = "\n".join(asked.said) or str(asked.error)
@@ -257,7 +285,7 @@ def _unanswered_check(
     )
     return _failed(
         found.model_copy(
-            update={"provider": asked.provider, "model": asked.model, "llm_s": llm_s}
+            update={"provider": asked.provider, "model": asked.model, "llm_s": llm_s},
         ),
         asked.reason,
         kind,
@@ -266,10 +294,13 @@ def _unanswered_check(
 
 
 def _failed(
-    found: CloneAiCheck, error: str, kind: ErrorKind, detail: str
+    found: CloneAiCheck,
+    error: str,
+    kind: ErrorKind,
+    detail: str,
 ) -> CloneAiCheck:
     return found.model_copy(
-        update={"error": error, "error_kind": kind, "error_detail": detail}
+        update={"error": error, "error_kind": kind, "error_detail": detail},
     )
 
 

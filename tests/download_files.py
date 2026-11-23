@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 from datetime import UTC, datetime, timedelta
 lazy from pathlib import Path
@@ -82,7 +84,10 @@ def removed_download(folder: Path, uploads: Path, user_id: int, link: str) -> Re
     asset = uploads / "assets" / "users" / str(user_id) / f"{'ab' * 32}__clip.mp4"
     now = datetime.now(UTC)
     file = DownloadedFile(
-        url=link, position=0, file_path=str(video), asset_path=str(asset)
+        url=link,
+        position=0,
+        file_path=str(video),
+        asset_path=str(asset),
     )
     store.record(user_id, job_id, [file], now)
     assert store.mark_removed(row(job_id).id, now, now)
@@ -97,7 +102,7 @@ def rows(job_id: str) -> list[Download]:
         found = s.execute(
             select(DownloadRow)
             .where(DownloadRow.job_id == job_id)
-            .order_by(DownloadRow.position)
+            .order_by(DownloadRow.position),
         ).scalars()
         return [Download.model_validate(row) for row in found]
 
@@ -114,5 +119,5 @@ def backdate(job_id: str, seconds: float, *, asked_too: bool = True) -> None:
         values["last_used_at"] = DownloadRow.last_used_at - back
     with session_scope() as s:
         s.execute(
-            update(DownloadRow).where(DownloadRow.job_id == job_id).values(values)
+            update(DownloadRow).where(DownloadRow.job_id == job_id).values(values),
         )

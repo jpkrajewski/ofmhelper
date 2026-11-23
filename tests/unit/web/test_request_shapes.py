@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import inspect
 from datetime import date
 from typing import Annotated
@@ -134,7 +136,8 @@ def test_only_the_phone_routes_that_use_a_secret_answer_the_vault_reason():
 
 def _logged(**values) -> dict:
     return _request_attributes(
-        MagicMock(), {"values": values, "errors": []}
+        MagicMock(),
+        {"values": values, "errors": []},
     ).model_dump()["values"]
 
 

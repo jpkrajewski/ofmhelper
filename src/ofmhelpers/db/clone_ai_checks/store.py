@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.db.clone_ai_checks.repository import CloneAiCheckRepository
@@ -22,7 +24,7 @@ def save(
             "user_id": user_id,
             "job_id": job_id,
             "file_index": file_index,
-        }
+        },
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections import defaultdict
 lazy from collections.abc import Callable
 
@@ -90,13 +92,19 @@ def queue_sync(owner: int) -> None:
 def run_scan(user_id: int, job_id: str) -> StorageUsage:
     usage = storage_of(user_id, interactive=False).bin.scan()
     logger.info(
-        "storage scan %s of %s: %s account folders", job_id, user_id, len(usage.folders)
+        "storage scan %s of %s: %s account folders",
+        job_id,
+        user_id,
+        len(usage.folders),
     )
     return usage
 
 
 def run_bin(
-    user_id: int, job_id: str, part: str, folder_id: str | None = None
+    user_id: int,
+    job_id: str,
+    part: str,
+    folder_id: str | None = None,
 ) -> Moved:
     move = BinMove.model_validate({"part": part, "folder_id": folder_id})
     moved = storage_of(user_id, interactive=False).bin.move(move.part, move.folder_id)

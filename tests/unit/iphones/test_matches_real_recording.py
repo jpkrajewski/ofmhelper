@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 import json
 import re
@@ -29,13 +31,13 @@ PER_RECORDING = re.compile(
     r"|AvgBitrate$"
     r"|(SampleSizes|ChunkOffset|SampleToChunk|TimeToSampleTable"
     r"|CompositionTimeToSample|SyncSampleTable|IdependentAndDisposableSamples"
-    r"|SampleToGroup)$"
+    r"|SampleToGroup)$",
 )
 LOCATION = re.compile(r"GPS|Location")
 NOT_REPRODUCIBLE = re.compile(r"^Track[3-9]:|^QuickTime(:Copy\d+)?:NextTrackID$")
 EXIFTOOL_SKIPS_REAL_BOXES = re.compile(
     r"^Track1:(Unknown_hvcC|ColorProfiles|ColorPrimaries"
-    r"|TransferCharacteristics|MatrixCoefficients)$"
+    r"|TransferCharacteristics|MatrixCoefficients)$",
 )
 
 
@@ -111,7 +113,7 @@ def test_recording_matches_a_real_iphone17_file_tag_for_tag(tmp_path: Path):
 
     dst = tmp_path / "repurposed.mov"
     Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
-        "iphone17"
+        "iphone17",
     ).run()
     made = _exif(dst).tags
     diff = {
@@ -148,7 +150,7 @@ def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
 
     dst = tmp_path / "repurposed.mov"
     Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
-        "iphone17"
+        "iphone17",
     ).run()
     data = dst.read_bytes()
     hvcc = data[data.index(b"hvcC") + 4 :]

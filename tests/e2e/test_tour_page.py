@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
@@ -102,7 +104,7 @@ def test_the_zone_starts_as_the_browsers_own_and_the_globe_changes_it(va: Sessio
     assert _zone_cookie(va) == "Asia/Manila"
     va.page.click(".time-zone-menu summary")
     expect(
-        va.page.locator('.time-zone-choice[data-zone="Asia/Manila"]')
+        va.page.locator('.time-zone-choice[data-zone="Asia/Manila"]'),
     ).to_have_attribute("aria-current", "true")
 
     va.page.locator(".time-zone-choice").first.click()
@@ -114,8 +116,11 @@ def test_the_vas_button_and_the_not_uploaded_switch_filter_clone(va: Session):
 
     helper = users.add_user(
         UserForm(
-            email="helper@example.com", role=Role.VA, name="Hana", owner_id=USER_ID
-        )
+            email="helper@example.com",
+            role=Role.VA,
+            name="Hana",
+            owner_id=USER_ID,
+        ),
     )
     assert helper is not None
     mine = create_job("clone", {}, actor=str(USER_ID))

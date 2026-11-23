@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from datetime import UTC, datetime, timedelta
 lazy from collections.abc import Collection
@@ -51,7 +53,10 @@ def _sync_model(source: ChatSource, model: ChatModel, scope: ReadScope) -> int:
 
 
 def sync(
-    source: ChatSource, skip: Collection[str] = (), *, thorough: bool = True
+    source: ChatSource,
+    skip: Collection[str] = (),
+    *,
+    thorough: bool = True,
 ) -> None:
     platform = source.platform
     started = time.monotonic()
@@ -78,7 +83,10 @@ def sync(
             changed += _sync_model(source, model, scope)
         except ChatSourceError:
             logger.warning(
-                "%s %s not read", platform.value, model.username, exc_info=True
+                "%s %s not read",
+                platform.value,
+                model.username,
+                exc_info=True,
             )
             failed = True
     chats.forget_model_messages((oldest - lookback).timestamp())
@@ -113,7 +121,10 @@ def read_now(source: ChatSource, usernames: set[str]) -> set[str]:
             _sync_model(source, model, scope)
         except ChatSourceError:
             logger.warning(
-                "%s %s not read", platform.value, model.username, exc_info=True
+                "%s %s not read",
+                platform.value,
+                model.username,
+                exc_info=True,
             )
             continue
         read.add(model.username)
@@ -141,7 +152,9 @@ def _run_platform(source: ChatSource) -> None:
         return
     sync(source)
     set_text(
-        sync_done_key(platform), "1", int(settings.chatting.webhook_sync_interval_s)
+        sync_done_key(platform),
+        "1",
+        int(settings.chatting.webhook_sync_interval_s),
     )
 
 

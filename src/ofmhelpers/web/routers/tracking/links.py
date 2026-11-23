@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -24,7 +26,9 @@ class _Count(BaseModel):
 
 @router.get("")
 def index(
-    request: Request, query: Annotated[LinkQuery, Query()], scope: Scope
+    request: Request,
+    query: Annotated[LinkQuery, Query()],
+    scope: Scope,
 ) -> Response:
     view = page.list_view(query, scope)
     return render(request, "links.html", {"query": query, **dict(view)})

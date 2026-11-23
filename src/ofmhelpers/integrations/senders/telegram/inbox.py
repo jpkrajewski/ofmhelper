@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from pydantic import BaseModel
@@ -39,7 +41,10 @@ def word_of(text: str, bot_name: str) -> str:
 
 
 def _ask(
-    message: Message, words: set[str], allowed: set[str], bot_name: str
+    message: Message,
+    words: set[str],
+    allowed: set[str],
+    bot_name: str,
 ) -> Ask | None:
     word = word_of(message.text, bot_name)
     if word not in words:
@@ -83,7 +88,9 @@ def read(client: TelegramClient, words: set[str], bot_name: str) -> Inbox:
         elif (found := _ask(message, words, allowed, bot_name)) is not None:
             asks.append(found)
     return Inbox(
-        asks=asks, starts=starts, next_offset=max(u.update_id for u in updates) + 1
+        asks=asks,
+        starts=starts,
+        next_offset=max(u.update_id for u in updates) + 1,
     )
 
 

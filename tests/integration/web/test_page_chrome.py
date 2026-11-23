@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
@@ -113,7 +115,10 @@ def signed_out():
     [("/generate", "client"), ("/login", "signed_out"), ("/", "signed_out")],
 )
 def test_every_page_head_links_the_favicon_and_it_loads_signed_out(
-    request, signed_out, path, who
+    request,
+    signed_out,
+    path,
+    who,
 ):
     html = request.getfixturevalue(who).get(path).text
     links = re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="([^"]+)"', html)

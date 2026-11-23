@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Sequence
 lazy from pathlib import Path
 
@@ -24,5 +26,8 @@ def build_ordered_paths(
 ) -> list[str]:
     with refused_as_400():
         return manifests.build_ordered_paths(
-            manifest_json, new_files, allowed_root, user_id=user_id
+            manifest_json,
+            new_files,
+            allowed_root,
+            user_id=user_id,
         )

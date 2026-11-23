@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.db.clone_examples.repository import CloneExampleRepository

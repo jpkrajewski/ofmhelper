@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.features.storage.bin import StorageServiceBin
@@ -43,7 +45,9 @@ class StorageService(BaseModel, frozen=True):
         person = None if access.bot else raw
         person_reader = None if access.bot else reader
         va_folders = StorageServiceVaFolders(
-            client=reader, owner_id=owner, read_live=live
+            client=reader,
+            owner_id=owner,
+            read_live=live,
         )
         folders = StorageServiceFolders(
             client=reader,

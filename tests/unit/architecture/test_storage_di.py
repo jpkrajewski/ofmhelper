@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 
 from test_architecture import check, trees
@@ -20,7 +22,7 @@ COMPOSITION_ROOTS = frozenset(
         "features/distribution/publish.py",
         "features/distribution/sweep.py",
         "features/clone_links/review.py",
-    }
+    },
 )
 PUBLIC = frozenset(
     {
@@ -33,7 +35,7 @@ PUBLIC = frozenset(
         "posting",
         "storage_choice",
         "dropbox_connect",
-    }
+    },
 )
 SECRETLESS_ROOTS = frozenset({"features/trials/cleanup.py"})
 SECRETLESS_FACTORY = frozenset({f"{FACTORY}.saved_storage"})
@@ -45,7 +47,7 @@ RAW_CLIENT = frozenset(
         "ReadOnlyDrive",
         "PerThreadDrive",
         "DriveSheet",
-    }
+    },
 )
 RAW_CLIENT_OWNERS = ("features/storage/", "integrations/", "features/fakes.py")
 COMPOSE = "compose"
@@ -64,7 +66,7 @@ NOT_MOVED_YET = frozenset(
         "features/clone_links/page.py",
         "features/clone_links/review.py",
         "features/accounts/removal.py",
-    }
+    },
 )
 CONSTANTS_CLASS = "StorageConstants"
 CONSTANTS_BUILDER = "features/storage/client.py"
@@ -254,7 +256,7 @@ def test_the_rules_see_what_they_look_for():
         "from ofmhelpers.features.storage.review import StorageServiceReview\n"
         "from ofmhelpers.integrations.storage.gdrive import connect\n"
         "StorageServiceReview(client=None)\n"
-        "StorageService.compose(access)\n"
+        "StorageService.compose(access)\n",
     )
 
     assert storage_modules(tree) == {"folders", "review"}
@@ -270,16 +272,16 @@ def test_the_rules_see_what_they_look_for():
         "class Part(BaseModel):\n"
         "    storage: StorageService\n"
         "    @classmethod\n"
-        "    def compose(cls, storage: StorageService) -> Part: ...\n"
+        "    def compose(cls, storage: StorageService) -> Part: ...\n",
     )
     assert functions_taking_storage(taking) == {"read", "page", "compose"}
     assert raw_client_imports(taking) == {"DriveSheet"}
     assert builds_storage_constants(ast.parse("c = StorageConstants()\n"))
     assert builds_storage_constants(ast.parse("c = constants.StorageConstants()\n"))
     assert builds_storage_constants(
-        ast.parse("c = StorageConstants.model_validate({})\n")
+        ast.parse("c = StorageConstants.model_validate({})\n"),
     )
     assert not builds_storage_constants(ast.parse("c = self.constants\n"))
     assert not builds_storage_constants(
-        ast.parse("from m import StorageConstants\nx: StorageConstants\n")
+        ast.parse("from m import StorageConstants\nx: StorageConstants\n"),
     )

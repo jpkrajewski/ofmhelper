@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import time
 lazy from pathlib import Path
@@ -43,8 +45,12 @@ def test_old_raw_downloads_nobody_names_go_and_the_rest_stays(out):
     resumable = _file(out, "apiyi_task-d.mp4")
     tasks.remember(
         tasks.ProviderTask(
-            job_id=failed, provider="apiyi", model="m", task_id="task-d", api_key="k"
-        )
+            job_id=failed,
+            provider="apiyi",
+            model="m",
+            task_id="task-d",
+            api_key="k",
+        ),
     )
     create_job("clone", {"source": str(image)})
     (out / "apiyi").mkdir()

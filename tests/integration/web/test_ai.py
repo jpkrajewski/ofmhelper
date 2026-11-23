@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import re
@@ -73,7 +75,7 @@ def test_page_offers_every_provider_and_every_model(client):
             r'id="model-catalog" type="application/json">(.*?)</script>',
             html,
             re.DOTALL,
-        ).group(1)
+        ).group(1),
     )
     assert {m["key"] for m in models} == set(catalog())
     assert 'action="/ai/run"' in html
@@ -86,7 +88,7 @@ def test_page_prefills_each_providers_key_for_the_role(client, monkeypatch):
     html = client.get("/generate").text
 
     keys = json.loads(
-        re.search(r'data-keys="([^"]*)"', html).group(1).replace("&#34;", '"')
+        re.search(r'data-keys="([^"]*)"', html).group(1).replace("&#34;", '"'),
     )
     assert keys["kie"] == SAVED_KEY
     assert keys["higgsfield"] == SAVED_KEY
@@ -112,7 +114,9 @@ def test_fields_render_the_schema_as_inputs(client):
     html = client.get("/ai/fields", params={"model": "kie:wan/3-0-video"}).text
 
     assert re.search(
-        r'<select name="resolution".*?<option value="1080P" selected', html, re.DOTALL
+        r'<select name="resolution".*?<option value="1080P" selected',
+        html,
+        re.DOTALL,
     )
     assert re.search(
         r'<input type="number" name="duration".*?min="2.0".*?max="30.0"',
@@ -132,11 +136,13 @@ def test_fields_render_the_schema_as_inputs(client):
 
 def test_a_single_file_field_is_a_one_item_picker(client):
     html = client.get(
-        "/ai/fields", params={"model": "kie:minimax-h3/image-to-video"}
+        "/ai/fields",
+        params={"model": "kie:minimax-h3/image-to-video"},
     ).text
 
     assert re.search(
-        r'data-field="first_frame_url" data-kind="image" data-max="1"', html
+        r'data-field="first_frame_url" data-kind="image" data-max="1"',
+        html,
     )
 
 
@@ -470,7 +476,8 @@ def test_job_page_shows_the_model_settings_and_reference_preview(client):
 def test_a_plain_download_job_page_has_no_inputs_section(client, monkeypatch):
     monkeypatch.setattr(download_videos_router, "run_downloads", lambda urls: [])
     job_id = client.post(
-        "/download-videos/run", data={"urls": "https://a.example/1"}
+        "/download-videos/run",
+        data={"urls": "https://a.example/1"},
     ).json()["job_id"]
 
     assert "job-inputs" not in client.get(f"/download-videos/jobs/{job_id}").text
@@ -493,7 +500,9 @@ def test_a_running_card_resumes_polling_under_ai(client):
     job_id = create_job("ai", {"provider": "fake", "model": FAKE_IMAGE, "prompt": "p"})
 
     card = re.search(
-        rf'data-job-id="{job_id}"(.*?)>', client.get("/generate").text, re.DOTALL
+        rf'data-job-id="{job_id}"(.*?)>',
+        client.get("/generate").text,
+        re.DOTALL,
     )
 
     assert "data-pending" in card.group(1)
@@ -505,7 +514,9 @@ def test_a_job_from_before_ai_still_shows_and_opens(client, tmp_path):
     out.write_bytes(_png())
     job_id = create_job("seedance", {"prompt": "old run", "reference_images": []})
     JobRepository().update_status(
-        job_id, "done", result=[{"name": "old.png", "path": str(out)}]
+        job_id,
+        "done",
+        result=[{"name": "old.png", "path": str(out)}],
     )
 
     assert f'data-job-id="{job_id}"' in client.get("/generate").text
@@ -521,7 +532,9 @@ def test_status_json_surfaces_the_preview_only_while_running(tmp_path):
 
     (tmp_path / "x.png").write_bytes(b"x")
     JobRepository().update_status(
-        job_id, "done", result=[{"name": "x.png", "path": str(tmp_path / "x.png")}]
+        job_id,
+        "done",
+        result=[{"name": "x.png", "path": str(tmp_path / "x.png")}],
     )
     assert job_status_payload(get_job(job_id), "/ai/files").preview is None
 
@@ -545,9 +558,9 @@ def plugin(tmp_path, monkeypatch):
                             "steps": {"type": "integer", "default": 4},
                         },
                     },
-                }
-            ]
-        )
+                },
+            ],
+        ),
     )
     sent = []
 

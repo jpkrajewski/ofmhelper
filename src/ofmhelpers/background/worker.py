@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import importlib
 import multiprocessing

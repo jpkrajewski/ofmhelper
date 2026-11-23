@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from repo_paths import SRC
@@ -12,7 +14,10 @@ DYNAMIC = ("badge-", "notice-", "sg-", "ref-mark-")
 
 def test_every_styled_class_is_used():
     css = re.sub(
-        r"/\*.*?\*/", "", "".join(p.read_text("utf-8") for p in CSS), flags=re.DOTALL
+        r"/\*.*?\*/",
+        "",
+        "".join(p.read_text("utf-8") for p in CSS),
+        flags=re.DOTALL,
     )
     css = re.sub(r"url\([^)]*\)", "", css)
     used = " ".join(

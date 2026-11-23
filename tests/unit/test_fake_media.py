@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from concurrent.futures import ThreadPoolExecutor
 
 from ofmhelpers.media import fake_media

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 import logging.config
@@ -97,7 +99,11 @@ class LoggingConfig(BaseModel):
 
 
 def _config(
-    level: str, fmt: str, access_log: bool, *, logfire: bool = False
+    level: str,
+    fmt: str,
+    access_log: bool,
+    *,
+    logfire: bool = False,
 ) -> LoggingConfig:
     return LoggingConfig(
         formatters={
@@ -121,7 +127,8 @@ def _config(
             else None,
         ),
         root=_Logger(
-            handlers=["stdout", "logfire"] if logfire else ["stdout"], level=level
+            handlers=["stdout", "logfire"] if logfire else ["stdout"],
+            level=level,
         ),
         loggers={
             "uvicorn": _Logger(handlers=[], propagate=True),

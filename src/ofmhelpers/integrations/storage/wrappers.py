@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 lazy from collections.abc import Callable
 lazy from pathlib import Path
@@ -23,7 +25,10 @@ class ReadOnlyDrive:
         return self._inner.folder(folder_id)
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]:
         return self._inner.children(parent_id, folders_only=folders_only)
 
@@ -112,7 +117,11 @@ class ScopedDrive(ReadOnlyDrive):
         return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
 
     def upload(
-        self, parent_id: str, path: Path, name: str, mime_type: str
+        self,
+        parent_id: str,
+        path: Path,
+        name: str,
+        mime_type: str,
     ) -> DriveFile:
         self._inside(parent_id)
         return self._inner.upload(parent_id, path, name, mime_type)
@@ -146,7 +155,10 @@ class PerThreadDrive:
         return self._drive().folder(folder_id)
 
     def children(
-        self, parent_id: str, *, folders_only: bool = False
+        self,
+        parent_id: str,
+        *,
+        folders_only: bool = False,
     ) -> list[DriveFile]:
         return self._drive().children(parent_id, folders_only=folders_only)
 
@@ -187,7 +199,11 @@ class PerThreadDrive:
         return self._drive().download(file_id)
 
     def upload(
-        self, parent_id: str, path: Path, name: str, mime_type: str
+        self,
+        parent_id: str,
+        path: Path,
+        name: str,
+        mime_type: str,
     ) -> DriveFile:
         return self._drive().upload(parent_id, path, name, mime_type)
 

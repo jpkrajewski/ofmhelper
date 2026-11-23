@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
@@ -33,7 +35,7 @@ def test_grouped_result_numbers_files_across_groups(tmp_path):
     ]
     assert assets[1].view_url == "/dl/files/j1/1"
     assert [(f.source, f.error, f.reason) for f in failed] == [
-        ("u2", "404", "Not found: the post is gone or the link is wrong")
+        ("u2", "404", "Not found: the post is gone or the link is wrong"),
     ]
 
 

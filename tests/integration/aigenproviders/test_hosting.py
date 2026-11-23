@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -122,5 +124,5 @@ def test_the_public_base_setting_wins_over_app_base_url(monkeypatch, clip):
     monkeypatch.setenv("OFM_AIGEN_PUBLIC_BASE_URL", "https://tunnel.example/")
 
     assert hosting.link(clip, "APIYI", 3600).startswith(
-        "https://tunnel.example/files/ai/"
+        "https://tunnel.example/files/ai/",
     )

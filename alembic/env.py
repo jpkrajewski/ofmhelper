@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from logging.config import fileConfig
 
 from sqlalchemy import Column, Index, engine_from_config, pool
@@ -47,7 +49,7 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         connection.exec_driver_sql(
             "SELECT set_config('ofm.via', 'migration', false), "
-            "set_config('ofm.ref', 'alembic', false)"
+            "set_config('ofm.ref', 'alembic', false)",
         )
         connection.commit()
         context.configure(

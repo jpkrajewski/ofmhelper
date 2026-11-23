@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -61,7 +63,8 @@ class YtDlpOptions(BaseModel):
 
     @model_serializer(mode="wrap")
     def _without_empty_args(
-        self, handler: SerializerFunctionWrapHandler
+        self,
+        handler: SerializerFunctionWrapHandler,
     ) -> dict[str, Any]:
         opts: dict[str, Any] = handler(self)
         if not self.extractor_args.values:
@@ -98,7 +101,7 @@ class YtDlpInfo(BaseModel):
 
     def video_url(self) -> str | None:
         streams = self.requested_formats or [
-            YtDlpFormat(url=self.url, vcodec=self.vcodec)
+            YtDlpFormat(url=self.url, vcodec=self.vcodec),
         ]
         return next((f.url for f in streams if f.url and f.vcodec != "none"), None)
 

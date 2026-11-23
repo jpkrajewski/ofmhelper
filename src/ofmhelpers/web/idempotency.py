@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import json
 from collections.abc import Callable, Coroutine
@@ -214,7 +216,9 @@ class IdempotentRoute(APIRoute):
                 return _replayed(claimed.response_status, claimed.response_body)
             if claimed.outcome is Outcome.BUSY:
                 return JSONResponse(
-                    {"detail": BUSY}, status_code=409, headers={"Retry-After": "1"}
+                    {"detail": BUSY},
+                    status_code=409,
+                    headers={"Retry-After": "1"},
                 )
             if claimed.outcome is Outcome.ABANDONED:
                 return JSONResponse({"detail": ABANDONED}, status_code=409)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import subprocess
 
@@ -16,7 +18,8 @@ NAME = "baseline"
 SHELLS = frozenset({"Bash", "PowerShell"})
 BASELINE = "tests/unit/architecture/baseline.json"
 ONLY_SHRINKS = (
-    "CLAUDE.md: tests/unit/architecture/baseline.json lists old breaks and only shrinks. "
+    "CLAUDE.md: tests/unit/architecture/baseline.json "
+    "lists old breaks and only shrinks. "
     "NEVER add a line to make a test pass: fix the code."
 )
 

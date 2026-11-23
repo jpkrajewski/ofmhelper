@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime

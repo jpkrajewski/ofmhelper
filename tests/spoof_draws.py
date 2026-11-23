@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 
 from ofmhelpers.media.repurpose import command
@@ -18,7 +20,10 @@ def drawn_step(seed: int) -> EncodeStep:
     rng = random.Random(seed)  # noqa: S311 - seeded draws, not cryptography
     video = VideoTransformer(preset.video, SOURCE, device.output_size(SOURCE), rng)
     audio = AudioTransformer(
-        preset.audio, video.timeline.speed, device.audio.sample_rate, rng
+        preset.audio,
+        video.timeline.speed,
+        device.audio.sample_rate,
+        rng,
     )
     return EncodeStep(
         command=[],

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, File, Request, UploadFile
@@ -17,7 +19,9 @@ from ofmhelpers.web.templates_config import render
 __all__ = ["router", "run_handmade"]
 
 router = APIRouter(
-    prefix=service.PREFIX, tags=["handmade"], dependencies=[Access(Area.HANDMADE)]
+    prefix=service.PREFIX,
+    tags=["handmade"],
+    dependencies=[Access(Area.HANDMADE)],
 )
 
 gallery = Gallery({TASK}, limit=lambda: settings.web.download_gallery_page)
@@ -25,7 +29,10 @@ gallery = Gallery({TASK}, limit=lambda: settings.web.download_gallery_page)
 
 @router.get("")
 def page(
-    request: Request, viewer: Viewing, storage: Storage, query: GalleryParams
+    request: Request,
+    viewer: Viewing,
+    storage: Storage,
+    query: GalleryParams,
 ) -> Response:
     first = gallery.page(viewer, query)
     return render(
@@ -45,7 +52,10 @@ def page(
 
 @router.get("/gallery")
 def gallery_page(
-    request: Request, viewer: Viewing, storage: Storage, query: GalleryParams
+    request: Request,
+    viewer: Viewing,
+    storage: Storage,
+    query: GalleryParams,
 ) -> Response:
     found = gallery.page(viewer, query)
     return render(
@@ -61,7 +71,8 @@ def gallery_page(
 
 @router.post("/run", status_code=202, dependencies=[Can(Action.UPLOAD_HANDMADE)])
 def run(
-    viewer: Viewing, files: Annotated[list[UploadFile] | None, File()] = None
+    viewer: Viewing,
+    files: Annotated[list[UploadFile] | None, File()] = None,
 ) -> JobsQueued:
     return service.start(files or [], viewer.user.id)
 

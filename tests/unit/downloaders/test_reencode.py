@@ -1,10 +1,15 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sys
 import time
 
 from ofmhelpers.integrations.downloaders import generic
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 
-_HANG = "import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_bytes(b'p'); time.sleep(60)"
+_HANG = (
+    "import pathlib,sys,time; "
+    "pathlib.Path(sys.argv[1]).write_bytes(b'p'); time.sleep(60)"
+)
 _FAIL = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(b'p'); sys.exit(1)"
 _DONE = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(b'h264')"
 
@@ -49,7 +54,8 @@ def test_a_failing_re_encode_keeps_the_original_and_no_partial(monkeypatch, tmp_
 
 def test_the_re_encode_is_veryfast_at_crf_18(tmp_path):
     cmd = DownloadConfig(output_dir=tmp_path).ffmpeg_cmd(
-        tmp_path / "a.mp4", tmp_path / "b.mp4"
+        tmp_path / "a.mp4",
+        tmp_path / "b.mp4",
     )
 
     assert cmd[cmd.index("-preset") + 1] == "veryfast"

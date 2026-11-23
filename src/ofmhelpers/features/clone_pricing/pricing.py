@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 
 from pydantic import BaseModel
@@ -48,7 +50,7 @@ def clone_pricing() -> MappingProxyType[str, ClonePrice]:
             name: _price(target, target.price, web)
             for name, target in clone_targets().items()
             if target.price
-        }
+        },
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 lazy from collections.abc import Callable
 
@@ -41,7 +43,7 @@ def _blend(x: int, y: int, t: float) -> int:
 
 def _mix(a: str, b: str, t: float) -> str:
     ca, cb = _Rgb.parse(a), _Rgb.parse(b)
-    return f"#{_blend(ca.r, cb.r, t):02x}{_blend(ca.g, cb.g, t):02x}{_blend(ca.b, cb.b, t):02x}"
+    return f"#{_blend(ca.r, cb.r, t):02x}{_blend(ca.g, cb.g, t):02x}{_blend(ca.b, cb.b, t):02x}"  # noqa: E501
 
 
 def _light(hex_color: str) -> bool:
@@ -53,7 +55,7 @@ class _Pen:
     def __init__(self, finish: str) -> None:
         self.finish = finish
         self.parts: list[str] = []
-        self.raised = _mix(finish, "#000000" if _light(finish) else "#ffffff", 0.1)
+        self.raised = _mix(finish, "#000000" if _light(finish) else "#fff", 0.1)
         self.edge = _mix(finish, "#000000", 0.35)
 
     def add(self, element: str) -> None:
@@ -63,23 +65,24 @@ class _Pen:
         self.add(
             f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
             f'rx="{r:.2f}" fill="{self.raised}" stroke="{self.edge}" '
-            'stroke-width="0.5"/>'
+            'stroke-width="0.5"/>',
         )
 
     def lens(self, cx: float, cy: float, r: float) -> None:
         self.add(
             f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" fill="#202126" '
-            f'stroke="{_mix(self.finish, "#9a9aa2", 0.6)}" stroke-width="{r * 0.18:.2f}"/>'
+            f'stroke="{_mix(self.finish, "#9a9aa2", 0.6)}" '
+            f'stroke-width="{r * 0.18:.2f}"/>'
             f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.58:.2f}" fill="#07070a"/>'
             f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.3:.2f}" fill="#1c2a44"/>'
             f'<circle cx="{cx - r * 0.25:.2f}" cy="{cy - r * 0.28:.2f}" '
-            f'r="{r * 0.13:.2f}" fill="#ffffff" fill-opacity="0.55"/>'
+            f'r="{r * 0.13:.2f}" fill="#fff" fill-opacity="0.55"/>',
         )
 
     def flash(self, cx: float, cy: float, r: float = 2.2) -> None:
         self.add(
             f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" fill="#f4ecd6" '
-            'stroke="#b9ae92" stroke-width="0.35"/>'
+            'stroke="#b9ae92" stroke-width="0.35"/>',
         )
 
     def dot(self, cx: float, cy: float, r: float) -> None:
@@ -214,16 +217,17 @@ def render(model: PhoneModel | None, finish: Finish | None) -> str:
     cw, ch = _CANVAS
     x, y = (cw - w) / 2, (ch - h) / 2
     pen = _Pen(color)
-    shine = _mix(color, "#ffffff", 0.22)
+    shine = _mix(color, "#fff", 0.22)
     pen.add(
         '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
         f'<stop offset="0" stop-color="{shine}"/><stop offset="0.55" '
-        f'stop-color="{color}"/><stop offset="1" stop-color="{_mix(color, "#000000", 0.12)}"/>'
-        "</linearGradient></defs>"
+        f'stop-color="{color}"/><stop offset="1" '
+        f'stop-color="{_mix(color, "#000000", 0.12)}"/>'
+        "</linearGradient></defs>",
     )
     pen.add(
         f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" rx="{r:.2f}" '
-        f'fill="url(#g)" stroke="{pen.edge}" stroke-width="1.1"/>'
+        f'fill="url(#g)" stroke="{pen.edge}" stroke-width="1.1"/>',
     )
     if model is not None:
         _LAYOUTS[model.camera](_Camera(pen=pen, x=x, y=y, w=w, lidar=model.lidar))

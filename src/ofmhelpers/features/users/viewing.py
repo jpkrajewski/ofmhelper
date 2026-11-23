@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.db.jobs.store import log_event
@@ -59,7 +61,7 @@ def _managing(manager: User) -> Viewer:
             "pages": Role.MANAGER,
             "keys_of": None,
             "label": manager.label,
-        }
+        },
     )
 
 

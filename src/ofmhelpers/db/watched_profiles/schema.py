@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from statistics import median
 from typing import Annotated
@@ -26,7 +28,7 @@ GLOBAL_CDN_HOST = "scontent.cdninstagram.com"
 def _global_cdn(value: str) -> str:
     parts = urlsplit(value)
     if parts.scheme != "https" or not (parts.hostname or "").endswith(
-        CDN_HOST_SUFFIXES
+        CDN_HOST_SUFFIXES,
     ):
         return value
     return parts._replace(netloc=GLOBAL_CDN_HOST).geturl()
@@ -162,7 +164,9 @@ class WatchedProfile(BaseModel):
 
     @classmethod
     def most_reels(
-        cls, profiles: list[WatchedProfile], excluding: str | None
+        cls,
+        profiles: list[WatchedProfile],
+        excluding: str | None,
     ) -> str | None:
         rest = [p for p in profiles if p.username != excluding]
         top = max(rest, key=lambda p: (p.reel_count, p.views_total), default=None)

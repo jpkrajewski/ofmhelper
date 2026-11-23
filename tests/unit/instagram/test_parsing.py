@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from repo_paths import FIXTURES
 
@@ -110,7 +112,7 @@ def test_gated_media_reads_as_none():
 
 def test_logged_in_media_info():
     media = ReelMedia.from_info(
-        MediaInfo.model_validate_json(_text("media_info_logged_in.json"))
+        MediaInfo.model_validate_json(_text("media_info_logged_in.json")),
     )
     assert media is not None
     assert media.duration_s == 13.2

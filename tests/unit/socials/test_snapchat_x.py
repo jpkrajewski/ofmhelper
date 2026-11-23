@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 import requests
 
@@ -23,7 +25,7 @@ def wire(monkeypatch):
 
     def answer(host: str, reply: FakeReply) -> None:
         outbound.register_fakes(
-            [FakeRoute(host=host, handler=lambda _request, _proxies: reply)]
+            [FakeRoute(host=host, handler=lambda _request, _proxies: reply)],
         )
 
     yield answer
@@ -196,7 +198,8 @@ def test_a_missing_account_is_tried_again_later(wire, key):
 
 
 @pytest.mark.parametrize(
-    ("key", "host"), [("snapchat", "www.snapchat.com"), ("x", "x.com")]
+    ("key", "host"),
+    [("snapchat", "www.snapchat.com"), ("x", "x.com")],
 )
 def test_a_429_stops_the_batch(wire, key, host):
     wire(host, FakeReply.text("slow down", status=429))
@@ -205,7 +208,8 @@ def test_a_429_stops_the_batch(wire, key, host):
 
 
 @pytest.mark.parametrize(
-    ("key", "host"), [("snapchat", "www.snapchat.com"), ("x", "x.com")]
+    ("key", "host"),
+    [("snapchat", "www.snapchat.com"), ("x", "x.com")],
 )
 def test_a_5xx_is_tried_again_later(wire, key, host, monkeypatch):
     monkeypatch.setenv("OFM_SNAPCHAT_HTTP_RETRIES", "0")
@@ -216,7 +220,8 @@ def test_a_5xx_is_tried_again_later(wire, key, host, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("key", "host"), [("snapchat", "www.snapchat.com"), ("x", "x.com")]
+    ("key", "host"),
+    [("snapchat", "www.snapchat.com"), ("x", "x.com")],
 )
 def test_a_page_without_its_data_is_a_refusal_that_says_why(wire, key, host):
     wire(host, FakeReply.text("<html><body>Log in to see this</body></html>"))
@@ -229,7 +234,7 @@ def test_unreadable_snapchat_page_data_is_a_refusal(wire):
     wire(
         "www.snapchat.com",
         FakeReply.text(
-            '<script id="__NEXT_DATA__" type="application/json">{"props": 1}</script>'
+            '<script id="__NEXT_DATA__" type="application/json">{"props": 1}</script>',
         ),
     )
     with pytest.raises(SocialError, match="unreadable page data"):
@@ -249,7 +254,7 @@ def test_a_dropped_connection_never_got_there(key, monkeypatch):
 
 
 def test_js_escapes_in_an_embedded_answer_are_decoded():
-    value = r"{\"data\":{\"user_result_by_screen_name\":{\"result\":{\"rest_id\":\"7\",\"core\":{\"screen_name\":\"a\",\"name\":\"It\x27s é 😀 \\\\x27\"},\"relationship_counts\":{\"followers\":3}}}}}"
+    value = r"{\"data\":{\"user_result_by_screen_name\":{\"result\":{\"rest_id\":\"7\",\"core\":{\"screen_name\":\"a\",\"name\":\"It\x27s é 😀 \\\\x27\"},\"relationship_counts\":{\"followers\":3}}}}}"  # noqa: E501
     [answer] = embedded_answers(f'x{{kind:"Result.Ok",value:"{value}"}}y')
     user = answer.data.user.result
     assert user.core.name == "It's é \U0001f600 \\x27"

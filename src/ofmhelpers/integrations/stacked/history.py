@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Collection, Iterator, Mapping
 lazy from datetime import datetime
 
@@ -52,7 +54,8 @@ def chat_event(message: Message, creator_user_id: str) -> ChatEvent | None:
 
 def _reaction_reply(messages: list[Message], creator_user_id: str) -> ChatEvent | None:
     newest = next(
-        (m for m in messages if m.user_id and m.user_id != creator_user_id), None
+        (m for m in messages if m.user_id and m.user_id != creator_user_id),
+        None,
     )
     if newest is None:
         return None
@@ -100,7 +103,11 @@ def new_reads(
         try:
             messages = (
                 _new_messages(
-                    client, creator_user_id, channel, seen.get(channel), oldest
+                    client,
+                    creator_user_id,
+                    channel,
+                    seen.get(channel),
+                    oldest,
                 )
                 if changed
                 else client.messages(creator_user_id, channel, limit=1)

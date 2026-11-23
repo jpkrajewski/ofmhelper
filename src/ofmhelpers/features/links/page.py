@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 lazy from collections.abc import Callable
 
@@ -59,7 +61,10 @@ DELETE_TASK = "links_delete"
 
 
 def _start(
-    task: str, run: Callable[..., None], user_id: int, what: dict[str, object]
+    task: str,
+    run: Callable[..., None],
+    user_id: int,
+    what: dict[str, object],
 ) -> None:
     job_id = create_job(task, dict(what), actor=str(user_id))
     enqueue(run_job, (job_id, run, {"user_id": user_id, **what}))

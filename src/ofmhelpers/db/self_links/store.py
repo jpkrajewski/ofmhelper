@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from types import MappingProxyType
 lazy from datetime import date
@@ -47,12 +49,15 @@ def _remote_to_id(user_id: int) -> MappingProxyType[str, int]:
             row.remote_id: row.id
             for row in _links().provider_links(user_id, PROVIDER, _LIVE)
             if row.remote_id
-        }
+        },
     )
 
 
 def daily(
-    user_id: int, remote_ids: list[str], start: date, end: date
+    user_id: int,
+    remote_ids: list[str],
+    start: date,
+    end: date,
 ) -> list[LinkDays]:
     ids = _remote_to_id(user_id)
     wanted = {ids[r]: r for r in remote_ids if r in ids}

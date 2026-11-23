@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 from typing import Self
 
@@ -97,7 +99,7 @@ def prefilled(user_id: int | None) -> MappingProxyType[str, str]:
         return MappingProxyType(dict.fromkeys(names, ""))
     keys = Keys.of(user_id)
     return MappingProxyType(
-        {name: SAVED_KEY if keys.prefill(name) else "" for name in names}
+        {name: SAVED_KEY if keys.prefill(name) else "" for name in names},
     )
 
 

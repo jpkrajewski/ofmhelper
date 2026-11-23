@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import struct
 
 from ofmhelpers.media.mov_atoms import Atom
@@ -49,7 +51,7 @@ def meta(keys: list[MetadataKey], recording: Recording) -> Atom | None:
                 Atom(
                     type=b"data",
                     payload=struct.pack(">I", k.data_type) + _locale(k.locale) + v,
-                )
+                ),
             ],
         )
         for index, (k, v) in enumerate(present, start=1)
@@ -103,7 +105,8 @@ def data_information(profile: DeviceProfile) -> Atom:
         payload=struct.pack(">I", _SELF_REFERENCE),
     )
     dref = Atom(
-        type=b"dref", payload=_FULL_BOX + struct.pack(">I", 1) + entry.to_bytes()
+        type=b"dref",
+        payload=_FULL_BOX + struct.pack(">I", 1) + entry.to_bytes(),
     )
     return Atom(type=b"dinf", payload=dref.to_bytes())
 
@@ -111,7 +114,11 @@ def data_information(profile: DeviceProfile) -> Atom:
 def video_media_header(profile: DeviceProfile) -> Atom:
     v = profile.video
     payload = struct.pack(">I", 1) + struct.pack(
-        ">HHHH", v.graphics_mode, v.op_color, v.op_color, v.op_color
+        ">HHHH",
+        v.graphics_mode,
+        v.op_color,
+        v.op_color,
+        v.op_color,
     )
     return Atom(type=b"vmhd", payload=payload)
 

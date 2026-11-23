@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -134,7 +136,9 @@ class BouncyProvider(LinkProvider):
             self.enable_adult(made["id"])
         except LinkError:
             logger.warning(
-                "bouncy %s: no 18+ gate, deleting it", made["id"], exc_info=True
+                "bouncy %s: no 18+ gate, deleting it",
+                made["id"],
+                exc_info=True,
             )
             try:
                 self.delete(made["id"])

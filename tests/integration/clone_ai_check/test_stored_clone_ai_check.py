@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.clone_ai_checks import store as clone_ai_checks
 from ofmhelpers.features.clone_links.ai_check import CloneAiCheck, Verdict, unanswered
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 from collections.abc import Callable
 from typing import Any, Self
@@ -43,7 +45,7 @@ RUNS: frozendict[str, Callable[..., object]] = frozendict(
         TrialsPhase.REMAKE: tasks.generate_reels,
         TrialsPhase.CAPTIONS: tasks.write_captions,
         TrialsPhase.UPLOAD: tasks.upload_trials,
-    }
+    },
 )
 _RESTARTS_MAX = 2
 
@@ -326,7 +328,9 @@ def phone_cards(uid: int, folders: StorageServiceFolders) -> PhoneCards:
     line = JobQueue(name=QueueName.MEDIA).line()
     progress = {
         c.target.login_id: FolderProgress.of(
-            load(uid, c.target.login_id), running, line
+            load(uid, c.target.login_id),
+            running,
+            line,
         )
         for c in board.cards
     }
@@ -399,7 +403,7 @@ def replay_run(job: Job) -> TrialsRun | None:
             "user_id": uid,
             "login_id": int(job.params["login"]),
             **args,
-        }
+        },
     )
 
 
@@ -462,7 +466,8 @@ class Trials(BaseModel, frozen=True):
     def open(self) -> OpenedFolder:
         synced = _sync_state(self.folders, self.uid, self.login_id)
         return OpenedFolder(
-            card=synced.card, view=FolderView.of(self.uid, synced.state)
+            card=synced.card,
+            view=FolderView.of(self.uid, synced.state),
         )
 
     def live(self) -> FolderLive:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import contextvars
 import json
 import os
@@ -113,7 +115,9 @@ def _provider(monkeypatch, provider_cls, generated: Path, sent: list, status=Non
         return dest
 
     monkeypatch.setattr(
-        provider_cls, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+        provider_cls,
+        "upload",
+        lambda _self, p, max_bytes=None: f"https://up/{p.name}",
     )
     monkeypatch.setattr(provider_cls, "submit", submit)
     monkeypatch.setattr(
@@ -155,7 +159,7 @@ def test_the_page_offers_one_image_one_video_and_the_prices(client):
     assert "No long clones yet" in html
     assert "export" not in html.lower().split("<form", 1)[1].split("</form>", 1)[0]
     rates = json.loads(
-        html.split("data-rates='", 1)[1].split("'", 1)[0].replace("&#34;", '"')
+        html.split("data-rates='", 1)[1].split("'", 1)[0].replace("&#34;", '"'),
     )
     assert set(rates) == set(TARGETS)
     assert rates["kie"] == {"credits_per_s": {"720P": 32.78}, "usd_per_credit": 0.005}
@@ -164,7 +168,10 @@ def test_the_page_offers_one_image_one_video_and_the_prices(client):
 @pytest.mark.slow
 @pytest.mark.parametrize("provider", list(TARGETS))
 def test_a_16_9_video_is_generated_in_pieces_and_comes_out_16_9(
-    client, tmp_path, monkeypatch, provider
+    client,
+    tmp_path,
+    monkeypatch,
+    provider,
 ):
     sent = []
     generated = _clip(tmp_path / "g.mp4", 2, size="1280x720")
@@ -172,7 +179,9 @@ def test_a_16_9_video_is_generated_in_pieces_and_comes_out_16_9(
     target = TARGETS[provider]
 
     r = _post(
-        client, _clip(tmp_path / "long.mp4", 32, "1280x720"), {"provider": provider}
+        client,
+        _clip(tmp_path / "long.mp4", 32, "1280x720"),
+        {"provider": provider},
     )
 
     assert r.status_code == 202, r.text
@@ -219,7 +228,9 @@ def test_a_4_5_video_is_made_at_3_4_and_comes_out_4_5(client, tmp_path, monkeypa
 
 @pytest.mark.slow
 def test_the_price_is_the_servers_and_the_key_is_never_stored(
-    client, tmp_path, monkeypatch
+    client,
+    tmp_path,
+    monkeypatch,
 ):
     sent = []
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
@@ -343,7 +354,8 @@ def test_a_rerun_resumes_every_piece_and_pays_for_none_again(tmp_path, monkeypat
 
 @pytest.mark.slow
 def test_a_refused_piece_fails_the_run_and_leaves_nothing_to_retry(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     def status(_self, tid):
         if tid == "t2":
@@ -360,7 +372,8 @@ def test_a_refused_piece_fails_the_run_and_leaves_nothing_to_retry(
 
 @pytest.mark.slow
 def test_a_refused_piece_never_leaves_a_piece_remembered_20_times(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     for attempt in range(20):
 
@@ -400,7 +413,10 @@ def test_a_refused_piece_starts_no_further_piece(tmp_path, monkeypatch):
 @pytest.mark.parametrize("provider", list(TARGETS))
 @pytest.mark.parametrize("audio", [False, True])
 def test_a_pieces_request_follows_the_audio_switch(
-    tmp_path, monkeypatch, provider, audio
+    tmp_path,
+    monkeypatch,
+    provider,
+    audio,
 ):
     monkeypatch.setenv("OFM_CLONE_LONG_AUDIO", "1" if audio else "0")
     target = TARGETS[provider]
@@ -423,7 +439,8 @@ def test_a_chained_pieces_request_starts_from_the_frame_given(tmp_path, provider
 
 @pytest.mark.slow
 def test_chained_pieces_go_in_order_each_from_the_last_frame_before_it(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
     sent = []
@@ -466,7 +483,8 @@ def test_a_refused_chained_piece_starts_no_further_piece(tmp_path, monkeypatch):
 
 @pytest.mark.slow
 def test_a_chained_rerun_takes_the_saved_pieces_and_pays_for_none_again(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
     sent = []
@@ -510,7 +528,8 @@ def test_a_run_keeps_the_switches_it_was_queued_with(tmp_path, monkeypatch):
 
 @pytest.mark.slow
 def test_a_run_queued_chained_stays_chained_when_the_switch_goes_off(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
     params = _params(tmp_path)
@@ -537,7 +556,9 @@ def test_a_job_stored_before_the_switches_runs_with_all_three_off(tmp_path):
 
 @pytest.mark.slow
 def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
-    client, tmp_path, monkeypatch
+    client,
+    tmp_path,
+    monkeypatch,
 ):
     sent = []
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
@@ -558,7 +579,9 @@ def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
 
 @pytest.mark.slow
 def test_a_piece_that_fails_to_download_is_finished_by_recovery_unpaid(
-    client, tmp_path, monkeypatch
+    client,
+    tmp_path,
+    monkeypatch,
 ):
     sent = []
     generated = _clip(tmp_path / "g.mp4", 2)
@@ -587,14 +610,18 @@ def test_a_piece_that_fails_to_download_is_finished_by_recovery_unpaid(
     assert job.status == "done", job.error
     assert len(sent) == 3
     assert sorted(downloads) == sorted(
-        [*(f"https://res/t{i}.mp4" for i in (1, 2, 3)), *["https://res/t2.mp4"] * tries]
+        [
+            *(f"https://res/t{i}.mp4" for i in (1, 2, 3)),
+            *["https://res/t2.mp4"] * tries,
+        ],
     )
     assert tasks.recall(job_id) is None
 
 
 @pytest.mark.slow
 def test_rqs_time_limit_starts_no_further_piece_and_keeps_the_paid_ones(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CLONE_LONG_PARALLEL", "1")
     sent = []
@@ -654,7 +681,9 @@ def test_every_piece_runs_in_the_jobs_context(tmp_path, monkeypatch):
 
 @pytest.mark.slow
 def test_a_big_videos_pieces_go_up_at_most_the_piece_size(
-    client, tmp_path, monkeypatch
+    client,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_CLONE_LONG_PIECE_MAX_SIDE", "18")
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), [])
@@ -713,7 +742,10 @@ def test_one_piece_says_piece_on_its_card(client, tmp_path, monkeypatch):
     ],
 )
 def test_the_time_limit_grows_with_the_rounds_of_pieces(
-    tmp_path, monkeypatch, seconds, expected
+    tmp_path,
+    monkeypatch,
+    seconds,
+    expected,
 ):
     monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
     monkeypatch.setenv("OFM_AIGEN_VIDEO_POLL_TIMEOUT_S", "1800")
@@ -777,7 +809,7 @@ def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeyp
                 model=TARGETS["kie"].model,
                 task_id=f"t{part}",
                 api_key="k",
-            )
+            ),
         )
     monkeypatch.setattr(
         KieProvider,
@@ -789,7 +821,7 @@ def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeyp
         recovery,
         "enqueue_to",
         lambda _queue, fn, args, job_timeout=None: queued.append(
-            ((fn, *args), job_timeout)
+            ((fn, *args), job_timeout),
         ),
     )
 

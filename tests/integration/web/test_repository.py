@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import threading
 
@@ -205,7 +207,11 @@ def test_a_cache_key_never_reads_an_entry_of_the_old_key_format():
 
 def test_an_empty_webhook_keep_list_deletes_no_row():
     hook = ChatWebhook(
-        model_id="keep-empty", model_username="k", webhook_id="w", url="u", secret="s"
+        model_id="keep-empty",
+        model_username="k",
+        webhook_id="w",
+        url="u",
+        secret="s",
     )
     chats.save_webhook(ChatPlatform.STACKED, hook)
 

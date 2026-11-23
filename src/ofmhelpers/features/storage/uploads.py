@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 from pathlib import Path
 
@@ -73,7 +75,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
                 a.handle: a.creator
                 for a in list_accounts(self.user_id)
                 if a.platform == self.constants.upload_platform and a.creator
-            }
+            },
         )
 
     def _handle(self, username: str) -> str:
@@ -116,7 +118,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
                     creator=creators.of(self._handle(t.handle)),
                     waiting=len(folder.scan.waiting) if folder.scan else None,
                     followers=t.followers,
-                )
+                ),
             )
         return found
 
@@ -144,7 +146,7 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
         usable = {t.login_id: t for t in self.targets()}
         if not set(login_ids) <= mine or not set(login_ids) <= set(usable):
             msg = self.constants.account_no_folder.format(
-                page=self.constants.drive_page
+                page=self.constants.drive_page,
             )
             raise RefusedError(msg)
         vas = self._va_targets(va_ids)
@@ -159,7 +161,11 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             for job_id, index in files
             if (
                 upload_id := store.queue(
-                    job_id, index, login_id, self.user_id, usable[login_id].folder_name
+                    job_id,
+                    index,
+                    login_id,
+                    self.user_id,
+                    usable[login_id].folder_name,
                 )
             )
             is not None
@@ -169,7 +175,12 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             for job_id, index in files
             if (
                 upload_id := store.queue(
-                    job_id, index, None, self.user_id, folder.name, va_id=folder.user_id
+                    job_id,
+                    index,
+                    None,
+                    self.user_id,
+                    folder.name,
+                    va_id=folder.user_id,
                 )
             )
             is not None
@@ -191,7 +202,8 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
         readers = readers if readers is not None else self.actor
         uploads = self._queued(job_ids, login_ids, readers, va_ids or [])
         return UploadsQueued(
-            queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
+            queued=sum(1 for u in uploads if u.status == "queued"),
+            uploads=uploads,
         )
 
     def remove(self, upload_id: int, readers: Readers = None) -> DriveUpload:
@@ -217,7 +229,10 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             logger.info("drive upload %s was already gone in Drive", upload_id)
         except (SignInError, DriveNotSetUpError) as exc:
             logger.warning(
-                "drive upload %s: sign-in refused: %s", upload_id, exc, exc_info=True
+                "drive upload %s: sign-in refused: %s",
+                upload_id,
+                exc,
+                exc_info=True,
             )
             msg = self.constants.connect_first
             raise RefusedError(msg) from exc
@@ -230,7 +245,10 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
         return found.model_copy(update={"status": "removed"})
 
     def _destination(
-        self, upload: DriveUpload, folder: Folder, drive: StorageClient
+        self,
+        upload: DriveUpload,
+        folder: Folder,
+        drive: StorageClient,
     ) -> ReviewPlace:
         job = get_job(upload.job_id, None)
         if (
@@ -241,7 +259,9 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             return ReviewPlace(drive=drive, folder_id=folder.folder_id)
         place = self.review.target()
         spoofed = self.review.account_subfolder(
-            place, folder.folder_id, AccountFolder.SPOOFED
+            place,
+            folder.folder_id,
+            AccountFolder.SPOOFED,
         )
         return ReviewPlace(drive=place.drive, folder_id=spoofed)
 
@@ -269,13 +289,17 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
                 store.finish(
                     upload.id,
                     error=self.constants.folder_outside_root.format(
-                        root=self.folders.root_name(), page=self.constants.drive_page
+                        root=self.folders.root_name(),
+                        page=self.constants.drive_page,
                     ),
                 )
                 return
             target = self._destination(upload, folder, drive)
             made = target.drive.upload(
-                target.folder_id, path, download_name(path.name), mime
+                target.folder_id,
+                path,
+                download_name(path.name),
+                mime,
             )
         except (DriveError, SignInError) as exc:
             logger.warning("drive upload %s failed: %s", upload.id, exc, exc_info=True)
@@ -283,5 +307,8 @@ class StorageServiceUploads(BaseModel, frozen=True, arbitrary_types_allowed=True
             return
         store.finish(upload.id, drive_file_id=made.id, drive_url=made.url)
         logger.info(
-            "drive upload %s: %s -> %s", upload.id, path.name, upload.folder_name
+            "drive upload %s: %s -> %s",
+            upload.id,
+            path.name,
+            upload.folder_name,
         )

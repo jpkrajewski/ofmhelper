@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import statistics
 lazy from collections.abc import Callable
 
@@ -46,11 +48,11 @@ def _queried(kind: HashKind, frame: Image.Image) -> np.ndarray:
                 _packed(h)
                 for v in views(frame)
                 for h in pdqhash.compute_dihedral(_pdq(v))[0]
-            ]
+            ],
         )
     hasher = _IMAGEHASH[kind]
     return np.stack(
-        [_packed(hasher(d).hash) for v in views(frame) for d in dihedral(v)]
+        [_packed(hasher(d).hash) for v in views(frame) for d in dihedral(v)],
     )
 
 

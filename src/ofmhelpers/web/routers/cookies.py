@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import Response
 
@@ -10,7 +12,9 @@ from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/cookies", tags=["cookies"], dependencies=[Access(Area.COOKIES)]
+    prefix="/cookies",
+    tags=["cookies"],
+    dependencies=[Access(Area.COOKIES)],
 )
 
 

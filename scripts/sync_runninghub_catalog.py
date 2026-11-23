@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Rebuild `integrations/ai_providers/runninghub/catalog.json` from RunningHub's docs.
 
 RunningHub lists every documented endpoint in
@@ -98,7 +100,7 @@ def _pages(skipped: list[str]) -> list[Page]:
                 family=family,
                 title=" ".join(m["title"].split()),
                 url=m["url"],
-            )
+            ),
         )
     return pages
 
@@ -252,7 +254,8 @@ def main() -> int:
     )
     catalog = [fresh.get(mid, e) for mid, e in current.items()] + added
     OUT.write_text(
-        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     print(f"{len(catalog)} models ({len(added)} new) from {len(pages)} pages -> {OUT}")
     for line in skipped:

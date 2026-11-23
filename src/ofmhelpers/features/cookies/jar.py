@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.config import settings
 from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.cookies.schema import SavedCookies
@@ -19,11 +21,15 @@ def saved(user_id: int) -> SavedCookies | None:
         summary = summarize(found.cookies, cookie_sites())
     except CookieFileError:
         logger.warning(
-            "stored cookies of user %s are not readable", user_id, exc_info=True
+            "stored cookies of user %s are not readable",
+            user_id,
+            exc_info=True,
         )
         return None
     return SavedCookies(
-        file_name=found.file_name, uploaded_at=found.uploaded_at, summary=summary
+        file_name=found.file_name,
+        uploaded_at=found.uploaded_at,
+        summary=summary,
     )
 
 

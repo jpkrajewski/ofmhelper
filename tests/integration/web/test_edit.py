@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import subprocess
@@ -20,7 +22,11 @@ pytestmark = pytest.mark.heavy
 
 
 def _video(
-    dest: Path, seconds: float = 4, size: str = "640x360", *, sound: bool = True
+    dest: Path,
+    seconds: float = 4,
+    size: str = "640x360",
+    *,
+    sound: bool = True,
 ) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tone = ["-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}"]
@@ -137,7 +143,8 @@ def test_another_persons_video_never_opens_or_cuts(client, mine):
 
 
 def test_the_strip_is_made_by_the_job_the_page_queues_never_in_the_request(
-    client, mine
+    client,
+    mine,
 ):
     video = _clip(mine)
     assert client.get("/edit/strip", params={"video": video}).status_code == 404
@@ -197,7 +204,9 @@ def test_a_number_that_is_no_time_is_refused(client, mine, bad):
     body = f'{{"video": "{_clip(mine)}", "start": {bad}, "end": 2}}'
 
     answer = client.post(
-        "/edit/cut", content=body, headers={"Content-Type": "application/json"}
+        "/edit/cut",
+        content=body,
+        headers={"Content-Type": "application/json"},
     )
 
     assert answer.status_code == 422
@@ -244,13 +253,15 @@ def test_an_upload_is_a_video_kept_in_edit_staging(client, mine, tmp_path):
 
     with clip.open("rb") as f:
         answer = client.post(
-            "/edit/upload", files={"file": ("phone.mp4", f, "video/mp4")}
+            "/edit/upload",
+            files={"file": ("phone.mp4", f, "video/mp4")},
         )
 
     assert answer.status_code == 201
     assert Path(answer.json()["path"]).parent == mine / ".edit"
     refused = client.post(
-        "/edit/upload", files={"file": ("notes.txt", b"hi", "text/plain")}
+        "/edit/upload",
+        files={"file": ("notes.txt", b"hi", "text/plain")},
     )
     assert refused.json() == {"detail": "Pick a video file"}
 
@@ -290,7 +301,9 @@ def test_opening_a_video_makes_its_light_copy_strip_and_frame_times(client, mine
     state = client.get("/edit/prepared", params={"video": video}).json()
     proxy = client.get("/edit/proxy", params={"video": video})
     part = client.get(
-        "/edit/proxy", params={"video": video}, headers={"Range": "bytes=0-99"}
+        "/edit/proxy",
+        params={"video": video},
+        headers={"Range": "bytes=0-99"},
     )
     times = client.get("/edit/frames", params={"video": video}).json()["times"]
 
@@ -351,7 +364,8 @@ def test_an_upload_and_its_page_make_one_light_copy(client, mine, tmp_path):
     clip = _video(tmp_path / "phone.mp4", seconds=1)
     with clip.open("rb") as f:
         path = client.post(
-            "/edit/upload", files={"file": ("phone.mp4", f, "video/mp4")}
+            "/edit/upload",
+            files={"file": ("phone.mp4", f, "video/mp4")},
         ).json()["path"]
 
     client.get("/edit", params={"video": path})
@@ -360,7 +374,9 @@ def test_an_upload_and_its_page_make_one_light_copy(client, mine, tmp_path):
 
 
 def test_a_video_too_slow_to_copy_is_not_tried_again_on_every_open(
-    client, mine, monkeypatch
+    client,
+    mine,
+    monkeypatch,
 ):
     def too_slow(*_args, **_kwargs):
         msg = "ffmpeg timed out after 600 s"
@@ -374,7 +390,7 @@ def test_a_video_too_slow_to_copy_is_not_tried_again_on_every_open(
 
     assert 'data-ready="false"' in page
     assert [j.error for j in _prepares(video)] == [
-        "Could not read this video: pick another one"
+        "Could not read this video: pick another one",
     ]
     assert client.get("/edit/prepared", params={"video": video}).json() == {
         "status": "failed",
@@ -386,7 +402,9 @@ def test_a_video_too_slow_to_copy_is_not_tried_again_on_every_open(
 
 
 def test_a_copy_that_failed_for_another_reason_is_tried_again(
-    client, mine, monkeypatch
+    client,
+    mine,
+    monkeypatch,
 ):
     def disk_full(*_args, **_kwargs):
         msg = "ffmpeg failed: No space left on device"
@@ -449,7 +467,7 @@ def _frame(client, video: str, **asked: str) -> Image.Image:
 def _bright(img: Image.Image, box: tuple[float, float, float, float]) -> float:
     w, h = img.size
     part = img.crop(
-        (int(box[0] * w), int(box[1] * h), int(box[2] * w), int(box[3] * h))
+        (int(box[0] * w), int(box[1] * h), int(box[2] * w), int(box[3] * h)),
     )
     return sum(part.getdata()) / (part.width * part.height)
 
@@ -597,7 +615,8 @@ def test_removing_the_middle_keeps_the_part_before_and_the_part_after(client, mi
 
 
 def test_clips_of_other_videos_join_in_the_first_ones_frame_even_without_sound(
-    client, mine
+    client,
+    mine,
 ):
     upright = _video(mine / f"{'b' * 64}__upright.mp4", 3, "360x640", sound=False)
 
@@ -623,7 +642,8 @@ def test_too_many_clips_or_too_long_together_is_refused(client, mine, monkeypatc
 
 
 def test_add_video_opens_a_stored_one_for_the_timeline_and_refuses_anothers(
-    client, mine
+    client,
+    mine,
 ):
     other = assets_root_for_user(make_user("other@example.com").id)
     theirs = _video(other / f"{'c' * 64}__theirs.mp4")

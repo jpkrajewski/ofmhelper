@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import sys
 from pathlib import Path
@@ -5,7 +7,7 @@ from pathlib import Path
 ROOTS = ("src", "tests", "scripts", "alembic", ".claude")
 SKIPPED = ("tests/fixtures/",)
 BANNED = frozenset(
-    {"getattr", "attrgetter", "__getattribute__", "getattr_static", "vars", "__dict__"}
+    {"getattr", "attrgetter", "__getattribute__", "getattr_static", "vars", "__dict__"},
 )
 FOUND = (
     "{spot}: {name} is banned (owner 2026-11-22): read the typed field, "
@@ -56,7 +58,7 @@ def problems(root: Path, relatives: list[str]) -> list[str]:
             found += banned_spots(relative.replace("\\", "/"), text)
         except SyntaxError as error:
             found.append(
-                f"{relative}:{error.lineno}: does not parse, so it was not checked"
+                f"{relative}:{error.lineno}: does not parse, so it was not checked",
             )
     return found
 

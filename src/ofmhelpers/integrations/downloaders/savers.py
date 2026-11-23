@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import re
 from pathlib import Path
@@ -40,7 +42,9 @@ _CONTENT_EXT = {
 def download(url: str, output_dir: Path, *, single: bool = False) -> DownloadResult:
     if not saver_supported(url):
         return DownloadResult(
-            url=url, success=False, error="Unsupported URL: not an Instagram post"
+            url=url,
+            success=False,
+            error="Unsupported URL: not an Instagram post",
         )
     limit = settings.downloaders.single_post_items if single else None
     errors: list[str] = []
@@ -56,7 +60,9 @@ def download(url: str, output_dir: Path, *, single: bool = False) -> DownloadRes
             return DownloadResult(url=url, success=True, output_paths=paths)
         errors.append(f"{name}: no files")
     return DownloadResult(
-        url=url, success=False, error="saver sites: " + " | ".join(errors)
+        url=url,
+        success=False,
+        error="saver sites: " + " | ".join(errors),
     )
 
 

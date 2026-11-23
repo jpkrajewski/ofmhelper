@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from pydantic import BaseModel
@@ -19,24 +21,34 @@ INTERPRETERS = frozenset({"python", "python3", "py"})
 LAUNCHERS = INTERPRETERS | {"uv", "docker"}
 SCRIPT_RUNNERS = INTERPRETERS | {"run"}
 UI_CHECK_VERDICT = re.compile(
-    r"^[ \t]*ui_check:[ \t]*(PASS|FAIL|DOWN)\b(.*)$", re.MULTILINE
+    r"^[ \t]*ui_check:[ \t]*(PASS|FAIL|DOWN)\b(.*)$",
+    re.MULTILINE,
 )
 UI_CHECK_REPORT_PASSED = re.compile(r"^- Result: PASS\b", re.MULTILINE)
 LOOK_FIRST = (
-    "CLAUDE.md ui.md: every UI change is looked at before it is done. Fast, one page: run "
-    "scripts/ui_screens.py's sign_in + shoot for the page you touched (both widths) in the tests "
-    "container, then Read the png and compare it with the cards next to it (same height, same grid, "
-    "nothing overflowing). All pages: scripts/ui_screens.py rNN. Then the owner checks dev."
+    "CLAUDE.md ui.md: every UI change is looked "
+    "at before it is done. Fast, one page: run "
+    "scripts/ui_screens.py's sign_in + shoot for the "
+    "page you touched (both widths) in the tests "
+    "container, then Read the png and compare it with "
+    "the cards next to it (same height, same grid, "
+    "nothing overflowing). All pages: scripts/ui_screens.py "
+    "rNN. Then the owner checks dev."
 )
 CHECK_FIRST = (
-    "CLAUDE.md ui.md: a JS or template change is done only after the edge-case UI check: load the "
-    "ui-check skill and run scripts/ui_check.py <page> in the tests container against dev (a 500, "
-    "an HTML answer, offline, a slow answer, 50 clicks, junk input), read its report.md and PNGs, "
+    "CLAUDE.md ui.md: a JS or template change is done "
+    "only after the edge-case UI check: load the "
+    "ui-check skill and run scripts/ui_check.py <page> "
+    "in the tests container against dev (a 500, "
+    "an HTML answer, offline, a slow answer, 50 clicks, "
+    "junk input), read its report.md and PNGs, "
     "fix what fails and rerun until it passes. Then the owner checks dev."
 )
 NOTE = (
-    "UI file changed: before calling it done, load the ui-check skill and run scripts/ui_check.py "
-    "on the page against dev; a JS or template change counts as looked at only after it passes. "
+    "UI file changed: before calling it done, load the "
+    "ui-check skill and run scripts/ui_check.py "
+    "on the page against dev; a JS or template change "
+    "counts as looked at only after it passes. "
     "A CSS-only change: scripts/ui_screens.py shoot at both widths is enough."
 )
 
@@ -70,8 +82,8 @@ def report_passed(reported: str, started_at: float) -> bool:
         and report.stat().st_mtime >= started_at
         and bool(
             UI_CHECK_REPORT_PASSED.search(
-                report.read_text(encoding="utf-8", errors="replace")
-            )
+                report.read_text(encoding="utf-8", errors="replace"),
+            ),
         )
     )
 

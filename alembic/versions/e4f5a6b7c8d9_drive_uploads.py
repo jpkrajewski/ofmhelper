@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -29,7 +31,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "job_id", "file_index", "login_id", name="uq_drive_uploads_file_folder"
+            "job_id",
+            "file_index",
+            "login_id",
+            name="uq_drive_uploads_file_folder",
         ),
     )
     op.create_index("ix_drive_uploads_job_id", "drive_uploads", ["job_id"])

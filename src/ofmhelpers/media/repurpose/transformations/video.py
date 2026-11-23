@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 from typing import Annotated, Self
 lazy import random
@@ -161,7 +163,10 @@ def _timeline(s: VideoSettings, src: Source, rng: random.Random) -> Timeline:
 
 
 def _handheld(
-    s: VideoSettings, src: Source, seconds: float, rng: random.Random
+    s: VideoSettings,
+    src: Source,
+    seconds: float,
+    rng: random.Random,
 ) -> Handheld:
     if not any((s.tilt, s.perspective, s.shake, s.drift)):
         return Handheld()
@@ -218,7 +223,10 @@ def _rotate_cover(rotate: float | None, aspect: float, eps: float) -> float | No
 
 
 def _draw(
-    s: VideoSettings, src: Source, size: tuple[int, int], rng: random.Random
+    s: VideoSettings,
+    src: Source,
+    size: tuple[int, int],
+    rng: random.Random,
 ) -> VideoDraws:
     timeline = _timeline(s, src, rng)
     tone_mid, tone_shoulder = draw_int(s.tone_mid, rng), draw_int(s.tone_shoulder, rng)
@@ -331,7 +339,10 @@ class VideoTransformer:
         )
 
     def filters(
-        self, work_dir: Path, scaler: str = "bicubic", caption_input: int | None = None
+        self,
+        work_dir: Path,
+        scaler: str = "bicubic",
+        caption_input: int | None = None,
     ) -> str:
         d = self.draws
         w, h = d.output_size
@@ -364,7 +375,7 @@ class VideoTransformer:
             down = d.shift_y or 0.0
             chain.append(
                 f"crop=trunc(iw/{d.zoom:.4f}/2)*2:trunc(ih/{d.zoom:.4f}/2)*2"
-                f":(iw-ow)/2:max(0\\,min(ih-oh\\,(ih-oh)/2-ih*{down:.4f}))"
+                f":(iw-ow)/2:max(0\\,min(ih-oh\\,(ih-oh)/2-ih*{down:.4f}))",
             )
         if d.corner and d.corner_zoom and d.corner_zoom > 1:
             x = "iw-ow" if d.corner[0] else "0"
@@ -438,7 +449,7 @@ class VideoTransformer:
         if d.noise and d.noise >= self.settings.constants.noise_min:
             chain.append(
                 f"noise=alls={d.noise:.2f}:allf={self.settings.noise_flags}"
-                f":all_seed={d.noise_seed}"
+                f":all_seed={d.noise_seed}",
             )
         if d.exposure:
             chain.append(f"exposure=exposure={d.exposure:.4f}")
@@ -457,7 +468,7 @@ class VideoTransformer:
         if d.particles and d.particles >= self.settings.constants.noise_min:
             seed = (d.noise_seed + 2) % (1 << 31)
             chain.append(
-                f"format=yuv420p,noise=alls={d.particles:.2f}:allf=t:all_seed={seed}"
+                f"format=yuv420p,noise=alls={d.particles:.2f}:allf=t:all_seed={seed}",
             )
         return chain
 

@@ -1,5 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 import urllib.parse
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
+
+if TYPE_CHECKING:
+    import requests
 
 from ofmhelpers.integrations.outbound import FakeHandler, FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
@@ -80,7 +87,7 @@ def _result_html(url: str, host: str) -> str:
             '<span class="format-icon"><i class="icon icon-dlvideo"></i></span></div>'
             '<div class="download-items__btn">'
             f'<a href="https://dl.snapcdn.app/get?token={token}">Download</a>'
-            f"<span>{ext}</span></div></div></li>"
+            f"<span>{ext}</span></div></div></li>",
         )
     return '<div id="ig_page"><ul class="download-box">' + "".join(lis) + "</ul></div>"
 
@@ -91,7 +98,7 @@ def _ajax_search(host: str, body: bytes | str) -> FakeReply:
     url = fields.get("q", [""])[0]
     if _FAIL in url:
         return FakeReply.json_body(
-            {"status": "fail", "mess": "No data found. Please try again!"}
+            {"status": "fail", "mess": "No data found. Please try again!"},
         )
     html = _result_html(url, host)
     if "saveinta" in host:
@@ -104,10 +111,11 @@ def _ajax_search(host: str, body: bytes | str) -> FakeReply:
         )
         packed = _pack(js)
         data = _PRELUDE + _EVAL.replace("__PACKED__", packed).replace(
-            "__CHARSET__", _CHARSET
+            "__CHARSET__",
+            _CHARSET,
         ).replace("__OFFSET__", str(_OFFSET)).replace("__RADIX__", str(_RADIX))
         return FakeReply.json_body(
-            {"status": "ok", "p": "instagram", "v": "v2", "data": data}
+            {"status": "ok", "p": "instagram", "v": "v2", "data": data},
         )
     return FakeReply.json_body({"status": "ok", "p": "instagram", "data": html})
 
@@ -116,7 +124,9 @@ def _dl(query: str) -> FakeReply:
     token = parse_qs(query).get("token", [""])[0]
     if token.endswith(".mp4"):
         return FakeReply(
-            status=200, body=fake_media.mp4(), headers={"Content-Type": "video/mp4"}
+            status=200,
+            body=fake_media.mp4(),
+            headers={"Content-Type": "video/mp4"},
         )
     return FakeReply(
         status=200,
@@ -126,19 +136,26 @@ def _dl(query: str) -> FakeReply:
 
 
 def _saver_host(host: str) -> FakeHandler:
-    def handle(request, _proxies) -> FakeReply:
+    def handle(
+        request: requests.PreparedRequest,
+        _proxies: Mapping[str, str],
+    ) -> FakeReply:
         split = urlsplit(request.url or "")
         if request.method == "GET" and split.path.rstrip("/") in ("", "/en"):
             page = _PAGE.format(base=f"https://{host}", exp=_K_EXP, tok=_K_TOKEN)
             return FakeReply.text(page)
         if request.method == "POST" and split.path == "/api/ajaxSearch":
-            return _ajax_search(host, request.body or b"")
+            body = request.body if isinstance(request.body, (str, bytes)) else b""
+            return _ajax_search(host, body)
         return FakeReply.text("not found", status=404)
 
     return handle
 
 
-def _snapcdn(request, _proxies) -> FakeReply:
+def _snapcdn(
+    request: requests.PreparedRequest,
+    _proxies: Mapping[str, str],
+) -> FakeReply:
     split = urlsplit(request.url or "")
     if request.method == "GET" and split.hostname == "dl.snapcdn.app":
         return _dl(split.query)

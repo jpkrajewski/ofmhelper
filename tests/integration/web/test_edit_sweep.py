@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import time
 from pathlib import Path
@@ -79,7 +81,10 @@ def test_a_cut_a_finished_clone_used_stays_for_its_recreate(store, part):
 
 def test_an_upload_stays_while_its_cut_waits_and_goes_once_it_is_done(store):
     waiting, cut_done, prepared = _old_files(
-        store / "users" / "7" / ".edit", "waiting", "cut_done", "prepared"
+        store / "users" / "7" / ".edit",
+        "waiting",
+        "cut_done",
+        "prepared",
     )
     create_job("edit_cut", {"video": str(waiting), "start": 0, "end": 2})
     finished = create_job("edit_cut", {"video": str(cut_done), "start": 0, "end": 2})

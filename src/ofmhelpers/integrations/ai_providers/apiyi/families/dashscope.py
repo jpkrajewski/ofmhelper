@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from typing import Any
 
@@ -92,7 +94,10 @@ def wire_body(spec: ModelSpec, payload: Payload, link: Any = str) -> Body:
         else:
             parameters[PARAMETER_NAMES.get(name, name)] = value
     return Body(
-        model=spec.model_id, prompts=prompts, media=media, parameters=parameters
+        model=spec.model_id,
+        prompts=prompts,
+        media=media,
+        parameters=parameters,
     )
 
 
@@ -101,11 +106,17 @@ class DashScope(Family):
     prefixes = ("wan3", "wan2.7", "happyhorse")
 
     def submit(
-        self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
+        self,
+        client: ApiyiClient,
+        spec: ModelSpec,
+        payload: Payload,
+        job: str,
     ) -> str:
         body = wire_body(spec, payload, client.link)
         response = client.submit(
-            SUBMIT_PATH, json=body.model_dump(), headers=ASYNC_HEADER
+            SUBMIT_PATH,
+            json=body.model_dump(),
+            headers=ASYNC_HEADER,
         )
         task_id = parsed(response, ApiyiSubmit, PROVIDER).task_id
         if not task_id:
@@ -140,7 +151,9 @@ class DashScope(Family):
         if task.state in FAILED:
             logger.info("apiyi task %s %s: %s", task_id, task.state, task.failure)
             return TaskState(
-                state="failed", error=task.failure, unfetched=task.unfetched
+                state="failed",
+                error=task.failure,
+                unfetched=task.unfetched,
             )
         msg = f"{PROVIDER}: task {task_id} answered status {task.state!r}"
         raise ProviderUnavailableError(msg)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date
 from typing import Literal, get_args
 
@@ -90,7 +92,8 @@ class _Place(BaseModel, frozen=True):
     def below(self, item: DriveFile) -> _Place:
         named = self.top and item.name in bin_parts()
         return _Place(
-            sizes=self.sizes, part=AccountFolder(item.name) if named else self.part
+            sizes=self.sizes,
+            part=AccountFolder(item.name) if named else self.part,
         )
 
 

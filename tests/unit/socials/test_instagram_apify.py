@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -42,7 +44,7 @@ def test_a_renamed_account_is_read_under_its_new_name():
                 "username": "new_name",
                 "inputUrl": "https://www.instagram.com/old_name",
                 "followersCount": 5,
-            }
+            },
         ],
         reels=[
             {
@@ -51,7 +53,7 @@ def test_a_renamed_account_is_read_under_its_new_name():
                 "ownerUsername": "new_name",
                 "videoPlayCount": 9,
                 "timestamp": _posted(1),
-            }
+            },
         ],
     )
 
@@ -73,7 +75,8 @@ def test_a_reel_listed_twice_is_one_post():
         "timestamp": _posted(1),
     }
     client = _Client(
-        profiles=[{"username": "yuki", "followersCount": 5}], reels=[reel, reel]
+        profiles=[{"username": "yuki", "followersCount": 5}],
+        reels=[reel, reel],
     )
 
     read = ApifyInstagramSource()._read(client, ["yuki"]).stats  # type: ignore[arg-type]
@@ -96,7 +99,7 @@ def test_a_dataset_item_reads_as_the_actors_fields_it_was_sent_with():
 
 def test_an_error_item_is_told_apart_by_its_error_key():
     item = DatasetItem.model_validate(
-        {"url": "https://www.instagram.com/gone", "error": "not_found"}
+        {"url": "https://www.instagram.com/gone", "error": "not_found"},
     )
 
     assert item.failed

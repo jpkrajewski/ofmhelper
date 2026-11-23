@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 import random
 import tempfile
@@ -152,11 +154,18 @@ class Repurpose:
         )
 
     def _encode(
-        self, source: Source, device: Device, dst: Path, rng: random.Random
+        self,
+        source: Source,
+        device: Device,
+        dst: Path,
+        rng: random.Random,
     ) -> EncodeStep:
         video = VideoTransformer(self.video, source, device.output_size(source), rng)
         audio = AudioTransformer(
-            self.audio, video.timeline.speed, device.audio.sample_rate, rng
+            self.audio,
+            video.timeline.speed,
+            device.audio.sample_rate,
+            rng,
         )
         encode = command.draw_encode(device, source, rng, self.recorded_at)
         makeup = (
@@ -191,7 +200,10 @@ class Repurpose:
         )
 
     def _record(
-        self, source: Source, recorder: Recorder, rng: random.Random
+        self,
+        source: Source,
+        recorder: Recorder,
+        rng: random.Random,
     ) -> _Recorded:
         edited = self.video != VideoSettings() or self.audio != AudioSettings()
         recording = self._recording(recorder, rng)
@@ -218,7 +230,9 @@ class Repurpose:
         seed = rng.getrandbits(32)
         if self.recorded_at is None:
             made = Recording.ending_now(
-                ZoneInfo(recorder.time_zone), recorder.place, rng
+                ZoneInfo(recorder.time_zone),
+                recorder.place,
+                rng,
             )
             return made.model_copy(update={"seed": seed})
         at = recorder.place.sample(rng) if recorder.place else None

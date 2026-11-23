@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 from functools import lru_cache
@@ -43,7 +45,10 @@ class FakeReply(BaseModel):
 @runtime_checkable
 class FakeHandler(Protocol):
     def __call__(
-        self, request: requests.PreparedRequest, proxies: Mapping[str, str], /
+        self,
+        request: requests.PreparedRequest,
+        proxies: Mapping[str, str],
+        /,
     ) -> FakeReply: ...
 
 
@@ -130,7 +135,7 @@ def page_session(page: ProfilePageSettings, proxy: str | None) -> requests.Sessi
             "User-Agent": page.user_agent,
             "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
-        }
+        },
     )
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
@@ -171,17 +176,25 @@ def post(
 ) -> requests.Response:
     if settings.infra.fake_externals:
         return mount(requests.Session()).post(
-            url, timeout=timeout, headers=headers, data=data
+            url,
+            timeout=timeout,
+            headers=headers,
+            data=data,
         )
     return requests.post(url, timeout=timeout, headers=headers, data=data)
 
 
 def head(
-    url: str, *, timeout: float | None = None, allow_redirects: bool = False
+    url: str,
+    *,
+    timeout: float | None = None,
+    allow_redirects: bool = False,
 ) -> requests.Response:
     if settings.infra.fake_externals:
         return mount(requests.Session()).head(
-            url, timeout=timeout, allow_redirects=allow_redirects
+            url,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
         )
     return requests.head(url, timeout=timeout, allow_redirects=allow_redirects)
 

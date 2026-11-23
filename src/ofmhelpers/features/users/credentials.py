@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hmac
 import time
 
@@ -22,7 +24,8 @@ class WrongPasswordError(PasswordRejectedError): ...
 def _is_admin_password(password: str) -> bool:
     admin_password = settings.web.app_password_admin
     return bool(admin_password) and hmac.compare_digest(
-        password.encode(), (admin_password or "").encode()
+        password.encode(),
+        (admin_password or "").encode(),
     )
 
 
@@ -76,7 +79,8 @@ def check_va_password(owner_id: int, password: str) -> None:
 
 def set_va_password(user_id: int, owner_id: int, password: str) -> None:
     users.set_password_hash(
-        user_id, hash_password(_free_for(owner_id, user_id, password))
+        user_id,
+        hash_password(_free_for(owner_id, user_id, password)),
     )
 
 

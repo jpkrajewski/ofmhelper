@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 import time
 from contextlib import contextmanager
@@ -68,7 +70,9 @@ def plan(platform: ChatPlatform, read: ChatRead, now: float | None = None) -> No
         get_redis().zadd(_DUE, due, nx=True)
     except RedisError:
         logger.warning(
-            "chat rechecks of %s not planned", read.channel_id, exc_info=True
+            "chat rechecks of %s not planned",
+            read.channel_id,
+            exc_info=True,
         )
 
 
@@ -124,7 +128,10 @@ def one_teller() -> Generator[bool]:
         return
     done = threading.Event()
     renewing = threading.Thread(
-        target=_renew, args=(lock, done), name="chat-telling-lock", daemon=True
+        target=_renew,
+        args=(lock, done),
+        name="chat-telling-lock",
+        daemon=True,
     )
     renewing.start()
     try:

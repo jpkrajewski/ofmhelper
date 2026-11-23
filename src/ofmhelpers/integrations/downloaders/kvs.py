@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -45,7 +47,7 @@ class KvsPage(BaseModel):
                 continue
             height = _HEIGHT.search(found.get(f"{key}_text", "") or value)
             sources.append(
-                KvsSource(url=value, height=int(height.group(1)) if height else 0)
+                KvsSource(url=value, height=int(height.group(1)) if height else 0),
             )
         if not license_code or not sources:
             return None
@@ -74,7 +76,9 @@ def download(url: str, output_dir: Path | None = None) -> DownloadResult:
     kvs = KvsPage.parse(page.text)
     if kvs is None:
         return DownloadResult(
-            url=url, success=False, error="Unsupported URL: no KVS player"
+            url=url,
+            success=False,
+            error="Unsupported URL: no KVS player",
         )
     try:
         real = kvs.best()

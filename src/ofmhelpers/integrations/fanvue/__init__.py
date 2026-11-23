@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.fanvue.client import FanvueClient
 from ofmhelpers.integrations.fanvue.errors import FanvueAuthError, FanvueError
 from ofmhelpers.integrations.fanvue.source import FanvueSource, TokenKeeper

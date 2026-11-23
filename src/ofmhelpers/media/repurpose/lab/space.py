@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 from typing import Any
 
@@ -196,5 +198,5 @@ def preset(strengths: dict[str, float], label: str = "") -> Preset:
             "label": label,
             "video": _settings(strengths, Part.VIDEO).model_dump(),
             "audio": _settings(strengths, Part.AUDIO).model_dump(),
-        }
+        },
     )

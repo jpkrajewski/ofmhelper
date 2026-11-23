@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 
 from ofmhelpers.config import settings
@@ -9,7 +11,9 @@ def posting_day_start(at: datetime.datetime) -> datetime.datetime:
     s = settings.gdrive
     day = posting_constants().day
     posting = datetime.datetime.combine(
-        at.astimezone(datetime.UTC).date(), s.posting_time_utc, datetime.UTC
+        at.astimezone(datetime.UTC).date(),
+        s.posting_time_utc,
+        datetime.UTC,
     )
     start = posting - datetime.timedelta(hours=s.posting_window_before_h)
     while start > at:
@@ -23,7 +27,7 @@ def window(at: datetime.datetime | None = None) -> PostingWindow:
     at = at or datetime.datetime.now(datetime.UTC)
     s = settings.gdrive
     length = datetime.timedelta(
-        hours=s.posting_window_before_h + s.posting_window_after_h
+        hours=s.posting_window_before_h + s.posting_window_after_h,
     )
     start = posting_day_start(at)
     if at >= start + length:

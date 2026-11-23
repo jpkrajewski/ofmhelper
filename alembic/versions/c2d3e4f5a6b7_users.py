@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from collections.abc import Sequence
 
@@ -47,7 +49,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("provider", "subject"),
     )
     op.create_index(
-        "ix_user_identities_user_id", "user_identities", ["user_id"], unique=False
+        "ix_user_identities_user_id",
+        "user_identities",
+        ["user_id"],
+        unique=False,
     )
     op.create_table(
         "password_links",
@@ -58,7 +63,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("token_hash"),
     )
     op.create_index(
-        "ix_password_links_user_id", "password_links", ["user_id"], unique=False
+        "ix_password_links_user_id",
+        "password_links",
+        ["user_id"],
+        unique=False,
     )
     op.create_table(
         "user_api_keys",
@@ -83,16 +91,16 @@ def upgrade() -> None:
                 "password_hash": "",
                 "drive_root_id": None,
                 "is_password_account": True,
-            }
+            },
         ],
     )
     op.execute(
         sa.text(
             "UPDATE jobs SET actor = (SELECT id::text FROM users WHERE email = :email)"
-            " WHERE actor IN :roles"
+            " WHERE actor IN :roles",
         )
         .bindparams(sa.bindparam("roles", expanding=True))
-        .bindparams(email=AGENCY_EMAIL, roles=list(_OLD_ROLES))
+        .bindparams(email=AGENCY_EMAIL, roles=list(_OLD_ROLES)),
     )
 
 
@@ -100,8 +108,8 @@ def downgrade() -> None:
     op.execute(
         sa.text(
             "UPDATE jobs SET actor = 'admin' WHERE actor IN"
-            " (SELECT id::text FROM users)"
-        )
+            " (SELECT id::text FROM users)",
+        ),
     )
     op.drop_table("user_api_keys")
     op.drop_index("ix_password_links_user_id", table_name="password_links")

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import socket
 
@@ -108,7 +110,8 @@ def test_one_private_address_among_public_ones_is_refused(net, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "url", ["https://nowhere.example.com/c.jpg", "file:///etc/passwd", "ftp://x.com/a"]
+    "url",
+    ["https://nowhere.example.com/c.jpg", "file:///etc/passwd", "ftp://x.com/a"],
 )
 def test_a_host_that_does_not_resolve_or_no_web_link_is_refused(net, tmp_path, url):
     _hosts, _replies, asked = net

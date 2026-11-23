@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
@@ -32,7 +34,8 @@ def test_kieai_out_is_a_browsable_root(client, _isolated_kieai_root):
 
 
 def test_deleting_a_file_through_the_manager_removes_its_job_from_the_gallery(
-    client, _isolated_kieai_root
+    client,
+    _isolated_kieai_root,
 ):
     out_file = _isolated_kieai_root / "gen.mp4"
     out_file.write_bytes(b"video")

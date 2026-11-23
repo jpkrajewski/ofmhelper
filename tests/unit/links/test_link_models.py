@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, timedelta
 
 import pytest
@@ -120,7 +122,7 @@ def _link(days: list[tuple[int, int, int]], **fields) -> ShortLink:
                 for ago, v, c in days
             ],
             **fields,
-        }
+        },
     )
 
 

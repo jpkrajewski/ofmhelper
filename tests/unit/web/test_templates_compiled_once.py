@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 
 import jinja2.loaders
@@ -22,7 +24,9 @@ def stats(monkeypatch) -> list[str]:
 
 def _env(directory, auto_reload: bool = True) -> jinja2.Environment:
     return jinja2.Environment(
-        loader=TemplateFiles(directory), auto_reload=auto_reload, autoescape=True
+        loader=TemplateFiles(directory),
+        auto_reload=auto_reload,
+        autoescape=True,
     )
 
 

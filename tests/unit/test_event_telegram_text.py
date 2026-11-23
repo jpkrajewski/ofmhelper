@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 
 import pytest
@@ -114,7 +116,7 @@ def test_rq_failure_lines_lose_the_jobs_arguments():
             "arguments": ("telegram", "-1001234567", {"title": "t"}),
             "kwargs": {"api_key": "sk-secret"},
             "func": "ofmhelpers.features.events.dispatch.deliver",
-        }
+        },
     )
 
     assert _HideJobArguments().filter(record)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import SimpleNamespace
 
 import pytest
@@ -31,7 +33,7 @@ class FakeYtDlp:
                 outer.calls.append(("extract" if download else "info", self.opts))
                 if outer.fails(self.opts):
                     raise RuntimeError(
-                        "refused " + ("proxied" if "proxy" in self.opts else "direct")
+                        "refused " + ("proxied" if "proxy" in self.opts else "direct"),
                     )
                 return outer._written() if download else {"id": "Dejzz26ILDl"}
 
@@ -63,7 +65,8 @@ def _install(monkeypatch, tmp_path, fails=lambda opts: False) -> FakeYtDlp:
 
 
 def test_a_reel_is_read_through_a_proxy_logged_out_and_fetched_direct(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     fake = _install(monkeypatch, tmp_path)
 

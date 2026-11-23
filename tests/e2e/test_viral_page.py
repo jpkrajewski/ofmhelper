@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
@@ -33,6 +35,6 @@ def test_text_that_is_no_profile_is_refused_in_place(va: Session):
     va.page.click('#viral-form button[type="submit"]')
 
     expect(va.page.locator("#viral-error")).to_have_text(
-        "Paste an Instagram profile: @name or its link"
+        "Paste an Instagram profile: @name or its link",
     )
     assert va.page.url.endswith("/viral")

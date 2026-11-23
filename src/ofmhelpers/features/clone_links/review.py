@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 import time
 from pathlib import Path
@@ -144,7 +146,10 @@ def _gone(review: CloneFromLink, span: logfire.LogfireSpan) -> None:
 
 
 def _failed(
-    review: CloneFromLink, reason: str, exc: Exception, span: logfire.LogfireSpan
+    review: CloneFromLink,
+    reason: str,
+    exc: Exception,
+    span: logfire.LogfireSpan,
 ) -> None:
     span.record_exception(exc)
     span.set_level("error")
@@ -160,7 +165,9 @@ def _mirrored(job_id: str) -> bool:
 
 
 def _checked(
-    review: CloneFromLink, video: Path, span: logfire.LogfireSpan
+    review: CloneFromLink,
+    video: Path,
+    span: logfire.LogfireSpan,
 ) -> CloneAiCheck:
     try:
         return check_clone(video, mirrored=_mirrored(review.job_id))
@@ -209,7 +216,7 @@ def _check(review: CloneFromLink, video: Path, span: logfire.LogfireSpan) -> str
             "input_tokens": check.input_tokens or 0,
             "thinking_tokens": check.thinking_tokens or 0,
             "output_tokens": check.output_tokens or 0,
-        }
+        },
     )
     if check.error:
         off = check.error_kind in ("quota", "setup") or check.error == CHECK_FAILED
@@ -266,7 +273,10 @@ def _upload(
 
 
 def _already_there(
-    drive: StorageClient, folder_id: str, name: str, size: int
+    drive: StorageClient,
+    folder_id: str,
+    name: str,
+    size: int,
 ) -> DriveFile | None:
     return next(
         (

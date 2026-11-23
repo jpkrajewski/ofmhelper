@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 
 import pytest
@@ -42,7 +44,9 @@ def drive(fake_externals, monkeypatch, tmp_path, dropbox_top) -> FakeDrive:
         return dropbox_top
 
     stub = _Provider(
-        token=dropbox.token, connect=connect_fake, constants=dropbox.constants
+        token=dropbox.token,
+        connect=connect_fake,
+        constants=dropbox.constants,
     )
     monkeypatch.setattr(
         storage_client,
@@ -57,15 +61,20 @@ def _live_logins() -> list[int]:
 
 
 def test_switching_provider_with_stored_folders_and_syncing_loses_no_account(
-    drive, dropbox_top
+    drive,
+    dropbox_top,
 ):
     phone = devices.add_device(
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
-        )
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Anna",
+        ),
     )
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig")
+        phone,
+        LoginFields(service="instagram", username="ann.ig"),
     )
     assert added is not None
     storage_jobs.sync()
@@ -75,7 +84,11 @@ def test_switching_provider_with_stored_folders_and_syncing_loses_no_account(
 
     owner = users.agency_id()
     storage_accounts.save(
-        owner, StorageProvider.DROPBOX, "dropbox-refresh", "dbid:1", AGENCY
+        owner,
+        StorageProvider.DROPBOX,
+        "dropbox-refresh",
+        "dbid:1",
+        AGENCY,
     )
     drive.clear_calls()
     storage_choice.use(owner, StorageProvider.DROPBOX)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 import time
 from unittest import mock
@@ -87,7 +89,8 @@ def test_the_api_key_is_never_part_of_a_redis_key(client, ref_file):
 
 
 def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
-    client, ref_file
+    client,
+    ref_file,
 ):
     with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
@@ -157,12 +160,16 @@ def test_remote_check_network_error_triggers_reupload(client, ref_file):
 
 
 def test_an_unreachable_broker_degrades_to_re_uploading(
-    client, ref_file, monkeypatch, caplog
+    client,
+    ref_file,
+    monkeypatch,
+    caplog,
 ):
     dead = Redis.from_url("unix:///nonexistent/redis.sock")
     monkeypatch.setattr("ofmhelpers.cache.redis.get_redis", lambda: dead)
     monkeypatch.setattr(
-        "ofmhelpers.integrations.ai_providers.base.get_redis", lambda: dead
+        "ofmhelpers.integrations.ai_providers.base.get_redis",
+        lambda: dead,
     )
 
     with kie_http() as mreq:
@@ -325,8 +332,8 @@ def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
         threads = [
             threading.Thread(
                 target=lambda: urls.append(
-                    new_client().upload_local_file(str(ref_file))
-                )
+                    new_client().upload_local_file(str(ref_file)),
+                ),
             )
             for _ in range(3)
         ]

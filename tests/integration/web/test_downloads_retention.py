@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -91,7 +93,10 @@ def test_a_download_writes_one_row_per_file_with_its_copy_in_the_store(assets):
 
 @pytest.mark.parametrize(("after_s", "stored"), [(-MINUTE, True), (MINUTE, False)])
 def test_an_unused_video_goes_a_day_after_it_was_downloaded(
-    assets, posters, after_s, stored
+    assets,
+    posters,
+    after_s,
+    stored,
 ):
     job = _download(assets, LINK)
     file = row(job)
@@ -105,7 +110,8 @@ def test_an_unused_video_goes_a_day_after_it_was_downloaded(
 
 
 def test_what_stays_of_a_removed_video_is_its_poster_its_row_and_its_job(
-    assets, posters
+    assets,
+    posters,
 ):
     job = _download(assets, LINK)
     file = row(job)
@@ -146,7 +152,10 @@ def test_a_hard_linked_copy_is_counted_once(assets, posters, monkeypatch):
 
 @pytest.mark.parametrize(("after_s", "stored"), [(-MINUTE, True), (MINUTE, False)])
 def test_a_video_a_clone_used_goes_14_days_after_that_use(
-    assets, posters, after_s, stored
+    assets,
+    posters,
+    after_s,
+    stored,
 ):
     job = _download(assets, LINK)
     file = row(job)
@@ -278,7 +287,10 @@ def test_an_image_keeps_its_small_preview(assets, posters):
 
 
 def test_one_row_that_fails_does_not_stop_the_rest(
-    assets, posters, monkeypatch, caplog
+    assets,
+    posters,
+    monkeypatch,
+    caplog,
 ):
     stuck = _download(assets, LINK)
     fine = _download(assets, OTHER)
@@ -305,7 +317,8 @@ def test_one_row_that_fails_does_not_stop_the_rest(
 
 
 def test_the_same_video_downloaded_twice_keeps_its_one_copy_in_the_store(
-    assets, posters
+    assets,
+    posters,
 ):
     first = _download(assets, LINK)
     second = _download(assets, OTHER)
@@ -339,7 +352,8 @@ def test_the_round_logs_what_it_did(assets, posters, caplog):
 
 
 def test_the_dry_count_says_what_a_round_would_remove_and_removes_nothing(
-    assets, posters
+    assets,
+    posters,
 ):
     unused = _download(assets, LINK)
     cloned = _download(assets, OTHER)
@@ -362,7 +376,8 @@ def test_the_dry_count_says_what_a_round_would_remove_and_removes_nothing(
 
 
 def test_the_dry_count_reads_a_use_from_the_name_when_the_file_is_not_here(
-    assets, posters
+    assets,
+    posters,
 ):
     job = _download(assets, LINK)
     file = row(job)

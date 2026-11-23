@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -47,7 +49,9 @@ def upgrade() -> None:
         sa.Column("ua", sa.Text(), nullable=True),
     )
     op.create_index(
-        "ix_self_link_clicks_link_ts", "self_link_clicks", ["link_id", "ts"]
+        "ix_self_link_clicks_link_ts",
+        "self_link_clicks",
+        ["link_id", "ts"],
     )
 
 

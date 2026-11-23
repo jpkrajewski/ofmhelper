@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import json
 import time
@@ -82,7 +84,8 @@ def token_reply(request: requests.PreparedRequest) -> FakeReply:
 
 def routes() -> list[FakeRoute]:
     def handle(
-        request: requests.PreparedRequest, _proxies: Mapping[str, str]
+        request: requests.PreparedRequest,
+        _proxies: Mapping[str, str],
     ) -> FakeReply:
         return token_reply(request)
 

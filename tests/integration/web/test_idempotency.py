@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -91,7 +93,7 @@ def _backdate(asked: Asked, by: timedelta) -> None:
         s.execute(
             update(row)
             .where(row.user_id == asked.user_id, row.key == asked.key)
-            .values(created_at=row.created_at - by)
+            .values(created_at=row.created_at - by),
         )
 
 
@@ -126,7 +128,7 @@ def test_a_run_without_a_key_is_refused(client, downloads):
 
     assert refused.status_code == 400
     assert refused.json() == {
-        "detail": "Send an Idempotency-Key header, one per action"
+        "detail": "Send an Idempotency-Key header, one per action",
     }
     assert downloads.fetched == []
 
@@ -139,7 +141,7 @@ def test_a_key_sent_again_with_other_links_is_refused(client, downloads):
 
     assert mismatch.status_code == 400
     assert mismatch.json() == {
-        "detail": "This Idempotency-Key was used for a different request"
+        "detail": "This Idempotency-Key was used for a different request",
     }
     assert downloads.fetched == [A]
 
@@ -174,13 +176,14 @@ def test_a_key_left_by_a_request_that_died_is_never_run_again(client, downloads)
     assert abandoned.status_code == 409
     assert "Retry-After" not in abandoned.headers
     assert abandoned.json() == {
-        "detail": "This request did not finish. Reload the page and try again."
+        "detail": "This request did not finish. Reload the page and try again.",
     }
     assert downloads.fetched == []
 
 
 def test_a_left_key_sent_with_a_different_request_is_refused_as_different(
-    client, downloads
+    client,
+    downloads,
 ):
     key = keyed()
     asked = _asked(client, key, A)
@@ -216,7 +219,9 @@ def test_a_crash_after_the_work_started_never_runs_it_again(downloads, monkeypat
 
 
 def test_an_outside_service_down_frees_the_key_to_try_again(
-    client, downloads, monkeypatch
+    client,
+    downloads,
+    monkeypatch,
 ):
     started = LinkDownloads.start
 
@@ -358,7 +363,9 @@ def test_keys_older_than_their_keep_time_are_removed(client):
 
 
 def test_a_link_still_downloading_is_not_downloaded_twice(
-    client, downloads, monkeypatch
+    client,
+    downloads,
+    monkeypatch,
 ):
     monkeypatch.setattr(download_links, "enqueue", lambda *_a, **_k: None)
     first = _run(client, A, keyed()).json()["job_id"]

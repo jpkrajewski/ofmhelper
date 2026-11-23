@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
@@ -41,8 +43,8 @@ class DriveFolderRepository(CachedRepository):
             rows = (
                 s.execute(
                     select(DriveAccountFolderRow).where(
-                        DriveAccountFolderRow.root_folder_id.in_(roots)
-                    )
+                        DriveAccountFolderRow.root_folder_id.in_(roots),
+                    ),
                 )
                 .scalars()
                 .all()
@@ -68,8 +70,8 @@ class DriveFolderRepository(CachedRepository):
             rows = (
                 s.execute(
                     select(DriveVaFolderRow).where(
-                        DriveVaFolderRow.user_id.in_(user_ids)
-                    )
+                        DriveVaFolderRow.user_id.in_(user_ids),
+                    ),
                 )
                 .scalars()
                 .all()
@@ -97,7 +99,7 @@ class DriveFolderRepository(CachedRepository):
                 s.execute(
                     insert(DriveVaFolderRow)
                     .values(user_id=folder.user_id, **values)
-                    .on_conflict_do_update(index_elements=["user_id"], set_=values)
+                    .on_conflict_do_update(index_elements=["user_id"], set_=values),
                 )
         except IntegrityError as exc:  # silent: the VA is gone, the caller logs it
             if not _parent_gone(exc, _VA_FK):
@@ -109,7 +111,7 @@ class DriveFolderRepository(CachedRepository):
     def sync_lock(self) -> Iterator[bool]:
         with session_scope() as s:
             held = bool(
-                s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar()
+                s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar(),
             )
             try:
                 yield held
@@ -119,7 +121,11 @@ class DriveFolderRepository(CachedRepository):
 
     @invalidates_cache
     def save_account_folder(
-        self, login_id: int, folder_id: str, name: str, root: str
+        self,
+        login_id: int,
+        folder_id: str,
+        name: str,
+        root: str,
     ) -> bool:
         values = {
             "folder_id": folder_id,
@@ -140,7 +146,7 @@ class DriveFolderRepository(CachedRepository):
                             **values,
                             "posted_folder_id": kept_posted,
                         },
-                    )
+                    ),
                 )
         except IntegrityError as exc:  # silent: the login is gone, the caller logs it
             if not _parent_gone(exc, _LOGIN_FK):
@@ -166,8 +172,8 @@ class DriveFolderRepository(CachedRepository):
         with session_scope() as s:
             s.execute(
                 delete(DriveAccountFolderRow).where(
-                    DriveAccountFolderRow.login_id == login_id
-                )
+                    DriveAccountFolderRow.login_id == login_id,
+                ),
             )
 
     @invalidates_cache
@@ -176,7 +182,7 @@ class DriveFolderRepository(CachedRepository):
             s.execute(
                 update(DriveAccountFolderRow)
                 .where(DriveAccountFolderRow.login_id == login_id)
-                .values(posted_folder_id=folder_id, updated_at=time.time())
+                .values(posted_folder_id=folder_id, updated_at=time.time()),
             )
 
     @invalidates_cache
@@ -201,7 +207,7 @@ class DriveFolderRepository(CachedRepository):
                     insert(DrivePostedFileRow)
                     .values(rows)
                     .on_conflict_do_nothing(index_elements=["file_id"])
-                    .returning(DrivePostedFileRow.file_id)
+                    .returning(DrivePostedFileRow.file_id),
                 ).all()
         except IntegrityError as exc:  # silent: the login is gone, the caller logs it
             if not _parent_gone(exc, _LOGIN_FK):

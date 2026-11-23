@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import Request, expect
@@ -19,7 +21,10 @@ def _trials(va: Session, drive: FakeDrive, jobs_idle) -> list[str]:
     jobs_idle()
     phone = devices.add_device(
         DeviceFields(
-            label="Vee 01", model_id="iphone-13", color_id="blue", owner="Vee"
+            label="Vee 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Vee",
         ),
         user_id=VA_ID,
     )
@@ -44,7 +49,9 @@ def _scanned(va: Session, jobs_idle) -> None:
 
 
 def test_a_folders_trials_go_to_the_bin_after_a_confirm(
-    va: Session, fake_drive: FakeDrive, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    jobs_idle,
 ):
     files = _trials(va, fake_drive, jobs_idle)
     _scanned(va, jobs_idle)
@@ -55,7 +62,7 @@ def test_a_folders_trials_go_to_the_bin_after_a_confirm(
     page.locator('.st-table .st-bin[data-part="TRIALS"]').click()
     expect(page.locator("#st-confirm")).to_be_visible()
     expect(page.locator("#st-confirm-text")).to_have_text(
-        "Trials of vee.ig - Vee · 2.0 MB"
+        "Trials of vee.ig - Vee · 2.0 MB",
     )
     with page.expect_navigation():
         page.locator("#st-confirm-go").click()
@@ -100,7 +107,9 @@ def test_cancel_moves_nothing(va: Session, fake_drive: FakeDrive, jobs_idle):
 
 
 def test_an_html_answer_shows_plain_words_and_the_buttons_come_back(
-    va: Session, fake_drive: FakeDrive, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    jobs_idle,
 ):
     _trials(va, fake_drive, jobs_idle)
     _scanned(va, jobs_idle)
@@ -108,7 +117,9 @@ def test_an_html_answer_shows_plain_words_and_the_buttons_come_back(
     page.route(
         "**/storage/bin-moves",
         lambda route: route.fulfill(
-            status=200, content_type="text/html", body="<!doctype html><p>login</p>"
+            status=200,
+            content_type="text/html",
+            body="<!doctype html><p>login</p>",
         ),
     )
 

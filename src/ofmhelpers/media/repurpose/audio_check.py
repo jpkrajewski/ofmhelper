@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -43,7 +45,10 @@ def verify_audio(src: Path, dst: Path) -> None:
         raise BrokenAudioError(msg)
     source = levels(src)
     if source is not None and copy.mean_db < source.mean_db - _MAX_DROP_DB:
-        msg = f"{dst.name}: audio mean {copy.mean_db:.1f} dB, source {source.mean_db:.1f} dB"
+        msg = (
+            f"{dst.name}: audio mean {copy.mean_db:.1f} "
+            f"dB, source {source.mean_db:.1f} dB"
+        )
         raise BrokenAudioError(msg)
     if copy.mean_db > _MEAN_MAX_DB:
         msg = f"{dst.name}: audio mean {copy.mean_db:.1f} dB over {_MEAN_MAX_DB}"
@@ -52,5 +57,8 @@ def verify_audio(src: Path, dst: Path) -> None:
     if source is not None:
         floor = min(floor, source.max_db - source.mean_db - _DYNAMICS_LOSS_DB)
     if copy.max_db - copy.mean_db < floor:
-        msg = f"{dst.name}: audio has no dynamics (max {copy.max_db:.1f}, mean {copy.mean_db:.1f})"
+        msg = (
+            f"{dst.name}: audio has no dynamics (max "
+            f"{copy.max_db:.1f}, mean {copy.mean_db:.1f})"
+        )
         raise BrokenAudioError(msg)

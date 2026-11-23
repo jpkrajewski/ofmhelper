@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 lazy from collections.abc import Callable
 
@@ -59,7 +61,10 @@ class _Window(BaseModel, frozen=True):
 
 
 def _stats(
-    handle: str, author: ApifyTweetAuthor, tweets: list[ApifyTweet], window: _Window
+    handle: str,
+    author: ApifyTweetAuthor,
+    tweets: list[ApifyTweet],
+    window: _Window,
 ) -> AccountStats:
     unique = {t.id: t for t in tweets}
     return AccountStats(
@@ -141,7 +146,9 @@ class ApifyXSource(AccountSource):
                     break
                 except Exception:
                     logger.warning(
-                        "apify x run of @%s failed; it goes on", handle, exc_info=True
+                        "apify x run of @%s failed; it goes on",
+                        handle,
+                        exc_info=True,
                     )
                     continue
                 if found is not None:
@@ -155,7 +162,9 @@ class ApifyXSource(AccountSource):
         now = time.time()
         since = now - s.apify_days * DAY_S
         run = client.run(
-            s.apify_x_actor, tweet_input(handle, since), s.apify_run_timeout_s
+            s.apify_x_actor,
+            tweet_input(handle, since),
+            s.apify_run_timeout_s,
         )
         if run.status not in (RunStatus.SUCCEEDED, RunStatus.TIMED_OUT):
             logger.warning(

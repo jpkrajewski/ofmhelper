@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -85,7 +87,9 @@ class FakeFanvue:
         self._access.add(access)
         self._refresh = refresh
         return FakeTokens(
-            access_token=access, refresh_token=refresh, expires_in=_EXPIRES_IN_S
+            access_token=access,
+            refresh_token=refresh,
+            expires_in=_EXPIRES_IN_S,
         )
 
     def handle_auth(self, request: requests.PreparedRequest) -> FakeReply:
@@ -94,7 +98,8 @@ class FakeFanvue:
                 return self.token_failures.pop(0)
             if not str(request.headers.get("Authorization") or "").startswith("Basic "):
                 return FakeReply.json_body(
-                    {"error": "invalid_client"}, HTTPStatus.UNAUTHORIZED
+                    {"error": "invalid_client"},
+                    HTTPStatus.UNAUTHORIZED,
                 )
             raw = request.body or ""
             text = raw.decode() if isinstance(raw, bytes) else str(raw)
@@ -121,12 +126,13 @@ class FakeFanvue:
         token = str(request.headers.get("Authorization") or "").removeprefix("Bearer ")
         if token not in self._access:
             return FakeReply.json_body(
-                {"error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED
+                {"error": "Unauthorized"},
+                HTTPStatus.UNAUTHORIZED,
             )
         parts = url.path.removeprefix(_PREFIX).split("/")
         if parts == ["users", "me"]:
             return FakeReply.json_body(
-                {"uuid": AGENCY, "handle": AGENCY_HANDLE, "roles": ["agency"]}
+                {"uuid": AGENCY, "handle": AGENCY_HANDLE, "roles": ["agency"]},
             )
         if parts == ["creators"]:
             return FakeReply.json_body({"data": _MANAGED, "nextCursor": None})
@@ -161,14 +167,15 @@ class FakeFanvue:
                     for fan, messages in chats[start:end]
                 ],
                 "nextCursor": str(end) if end < len(chats) else None,
-            }
+            },
         )
 
     def _messages(self, creator: str, fan: str, query: Mapping[str, str]) -> FakeReply:
         messages = self._chats.get(creator, {}).get(fan)
         if messages is None:
             return FakeReply.json_body(
-                {"error": "Invalid user UUID"}, HTTPStatus.BAD_REQUEST
+                {"error": "Invalid user UUID"},
+                HTTPStatus.BAD_REQUEST,
             )
         before = query.get("sentBefore")
         found = [m for m in messages if not before or m["sentAt"] < before]
@@ -179,7 +186,7 @@ class FakeFanvue:
             {
                 "data": page,
                 "dateFilter": {"sentBefore": page[-1]["sentAt"]} if more else None,
-            }
+            },
         )
 
 

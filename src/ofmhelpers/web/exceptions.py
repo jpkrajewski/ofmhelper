@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
 from typing import Any
@@ -46,7 +48,7 @@ REFUSALS: frozendict[type[Exception], int] = frozendict(
         TooSoonError: 429,
         UnavailableError: 502,
         TryAgainError: 503,
-    }
+    },
 )
 
 
@@ -55,7 +57,9 @@ async def unhandled(request: Request, exc: Exception) -> Response:
     if AuthMiddleware.is_fetch(request):
         return JSONResponse({"detail": MESSAGE}, status_code=500)
     return HTMLResponse(
-        f"<p>{MESSAGE}</p>", status_code=500, headers=dict(FRAME_HEADERS)
+        f"<p>{MESSAGE}</p>",
+        status_code=500,
+        headers=dict(FRAME_HEADERS),
     )
 
 
@@ -84,7 +88,7 @@ def _refusal(status_code: int) -> Handler:
             {
                 "detail": detail.model_dump()
                 if isinstance(detail, BaseModel)
-                else str(exc)
+                else str(exc),
             },
             status_code=status_code,
         )
@@ -109,5 +113,5 @@ def exception_handlers() -> ExceptionHandlers:
             StarletteHTTPException: http_error,
             RequestValidationError: invalid_request,
             **{error: _refusal(status) for error, status in REFUSALS.items()},
-        }
+        },
     )

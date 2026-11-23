@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Callable
 
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -35,8 +37,8 @@ class ChatRepository:
         with session_scope() as s:
             rows = s.execute(
                 select(ChatThreadRow.channel_id, ChatThreadRow.last_message_id).where(
-                    ChatThreadRow.platform == platform
-                )
+                    ChatThreadRow.platform == platform,
+                ),
             )
             return [ChatPosition.model_validate(dict(row)) for row in rows.mappings()]
 
@@ -45,9 +47,9 @@ class ChatRepository:
             s.execute(
                 select(
                     func.pg_advisory_xact_lock(
-                        func.hashtextextended(f"chat:{platform}:{read.channel_id}", 0)
-                    )
-                )
+                        func.hashtextextended(f"chat:{platform}:{read.channel_id}", 0),
+                    ),
+                ),
             )
             owner = s.execute(
                 select(ChatFanMessageRow.model_username)
@@ -55,7 +57,7 @@ class ChatRepository:
                     ChatFanMessageRow.platform == platform,
                     ChatFanMessageRow.channel_id == read.channel_id,
                 )
-                .limit(1)
+                .limit(1),
             ).scalar_one_or_none()
             if owner is not None and owner != read.model_username:
                 return False
@@ -67,7 +69,11 @@ class ChatRepository:
             return True
 
     def _keep_fan_message(
-        self, s: Session, platform: str, read: ChatRead, event: ChatEvent
+        self,
+        s: Session,
+        platform: str,
+        read: ChatRead,
+        event: ChatEvent,
     ) -> None:
         s.execute(
             insert(ChatFanMessageRow)
@@ -87,11 +93,15 @@ class ChatRepository:
                 )
                 .scalar_subquery(),
             )
-            .on_conflict_do_nothing()
+            .on_conflict_do_nothing(),
         )
 
     def _keep_model_message(
-        self, s: Session, platform: str, read: ChatRead, event: ChatEvent
+        self,
+        s: Session,
+        platform: str,
+        read: ChatRead,
+        event: ChatEvent,
     ) -> None:
         s.execute(
             insert(ChatModelMessageRow)
@@ -101,7 +111,7 @@ class ChatRepository:
                 channel_id=read.channel_id,
                 sent_at=event.at,
             )
-            .on_conflict_do_nothing()
+            .on_conflict_do_nothing(),
         )
         s.execute(
             update(ChatFanMessageRow)
@@ -114,13 +124,13 @@ class ChatRepository:
                     ChatFanMessageRow.replied_at > event.at,
                 ),
             )
-            .values(replied_at=event.at)
+            .values(replied_at=event.at),
         )
 
     def forget_model_messages(self, before: float) -> None:
         with session_scope() as s:
             s.execute(
-                delete(ChatModelMessageRow).where(ChatModelMessageRow.sent_at < before)
+                delete(ChatModelMessageRow).where(ChatModelMessageRow.sent_at < before),
             )
 
     def mark_read(self, platform: str, read: ChatRead) -> None:
@@ -136,7 +146,7 @@ class ChatRepository:
                 .on_conflict_do_update(
                     index_elements=["platform", "channel_id"],
                     set_={"last_message_id": read.last_message_id},
-                )
+                ),
             )
 
     def forget_open(self, platform: str, channel_id: str) -> None:
@@ -146,11 +156,14 @@ class ChatRepository:
                     ChatFanMessageRow.platform == platform,
                     ChatFanMessageRow.channel_id == channel_id,
                     ChatFanMessageRow.replied_at.is_(None),
-                )
+                ),
             )
 
     def forget_message(
-        self, platform: str, message_id: str, model_username: str
+        self,
+        platform: str,
+        message_id: str,
+        model_username: str,
     ) -> None:
         with session_scope() as s:
             s.execute(
@@ -158,7 +171,7 @@ class ChatRepository:
                     ChatFanMessageRow.platform == platform,
                     ChatFanMessageRow.message_id == message_id,
                     ChatFanMessageRow.model_username == model_username,
-                )
+                ),
             )
 
     def models(self, platform: str) -> list[str]:
@@ -168,12 +181,15 @@ class ChatRepository:
                     select(ChatThreadRow.model_username)
                     .where(ChatThreadRow.platform == platform)
                     .distinct()
-                    .order_by(ChatThreadRow.model_username)
-                ).scalars()
+                    .order_by(ChatThreadRow.model_username),
+                ).scalars(),
             )
 
     def fan_messages(
-        self, platform: str, username: str, since: float
+        self,
+        platform: str,
+        username: str,
+        since: float,
     ) -> list[FanMessage]:
         with session_scope() as s:
             rows = s.execute(
@@ -193,7 +209,7 @@ class ChatRepository:
                         ChatFanMessageRow.replied_at >= since,
                     ),
                 )
-                .order_by(ChatFanMessageRow.sent_at.desc())
+                .order_by(ChatFanMessageRow.sent_at.desc()),
             )
             return [FanMessage.model_validate(dict(row)) for row in rows.mappings()]
 
@@ -214,7 +230,7 @@ class ChatRepository:
                     ChatFanMessageRow.model_username,
                     ChatFanMessageRow.channel_id,
                 )
-                .having(started_at < before)
+                .having(started_at < before),
             )
             return [OpenWait.model_validate(dict(row)) for row in rows.mappings()]
 
@@ -242,7 +258,7 @@ class ChatRepository:
                     detail=detail,
                     at=at,
                 )
-                .on_conflict_do_nothing()
+                .on_conflict_do_nothing(),
             )
 
     def save_sale(
@@ -267,7 +283,7 @@ class ChatRepository:
                     source=source,
                     at=at,
                 )
-                .on_conflict_do_nothing()
+                .on_conflict_do_nothing(),
             )
 
     def sales_between(self, since: float, until: float) -> list[ModelTotal]:
@@ -280,7 +296,7 @@ class ChatRepository:
                     func.sum(ChatSaleRow.gross_cents).label("cents"),
                 )
                 .where(ChatSaleRow.at >= since, ChatSaleRow.at < until)
-                .group_by(ChatSaleRow.platform, ChatSaleRow.model_username)
+                .group_by(ChatSaleRow.platform, ChatSaleRow.model_username),
             )
             return [ModelTotal.model_validate(dict(row)) for row in rows.mappings()]
 
@@ -298,13 +314,17 @@ class ChatRepository:
                     ChatNotificationRow.at < until,
                 )
                 .group_by(
-                    ChatNotificationRow.platform, ChatNotificationRow.model_username
-                )
+                    ChatNotificationRow.platform,
+                    ChatNotificationRow.model_username,
+                ),
             )
             return [ModelTotal.model_validate(dict(row)) for row in rows.mappings()]
 
     def models_reaching_chats(
-        self, platform: str, since: float, min_chats: int
+        self,
+        platform: str,
+        since: float,
+        min_chats: int,
     ) -> list[ModelReach]:
         reached = func.count(ChatModelMessageRow.channel_id.distinct())
         with session_scope() as s:
@@ -325,12 +345,16 @@ class ChatRepository:
                     ChatModelMessageRow.sent_at >= since,
                 )
                 .group_by(ChatThreadRow.model_username)
-                .having(reached >= min_chats)
+                .having(reached >= min_chats),
             )
             return [ModelReach.model_validate(dict(row)) for row in rows.mappings()]
 
     def recent_events(
-        self, platform: str, username: str, kind: str, since: float
+        self,
+        platform: str,
+        username: str,
+        kind: str,
+        since: float,
     ) -> list[str]:
         with session_scope() as s:
             return list(
@@ -340,8 +364,8 @@ class ChatRepository:
                         ChatNotificationRow.model_username == username,
                         ChatNotificationRow.kind == kind,
                         ChatNotificationRow.at >= since,
-                    )
-                ).scalars()
+                    ),
+                ).scalars(),
             )
 
     def notifications(self, since: float) -> list[StoredNotification]:
@@ -358,7 +382,7 @@ class ChatRepository:
                     ChatNotificationRow.at,
                 )
                 .where(ChatNotificationRow.at >= since)
-                .order_by(ChatNotificationRow.at.desc())
+                .order_by(ChatNotificationRow.at.desc()),
             )
             return [
                 StoredNotification.model_validate(dict(row)) for row in rows.mappings()
@@ -373,8 +397,8 @@ class ChatRepository:
                         ChatFanMessageRow.platform == platform,
                         ChatFanMessageRow.replied_at.is_(None),
                     )
-                    .distinct()
-                ).scalars()
+                    .distinct(),
+                ).scalars(),
             )
 
     def accounts(self, platform: str, connected_from: str) -> list[ChatAccount]:
@@ -390,7 +414,7 @@ class ChatRepository:
                     ChatAccountRow.platform == platform,
                     ChatAccountRow.connected_from == connected_from,
                 )
-                .order_by(ChatAccountRow.username)
+                .order_by(ChatAccountRow.username),
             )
             return [ChatAccount.model_validate(dict(row)) for row in rows.mappings()]
 
@@ -415,8 +439,9 @@ class ChatRepository:
                 insert(ChatAccountRow)
                 .values(platform=platform, account_id=account.account_id, **values)
                 .on_conflict_do_update(
-                    index_elements=["platform", "account_id"], set_=values
-                )
+                    index_elements=["platform", "account_id"],
+                    set_=values,
+                ),
             )
 
     def fresh_token(
@@ -431,9 +456,9 @@ class ChatRepository:
             s.execute(
                 select(
                     func.pg_advisory_xact_lock(
-                        func.hashtextextended(f"token:{platform}:{account_id}", 0)
-                    )
-                )
+                        func.hashtextextended(f"token:{platform}:{account_id}", 0),
+                    ),
+                ),
             )
             row = s.get(ChatAccountRow, (platform, account_id))
             if (
@@ -462,7 +487,7 @@ class ChatRepository:
                     ChatWebhookRow.webhook_id,
                     ChatWebhookRow.url,
                     ChatWebhookRow.secret,
-                ).where(ChatWebhookRow.platform == platform)
+                ).where(ChatWebhookRow.platform == platform),
             )
             return [ChatWebhook.model_validate(dict(row)) for row in rows.mappings()]
 
@@ -470,13 +495,15 @@ class ChatRepository:
         with session_scope() as s:
             rows = s.execute(
                 select(ChatWebhookRow.model_username, ChatWebhookRow.url).where(
-                    ChatWebhookRow.platform == platform
-                )
+                    ChatWebhookRow.platform == platform,
+                ),
             )
             return [WebhookTarget.model_validate(dict(row)) for row in rows.mappings()]
 
     def drop_webhooks_except(
-        self, platform: str, model_ids: list[str]
+        self,
+        platform: str,
+        model_ids: list[str],
     ) -> list[ChatWebhook]:
         if not model_ids:
             return []
@@ -493,7 +520,7 @@ class ChatRepository:
                     ChatWebhookRow.webhook_id,
                     ChatWebhookRow.url,
                     ChatWebhookRow.secret,
-                )
+                ),
             )
             return [ChatWebhook.model_validate(dict(row)) for row in dropped.mappings()]
 
@@ -504,6 +531,7 @@ class ChatRepository:
                 insert(ChatWebhookRow)
                 .values(platform=platform, model_id=webhook.model_id, **values)
                 .on_conflict_do_update(
-                    index_elements=["platform", "model_id"], set_=values
-                )
+                    index_elements=["platform", "model_id"],
+                    set_=values,
+                ),
             )

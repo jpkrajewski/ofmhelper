@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import threading
 from datetime import datetime
@@ -83,12 +85,16 @@ class FakeStacked:
                 "members": members,
                 "messageCount": 0,
                 "unreadMessageCount": 0,
-            }
+            },
         )
         self._messages[channel_url] = []
 
     def add_message(
-        self, channel_url: str, user_id: str, text: str, at_ms: int | None = None
+        self,
+        channel_url: str,
+        user_id: str,
+        text: str,
+        at_ms: int | None = None,
     ) -> FakeMessage:
         self._last_id += 1
         made = FakeMessage(
@@ -112,13 +118,17 @@ class FakeStacked:
         return made
 
     def add_reaction(
-        self, channel_url: str, message_id: int, user_id: str, at_ms: int
+        self,
+        channel_url: str,
+        message_id: int,
+        user_id: str,
+        at_ms: int,
     ) -> None:
         message = next(
             m for m in self._messages[channel_url] if m["messageId"] == message_id
         )
         message.setdefault("reactions", []).append(
-            {"key": "fire", "userIds": [user_id], "updatedAt": at_ms}
+            {"key": "fire", "userIds": [user_id], "updatedAt": at_ms},
         )
 
     def sold(self, creator: str, gross_cents: int, at: float) -> None:
@@ -148,8 +158,8 @@ class FakeStacked:
                 {
                     "creators": [
                         _creator(c, access).model_dump(by_alias=True) for c in reachable
-                    ]
-                }
+                    ],
+                },
             )
         creator = query.get("creatorUserId")
         if not creator:
@@ -160,7 +170,8 @@ class FakeStacked:
             )
         if creator not in reachable:
             return _error(
-                HTTPStatus.FORBIDDEN, "api key does not have access to this creator"
+                HTTPStatus.FORBIDDEN,
+                "api key does not have access to this creator",
             )
         if parts == ["chats"]:
             return self._chats(creator, query)
@@ -175,7 +186,9 @@ class FakeStacked:
         return _error(HTTPStatus.NOT_FOUND, "not found")
 
     def _in_window(
-        self, items: list[tuple[float, int]], query: Mapping[str, str]
+        self,
+        items: list[tuple[float, int]],
+        query: Mapping[str, str],
     ) -> list[int]:
         start = _seconds(query["startTime"])
         end = _seconds(query["endTime"])
@@ -209,7 +222,10 @@ class FakeStacked:
         return FakeReply.json_body({"summaries": [summary]})
 
     def _webhooks(
-        self, request: requests.PreparedRequest, creator: str, parts: list[str]
+        self,
+        request: requests.PreparedRequest,
+        creator: str,
+        parts: list[str],
     ) -> FakeReply:
         token = str(request.headers.get("Authorization") or "").removeprefix("Bearer ")
         held = creator if token == CREATOR_KEY else f"{token}:{creator}"
@@ -244,7 +260,10 @@ class FakeStacked:
         return FakeReply.json_body(body)
 
     def _chat_messages(
-        self, creator: str, channel_url: str, query: Mapping[str, str]
+        self,
+        creator: str,
+        channel_url: str,
+        query: Mapping[str, str],
     ) -> FakeReply:
         if not any(c["channelUrl"] == channel_url for c in self.chats.get(creator, [])):
             return _error(HTTPStatus.NOT_FOUND, "failed to fetch chat")

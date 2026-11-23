@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 
 import pytest
@@ -119,10 +121,10 @@ def test_one_line_per_model_and_per_event_in_the_order_given(admin: Session):
     _toggle(admin)
 
     expect(_items(admin).locator(".notifications-item-title")).to_have_text(
-        ["@model_a", "@model_b", "@model_b"]
+        ["@model_a", "@model_b", "@model_b"],
     )
     expect(_items(admin).locator(".notifications-item-text")).to_have_text(
-        ["Chats unanswered (3)", "New subscriber", "Sold $75 post"]
+        ["Chats unanswered (3)", "New subscriber", "Sold $75 post"],
     )
     assert _items(admin).first.get_attribute("href") == "/chatting/stacked/model_a"
     assert _items(admin).first.get_attribute("data-kind") == "warn"
@@ -160,14 +162,14 @@ def test_the_number_moves_on_the_open_page_with_no_new_alert_when_it_falls(
 ):
     server = _start(admin, _model("model_a", "f1", "f2", "f3"))
     expect(_items(admin).locator(".notifications-item-text")).to_have_text(
-        ["Chats unanswered (3)"]
+        ["Chats unanswered (3)"],
     )
     _unlock_sound(admin)
     admin.page.wait_for_function("window.__chimes === 1")
 
     server.send(_model("model_a", "f2", "f3"))
     expect(_items(admin).locator(".notifications-item-text")).to_have_text(
-        ["Chats unanswered (2)"]
+        ["Chats unanswered (2)"],
     )
 
     admin.page.wait_for_timeout(300)
@@ -186,7 +188,7 @@ def test_a_new_fan_alerts_again(admin: Session):
 
     server.send(_model("model_a", "f1", "f2"))
     expect(_items(admin).locator(".notifications-item-text")).to_have_text(
-        ["Chats unanswered (2)"]
+        ["Chats unanswered (2)"],
     )
 
     admin.page.wait_for_function("window.__chimes === 2")
@@ -214,7 +216,9 @@ def test_a_finished_job_shows_like_any_other(admin: Session):
 
 def test_opening_the_list_marks_it_seen_until_a_new_fan_waits(admin: Session):
     server = _start(
-        admin, _model("model_a", "f1", "f2"), _event("e1", "New subscriber")
+        admin,
+        _model("model_a", "f1", "f2"),
+        _event("e1", "New subscriber"),
     )
     expect(_count(admin)).to_have_text("2")
 
@@ -232,7 +236,7 @@ def test_opening_the_list_marks_it_seen_until_a_new_fan_waits(admin: Session):
     expect(_count(admin)).to_have_text("1")
     _toggle(admin)
     expect(_new_items(admin).locator(".notifications-item-title")).to_have_text(
-        ["@model_a"]
+        ["@model_a"],
     )
 
 
@@ -259,7 +263,8 @@ def test_a_closed_socket_keeps_what_shows_and_opens_again(admin: Session):
     expect(_count(admin)).to_have_text("1")
 
     expect(_items(admin).locator(".notifications-item-text")).to_have_text(
-        ["Chats unanswered (2)"], timeout=10_000
+        ["Chats unanswered (2)"],
+        timeout=10_000,
     )
     assert len(server.opened) == 2
 

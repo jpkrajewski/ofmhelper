@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import re
@@ -33,7 +35,7 @@ def error(status: int, code: str, message: str) -> FakeReply:
                 "retry_after": None,
                 "request_id": "req_fake",
                 "docs_url": "https://elyum.ai/open/docs#error-codes",
-            }
+            },
         },
         status=status,
     )
@@ -55,7 +57,9 @@ class FakeElyum:
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         if request.headers.get("Authorization") != f"Bearer {FAKE_KEY}":
             return error(
-                401, "auth", "Send an API key: Authorization: Bearer ek_live_…"
+                401,
+                "auth",
+                "Send an API key: Authorization: Bearer ek_live_…",
             )
         path = urlsplit(request.url or "").path
         if request.method == "POST" and path == _FILES:
@@ -94,7 +98,9 @@ class FakeElyum:
                 found = self.generations[self.by_key[key]]
                 reply = self._generation(found["id"], "queued")
                 return reply.model_copy(
-                    update={"headers": {**reply.headers, "Idempotent-Replayed": "true"}}
+                    update={
+                        "headers": {**reply.headers, "Idempotent-Replayed": "true"},
+                    },
                 )
             refused, self.refuse_next = self.refuse_next, None
             self.created.append((body, key))
@@ -128,7 +134,9 @@ class FakeElyum:
         if found["failure"]:
             code, message = found["failure"]
             return self._generation(
-                generation_id, "failed", error={"code": code, "message": message}
+                generation_id,
+                "failed",
+                error={"code": code, "message": message},
             )
         suffix = "mp4" if _is_video(found["model"]) else "png"
         output = {
@@ -180,7 +188,8 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
     if urlsplit(request.url or "").path.endswith(".mp4"):
         return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
     return FakeReply(
-        body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+        body=fake_media.image(fmt="PNG"),
+        headers={"Content-Type": "image/png"},
     )
 
 

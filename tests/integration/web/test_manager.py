@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime
 
 import pytest
@@ -69,7 +71,9 @@ def test_a_manager_never_opens_their_own_business_or_the_admin_tools(manager, pa
 def test_a_manager_cannot_connect_a_chat_login(manager):
     page = manager.get("/chatting/fanvue", headers=PAGE)
     connect = manager.get(
-        "/chatting/fanvue/connect", headers=PAGE, follow_redirects=False
+        "/chatting/fanvue/connect",
+        headers=PAGE,
+        follow_redirects=False,
     )
 
     assert "Connect Fanvue" not in page.text
@@ -160,7 +164,9 @@ def test_an_admins_manager_keeps_the_chats_after_the_fix(manager, chat_line):
 
 
 def test_an_admins_manager_loses_the_chats_when_the_admin_is_deactivated(
-    boss, manager, chat_line
+    boss,
+    manager,
+    chat_line,
 ):
     user_store.set_active(boss, active=False)
 

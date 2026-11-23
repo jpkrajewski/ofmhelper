@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -11,7 +13,9 @@ from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
 from ofmhelpers.web.templates_config import render, render_polled
 
 router = APIRouter(
-    prefix="/generate", tags=["generate"], dependencies=[Access(Area.GENERATE)]
+    prefix="/generate",
+    tags=["generate"],
+    dependencies=[Access(Area.GENERATE)],
 )
 
 gallery = Gallery(GENERATE_TOOLS, limit=lambda: settings.web.gallery_limit)

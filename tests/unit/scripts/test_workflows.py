@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -88,7 +90,7 @@ def test_every_action_is_pinned_to_a_commit(path: Path):
 
 def _ci() -> dict:
     return yaml.safe_load(
-        (REPO / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        (REPO / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
     )
 
 

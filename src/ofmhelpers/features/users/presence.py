@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.config import settings
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role, User

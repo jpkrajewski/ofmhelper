@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 from types import MappingProxyType
 lazy from pathlib import Path
@@ -139,7 +141,8 @@ class Threads(BaseModel, frozen=True):
     def start(self, key: str) -> None:
         card = self._card()
         reel = next(
-            (f for f in card.scan.posted if f.id == key and f.kind == "video"), None
+            (f for f in card.scan.posted if f.id == key and f.kind == "video"),
+            None,
         )
         if reel is None:
             raise NotFoundError(NO_REEL)

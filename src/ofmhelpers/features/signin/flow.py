@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
@@ -41,7 +43,9 @@ def _identity(provider: Provider, back: Callback) -> _Verified:
         raise SignInError(msg)
     carried = unseal(back.cookie, provider.name, back.state)
     reply = provider.exchange(
-        back.code, redirect_uri(provider, back.site), take_verifier(carried.state)
+        back.code,
+        redirect_uri(provider, back.site),
+        take_verifier(carried.state),
     )
     return _Verified(carried=carried, identity=provider.identity(reply, carried.nonce))
 
@@ -59,7 +63,10 @@ def _use_google_drive(user_id: int, refresh_token: str | None) -> None:
 
 
 def _link(
-    provider: Provider, carried: SignInState, user_id: int, identity: Identity
+    provider: Provider,
+    carried: SignInState,
+    user_id: int,
+    identity: Identity,
 ) -> Outcome:
     owner = users.get_user(user_id)
     may_link = owner is not None and owner.active and owner.role != Role.VA

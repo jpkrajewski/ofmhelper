@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 
 from ofmhelpers.db.audit_log import store as audit_log
@@ -24,7 +26,9 @@ def _main() -> None:
     actor = commands.add_parser("actor", parents=[limit], help="what one person did")
     actor.add_argument("id", type=int)
     owner = commands.add_parser(
-        "owner", parents=[limit], help="what happened to one person's data"
+        "owner",
+        parents=[limit],
+        help="what happened to one person's data",
     )
     owner.add_argument("id", type=int)
     args = parser.parse_args()

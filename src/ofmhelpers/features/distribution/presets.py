@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 from ofmhelpers.db.distribution import store

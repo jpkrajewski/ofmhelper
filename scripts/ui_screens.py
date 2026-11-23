@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Screenshots of every page of the running dev app, one folder per UI
 revision, plus a side-by-side gallery of all revisions.
 
@@ -103,9 +105,10 @@ def shoot(page: Page, shot: Shot, revision: Path) -> list[str]:
         reloads_itself = False
         try:
             page.evaluate(
-                "async () => { for (let y = 0; y < document.body.scrollHeight; y += 600)"
+                "async () => { for (let y = 0; y < "
+                "document.body.scrollHeight; y += 600)"
                 " { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); }"
-                " window.scrollTo(0, 0); }"
+                " window.scrollTo(0, 0); }",
             )
         except PlaywrightError:
             print(f"ui_screens: {shot.name}-{width}: reloads itself, the screen only")
@@ -117,11 +120,12 @@ def shoot(page: Page, shot: Shot, revision: Path) -> list[str]:
         page.wait_for_timeout(SETTLE_MS)
         broken = page.evaluate(
             "() => [...document.images].filter(i => i.complete && i.naturalWidth === 0"
-            " && i.currentSrc).map(i => i.currentSrc)"
+            " && i.currentSrc).map(i => i.currentSrc)",
         )
         if broken:
             print(
-                f"ui_screens: {shot.name}-{width}: {len(broken)} broken images, e.g. {broken[0]}"
+                f"ui_screens: {shot.name}-{width}: {len(broken)} "
+                f"broken images, e.g. {broken[0]}",
             )
         page.screenshot(path=revision / f"{shot.name}-{width}.png", full_page=True)
     return failed
@@ -141,7 +145,7 @@ def gallery() -> None:
             cells.append(
                 f'<td><a href="{src}"><img src="{src}" loading="lazy"></a></td>'
                 if img.exists()
-                else "<td>-</td>"
+                else "<td>-</td>",
             )
         rows.append(f"<tr><th>{escape(name)}</th>{''.join(cells)}</tr>")
     (OUT / "index.html").write_text(
@@ -150,7 +154,7 @@ def gallery() -> None:
         "td,th{border:1px solid #ddd;padding:6px;vertical-align:top}"
         "th{position:sticky;top:0;background:#fff;text-align:left}"
         "img{width:420px;display:block}</style>"
-        f"<table><tr><th>page</th>{head}</tr>{''.join(rows)}</table>"
+        f"<table><tr><th>page</th>{head}</tr>{''.join(rows)}</table>",
     )
 
 

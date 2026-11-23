@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, Response, status
@@ -32,10 +34,14 @@ FolderId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_:-]{1,128}$")]
 _SOURCES = [
     Source(task=CLONE_TASK, files_prefix=CLONE_FILES, page="/clone"),
     Source(
-        task=repurpose.TASK, files_prefix=repurpose.FILES_PREFIX, page=repurpose.PREFIX
+        task=repurpose.TASK,
+        files_prefix=repurpose.FILES_PREFIX,
+        page=repurpose.PREFIX,
     ),
     Source(
-        task=handmade.TASK, files_prefix=handmade.FILES_PREFIX, page=handmade.PREFIX
+        task=handmade.TASK,
+        files_prefix=handmade.FILES_PREFIX,
+        page=handmade.PREFIX,
     ),
 ]
 
@@ -71,7 +77,8 @@ def sync_status(job_id: str, actors: Actors) -> JobStatusPayload:
 @router.get("/folders/{folder_id}", status_code=status.HTTP_303_SEE_OTHER)
 def open_folder(folder_id: FolderId, storage: Storage) -> RedirectResponse:
     return RedirectResponse(
-        storage.folders.open_url(folder_id), status_code=status.HTTP_303_SEE_OTHER
+        storage.folders.open_url(folder_id),
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 

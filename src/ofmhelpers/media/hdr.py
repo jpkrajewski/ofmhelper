@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 HDR_TRANSFERS = frozenset({"arib-std-b67", "smpte2084"})
 SDR_WHITE_NITS = 203
 

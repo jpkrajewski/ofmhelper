@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 from enum import StrEnum
 lazy import random
@@ -39,7 +41,7 @@ class GeoPoint(_Frozen):
             update={
                 "latitude": self.latitude + north_m / _M_PER_DEGREE,
                 "longitude": self.longitude + east_m / lon_m,
-            }
+            },
         )
 
 
@@ -52,7 +54,8 @@ class Place(_Frozen):
         distance = self.jitter_m * math.sqrt(rng.random())
         bearing = rng.uniform(0, 2 * math.pi)
         point = self.center.moved(
-            distance * math.cos(bearing), distance * math.sin(bearing)
+            distance * math.cos(bearing),
+            distance * math.sin(bearing),
         )
         return PlaceSample(point=point, accuracy_m=rng.uniform(*self.accuracy_m))
 

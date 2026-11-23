@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.short_links.catalog import (
     DayStat,
     HourStat,

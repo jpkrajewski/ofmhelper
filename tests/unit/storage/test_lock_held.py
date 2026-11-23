@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 

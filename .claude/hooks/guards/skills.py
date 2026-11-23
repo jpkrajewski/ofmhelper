@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from pydantic import BaseModel
@@ -13,10 +15,11 @@ IMPORT = re.compile(
 PYDANTIC = re.compile(
     r"\b(?:BaseModel|BaseSettings|RootModel|TypeAdapter|ConfigDict|model_validate(?:_json)?"
     r"|model_dump(?:_json)?|model_copy|model_construct|model_fields(?:_set)?|field_validator"
-    r"|model_validator|from_attributes)\b|\bField\("
+    r"|model_validator|from_attributes)\b|\bField\(",
 )
 LOAD_FIRST = (
-    "CLAUDE.md STANDARDS: load the {skills} skill(s) with the Skill tool before editing {path}, "
+    "CLAUDE.md STANDARDS: load the {skills} skill(s) "
+    "with the Skill tool before editing {path}, "
     "then say in two lines where the new thing goes and which existing file it follows."
 )
 
@@ -29,7 +32,11 @@ class SkillRule(BaseModel):
     writes: re.Pattern[str] | None = None
 
     def needed(
-        self, relative: str, is_new: bool, adds_names: bool, written: str
+        self,
+        relative: str,
+        is_new: bool,
+        adds_names: bool,
+        written: str,
     ) -> bool:
         if not self.path.search(relative):
             return False
@@ -56,7 +63,7 @@ RULES = (
     ),
     SkillRule(
         path=re.compile(
-            r"^src/ofmhelpers/(web/routers|web/static/js|features|integrations)/.*\.(py|js|html)$"
+            r"^src/ofmhelpers/(web/routers|web/static/js|features|integrations)/.*\.(py|js|html)$",
         ),
         skills=("failure-modes",),
         new_code_only=True,
@@ -67,13 +74,13 @@ RULES = (
     ),
     SkillRule(
         path=re.compile(
-            r"^(docker-compose[^/]*\.ya?ml|Dockerfile[^/]*|\.github/workflows/.+|scripts/(deploy|[^/]*backup)[^/]*)$"
+            r"^(docker-compose[^/]*\.ya?ml|Dockerfile[^/]*|\.github/workflows/.+|scripts/(deploy|[^/]*backup)[^/]*)$",
         ),
         skills=("aws-devops-guidance",),
     ),
     SkillRule(
         path=re.compile(
-            r"^(src|tests|scripts|alembic|\.claude/(hooks|skills))/.*\.py$"
+            r"^(src|tests|scripts|alembic|\.claude/(hooks|skills))/.*\.py$",
         ),
         skills=("pydantic",),
         writes=PYDANTIC,
@@ -86,7 +93,10 @@ def skill_marker(name: str) -> str:
 
 
 def required(
-    relative: str, is_new: bool, adds_names: bool, written: str = ""
+    relative: str,
+    is_new: bool,
+    adds_names: bool,
+    written: str = "",
 ) -> list[str]:
     return [
         skill

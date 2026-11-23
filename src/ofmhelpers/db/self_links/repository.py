@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from datetime import UTC, date, datetime
 from typing import Any
@@ -51,7 +53,9 @@ class SelfLinkRepository(CachedRepository):
         where = [(dom.owner_id == owner) | (dom.owner_id.is_(None))] if owner else []
         with session_scope() as s:
             rows = s.execute(
-                select(dom).where(*where).order_by(dom.created_at.desc(), dom.id.desc())
+                select(dom)
+                .where(*where)
+                .order_by(dom.created_at.desc(), dom.id.desc()),
             ).scalars()
             return [
                 SelfDomain(
@@ -82,14 +86,17 @@ class SelfLinkRepository(CachedRepository):
 
     @invalidates_cache
     def set_domain_status(
-        self, domain_id: int, status: str, owner: int | None = None
+        self,
+        domain_id: int,
+        status: str,
+        owner: int | None = None,
     ) -> None:
         dom = SelfLinkDomainRow
         with session_scope() as s:
             s.execute(
                 update(dom)
                 .where(dom.id == domain_id, *mine(dom.owner_id, owner))
-                .values(status=status)
+                .values(status=status),
             )
 
     @invalidates_cache
@@ -98,8 +105,9 @@ class SelfLinkRepository(CachedRepository):
         with session_scope() as s:
             gone = s.execute(
                 select(dom.host, dom.owner_id).where(
-                    dom.id == domain_id, *mine(dom.owner_id, owner)
-                )
+                    dom.id == domain_id,
+                    *mine(dom.owner_id, owner),
+                ),
             ).first()
             if gone is not None and gone.owner_id is not None:
                 s.execute(
@@ -110,10 +118,10 @@ class SelfLinkRepository(CachedRepository):
                         ShortLinkRow.user_id == gone.owner_id,
                         ShortLinkRow.status == "active",
                     )
-                    .values(status="inactive")
+                    .values(status="inactive"),
                 )
             s.execute(
-                delete(dom).where(dom.id == domain_id, *mine(dom.owner_id, owner))
+                delete(dom).where(dom.id == domain_id, *mine(dom.owner_id, owner)),
             )
 
     def record_click(self, click: dict[str, Any]) -> None:
@@ -135,11 +143,12 @@ class SelfLinkRepository(CachedRepository):
                     click.ts < _epoch(end) + 86400,
                 )
                 .group_by(click.link_id, day)
-                .order_by(day)
+                .order_by(day),
             ).all()
         for link_id, d, views, clicks in rows:
             found.setdefault(
-                link_id, SelfLinkDays(link_id=link_id, days=[])
+                link_id,
+                SelfLinkDays(link_id=link_id, days=[]),
             ).days.append(DayStat(day=d, views=int(views), clicks=int(clicks)))
         return list(found.values())
 
@@ -148,7 +157,8 @@ class SelfLinkRepository(CachedRepository):
             return []
         click = SelfLinkClickRow
         hour = func.date_trunc(
-            "hour", func.to_timestamp(click.ts).op("AT TIME ZONE")("UTC")
+            "hour",
+            func.to_timestamp(click.ts).op("AT TIME ZONE")("UTC"),
         )
         found: dict[int, SelfLinkHours] = {}
         with session_scope() as s:
@@ -160,12 +170,13 @@ class SelfLinkRepository(CachedRepository):
                     click.ts < _epoch(day) + 86400,
                 )
                 .group_by(click.link_id, hour)
-                .order_by(hour)
+                .order_by(hour),
             ).all()
         for link_id, h, views, clicks in rows:
             when = h.replace(tzinfo=UTC) if h.tzinfo is None else h
             found.setdefault(
-                link_id, SelfLinkHours(link_id=link_id, hours=[])
+                link_id,
+                SelfLinkHours(link_id=link_id, hours=[]),
             ).hours.append(HourStat(hour=when, views=int(views), clicks=int(clicks)))
         return list(found.values())
 
@@ -183,12 +194,17 @@ class SelfLinkRepository(CachedRepository):
                     click.link_id.in_(link_ids),
                     click.ts >= _epoch(start),
                     click.ts < _epoch(end) + 86400,
-                )
+                ),
             ).one()
         return SelfTotals(views=int(row.v), clicks=int(row.c), visitors=int(row.u))
 
     def series(
-        self, link_ids: list[int], start: date, end: date, *, by_hour: bool
+        self,
+        link_ids: list[int],
+        start: date,
+        end: date,
+        *,
+        by_hour: bool,
     ) -> list[SelfSeriesPoint]:
         if not link_ids:
             return []
@@ -204,7 +220,7 @@ class SelfLinkRepository(CachedRepository):
                     click.ts < _epoch(end) + 86400,
                 )
                 .group_by(bucket)
-                .order_by(bucket)
+                .order_by(bucket),
             ).all()
         return [
             SelfSeriesPoint(bucket=b.isoformat(), views=int(views), clicks=int(clicks))
@@ -234,14 +250,17 @@ class SelfLinkRepository(CachedRepository):
                 )
                 .group_by(col)
                 .order_by(func.count().desc())
-                .limit(limit)
+                .limit(limit),
             ).all()
         return [
             SelfBreakdownRow(value=value, clicks=int(clicks)) for value, clicks in rows
         ]
 
     def per_link(
-        self, link_ids: list[int], start: date, end: date
+        self,
+        link_ids: list[int],
+        start: date,
+        end: date,
     ) -> list[SelfLinkCount]:
         if not link_ids:
             return []
@@ -254,7 +273,7 @@ class SelfLinkRepository(CachedRepository):
                     click.ts >= _epoch(start),
                     click.ts < _epoch(end) + 86400,
                 )
-                .group_by(click.link_id)
+                .group_by(click.link_id),
             ).all()
         return [
             SelfLinkCount(link_id=link_id, views=int(views), clicks=int(clicks))

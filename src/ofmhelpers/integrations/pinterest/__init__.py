@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.pinterest.client import (
     LOGIN_COOKIE,
     PinterestClient,

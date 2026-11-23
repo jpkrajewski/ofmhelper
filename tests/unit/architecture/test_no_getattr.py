@@ -1,9 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location(
-    "check_no_getattr", ROOT / "scripts" / "check_no_getattr.py"
+    "check_no_getattr",
+    ROOT / "scripts" / "check_no_getattr.py",
 )
 assert SPEC is not None
 assert SPEC.loader is not None

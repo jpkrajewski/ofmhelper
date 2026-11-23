@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -8,8 +10,10 @@ NAME = "no_comments"
 CHECKER = ROOT / "scripts" / "check_no_comments.py"
 GETATTR_CHECKER = ROOT / "scripts" / "check_no_getattr.py"
 FOUND = (
-    "CLAUDE.md: NO COMMENTS, NO DOCSTRINGS, EVER: {spots}. Remove them; a descriptive name says it. "
-    "Only machine directives stay (# noqa, # type: ignore, # fmt:, # pragma, # silent: <reason>)."
+    "CLAUDE.md: NO COMMENTS, NO DOCSTRINGS, EVER: "
+    "{spots}. Remove them; a descriptive name says it. "
+    "Only machine directives stay (# noqa, # type: "
+    "ignore, # fmt:, # pragma, # silent: <reason>)."
 )
 
 

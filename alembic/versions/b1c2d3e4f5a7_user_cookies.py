@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -27,7 +29,7 @@ def _move_shared_file() -> None:
         return
     conn = op.get_bind()
     admin = conn.execute(
-        sa.text("SELECT id FROM users WHERE is_password_account ORDER BY id LIMIT 1")
+        sa.text("SELECT id FROM users WHERE is_password_account ORDER BY id LIMIT 1"),
     ).scalar()
     if admin is None:
         logger.warning("no password admin yet: shared cookies file %s not moved", path)
@@ -36,7 +38,7 @@ def _move_shared_file() -> None:
         sa.text(
             "INSERT INTO user_cookies (user_id, cookies, file_name, uploaded_at)"
             " VALUES (:user_id, :cookies, :file_name, :uploaded_at)"
-            " ON CONFLICT (user_id) DO NOTHING"
+            " ON CONFLICT (user_id) DO NOTHING",
         ),
         {
             "user_id": admin,

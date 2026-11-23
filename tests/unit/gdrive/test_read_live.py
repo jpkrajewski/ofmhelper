@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 import pytest
@@ -99,7 +101,10 @@ def test_read_live_mode_is_off_by_default(monkeypatch):
 
 def _service(raw: _Reads) -> StorageService:
     access = StorageAccess(
-        owner_id=1, client=raw, constants=StorageConstants(), read_live=read_live()
+        owner_id=1,
+        client=raw,
+        constants=StorageConstants(),
+        read_live=read_live(),
     )
     return StorageService.compose(access)
 

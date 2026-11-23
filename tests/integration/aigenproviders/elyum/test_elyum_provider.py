@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -136,7 +138,9 @@ def test_a_file_elyum_does_not_take_is_refused_before_any_call(provider, tmp_pat
 
 
 def test_a_file_over_elyums_limit_is_refused_before_any_call(
-    provider, video, monkeypatch
+    provider,
+    video,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_ELYUM_MAX_FILE_BYTES", "1000")
 

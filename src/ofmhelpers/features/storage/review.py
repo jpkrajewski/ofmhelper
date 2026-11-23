@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
@@ -25,7 +27,9 @@ logger = get_logger(__name__)
 def _review_lock(user_id: int) -> Iterator[None]:
     wait_s = settings.gdrive.review_lock_s
     lock = get_redis().lock(
-        f"lock:drive-review:{user_id}", timeout=wait_s, blocking_timeout=wait_s
+        f"lock:drive-review:{user_id}",
+        timeout=wait_s,
+        blocking_timeout=wait_s,
     )
     try:
         held = bool(lock.acquire())
@@ -35,7 +39,9 @@ def _review_lock(user_id: int) -> Iterator[None]:
     else:
         if not held:
             logger.warning(
-                "drive: review lock of %s not had in %s s: going ahead", user_id, wait_s
+                "drive: review lock of %s not had in %s s: going ahead",
+                user_id,
+                wait_s,
             )
     try:
         yield
@@ -45,7 +51,9 @@ def _review_lock(user_id: int) -> Iterator[None]:
                 lock.release()
             except RedisError, LockError:
                 logger.warning(
-                    "drive: review lock of %s not released", user_id, exc_info=True
+                    "drive: review lock of %s not released",
+                    user_id,
+                    exc_info=True,
                 )
 
 
@@ -61,7 +69,9 @@ def _remembered(root: ReviewPlace, key: str, name: str) -> str | None:
         current = root.drive.folder(known)
     except FolderGoneError:  # silent: deleted by hand: found again
         logger.info(
-            "drive: review folder %s (%s) is gone: finding it again", name, known
+            "drive: review folder %s (%s) is gone: finding it again",
+            name,
+            known,
         )
         return None
     if current.name != name or root.folder_id not in current.parents:
@@ -96,7 +106,10 @@ class StorageServiceReview(BaseModel, frozen=True, arbitrary_types_allowed=True)
         return self.client
 
     def account_subfolder(
-        self, place: ReviewPlace, account_folder_id: str, name: AccountFolder
+        self,
+        place: ReviewPlace,
+        account_folder_id: str,
+        name: AccountFolder,
     ) -> str:
         drive = place.drive
         if not self.read_live:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.db.drive_folders.schema import UploadPick
@@ -17,7 +19,9 @@ logger = get_logger(__name__)
 
 
 def _upload_pick(
-    readers: Readers, job_id: str, sources: list[Source]
+    readers: Readers,
+    job_id: str,
+    sources: list[Source],
 ) -> UploadPick | None:
     job = get_job(job_id, readers)
     source = next((s for s in sources if job and s.task == job.task), None)
@@ -46,7 +50,11 @@ class StorageServicePage(BaseModel, frozen=True):
     folders: StorageServiceFolders
 
     def view(
-        self, viewer: int, readers: Readers, upload: str, sources: list[Source]
+        self,
+        viewer: int,
+        readers: Readers,
+        upload: str,
+        sources: list[Source],
     ) -> PageView:
         return PageView(
             board=self.folders.saved_board(viewer=viewer),
@@ -58,7 +66,10 @@ class StorageServicePage(BaseModel, frozen=True):
             found = self.folders.thumbnail(login_id, file_id)
         except (DriveError, SignInError) as exc:
             logger.warning(
-                "drive: preview of %s failed: %s", file_id, exc, exc_info=True
+                "drive: preview of %s failed: %s",
+                file_id,
+                exc,
+                exc_info=True,
             )
             msg = self.constants.no_preview
             raise NotFoundError(msg) from exc

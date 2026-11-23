@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 lazy from pathlib import Path
 
@@ -57,7 +59,9 @@ def _video(tmp_path: Path, name: str = "clone.mp4") -> Path:
 
 def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> str:
     job_id = create_job(
-        CloneLinksTask.RUN, {"link": REEL, "mirror": mirror}, actor=str(_owner(email))
+        CloneLinksTask.RUN,
+        {"link": REEL, "mirror": mirror},
+        actor=str(_owner(email)),
     )
     entry = (
         ResultFile(name=video.name, path=str(video))
@@ -65,7 +69,9 @@ def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> 
         else ResultFile(name="clone.mp4", path=None, remote_url="https://kie.example/c")
     )
     jobs_repository().update_status(
-        job_id, "done", result=[entry.model_dump(exclude_unset=True)]
+        job_id,
+        "done",
+        result=[entry.model_dump(exclude_unset=True)],
     )
     return job_id
 
@@ -87,7 +93,7 @@ def _set(review_id: int, **values) -> None:
         s.execute(
             update(CloneFromLinkRow)
             .where(CloneFromLinkRow.id == review_id)
-            .values(**values)
+            .values(**values),
         )
 
 
@@ -150,7 +156,9 @@ def test_a_glitchy_video_lands_in_trial_reels_with_its_glitches(tmp_path):
 
 
 def test_a_check_that_raises_still_sends_the_video_to_trial_reels(
-    tmp_path, monkeypatch, capfire: CaptureLogfire
+    tmp_path,
+    monkeypatch,
+    capfire: CaptureLogfire,
 ):
     drive = fake_drive()
     ann = client(ANN)
@@ -185,7 +193,9 @@ def test_a_check_that_raises_still_sends_the_video_to_trial_reels(
 
 
 def test_a_used_up_ai_says_so_on_the_card_and_is_an_error_span(
-    tmp_path, monkeypatch, capfire: CaptureLogfire
+    tmp_path,
+    monkeypatch,
+    capfire: CaptureLogfire,
 ):
     ann = client(ANN)
     raw = "429 RESOURCE_EXHAUSTED: You exceeded your current quota"
@@ -193,7 +203,10 @@ def test_a_used_up_ai_says_so_on_the_card_and_is_an_error_span(
         review,
         "check_clone",
         lambda video, *, mirrored=False: unanswered(
-            video, "No AI model answered", "quota", detail=raw
+            video,
+            "No AI model answered",
+            "quota",
+            detail=raw,
         ),
     )
 
@@ -293,7 +306,8 @@ def test_a_result_kept_only_by_the_provider_gets_a_failed_review_saying_so(tmp_p
 
 
 def test_a_queue_that_refuses_the_review_fails_it_with_fixed_words(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     ann = client(ANN)
     video = _video(tmp_path)
@@ -316,7 +330,8 @@ def test_a_queue_that_refuses_the_review_fails_it_with_fixed_words(
 
 
 def test_start_reviews_never_raises_even_when_nothing_can_be_saved(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     client(ANN)
     video = _video(tmp_path)
@@ -352,7 +367,8 @@ def test_a_review_is_claimed_once(tmp_path):
 
 
 def test_a_run_whose_row_was_taken_over_writes_and_uploads_nothing(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     drive = fake_drive()
     client(ANN)
@@ -536,7 +552,9 @@ def test_an_upload_cut_off_after_it_reached_drive_is_adopted_not_doubled(tmp_pat
     claimed = store.claim(review_id)
     assert store.checked(claimed, None, GOOD_REELS)
     folder_id = drive_folders.review_folder(
-        users.refresh_token(_owner()), _owner(), GOOD_REELS
+        users.refresh_token(_owner()),
+        _owner(),
+        GOOD_REELS,
     ).folder_id
     made = drive.add_file(folder_id, download_name(video.name), "video/mp4")
     _set(review_id, started_at=_long_ago())

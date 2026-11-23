@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 
 import pytest
@@ -20,7 +22,8 @@ def fakes_on(monkeypatch, tmp_path):
 
 def test_a_video_url_downloads_to_a_playable_mp4(tmp_path):
     result = generic.download(
-        "https://www.tiktok.com/@a/video/1", DownloadConfig(output_dir=tmp_path / "v")
+        "https://www.tiktok.com/@a/video/1",
+        DownloadConfig(output_dir=tmp_path / "v"),
     )
     assert result.success
     (path,) = result.output_paths
@@ -39,7 +42,8 @@ def test_a_post_url_downloads_two_images(tmp_path):
 
 def test_a_failing_url_fails_with_a_reason(tmp_path):
     result = generic.download(
-        "https://www.tiktok.com/fake-fail", DownloadConfig(output_dir=tmp_path)
+        "https://www.tiktok.com/fake-fail",
+        DownloadConfig(output_dir=tmp_path),
     )
     assert not result.success
     assert result.error == "ERROR: Video unavailable"
@@ -72,7 +76,9 @@ def test_a_reel_looks_like_the_2_s_video_it_downloads_to(monkeypatch, tmp_path):
     ],
 )
 def test_a_photo_post_has_no_video_in_the_look_and_the_download(
-    url, monkeypatch, tmp_path
+    url,
+    monkeypatch,
+    tmp_path,
 ):
     info = generic.video_info(url)
 

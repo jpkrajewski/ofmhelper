@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from repo_paths import SRC
@@ -20,13 +22,14 @@ def admin(fake_externals) -> TestClient:
 
 def _phone(label: str) -> int:
     return store.add_device(
-        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner="Anna")
+        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner="Anna"),
     )
 
 
 def _add(admin: TestClient, phone: int, service: str, username: str) -> int:
     r = admin.post(
-        f"/phones/{phone}/logins", json={"service": service, "username": username}
+        f"/phones/{phone}/logins",
+        json={"service": service, "username": username},
     )
     assert r.status_code == 201, r.text
     return r.json()["id"]

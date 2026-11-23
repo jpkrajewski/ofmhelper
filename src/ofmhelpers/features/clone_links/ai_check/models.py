@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, Field
 
 from ofmhelpers.db.clone_ai_checks.schema import (
@@ -13,7 +15,7 @@ __all__ = ["CloneAiCheck", "CloneAiVerdict", "ErrorKind", "Glitch", "Verdict"]
 class CloneAiVerdict(BaseModel):
     reasoning: str = Field(description="One short sentence: what you saw and why.")
     glitches: list[Glitch] = Field(
-        description="Every glitch you saw, minor ones too; empty when none."
+        description="Every glitch you saw, minor ones too; empty when none.",
     )
     glitch_percent: int = Field(
         ge=0,

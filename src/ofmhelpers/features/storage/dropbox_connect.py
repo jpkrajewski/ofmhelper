@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 
 from redis.exceptions import RedisError
@@ -60,7 +62,9 @@ def finish(user_id: int, code: str, state: str) -> bool:
     starter, _, verifier = stored.partition(":")
     if starter != str(user_id):
         logger.warning(
-            "dropbox connect: state started by user %s used by %s", starter, user_id
+            "dropbox connect: state started by user %s used by %s",
+            starter,
+            user_id,
         )
         return False
     try:

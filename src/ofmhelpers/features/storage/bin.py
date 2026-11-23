@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from pydantic import BaseModel, SkipValidation
@@ -74,7 +76,7 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
                     login_id=target.login_id,
                     folder_id=folder.folder_id,
                     name=target.folder_name,
-                )
+                ),
             )
         return found
 
@@ -118,7 +120,9 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
                 self._start_scan()
             except RedisError:
                 logger.warning(
-                    "storage: scan of %s not queued", self.user_id, exc_info=True
+                    "storage: scan of %s not queued",
+                    self.user_id,
+                    exc_info=True,
                 )
             scan = latest_job(StorageTask.SCAN, self.actor)
         return StoragePage(
@@ -147,7 +151,8 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
             raise NotFoundError(self.constants.no_folder)
         params = BinMove(part=part, folder_id=folder_id).model_dump(mode="json")
         with lock_held(
-            f"storage:bin:{self.user_id}", settings.storage.start_lock_s
+            f"storage:bin:{self.user_id}",
+            settings.storage.start_lock_s,
         ) as held:
             if not held:
                 raise TryAgainError(self.constants.try_again)
@@ -191,7 +196,9 @@ class StorageServiceBin(BaseModel, frozen=True, arbitrary_types_allowed=True):
         folders = self._accounts()
         self._measure({f.folder_id: f.sizes for f in folders}, split=True)
         return StorageUsage(
-            quota=self._drive().storage(), folders=folders, scanned_at=time.time()
+            quota=self._drive().storage(),
+            folders=folders,
+            scanned_at=time.time(),
         )
 
     def _trash(self, item_id: str) -> bool:

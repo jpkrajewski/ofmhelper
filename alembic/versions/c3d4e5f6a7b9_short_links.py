@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -46,10 +48,17 @@ def upgrade() -> None:
         sa.Column("created_at", sa.Float(), nullable=False),
         sa.Column("updated_at", sa.Float(), nullable=False),
         sa.UniqueConstraint(
-            "user_id", "provider", "domain", "slug", name="uq_short_links_address"
+            "user_id",
+            "provider",
+            "domain",
+            "slug",
+            name="uq_short_links_address",
         ),
         sa.UniqueConstraint(
-            "user_id", "provider", "remote_id", name="uq_short_links_remote"
+            "user_id",
+            "provider",
+            "remote_id",
+            name="uq_short_links_remote",
         ),
     )
     op.create_index("ix_short_links_user_id", "short_links", ["user_id"])

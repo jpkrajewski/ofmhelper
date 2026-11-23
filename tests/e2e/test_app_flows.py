@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import re
 import subprocess
@@ -58,7 +60,9 @@ def test_va_sees_only_its_pages_and_none_of_the_admin_ones(va: Session):
 
 
 def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
-    admin: Session, browser, base_url
+    admin: Session,
+    browser,
+    base_url,
 ):
     admin.goto("/users")
     admin.page.fill("#users-email", "newbie@example.com")
@@ -81,7 +85,7 @@ def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
     page.goto("/account")
     assert page.url.endswith("/account")
     expect(page.locator('[data-provider="google"]')).to_contain_text(
-        "newbie@example.com"
+        "newbie@example.com",
     )
     expect(page.locator(".card").nth(1)).to_contain_text("Connected")
     page.click(".logout-form button")
@@ -105,7 +109,8 @@ def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
 
 
 def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
-    va: Session, coworker: Session
+    va: Session,
+    coworker: Session,
 ):
     coworker.goto("/generate")
     va.goto("/generate")
@@ -145,7 +150,7 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
         va.page.click('#generate-form button[type="submit"]')
     card = f'.result-item[data-job-id="{run.value.json()["job_id"]}"]'
     expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
-        timeout=RESULT_TIMEOUT_MS
+        timeout=RESULT_TIMEOUT_MS,
     )
 
     fields_asked: list[str] = []
@@ -185,7 +190,8 @@ def test_picked_files_survive_a_model_switch(va: Session, subject_images: list[P
     va.goto("/generate")
     _swap_fields(va, lambda: va.page.select_option("#provider-select", "kie"))
     _swap_fields(
-        va, lambda: va.page.select_option("#model-select", "kie:bytedance/seedance-2-5")
+        va,
+        lambda: va.page.select_option("#model-select", "kie:bytedance/seedance-2-5"),
     )
     seedance = '#model-fields .file-picker[data-field="reference_image_urls"]'
     for path in subject_images:
@@ -198,7 +204,8 @@ def test_picked_files_survive_a_model_switch(va: Session, subject_images: list[P
 
     va.page.select_option("#provider-select", "higgsfield")
     va.page.select_option(
-        "#model-select", "higgsfield:bytedance/seedance-2.5/reference-to-video"
+        "#model-select",
+        "higgsfield:bytedance/seedance-2.5/reference-to-video",
     )
     hf = '#model-fields .file-picker[data-field="image_urls"]'
     expect(va.page.locator(f"{hf} li")).to_have_count(2)
@@ -216,10 +223,10 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     va.page.select_option("#provider-select", "kie")
     va.page.fill("#api-key", "e2e-wrong-key")
     va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
-        [str(p) for p in subject_images]
+        [str(p) for p in subject_images],
     )
     va.page.locator(
-        '.file-picker[data-field="videos"] .file-add-input'
+        '.file-picker[data-field="videos"] .file-add-input',
     ).set_input_files([str(p) for p in source_videos])
 
     with va.page.expect_response(lambda r: r.url.endswith("/clone/run")) as run:
@@ -230,11 +237,12 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     cards = ", ".join(f'#clone-gallery > [data-job-id="{j}"]' for j in body["job_ids"])
     expect(va.page.locator(cards)).to_have_count(len(source_videos))
     expect(coworker.page.locator(cards)).to_have_count(
-        len(source_videos), timeout=LIVE_TIMEOUT_MS
+        len(source_videos),
+        timeout=LIVE_TIMEOUT_MS,
     )
 
     failed = va.page.locator("#clone-gallery .result-failed").filter(
-        has_text="kie.ai: Wrong API key"
+        has_text="kie.ai: Wrong API key",
     )
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
     expect(failed.first).to_have_attribute("data-reason", "Wrong API key")
@@ -245,7 +253,7 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
 
     first = va.page.locator(f'#clone-gallery > [data-job-id="{body["job_ids"][0]}"]')
     expect(
-        first.locator(".result-actions .menu .menu-item:not([hidden])")
+        first.locator(".result-actions .menu .menu-item:not([hidden])"),
     ).to_have_text(["Hide"])
     first.locator(".recreate-btn").click()
     expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
@@ -258,14 +266,14 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     assert coworker.js_errors == []
 
     expect(va.page.locator("#clone-cost-summary")).to_have_text(
-        re.compile(r"^1 run · [\d.]+ s of video$")
+        re.compile(r"^1 run · [\d.]+ s of video$"),
     )
     params = json.loads(first.get_attribute("data-params") or "{}")
     Path(params["reference_videos"][0]).unlink()
     first.locator(".recreate-btn").click()
     videos = va.page.locator('.file-picker[data-field="videos"]')
     expect(videos.locator(".file-picker-missing")).to_contain_text(
-        "is not on this server: pick it again"
+        "is not on this server: pick it again",
     )
     expect(videos.locator("li")).to_have_count(0)
     expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
@@ -273,10 +281,15 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
 
 
 def test_recreate_downloads_a_clones_removed_video_again(
-    va: Session, tmp_path: Path, app_dir: Path
+    va: Session,
+    tmp_path: Path,
+    app_dir: Path,
 ):
     removed = removed_download(
-        tmp_path, app_dir / "uploads", VA_ID, "https://www.example.com/watch/recreate"
+        tmp_path,
+        app_dir / "uploads",
+        VA_ID,
+        "https://www.example.com/watch/recreate",
     )
     params = {
         "provider": "kie",
@@ -295,7 +308,8 @@ def test_recreate_downloads_a_clones_removed_video_again(
     expect(videos.locator("li")).to_have_count(1)
     expect(videos.locator(".reused-badge")).to_have_text("Downloading again…")
     expect(videos.locator(".reused-badge")).to_have_text(
-        "reused", timeout=RESULT_TIMEOUT_MS
+        "reused",
+        timeout=RESULT_TIMEOUT_MS,
     )
     expect(videos.locator("li")).to_have_count(1)
     expect(videos.locator(".file-picker-missing")).to_have_count(0)
@@ -321,13 +335,15 @@ def test_clone_output_selects_and_switches_line_up(va: Session):
     assert selects[0]["width"] == selects[1]["width"]
     assert switches[0]["x"] == switches[1]["x"]
     assert va.page.eval_on_selector(
-        "#clone-export", "e => getComputedStyle(e).backgroundImage"
+        "#clone-export",
+        "e => getComputedStyle(e).backgroundImage",
     ).startswith("linear-gradient")
     assert va.js_errors == []
 
 
 def test_clone_long_prices_a_long_16_9_video_before_it_runs(
-    va: Session, tmp_path: Path
+    va: Session,
+    tmp_path: Path,
 ):
     video = tmp_path / "long.mp4"
     subprocess.run(
@@ -355,7 +371,7 @@ def test_clone_long_prices_a_long_16_9_video_before_it_runs(
     expect(quote).to_be_hidden()
 
     va.page.locator('.file-picker[data-field="video"] .file-add-input').set_input_files(
-        str(video)
+        str(video),
     )
 
     expect(quote).to_have_text("32 s · 3 pieces · $5.12 · 1,024 credits")
@@ -365,17 +381,19 @@ def test_clone_long_prices_a_long_16_9_video_before_it_runs(
 
 
 def test_clone_long_start_queues_a_card_that_fails_cleanly_on_a_wrong_key(
-    va: Session, subject_images: list[Path], source_videos: list[Path]
+    va: Session,
+    subject_images: list[Path],
+    source_videos: list[Path],
 ):
     va.goto("/clone-long")
     expect(va.page.locator("#clone-long-empty")).to_be_visible()
     va.page.select_option("#provider-select", "kie")
     va.page.fill("#api-key", "e2e-wrong-key")
     va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
-        str(subject_images[0])
+        str(subject_images[0]),
     )
     va.page.locator('.file-picker[data-field="video"] .file-add-input').set_input_files(
-        str(source_videos[0])
+        str(source_videos[0]),
     )
 
     with va.page.expect_response(lambda r: r.url.endswith("/clone-long/run")) as run:
@@ -386,13 +404,14 @@ def test_clone_long_start_queues_a_card_that_fails_cleanly_on_a_wrong_key(
     expect(card).to_have_count(1)
     expect(va.page.locator("#clone-long-empty")).to_be_hidden()
     expect(card.locator(".result-failed")).to_have_text(
-        re.compile("Wrong API key"), timeout=RESULT_TIMEOUT_MS
+        re.compile("Wrong API key"),
+        timeout=RESULT_TIMEOUT_MS,
     )
 
     va.page.reload()
     va.page.fill("#clone-long-prompt", "")
     va.page.locator(
-        f'#clone-long-gallery > [data-job-id="{job_id}"] .recreate-btn'
+        f'#clone-long-gallery > [data-job-id="{job_id}"] .recreate-btn',
     ).click()
     for field in ("image", "video"):
         picked = va.page.locator(f'.file-picker[data-field="{field}"] li')
@@ -409,18 +428,18 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
     panel = va.page.locator("#clone-cost")
     expect(panel).to_be_hidden()
     va.page.locator(
-        '.file-picker[data-field="videos"] .file-add-input'
+        '.file-picker[data-field="videos"] .file-add-input',
     ).set_input_files([str(p) for p in source_videos])
 
     expect(panel).to_be_visible()
     expect(va.page.locator("#clone-cost-lines .cost-line")).to_have_count(2)
     expect(va.page.locator("#clone-cost-summary")).to_have_text(
-        "2 runs · 8.0 s of video"
+        "2 runs · 8.0 s of video",
     )
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.28")
     expect(va.page.locator("#clone-cost-credits")).to_have_text("256 credits")
     expect(va.page.locator("#clone-cost-rate")).to_have_text(
-        "720P · $0.16 per video second"
+        "720P · $0.16 per video second",
     )
 
     va.page.select_option("#clone-resolution", "1080P")
@@ -432,7 +451,7 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$3.47")
     expect(va.page.locator("#clone-cost-credits")).to_have_text("55.4 credits")
     expect(va.page.locator("#clone-cost-rate")).to_have_text(
-        "720P · $0.433 per video second"
+        "720P · $0.433 per video second",
     )
     expect(va.page.locator("#clone-cost-note")).to_contain_text("Measured on your runs")
     va.page.select_option("#provider-select", "kie")
@@ -440,7 +459,8 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$2.56")
 
     va.page.locator(
-        '.file-picker[data-field="videos"] .file-order-list button', has_text="✕"
+        '.file-picker[data-field="videos"] .file-order-list button',
+        has_text="✕",
     ).first.click()
     expect(va.page.locator("#clone-cost-lines .cost-line")).to_have_count(1)
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.60")
@@ -448,7 +468,8 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
 
 @REELS_PARKED
 def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
-    va: Session, subject_images: list[Path]
+    va: Session,
+    subject_images: list[Path],
 ):
     va.goto("/reels")
     va.page.fill("#reels-profiles", "\n".join(VIRAL_PROFILES))
@@ -461,10 +482,10 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     expect(va.page.locator(".reels-watch-item[data-pending]")).to_have_count(0)
     for username in ("sheep_love33", "brookslockvip"):
         expect(
-            va.page.locator(f'.reels-watch-item[data-username="{username}"]')
+            va.page.locator(f'.reels-watch-item[data-username="{username}"]'),
         ).to_have_count(1)
     views = va.page.locator(".reel-card").evaluate_all(
-        "cs => cs.map(c => Number(c.dataset.views))"
+        "cs => cs.map(c => Number(c.dataset.views))",
     )
     assert views == sorted(views, reverse=True)
     expect(va.page.locator("#reels-feed video")).to_have_count(0)
@@ -488,12 +509,13 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     va.page.reload()
     for username in ("sheep_love33", "brookslockvip"):
         expect(
-            va.page.locator(f'.reels-watch-item[data-username="{username}"]')
+            va.page.locator(f'.reels-watch-item[data-username="{username}"]'),
         ).to_have_count(1)
     expect(picked_count).to_have_text(f"{len(picked)} reels selected")
 
     with va.page.expect_navigation(
-        url=re.compile(r"/clone\?video="), timeout=SCAN_TIMEOUT_MS
+        url=re.compile(r"/clone\?video="),
+        timeout=SCAN_TIMEOUT_MS,
     ):
         va.page.click("#reels-clone")
 
@@ -501,7 +523,7 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     expect(videos).to_have_count(len(picked))
     va.page.fill("#api-key", "e2e-wrong-key")
     va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
-        [str(p) for p in subject_images]
+        [str(p) for p in subject_images],
     )
     with va.page.expect_response(lambda r: r.url.endswith("/clone/run")) as run:
         va.page.click('#clone-form button[type="submit"]')
@@ -509,7 +531,8 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     body = run.value.json()
     assert len(body["job_ids"]) == len(picked)
     failed = va.page.locator(
-        "#clone-gallery .result-failed", has_text="Higgsfield: Wrong API key"
+        "#clone-gallery .result-failed",
+        has_text="Higgsfield: Wrong API key",
     )
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
 
@@ -521,10 +544,12 @@ def _add_viral_profiles(session: Session) -> None:
     session.page.fill("#reels-profiles", "\n".join(VIRAL_PROFILES))
     session.page.click('#reels-form button[type="submit"]')
     expect(session.page.locator("#reels-form .generation-status")).to_contain_text(
-        "Added", timeout=SCAN_TIMEOUT_MS
+        "Added",
+        timeout=SCAN_TIMEOUT_MS,
     )
     expect(session.page.locator(".reel-card[data-video-url]")).to_have_count(
-        FEED_REELS, timeout=SCAN_TIMEOUT_MS
+        FEED_REELS,
+        timeout=SCAN_TIMEOUT_MS,
     )
 
 
@@ -560,7 +585,8 @@ def test_every_reels_filter_chip_shows_exactly_its_reels(va: Session):
         chips = va.page.locator(f'nav[aria-labelledby="{nav}"] a')
         keys = [
             _chip_key(
-                chips.nth(i).inner_text().split()[0], chips.nth(i).get_attribute("href")
+                chips.nth(i).inner_text().split()[0],
+                chips.nth(i).get_attribute("href"),
             )
             for i in range(chips.count())
         ]
@@ -615,7 +641,9 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
     row = va.page.locator("#accounts-table tbody tr", has_text=f"@{TRACKED_ACCOUNT}")
     expect(row).to_have_count(1, timeout=SCAN_TIMEOUT_MS)
     expect(row).to_have_attribute(
-        "data-status", re.compile("active|private"), timeout=SCAN_TIMEOUT_MS
+        "data-status",
+        re.compile("active|private"),
+        timeout=SCAN_TIMEOUT_MS,
     )
     expect(row.locator(".accounts-creator-tag")).to_have_text("e2e creator")
     expect(row.locator('td[data-label="Followers"]')).to_contain_text("850")
@@ -671,7 +699,7 @@ def test_a_snapchat_account_is_added_and_shown_under_its_platform(va: Session):
     with va.page.expect_navigation():
         shown.select_option("instagram")
     expect(
-        va.page.locator("#accounts-table tbody tr", has_text="@fake_snap")
+        va.page.locator("#accounts-table tbody tr", has_text="@fake_snap"),
     ).to_have_count(0)
 
     assert va.js_errors == []
@@ -684,7 +712,8 @@ def test_links_are_generated_for_a_models_accounts_and_deleted(admin: Session):
     admin.page.fill("#accounts-add-creator", "e2e model")
     admin.page.click('#accounts-add-form button[type="submit"]')
     account = admin.page.locator(
-        "#accounts-table tbody tr", has_text=f"@{TRACKED_ACCOUNT}"
+        "#accounts-table tbody tr",
+        has_text=f"@{TRACKED_ACCOUNT}",
     )
     expect(account).to_have_count(1, timeout=SCAN_TIMEOUT_MS)
 
@@ -734,7 +763,8 @@ def test_links_are_generated_for_a_models_accounts_and_deleted(admin: Session):
 
 
 def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
-    admin: Session, va: Session
+    admin: Session,
+    va: Session,
 ):
     stamp = "4242"
     label = f"e2e {stamp}"
@@ -746,7 +776,8 @@ def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
     admin.page.select_option("#ph-model", "iphone-12-mini")
     admin.page.locator(".ph-swatch", has_text="Purple").click()
     expect(admin.page.locator("#ph-drawing")).to_have_attribute(
-        "src", "/phones/drawing.svg?model=iphone-12-mini&color=purple"
+        "src",
+        "/phones/drawing.svg?model=iphone-12-mini&color=purple",
     )
     admin.page.fill("#ph-label", label)
     with admin.page.expect_navigation():
@@ -780,7 +811,8 @@ def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
     with admin.page.expect_download() as download:
         admin.page.click('a[href="/phones/export.xlsx"]')
     assert re.fullmatch(
-        r"phones-\d{4}-\d{2}-\d{2}\.xlsx", download.value.suggested_filename
+        r"phones-\d{4}-\d{2}-\d{2}\.xlsx",
+        download.value.suggested_filename,
     )
     download.value.delete()
 
@@ -797,11 +829,12 @@ def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
 
 def _seed_phone(label: str, owner: str, *logins: tuple[str, str]) -> int:
     device = devices.add_device(
-        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner=owner)
+        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner=owner),
     )
     for service, username in logins:
         assert devices.add_login(
-            device, LoginFields(service=service, username=username)
+            device,
+            LoginFields(service=service, username=username),
         )
     return device
 
@@ -819,7 +852,9 @@ def _capture_json(session: Session, pattern: str) -> list[dict]:
 
 
 def test_drive_page_lists_accounts_searches_and_syncs(
-    admin: Session, fake_drive: FakeDrive, jobs_idle
+    admin: Session,
+    fake_drive: FakeDrive,
+    jobs_idle,
 ):
     connect_google(admin, "agency.google@example.com")
     jobs_idle()
@@ -865,7 +900,8 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     assert fake_drive.writes == ["create"] * 5
 
     (ann,) = fake_drive.named(
-        "ann.ig - Anna", my_root(fake_drive, "agency.google@example.com")
+        "ann.ig - Anna",
+        my_root(fake_drive, "agency.google@example.com"),
     )
     (ann_posted,) = fake_drive.named("POSTED", ann)
     reel = fake_drive.add_file(ann, "reel1.mp4", "video/mp4", thumbnail=True)
@@ -885,7 +921,7 @@ def test_drive_page_lists_accounts_searches_and_syncs(
         admin.page.click("#dr-sync")
     assert reports.pop()["newly_posted"] == 1
     expect(ann_card.locator(".dr-uploaded")).to_contain_text(
-        "Uploaded to Drive today: 1"
+        "Uploaded to Drive today: 1",
     )
 
     assert fake_drive.writes == ["create"] * 5
@@ -893,7 +929,9 @@ def test_drive_page_lists_accounts_searches_and_syncs(
 
 
 def test_drive_page_sets_up_folders_by_itself_when_the_sync_job_ends(
-    admin: Session, fake_drive: FakeDrive, jobs_idle
+    admin: Session,
+    fake_drive: FakeDrive,
+    jobs_idle,
 ):
     connect_google(admin, "agency.google@example.com")
     jobs_idle()
@@ -909,13 +947,15 @@ def test_drive_page_sets_up_folders_by_itself_when_the_sync_job_ends(
     finish_job(job_id, {})
     expect(notice).to_have_count(0, timeout=15000)
     expect(
-        admin.page.locator(".dr-card").filter(has_text="No folder yet")
+        admin.page.locator(".dr-card").filter(has_text="No folder yet"),
     ).to_have_count(1)
     assert admin.js_errors == []
 
 
 def test_drive_page_shows_the_error_of_a_failed_sync_in_the_notice(
-    admin: Session, fake_drive: FakeDrive, jobs_idle
+    admin: Session,
+    fake_drive: FakeDrive,
+    jobs_idle,
 ):
     connect_google(admin, "agency.google@example.com")
     jobs_idle()
@@ -926,13 +966,17 @@ def test_drive_page_shows_the_error_of_a_failed_sync_in_the_notice(
     admin.goto("/drive")
     fail_job(job_id, "Drive refused")
     expect(admin.page.locator(".dr-syncing")).to_have_text(
-        "Drive refused", timeout=15000
+        "Drive refused",
+        timeout=15000,
     )
     assert admin.js_errors == []
 
 
 def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
-    va: Session, fake_drive: FakeDrive, source_videos: list[Path], jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    source_videos: list[Path],
+    jobs_idle,
 ):
 
     connect_google(va, "va.google@example.com")
@@ -942,7 +986,10 @@ def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     va_id = 2
     phone = devices.add_device(
         DeviceFields(
-            label="Vee 01", model_id="iphone-13", color_id="blue", owner="Vee"
+            label="Vee 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Vee",
         ),
         user_id=va_id,
     )
@@ -981,7 +1028,8 @@ def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     expect(done).to_contain_text("In Drive: vee.ig - Vee", timeout=RESULT_TIMEOUT_MS)
 
     (folder,) = fake_drive.named(
-        "vee.ig - Vee", my_root(fake_drive, "va.google@example.com")
+        "vee.ig - Vee",
+        my_root(fake_drive, "va.google@example.com"),
     )
     uploaded = [n for n in fake_drive.names_in(folder) if n.startswith("VID_")]
     assert len(uploaded) == 1

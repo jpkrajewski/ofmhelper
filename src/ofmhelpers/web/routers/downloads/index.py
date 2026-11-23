@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -29,7 +31,10 @@ def _cards(jobs: list[Job]) -> list[TaskCard]:
 
 @router.get("")
 def form(
-    request: Request, viewer: Viewing, query: GalleryParams, downloads: Downloads
+    request: Request,
+    viewer: Viewing,
+    query: GalleryParams,
+    downloads: Downloads,
 ) -> Response:
     first = gallery.page(viewer, query)
     return render(

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 from enum import StrEnum
@@ -35,7 +37,7 @@ class CloneLinksConstants(BaseModel):
     not_one_post: str = "Paste a reel's link, not a profile or playlist"
     share_link: str = "Open the link and copy the reel's address"
     instagram_post: re.Pattern[str] = re.compile(
-        r"^/(?!share/)(?:[\w.]+/)?(?:reels?(?!/audio/)|p|tv)/([\w-]+)"
+        r"^/(?!share/)(?:[\w.]+/)?(?:reels?(?!/audio/)|p|tv)/([\w-]+)",
     )
     tiktok_video: re.Pattern[str] = re.compile(r"^/@[\w.-]+/video/\d+")
     instagram_domain: str = "instagram.com"
@@ -81,7 +83,8 @@ class CloneLinksConstants(BaseModel):
     refetch: str = "Still generating: this reel is downloaded again on the next try"
     run_not_saved: str = "Still generating: the video is saved on the next try"
     login_wall: re.Pattern[str] = re.compile(
-        r"\blog ?in\b|\bsign in\b|cookies", re.IGNORECASE
+        r"\blog ?in\b|\bsign in\b|cookies",
+        re.IGNORECASE,
     )
 
     rules: str = """\

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from collections.abc import Callable
 
@@ -11,7 +13,9 @@ from ofmhelpers.web.dependencies import Access, CurrentUser, Scope, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/trials", tags=["trials"], dependencies=[Access(Area.TRIALS)]
+    prefix="/trials",
+    tags=["trials"],
+    dependencies=[Access(Area.TRIALS)],
 )
 
 
@@ -20,7 +24,10 @@ def _encodes() -> Callable[..., object]:
 
 
 def _trials(
-    login_id: int, user: CurrentUser, scope: Scope, storage: Storage
+    login_id: int,
+    user: CurrentUser,
+    scope: Scope,
+    storage: Storage,
 ) -> folder.Trials:
     trials = folder.Trials(
         uid=user.id,
@@ -48,7 +55,9 @@ Reel = Annotated[folder.Reel, Depends(_reel)]
 def trials_page(request: Request, user: CurrentUser, storage: Storage) -> Response:
     cards = folder.phone_cards(user.id, storage.folders)
     return render(
-        request, "trials.html", {"board": cards.board, "progress": cards.progress}
+        request,
+        "trials.html",
+        {"board": cards.board, "progress": cards.progress},
     )
 
 
@@ -56,7 +65,9 @@ def trials_page(request: Request, user: CurrentUser, storage: Storage) -> Respon
 def folder_page(request: Request, trials: Trials) -> Response:
     opened = trials.open()
     return render(
-        request, "trials_folder.html", {"card": opened.card, "view": opened.view}
+        request,
+        "trials_folder.html",
+        {"card": opened.card, "view": opened.view},
     )
 
 
@@ -112,7 +123,8 @@ def select(reel: Reel, selected: Annotated[bool, Form()] = False) -> folder.Sele
 
 @router.post("/{login_id}/upload")
 def upload(
-    trials: Trials, approved: Annotated[list[str] | None, Form()] = None
+    trials: Trials,
+    approved: Annotated[list[str] | None, Form()] = None,
 ) -> folder.Uploading:
     return trials.upload(approved)
 

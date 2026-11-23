@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor

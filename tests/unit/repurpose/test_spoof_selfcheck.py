@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 
 import pytest
@@ -62,7 +64,10 @@ def test_a_stronger_preset_moves_every_knob_2_percent_further_from_untouched():
         rotate_both_ways=True,
     ).stronger(1.02)
     audio = AudioSettings(
-        pitch=(0.7, 0.8), volume=(0.985, 1.015), limit=0.97, loudness=0.8
+        pitch=(0.7, 0.8),
+        volume=(0.985, 1.015),
+        limit=0.97,
+        loudness=0.8,
     ).stronger(1.02)
 
     assert video.corner_zoom == pytest.approx((1.102, 1.1428))
@@ -106,11 +111,13 @@ def test_a_2_percent_stronger_copy_turns_and_zooms_2_percent_further():
     preset = load_preset(PRESET).video
 
     for base, stronger in zip(
-        _framings(preset), _framings(preset.stronger(1.02)), strict=True
+        _framings(preset),
+        _framings(preset.stronger(1.02)),
+        strict=True,
     ):
         assert stronger.rotate == pytest.approx((base.rotate or 0.0) * 1.02)
         assert (stronger.corner_zoom or 0.0) - 1 == pytest.approx(
-            ((base.corner_zoom or 0.0) - 1) * 1.02
+            ((base.corner_zoom or 0.0) - 1) * 1.02,
         )
 
 

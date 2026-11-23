@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date
 
 import pytest
@@ -25,7 +27,8 @@ def test_an_explicit_window_is_ordered_and_kept_within_the_limits():
 def test_a_single_day_is_read_by_the_hour():
     window = SelfRange.model_validate({"from": "2026-11-10", "to": "2026-11-10"})
     assert window.resolved(TODAY) == DateSpan(
-        start=date(2026, 11, 10), end=date(2026, 11, 10)
+        start=date(2026, 11, 10),
+        end=date(2026, 11, 10),
     )
     assert window.by_hour(TODAY) is True
 

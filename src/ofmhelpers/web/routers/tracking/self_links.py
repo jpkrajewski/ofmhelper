@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -10,13 +12,17 @@ from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/self-links", tags=["self-links"], dependencies=[Access(Area.SELF_LINKS)]
+    prefix="/self-links",
+    tags=["self-links"],
+    dependencies=[Access(Area.SELF_LINKS)],
 )
 
 
 @router.get("")
 def index(
-    request: Request, query: Annotated[SelfRange, Query()], scope: Scope
+    request: Request,
+    query: Annotated[SelfRange, Query()],
+    scope: Scope,
 ) -> Response:
     view = self_page.page_view(query, scope)
     return render(request, "self_links.html", {"query": query, **dict(view)})
@@ -30,7 +36,9 @@ def add_domain(form: Annotated[SelfDomainForm, Form()], owner_id: OwnerId) -> Re
 
 @router.post("/domains/{domain_id}/status")
 def set_status(
-    domain_id: int, owner_id: OwnerId, status: Annotated[str, Form()]
+    domain_id: int,
+    owner_id: OwnerId,
+    status: Annotated[str, Form()],
 ) -> Response:
     self_page.set_status(domain_id, status, owner_id)
     return RedirectResponse("/self-links", status_code=303)

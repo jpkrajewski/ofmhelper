@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 from pathlib import Path
 from typing import Any, Protocol
@@ -105,7 +107,8 @@ def _measure(path: str) -> Measured:
     tools = VideoTools(settings.web.ffmpeg_timeout_s)
     try:
         found = Measured(
-            seconds=tools.length(Path(path)), shape=tools.shape(Path(path))
+            seconds=tools.length(Path(path)),
+            shape=tools.shape(Path(path)),
         )
     except (
         OSError,
@@ -128,7 +131,9 @@ def _require_choices(form: Submitted, owner_id: int) -> str:
         msg = "That provider cannot clone"
         raise RefusedError(msg)
     api_key = Keys.of(owner_id).for_run(
-        form.provider, TARGETS[form.provider].model, form.api_key
+        form.provider,
+        TARGETS[form.provider].model,
+        form.api_key,
     )
     if not api_key:
         msg = "API key is required"
@@ -143,14 +148,20 @@ def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
     api_key = _require_choices(form, owner_id)
     image = _one(
         build_ordered_paths(
-            form.image_manifest, form.image, assets_root, user_id=owner_id
+            form.image_manifest,
+            form.image,
+            assets_root,
+            user_id=owner_id,
         ),
         "image",
         "subject image",
     )
     video = _one(
         build_ordered_paths(
-            form.video_manifest, form.video, assets_root, user_id=owner_id
+            form.video_manifest,
+            form.video,
+            assets_root,
+            user_id=owner_id,
         ),
         "video",
         "video",

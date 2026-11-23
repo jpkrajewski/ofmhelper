@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from pathlib import Path
 
@@ -10,7 +12,7 @@ SHELLS = frozenset({"Bash", "PowerShell"})
 IN_PLACE_EDIT = re.compile(r"\b(?:sed|perl)\s+(?:-\S+\s+)*(?:-\w*i|--in-place)")
 SAFE_PROGRAMS = frozenset({"git", "ruff", "test.sh"})
 READ_PROGRAMS = frozenset(
-    {"grep", "rg", "cat", "head", "tail", "less", "wc", "diff", "sed"}
+    {"grep", "rg", "cat", "head", "tail", "less", "wc", "diff", "sed"},
 )
 INTERPRETERS = frozenset(
     {
@@ -24,7 +26,7 @@ INTERPRETERS = frozenset(
         "bash",
         "pwsh",
         "powershell",
-    }
+    },
 )
 PATH_RUN = r"[\w./\\:~-]{1,260}"
 PY_END = r"\.py(?![\w.])"
@@ -36,23 +38,28 @@ CODE_WRITE = (
 WRITE_LINE = re.compile(
     rf"(?:{CODE_WRITE})[^\n;&|]*{PY_END}|"
     rf"{PATH_RUN}{PY_END}['\"]?\)\.(?:write_text|write_bytes)\(|"
-    rf"\b(?:sed|perl)\s+(?:-\S+\s+)*(?:-\w*i|--in-place)[^\n;&|]*{PY_END}"
+    rf"\b(?:sed|perl)\s+(?:-\S+\s+)*(?:-\w*i|--in-place)[^\n;&|]*{PY_END}",
 )
 REDIRECT_TO_PY = re.compile(
-    rf"(?:>>?|\btee\s+(?:-\w+\s+)*)\s*[\"']?([^\s\"';|&<>]{{1,260}}{PY_END})"
+    rf"(?:>>?|\btee\s+(?:-\w+\s+)*)\s*[\"']?([^\s\"';|&<>]{{1,260}}{PY_END})",
 )
 SHELL_DENIED = (
-    "{paths}: an existing .py in the repo is written from the shell. Change an existing .py with "
+    "{paths}: an existing .py in the repo is written "
+    "from the shell. Change an existing .py with "
     "the Edit tool: the ruff hook formats it and the edit shows what changed."
 )
 USE_EDIT = (
-    "{path} exists: change it with Edit, not Write. The ruff hook reformats a file after every "
-    "write, so a second Write fails 'modified since read', and a whole-file rewrite hides what "
+    "{path} exists: change it with Edit, not Write. "
+    "The ruff hook reformats a file after every "
+    "write, so a second Write fails 'modified since "
+    "read', and a whole-file rewrite hides what "
     "changed."
 )
 SHELL_REWRITE = (
-    "{paths}: an existing .py was rewritten from the shell. Change an existing .py with Edit: "
-    "the ruff hook formats it and the edit shows what changed. Check the rewrite now with "
+    "{paths}: an existing .py was rewritten from the "
+    "shell. Change an existing .py with Edit: "
+    "the ruff hook formats it and the edit shows "
+    "what changed. Check the rewrite now with "
     "git diff -- {paths}."
 )
 
@@ -77,7 +84,8 @@ def heredoc_targets(event: HookEvent) -> set[str]:
     for found in HEREDOC.finditer(event.command):
         start = event.command.rfind("\n", 0, found.start()) + 1
         lead = statements(
-            event.command[start : found.end(1)], event.tool_name != "PowerShell"
+            event.command[start : found.end(1)],
+            event.tool_name != "PowerShell",
         )
         programs = {s.program for s in lead}
         if not programs or programs & INTERPRETERS:
@@ -109,7 +117,7 @@ def refused_before_shell(event: HookEvent) -> Verdict | None:
     if event.tool_name not in SHELLS:
         return None
     paths = sorted(
-        {p for t in command_targets(event) if (p := existing_in_repo(t, event.cwd))}
+        {p for t in command_targets(event) if (p := existing_in_repo(t, event.cwd))},
     )
     return deny(NAME, SHELL_DENIED.format(paths=" ".join(paths))) if paths else None
 

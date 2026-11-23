@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any, Literal
 
 from pydantic import Field
@@ -5,7 +7,12 @@ from pydantic import Field
 from ofmhelpers.integrations.ai_providers.http import Lenient
 
 HiggsfieldStatus = Literal[
-    "queued", "in_progress", "completed", "failed", "nsfw", "canceled"
+    "queued",
+    "in_progress",
+    "completed",
+    "failed",
+    "nsfw",
+    "canceled",
 ]
 
 

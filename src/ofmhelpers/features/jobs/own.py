@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.jobs.store import Readers, get_job, hide_job
 from ofmhelpers.features.jobs.schema import JobVisibility
 from ofmhelpers.features.refusals import NotFoundError

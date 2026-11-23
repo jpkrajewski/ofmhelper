@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.db.drive_folders.schema import DriveFile
@@ -17,7 +19,7 @@ class DriveRow(BaseModel):
 
     def as_file(self) -> DriveFile:
         return DriveFile.model_validate(
-            self.model_dump(by_alias=True, exclude_unset=True)
+            self.model_dump(by_alias=True, exclude_unset=True),
         )
 
 

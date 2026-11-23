@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from idempotent import keyed
@@ -24,7 +26,9 @@ def test_one_run_gets_a_reels_video_and_a_posts_images(client):
     post = "https://www.instagram.com/p/xyz/"
 
     r = client.post(
-        "/download-media/run", data={"urls": f"{reel}\n{post}"}, headers=keyed()
+        "/download-media/run",
+        data={"urls": f"{reel}\n{post}"},
+        headers=keyed(),
     )
     assert r.status_code == 202
     status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
@@ -100,21 +104,27 @@ def test_a_login_walled_reel_is_rescued_by_the_saver_fallback(client, monkeypatc
         generic,
         "download",
         lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=False, error=walled
+            url=url,
+            success=False,
+            error=walled,
         ),
     )
     monkeypatch.setattr(
         images,
         "download",
         lambda url, config=None, cookiefile=None: DownloadResult(
-            url=url, success=False, error="This post needs a login"
+            url=url,
+            success=False,
+            error="This post needs a login",
         ),
     )
     monkeypatch.setattr(
         kvs,
         "download",
         lambda url, output_dir=None: DownloadResult(
-            url=url, success=False, error="Unsupported URL: no KVS player"
+            url=url,
+            success=False,
+            error="Unsupported URL: no KVS player",
         ),
     )
 

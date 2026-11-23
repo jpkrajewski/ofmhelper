@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.clone_links.ai_check.check import (
     check_clone,
     sheet_at,

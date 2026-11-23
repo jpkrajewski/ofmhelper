@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from typing import Any
 lazy from collections.abc import Mapping
@@ -56,7 +58,10 @@ class ApifyClient:
         return LimitsEnvelope.model_validate(self._ok(r).json()).data.remaining_usd
 
     def run(
-        self, actor: str, run_input: BaseModel | dict[str, Any], timeout_s: int
+        self,
+        actor: str,
+        run_input: BaseModel | dict[str, Any],
+        timeout_s: int,
     ) -> ActorRun:
         if isinstance(run_input, BaseModel):
             run_input = run_input.model_dump(by_alias=True, exclude_none=True)
@@ -99,7 +104,10 @@ class ApifyClient:
             raise ApifyError(msg) from exc
 
     def _read(
-        self, url: str, params: Mapping[str, str | int], timeout: float
+        self,
+        url: str,
+        params: Mapping[str, str | int],
+        timeout: float,
     ) -> requests.Response:
         for attempt in range(1, _READ_TRIES):
             try:

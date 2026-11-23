@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
@@ -35,7 +37,7 @@ def _seed_link(slug: str = "dany", destination: str = DEST, host: str = HOST) ->
                 target="onlyfans",
                 account_id=None,
                 creator="",
-            )
+            ),
         ],
     )
     provider = link_keys.client(user.id, "self")
@@ -117,7 +119,9 @@ def test_the_beacon_is_rate_limited_per_ip(bridge, monkeypatch):
     _seed_link()
     for _ in range(6):
         bridge.post(
-            "/api/track-direct", json={"slug": "dany"}, headers={"user-agent": IG_UA}
+            "/api/track-direct",
+            json={"slug": "dany"},
+            headers={"user-agent": IG_UA},
         )
     assert len(_clicks("click")) == 3
 
@@ -127,7 +131,9 @@ def test_the_beacon_is_rate_limited_per_ip(bridge, monkeypatch):
     [b"not json", b"[1, 2]", b'"dany"', b"null", b'{"slug": "dany", "referrer": 5}'],
 )
 def test_a_beacon_body_that_is_not_ours_answers_204_and_records_nothing(
-    bridge, body, caplog
+    bridge,
+    body,
+    caplog,
 ):
     _seed_link()
     with caplog.at_level("INFO"):
@@ -191,11 +197,16 @@ def test_a_disabled_link_does_not_serve(bridge):
     ],
 )
 def test_a_bridge_host_answers_404_for_everything_but_its_own_paths(
-    bridge, method, path
+    bridge,
+    method,
+    path,
 ):
     _seed_link()
     page = bridge.request(
-        method, path, headers={"user-agent": IG_UA}, follow_redirects=False
+        method,
+        path,
+        headers={"user-agent": IG_UA},
+        follow_redirects=False,
     )
     assert page.status_code == 404
     assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
@@ -238,7 +249,9 @@ def test_a_tunnel_host_serves_its_self_link_slug(tunnel):
 def test_a_tunnel_host_takes_the_beacon(tunnel):
     _seed_link(host=TUNNEL)
     response = tunnel.post(
-        "/api/track-direct", json={"slug": "dany"}, headers={"user-agent": IG_UA}
+        "/api/track-direct",
+        json={"slug": "dany"},
+        headers={"user-agent": IG_UA},
     )
     assert response.status_code == 204
     assert len(_clicks("click")) == 1

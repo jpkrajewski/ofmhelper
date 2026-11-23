@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.storage.dropbox import oauth
 from ofmhelpers.integrations.storage.dropbox.client import DropboxDrive, connect_as
 from ofmhelpers.integrations.storage.dropbox.constants import (

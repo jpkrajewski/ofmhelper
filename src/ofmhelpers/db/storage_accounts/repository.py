@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -45,7 +47,7 @@ class StorageAccountRepository:
                         "email": email,
                         "connected_at": func.now(),
                     },
-                )
+                ),
             )
 
     def refresh_token(self, user_id: int, provider: StorageProvider) -> str | None:
@@ -54,7 +56,7 @@ class StorageAccountRepository:
                 select(StorageAccountRow.refresh_token).where(
                     StorageAccountRow.user_id == user_id,
                     StorageAccountRow.provider == provider.value,
-                )
+                ),
             ).scalar_one_or_none()
 
     def get(self, user_id: int, provider: StorageProvider) -> StorageAccount | None:

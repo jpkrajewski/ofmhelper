@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import secrets
 from abc import abstractmethod
@@ -47,7 +49,11 @@ class SyncImages(Family):
     def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made: ...
 
     def submit(
-        self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
+        self,
+        client: ApiyiClient,
+        spec: ModelSpec,
+        payload: Payload,
+        job: str,
     ) -> str:
         made = self.make(client, spec, payload)
         own = secrets.token_hex(12)
@@ -75,7 +81,8 @@ class SyncImages(Family):
         record = _results_dir() / f"{task_id}.json"
         if not record.is_file():
             return TaskState(
-                state="failed", error=f"{PROVIDER}: result {task_id} is gone"
+                state="failed",
+                error=f"{PROVIDER}: result {task_id} is gone",
             )
         results = Recorded.model_validate_json(record.read_text()).results
         return TaskState(state="done", urls=results)

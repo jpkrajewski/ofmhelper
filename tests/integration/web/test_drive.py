@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -58,14 +60,19 @@ def _client() -> TestClient:
 def _phone(label: str, owner: str = "Anna", **extra) -> int:
     return devices.add_device(
         DeviceFields(
-            label=label, model_id="iphone-13", color_id="blue", owner=owner, **extra
-        )
+            label=label,
+            model_id="iphone-13",
+            color_id="blue",
+            owner=owner,
+            **extra,
+        ),
     )
 
 
 def _login(device_id: int, service: str, username: str) -> int:
     added = devices.add_login(
-        device_id, LoginFields(service=service, username=username)
+        device_id,
+        LoginFields(service=service, username=username),
     )
     assert added is not None
     return added.id
@@ -190,7 +197,10 @@ def test_new_owner_renames_the_folder_and_keeps_its_posted_folder(drive):
     devices.update_device(
         phone,
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Kate"
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Kate",
         ),
     )
 
@@ -238,7 +248,7 @@ def test_a_deleted_posted_folder_is_made_again(drive):
     storage_jobs.sync()
 
     assert drive.named(POSTED, _account(drive, "ann.ig")) == [
-        _stored().posted_folder_id
+        _stored().posted_folder_id,
     ]
 
 
@@ -270,14 +280,18 @@ def test_a_posted_folder_dragged_out_is_left_there_and_a_new_one_made(drive):
 
 
 @pytest.mark.parametrize(
-    "remove", [FakeDrive.trash, FakeDrive.delete], ids=["trash", "delete"]
+    "remove",
+    [FakeDrive.trash, FakeDrive.delete],
+    ids=["trash", "delete"],
 )
 def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(
-    drive, remove
+    drive,
+    remove,
 ):
     phone = _phone("Phone 01")
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig", password="pw")
+        phone,
+        LoginFields(service="instagram", username="ann.ig", password="pw"),
     )
     assert added is not None
     login = added.id
@@ -353,7 +367,8 @@ def test_one_failing_login_does_not_stop_the_others(drive):
 
 
 def test_a_login_deleted_while_its_folder_is_made_is_skipped_and_nothing_is_deleted(
-    drive, monkeypatch
+    drive,
+    monkeypatch,
 ):
     gone_phone = _phone("Phone 01")
     gone = _login(gone_phone, "instagram", "ann.ig")
@@ -384,7 +399,10 @@ def test_a_folder_saved_for_a_login_or_va_that_is_gone_saves_nothing(drive):
     assert store.save_account_folder(987_654_321, "f-1", "x - y", ROOT) is False
     assert store.account_folders().folders == []
     va = VaFolder(
-        user_id=987_654_321, folder_id="f-2", name="Gone", root_folder_id=ROOT
+        user_id=987_654_321,
+        folder_id="f-2",
+        name="Gone",
+        root_folder_id=ROOT,
     )
     assert store.save_va_folder(va) is False
 
@@ -882,10 +900,14 @@ def test_thumb_route_needs_login(drive):
 
 
 def test_the_agencys_hand_made_root_is_adopted_in_any_case(
-    fake_externals, tmp_path, monkeypatch
+    fake_externals,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setattr(
-        drive_client, "StorageConstants", lambda: StorageConstants(dev_prefix="")
+        drive_client,
+        "StorageConstants",
+        lambda: StorageConstants(dev_prefix=""),
     )
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
@@ -904,7 +926,9 @@ def test_the_agencys_hand_made_root_is_adopted_in_any_case(
 
 
 def test_dev_never_adopts_the_live_root_it_makes_its_own(
-    fake_externals, tmp_path, monkeypatch
+    fake_externals,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
@@ -938,7 +962,10 @@ def test_an_owner_without_google_drive_gets_nothing_made_and_is_told(drive):
     vee = make_user("vee@example.com")
     phone = devices.add_device(
         DeviceFields(
-            label="Vee 01", model_id="iphone-13", color_id="blue", owner="Vee"
+            label="Vee 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Vee",
         ),
         user_id=vee.id,
     )
@@ -1035,7 +1062,10 @@ def _user_phone(email: str, handle: str, owner: str, *, google: bool = True) -> 
         users._repository().signed_in(user.id, "", f"fake-refresh:{email}")
     phone = devices.add_device(
         DeviceFields(
-            label=f"{owner} 01", model_id="iphone-13", color_id="blue", owner=owner
+            label=f"{owner} 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner=owner,
         ),
         user_id=user.id,
     )
@@ -1184,7 +1214,8 @@ def test_an_unusable_bot_key_is_no_fallback(bot_drive, monkeypatch):
 
 def _tracked_login(phone: int, handle: str = "ann.ig") -> tuple[int, int]:
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username=handle, password="pw")
+        phone,
+        LoginFields(service="instagram", username=handle, password="pw"),
     )
     assert added is not None
     track("instagram", handle, user_id=users.agency_id())
@@ -1257,7 +1288,8 @@ def test_adding_an_archived_account_again_brings_it_back(drive):
     _client().post("/accounts/delete", json={"ids": [account]})
 
     again = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig")
+        phone,
+        LoginFields(service="instagram", username="ann.ig"),
     )
 
     assert again == AddedLogin(id=login, existed=True)
@@ -1327,7 +1359,9 @@ def test_a_live_read_of_many_accounts_writes_each_table_once(drive):
 
 
 def test_a_login_gone_during_a_live_read_loses_only_its_own_posted_files(
-    drive, monkeypatch, caplog
+    drive,
+    monkeypatch,
+    caplog,
 ):
     _three_logins()
     storage_jobs.sync()
@@ -1390,7 +1424,8 @@ def test_a_vas_board_names_the_owners_running_sync(drive):
     job_id = _start_sync()
 
     storage = drive_client.storage_of(
-        drive_client.storage_owner(va.id), interactive=True
+        drive_client.storage_owner(va.id),
+        interactive=True,
     )
 
     assert storage.folders.saved_board(viewer=va.id).syncing_job_id == job_id

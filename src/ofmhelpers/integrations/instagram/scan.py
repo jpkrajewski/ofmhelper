@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from itertools import islice
 from types import MappingProxyType
@@ -36,7 +38,10 @@ def _recent(reels: Iterator[ReelSummary], since: float) -> Iterator[ReelSummary]
 
 
 def _bulk_media(
-    client: InstagramClient, username: str, codes: set[str], since: float
+    client: InstagramClient,
+    username: str,
+    codes: set[str],
+    since: float,
 ) -> MappingProxyType[str, ReelMedia]:
     found: dict[str, ReelMedia] = {}
     old_in_a_row = 0
@@ -50,7 +55,9 @@ def _bulk_media(
                 break
     except InstagramRateLimitedError:
         logger.warning(
-            "@%s: posts refused, reading reels one by one", username, exc_info=True
+            "@%s: posts refused, reading reels one by one",
+            username,
+            exc_info=True,
         )
     return MappingProxyType(found)
 

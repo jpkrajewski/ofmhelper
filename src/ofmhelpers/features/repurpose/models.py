@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import Field
 
 from ofmhelpers.features.jobs.models import TaskCard

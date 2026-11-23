@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from contextlib import contextmanager
 lazy from collections.abc import Iterator

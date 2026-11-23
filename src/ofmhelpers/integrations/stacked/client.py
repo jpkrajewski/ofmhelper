@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 from datetime import UTC, datetime
@@ -70,7 +72,9 @@ class StackedClient:
                 return KeyInfo.model_validate_json(raw)
             except ValidationError:
                 logger.warning(
-                    "stacked key %s: kept info unreadable", self.key_hint, exc_info=True
+                    "stacked key %s: kept info unreadable",
+                    self.key_hint,
+                    exc_info=True,
                 )
         info = KeyInfo(
             agency=self.me().account.type is AccountType.AGENCY,
@@ -126,7 +130,10 @@ class StackedClient:
         ).messages
 
     def earnings(
-        self, creator_user_id: str, start: datetime, end: datetime
+        self,
+        creator_user_id: str,
+        start: datetime,
+        end: datetime,
     ) -> Earnings | None:
         page = _parsed(
             EarningsPage,
@@ -138,7 +145,10 @@ class StackedClient:
         return page.earnings[0] if page.earnings else None
 
     def subscriber_summary(
-        self, creator_user_id: str, start: datetime, end: datetime
+        self,
+        creator_user_id: str,
+        start: datetime,
+        end: datetime,
     ) -> SubscriberSummary | None:
         page = _parsed(
             SubscriberSummaryPage,
@@ -154,7 +164,10 @@ class StackedClient:
         return _parsed(WebhooksPage, reply).webhooks
 
     def create_webhook(
-        self, creator_user_id: str, url: str, events: list[str]
+        self,
+        creator_user_id: str,
+        url: str,
+        events: list[str],
     ) -> CreatedWebhook:
         return _parsed(
             CreatedWebhook,
@@ -190,7 +203,9 @@ class StackedClient:
         return _ok(r)
 
     def _get(
-        self, path: str, params: dict[str, Any] | None = None
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
     ) -> requests.Response:
         params = params or {}
         for attempt in range(1, settings.stacked.tries):
@@ -198,14 +213,20 @@ class StackedClient:
                 r = self._request(path, params)
             except requests.RequestException:
                 logger.warning(
-                    "stacked GET %s try %d failed", path, attempt, exc_info=True
+                    "stacked GET %s try %d failed",
+                    path,
+                    attempt,
+                    exc_info=True,
                 )
                 time.sleep(settings.stacked.retry_wait_s)
                 continue
             if not _retried(r):
                 return _ok(r)
             logger.warning(
-                "stacked GET %s try %d answered %s", path, attempt, r.status_code
+                "stacked GET %s try %d answered %s",
+                path,
+                attempt,
+                r.status_code,
             )
             time.sleep(_retry_wait(r))
         try:
@@ -261,7 +282,8 @@ def reach(api_keys: Iterable[str]) -> Reach:
     for key in sorted(read, key=lambda k: not k.info.agency):
         for creator in key.info.creators:
             found.setdefault(
-                creator.user_id, Reached(client=key.client, creator=creator)
+                creator.user_id,
+                Reached(client=key.client, creator=creator),
             )
     return Reach(found=list(found.values()), failed=failed, refused=refused)
 
@@ -297,7 +319,10 @@ def _parsed[T: BaseModel](model: type[T], reply: requests.Response) -> T:
     try:
         return model.model_validate(body)
     except ValidationError as exc:
-        msg = f"Stacked answered an unexpected {model.__name__}: {exc.error_count()} fields"
+        msg = (
+            f"Stacked answered an unexpected "
+            f"{model.__name__}: {exc.error_count()} fields"
+        )
         raise StackedError(msg) from None
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 import tempfile
 from pathlib import Path
@@ -78,7 +80,9 @@ def video_seconds(video: Path, timeout_s: int) -> float:
 
 def _to_sdr(stream: _Stream) -> str:
     return sdr_filters(
-        stream.color_transfer, stream.color_primaries, stream.color_space
+        stream.color_transfer,
+        stream.color_primaries,
+        stream.color_space,
     )
 
 
@@ -95,7 +99,11 @@ def time_label(seconds: float) -> str:
 
 
 def contact_sheet(
-    video: Path, dest: Path, frames: int, frame_px: int, timeout_s: int
+    video: Path,
+    dest: Path,
+    frames: int,
+    frame_px: int,
+    timeout_s: int,
 ) -> Path:
     probe = _probed(video, timeout_s)
     colour = _to_sdr(probe.stream)
@@ -125,7 +133,9 @@ def contact_sheet(
             )
             if not out.exists():
                 logger.warning(
-                    "contact sheet: no frame at %.2f s of %s", at, video.name
+                    "contact sheet: no frame at %.2f s of %s",
+                    at,
+                    video.name,
                 )
                 continue
             with Image.open(out) as still:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import datetime
 
@@ -9,7 +11,8 @@ DONE = ROOT / "reports" / "self-learn" / "last.txt"
 SHELLS = frozenset({"Bash", "PowerShell"})
 DEPLOY_WORKFLOW = re.compile(r"deploy", re.IGNORECASE)
 LEARN = (
-    "CLAUDE.md SELF-LEARNING: a commit was made, a PR was merged or a deploy was started "
+    "CLAUDE.md SELF-LEARNING: a commit was made, "
+    "a PR was merged or a deploy was started "
     "in this session (owner 2026-11-22: self reflect after every approved commit or "
     "deploy). Once the commit or the production deploy is done and reported, run the "
     "self-learn skill: it reads every saved session log since the last pass and turns "
@@ -67,5 +70,8 @@ def check(event: HookEvent) -> Verdict | None:
 
 
 GUARD = Guard(
-    name=NAME, events=frozenset({"PostToolUse", "Stop"}), tools=SHELLS, check=check
+    name=NAME,
+    events=frozenset({"PostToolUse", "Stop"}),
+    tools=SHELLS,
+    check=check,
 )

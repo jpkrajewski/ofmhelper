@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from signin import make_user
 
 from ofmhelpers.db.jobs.store import create_job, get_job

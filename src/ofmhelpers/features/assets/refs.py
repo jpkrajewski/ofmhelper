@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import heapq
 import os
 import re
@@ -87,7 +89,10 @@ def _newest(files: list[StoredFile], limit: int) -> list[RefEntry]:
 
 
 def listing(
-    assets_root: Path, owner_id: int, kind: str | None, limit: int | None
+    assets_root: Path,
+    owner_id: int,
+    kind: str | None,
+    limit: int | None,
 ) -> list[RefEntry]:
     files = stored_files(assets_root, kind)
     if limit is not None:
@@ -118,7 +123,9 @@ def _restorable(path: str, actor: str | None) -> RestorableRef | None:
 
 
 def missing(
-    assets_root: Path, paths: list[str], actor: str | None = None
+    assets_root: Path,
+    paths: list[str],
+    actor: str | None = None,
 ) -> MissingRefs:
     gone = [
         p
@@ -127,7 +134,8 @@ def missing(
     ]
     found = (_restorable(path, actor) for path in gone)
     return MissingRefs(
-        missing=gone, restorable=[ref for ref in found if ref is not None]
+        missing=gone,
+        restorable=[ref for ref in found if ref is not None],
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 
 from guards.event import (
@@ -14,12 +16,16 @@ NAME = "test_lock"
 EDITS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 GIT_TIMEOUT_S = 5
 WAIT = (
-    "scripts/test.sh is running (since {since}): a half-written file under src/ or tests/ breaks "
-    "its collection and the whole run ends NOT GREEN. Wait for it to end, or stop it first."
+    "scripts/test.sh is running (since {since}): a "
+    "half-written file under src/ or tests/ breaks "
+    "its collection and the whole run ends NOT "
+    "GREEN. Wait for it to end, or stop it first."
 )
 PUSH_WAIT = (
-    "The pre-push suite is running (since {since}): pre-commit refuses the push when a tracked "
-    "file changes during its run, so {path} waits. Edit only untracked paths (new files, "
+    "The pre-push suite is running (since {since}): "
+    "pre-commit refuses the push when a tracked "
+    "file changes during its run, so {path} waits. "
+    "Edit only untracked paths (new files, "
     "reports/) until it ends."
 )
 

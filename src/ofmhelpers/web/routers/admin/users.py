@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -73,7 +75,8 @@ def set_password(
 
 @router.post("/{user_id}/owner")
 def change_owner(
-    user: OtherUser, owner_id: Annotated[int | None, Form()] = None
+    user: OtherUser,
+    owner_id: Annotated[int | None, Form()] = None,
 ) -> Response:
     service.set_owner(user, owner_id)
     return see_other("/users")

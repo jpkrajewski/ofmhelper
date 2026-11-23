@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.clone.run import run_clone
 from ofmhelpers.features.clone_links import run as clone_link_run
 lazy from ofmhelpers.db.jobs.schema import ResultFile

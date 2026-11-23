@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import urlencode
 
 from pydantic import BaseModel

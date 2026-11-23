@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import threading
 import time
@@ -39,7 +41,9 @@ def slow_writes(monkeypatch):
 
 
 def test_workers_fitting_one_image_at_once_all_read_the_whole_copy(
-    tmp_path, oversized, slow_writes
+    tmp_path,
+    oversized,
+    slow_writes,
 ):
     dest_dir = tmp_path / "fitted"
     start = threading.Barrier(3)

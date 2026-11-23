@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
@@ -110,7 +112,8 @@ def analytics_view(account_id: int, query: AccountQuery, scope: int) -> Analytic
         chart=history.follower_chart(period.days, s.rescan_interval_s),
         top=account.top_posts(period.days, s.top_posts),
         ask_for_cookies=_ask_for_cookies(
-            bool(account.metrics and account.metrics.limited), scope
+            bool(account.metrics and account.metrics.limited),
+            scope,
         ),
         period=period,
         periods=_periods(),

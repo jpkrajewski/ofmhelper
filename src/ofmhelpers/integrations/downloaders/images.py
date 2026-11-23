@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 import time
 from pathlib import Path
@@ -56,7 +58,9 @@ class ImageDownloadConfig(BaseModel):
 
 
 def download(
-    url: str, config: ImageDownloadConfig | None = None, cookiefile: str | None = None
+    url: str,
+    config: ImageDownloadConfig | None = None,
+    cookiefile: str | None = None,
 ) -> DownloadResult:
     config = config or ImageDownloadConfig()
     if settings.infra.fake_externals:

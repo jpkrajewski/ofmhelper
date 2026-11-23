@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
@@ -26,7 +28,10 @@ VA_LOGIN_PATH = "/login/va"
 
 
 def _login_page(
-    request: Request, next_url: str, error: str | None = None, status_code: int = 200
+    request: Request,
+    next_url: str,
+    error: str | None = None,
+    status_code: int = 200,
 ) -> Response:
     return render(
         request,
@@ -39,7 +44,10 @@ def _login_page(
 def _respond(request: Request, outcome: Outcome) -> Response:
     if outcome.redirect is None:
         return _login_page(
-            request, outcome.next_url, outcome.error, outcome.status_code
+            request,
+            outcome.next_url,
+            outcome.error,
+            outcome.status_code,
         )
     if outcome.user is not None:
         AuthMiddleware.sign_in(request, outcome.user)
@@ -48,7 +56,8 @@ def _respond(request: Request, outcome: Outcome) -> Response:
 
 @router.get("/login")
 def login_form(
-    request: Request, next_url: Annotated[str, Query(alias="next")] = HOME
+    request: Request,
+    next_url: Annotated[str, Query(alias="next")] = HOME,
 ) -> Response:
     if AuthMiddleware.session_user(request):
         return see_other(safe_next(next_url))
@@ -67,12 +76,15 @@ def login_submit(
 
 @router.get(VA_LOGIN_PATH)
 def va_login_form(
-    request: Request, next_url: Annotated[str, Query(alias="next")] = HOME
+    request: Request,
+    next_url: Annotated[str, Query(alias="next")] = HOME,
 ) -> Response:
     if AuthMiddleware.session_user(request):
         return see_other(safe_next(next_url))
     return render(
-        request, "va_login.html", {"next": safe_next(next_url), "error": None}
+        request,
+        "va_login.html",
+        {"next": safe_next(next_url), "error": None},
     )
 
 
@@ -156,7 +168,11 @@ def _finish(request: Request, name: str, code: str, state: str, error: str) -> R
 
 @router.get("/auth/{name}/callback")
 def callback_get(
-    request: Request, name: str, code: str = "", state: str = "", error: str = ""
+    request: Request,
+    name: str,
+    code: str = "",
+    state: str = "",
+    error: str = "",
 ) -> Response:
     return _finish(request, name, code, state, error)
 

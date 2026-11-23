@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -20,7 +22,9 @@ from ofmhelpers.web.dependencies import Access, OwnerId, Scope, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/accounts", tags=["accounts"], dependencies=[Access(Area.ACCOUNTS)]
+    prefix="/accounts",
+    tags=["accounts"],
+    dependencies=[Access(Area.ACCOUNTS)],
 )
 
 ListQuery = Annotated[AccountQuery, Query()]
@@ -64,7 +68,10 @@ def notes(account_id: int, body: Notes, scope: Scope) -> Notes:
 
 @router.get("/{account_id}")
 def analytics(
-    request: Request, account_id: int, query: ListQuery, scope: Scope
+    request: Request,
+    account_id: int,
+    query: ListQuery,
+    scope: Scope,
 ) -> Response:
     view = page.analytics_view(account_id, query, scope)
     return render(request, "account_analytics.html", {"query": query, **dict(view)})

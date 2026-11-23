@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 from datetime import date, datetime
 from typing import Any
@@ -43,5 +45,5 @@ def read_xlsx(content: bytes) -> DriveSheet:
                 rows=_rows([[_value(c) for c in row] for row in tab.iter_rows()]),
             )
             for tab in book.worksheets
-        ]
+        ],
     )

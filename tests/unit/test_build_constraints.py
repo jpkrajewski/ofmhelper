@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import tomllib
 from pathlib import Path
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 
@@ -55,7 +57,8 @@ def test_json_format_emits_one_parseable_object_per_record(monkeypatch, capsys):
 
 
 def test_json_format_keeps_only_its_own_fields_not_a_records_extras(
-    monkeypatch, capsys
+    monkeypatch,
+    capsys,
 ):
     monkeypatch.setenv("OFM_LOG_FORMAT", "json")
     configure_logging(force=True)
@@ -130,14 +133,15 @@ def test_noisy_third_party_loggers_are_raised_to_warning(monkeypatch, capsys):
 
 
 def test_app_loggers_still_emit_at_info_when_third_parties_are_muted(
-    monkeypatch, capsys
+    monkeypatch,
+    capsys,
 ):
     monkeypatch.setenv("OFM_LOG_LEVEL", "INFO")
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
 
     get_logger("ofmhelpers.integrations.ai_providers.kie.client").info(
-        "upload starting"
+        "upload starting",
     )
 
     assert "upload starting" in capsys.readouterr().out

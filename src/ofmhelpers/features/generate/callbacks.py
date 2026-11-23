@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Mapping
 
 from pydantic import BaseModel
@@ -11,7 +13,10 @@ class Callback(BaseModel):
 
 
 def receive(
-    provider: str, key: str, raw: bytes, headers: Mapping[str, str]
+    provider: str,
+    key: str,
+    raw: bytes,
+    headers: Mapping[str, str],
 ) -> Callback:
     outcome = heard(provider, key, raw, headers)
     return Callback(known=outcome != Heard.UNKNOWN, genuine=outcome != Heard.REFUSED)

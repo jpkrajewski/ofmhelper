@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import os
 import secrets
@@ -191,7 +193,8 @@ def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
 
 
 def register_generated_asset(
-    path: Path, assets_root: Path | None = None
+    path: Path,
+    assets_root: Path | None = None,
 ) -> Path | None:
     assets_root = assets_root or _store_root()
     try:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.cache import get_text, set_text
@@ -29,6 +31,8 @@ def reached_names(platform: ChatPlatform) -> list[str]:
         return _Reached.model_validate_json(raw).usernames
     except ValidationError:
         logger.warning(
-            "chatting: reached models of %s unreadable", platform.value, exc_info=True
+            "chatting: reached models of %s unreadable",
+            platform.value,
+            exc_info=True,
         )
         return []

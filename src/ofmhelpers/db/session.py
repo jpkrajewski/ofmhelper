@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 from typing import Any
 lazy from collections.abc import Iterator
@@ -30,7 +32,10 @@ def get_engine() -> Engine:
         if _engine is not None:
             _engine.dispose()
         _engine = sqlalchemy.create_engine(
-            url, pool_pre_ping=True, future=True, hide_parameters=True
+            url,
+            pool_pre_ping=True,
+            future=True,
+            hide_parameters=True,
         )
         event.listen(_engine, "begin", _new_transaction)
         event.listen(_engine, "before_cursor_execute", _say_who_acts)
@@ -51,7 +56,7 @@ def _say_who_acts(
     _executemany: object,
 ) -> None:
     if conn.info.get(_STAMPED) or not statement.lstrip()[:6].upper().startswith(
-        _WRITES
+        _WRITES,
     ):
         return
     conn.info[_STAMPED] = True

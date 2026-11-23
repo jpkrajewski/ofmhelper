@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -124,7 +126,7 @@ def _remember_paid(job: Job) -> None:
             model=clone.CLONE_TARGETS["kie"].model,
             task_id=fake_kie().created[-1],
             api_key=KIE_KEY,
-        )
+        ),
     )
 
 
@@ -149,7 +151,8 @@ def test_a_paid_rerun_reuses_its_saved_reel_and_pays_nothing_again(ann, monkeypa
 
 
 def test_a_paid_rerun_that_cannot_download_its_reel_again_keeps_its_request(
-    ann, monkeypatch
+    ann,
+    monkeypatch,
 ):
     job = _done_run(ann)
     Path(job.params["source_video"]).unlink()
@@ -211,7 +214,9 @@ def test_a_wrong_key_fails_the_rest_of_its_generate_without_downloading(ann, dow
 
 
 def test_no_credits_fails_the_rest_of_its_generate_without_downloading(
-    ann, downloads, monkeypatch
+    ann,
+    downloads,
+    monkeypatch,
 ):
     message = "kie.ai: credits insufficient (code 402)"
 
@@ -261,7 +266,9 @@ def test_a_download_is_one_post_and_leaves_no_folder_behind(ann, downloads, tmp_
 
 
 def test_a_reel_over_the_limit_is_refused_rounded_up_and_leaves_nothing(
-    ann, monkeypatch, tmp_path
+    ann,
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setattr(run_module, "duration_s", lambda _path, _timeout: 15.04)
 
@@ -283,7 +290,11 @@ def test_a_reel_over_the_limit_is_refused_rounded_up_and_leaves_nothing(
     ],
 )
 def test_a_failed_download_gives_a_short_fixed_reason(
-    ann, monkeypatch, error, cookies, reason
+    ann,
+    monkeypatch,
+    error,
+    cookies,
+    reason,
 ):
     job = _done_run(ann)
     monkeypatch.setattr(run_module.login_cookies, "for_user", lambda _id: cookies)
@@ -322,7 +333,7 @@ def _hosted_only(monkeypatch):
                 model=model,
                 task_id="fake-task-hosted",
                 api_key=api_key,
-            )
+            ),
         )
         url = f"https://{RESULT_HOST}/results/hosted-{job_id}.mp4"
         return [ResultFile(name=f"hosted-{job_id}.mp4", path=None, remote_url=url)]

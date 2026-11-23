@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 from datetime import UTC, datetime
 
@@ -36,7 +38,9 @@ def api(monkeypatch) -> NoSdkCall:
 
 @pytest.mark.parametrize("stale_id", ["1AbC_google_folder_id", "mydrive-x", "abc:def"])
 def test_a_google_shaped_id_is_a_gone_folder_and_the_sdk_is_not_asked(
-    api, stale_id, caplog
+    api,
+    stale_id,
+    caplog,
 ):
     drive = dropbox_client.DropboxDrive("refresh")
 
@@ -202,10 +206,13 @@ def test_a_rate_limit_or_server_error_is_no_answer_not_a_reconnect(monkeypatch, 
 
 
 def test_a_token_answer_missing_a_field_names_the_field_and_never_a_token(
-    monkeypatch, caplog
+    monkeypatch,
+    caplog,
 ):
     _answer(
-        monkeypatch, 200, '{"access_token": "sl.SECRET-ACCESS", "account_id": "dbid:1"}'
+        monkeypatch,
+        200,
+        '{"access_token": "sl.SECRET-ACCESS", "account_id": "dbid:1"}',
     )
 
     with caplog.at_level(logging.DEBUG), pytest.raises(DriveError) as caught:

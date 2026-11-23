@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
@@ -35,7 +37,8 @@ def _owner() -> TestClient:
     user_repository().signed_in(user.id, "", f"fake-refresh:{OWNER}")
     phone = c.post("/phones/add", json=PHONE).json()["id"]
     c.login_id = c.post(  # type: ignore[attr-defined]
-        f"/phones/{phone}/logins", json={"service": "instagram", "username": "ann.ig"}
+        f"/phones/{phone}/logins",
+        json={"service": "instagram", "username": "ann.ig"},
     ).json()["id"]
     storage_jobs.sync()
     return c
@@ -64,7 +67,8 @@ def _drive_files(drive: FakeDrive) -> list[str]:
 
 def _send(client: TestClient, job_id: str, login: int):
     return client.post(
-        "/clone/drive-upload", json={"job_ids": [job_id], "login_ids": [login]}
+        "/clone/drive-upload",
+        json={"job_ids": [job_id], "login_ids": [login]},
     )
 
 
@@ -160,10 +164,12 @@ def test_the_owner_can_send_a_reel_into_the_vas_own_folder(drive):
 
     picker = owner.get("/drive", params={"upload": job_id}).text
     r = owner.post(
-        "/clone/drive-upload", json={"job_ids": [job_id], "va_ids": [va_user.id]}
+        "/clone/drive-upload",
+        json={"job_ids": [job_id], "va_ids": [va_user.id]},
     )
     again = owner.post(
-        "/clone/drive-upload", json={"job_ids": [job_id], "va_ids": [va_user.id]}
+        "/clone/drive-upload",
+        json={"job_ids": [job_id], "va_ids": [va_user.id]},
     )
 
     assert f'data-va-folder="{va_user.id}"' in picker

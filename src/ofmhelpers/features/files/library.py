@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from urllib.parse import urlencode
 lazy from collections.abc import Sequence
@@ -105,7 +107,11 @@ class Library(BaseModel):
                     per_section[self.section_of(count.task)] += count.count
             per_section[UPLOADS] = len(_uploads(user.id))
             found.append(
-                UserFiles(id=user.id, label=user.name or user.email, counts=per_section)
+                UserFiles(
+                    id=user.id,
+                    label=user.name or user.email,
+                    counts=per_section,
+                ),
             )
         return found
 

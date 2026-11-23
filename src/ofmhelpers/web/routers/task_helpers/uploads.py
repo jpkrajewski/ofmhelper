@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 lazy from pathlib import Path

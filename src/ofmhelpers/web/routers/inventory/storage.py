@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request, Response, status
@@ -9,7 +11,9 @@ from ofmhelpers.web.dependencies import Access, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/storage", tags=["storage"], dependencies=[Access(Area.STORAGE)]
+    prefix="/storage",
+    tags=["storage"],
+    dependencies=[Access(Area.STORAGE)],
 )
 
 FolderId = Annotated[str | None, Form(pattern=r"^[A-Za-z0-9_-]{10,128}$")]

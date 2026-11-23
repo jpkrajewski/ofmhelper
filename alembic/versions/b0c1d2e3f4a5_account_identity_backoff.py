@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -28,7 +30,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        "uq_tracked_accounts_platform_account", "tracked_accounts", type_="unique"
+        "uq_tracked_accounts_platform_account",
+        "tracked_accounts",
+        type_="unique",
     )
     op.drop_column("tracked_accounts", "failed_scans")
     op.drop_column("tracked_accounts", "platform_account_id")

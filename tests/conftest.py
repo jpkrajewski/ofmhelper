@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 import os
 from pathlib import Path
@@ -60,7 +62,7 @@ def _per_worker_database(url: str) -> str:
         return url
     parsed = make_url(url)
     return parsed.set(database=f"{parsed.database}_{_XDIST_WORKER}").render_as_string(
-        hide_password=False
+        hide_password=False,
     )
 
 
@@ -76,10 +78,10 @@ TEST_DATABASE_URL = _per_worker_database(
     os.environ.get(
         "OFM_TEST_DATABASE_URL",
         "postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test",
-    )
+    ),
 )
 TEST_REDIS_URL = _per_worker_redis(
-    os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1")
+    os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1"),
 )
 
 
@@ -156,8 +158,8 @@ def _wipe_sql(_test_database) -> str:
         found = conn.execute(
             text(
                 "SELECT quote_ident(sequencename) FROM pg_sequences"
-                " WHERE schemaname = current_schema()"
-            )
+                " WHERE schemaname = current_schema()",
+            ),
         )
         sequences = [row[0] for row in found]
     deletes = "".join(
@@ -214,7 +216,8 @@ def pytest_collection_modifyitems(config, items):
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "ci_only: slow and of little use locally; runs only where CI=true (GitHub Actions)",
+        "ci_only: slow and of little use locally; "
+        "runs only where CI=true (GitHub Actions)",
     )
 
 
@@ -265,7 +268,7 @@ _SETTINGS_CLASSES = tuple(
         cls
         for cls in _subclasses(BaseSettings)
         if cls.__module__ == settings_module.__name__
-    )
+    ),
 )
 
 

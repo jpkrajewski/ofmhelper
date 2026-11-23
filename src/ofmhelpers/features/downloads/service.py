@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -23,7 +25,11 @@ class DownloadService(BaseModel, frozen=True):
 
     @classmethod
     def compose(
-        cls, actor: str, owner_id: int, assets_root: Path, storage: StorageService
+        cls,
+        actor: str,
+        owner_id: int,
+        assets_root: Path,
+        storage: StorageService,
     ) -> DownloadService:
         again = Again(actor=actor)
 
@@ -45,6 +51,8 @@ class DownloadService(BaseModel, frozen=True):
             videos=tool(video_tool.TASK, video_tool.run_downloads),
             images=tool(image_tool.TASK, image_tool.run_downloads),
             sheet=SheetDownloads(
-                clicker=Clicker(user_id=owner_id), sheets=storage.sheet, links=media
+                clicker=Clicker(user_id=owner_id),
+                sheets=storage.sheet,
+                links=media,
             ),
         )

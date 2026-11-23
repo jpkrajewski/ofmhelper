@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import shutil
 import socket
@@ -157,7 +159,10 @@ def e2e_backend(_test_environment) -> E2EBackend:
 
 @pytest.fixture(scope="session")
 def base_url(
-    e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
+    e2e_backend: E2EBackend,
+    app_dir: Path,
+    fakes_dir: Path,
+    app_log: Path,
 ) -> Iterator[str]:
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
@@ -240,7 +245,7 @@ def _seed_users(database_url: str) -> None:
                 " VALUES"
                 " (1, 'admin', 'Admin (password)', 'admin', true, '', '', true),"
                 " (2, :va, '', 'user', true, '', :hash, false)"
-                " ON CONFLICT (id) DO NOTHING"
+                " ON CONFLICT (id) DO NOTHING",
             ),
             {"va": va_email, "hash": _va_password_hash()},
         )
@@ -299,7 +304,10 @@ def browser() -> Iterator[Browser]:
 
 @pytest.fixture(scope="session")
 def auth_states(
-    browser: Browser, base_url: str, tmp_path_factory, e2e_backend: E2EBackend
+    browser: Browser,
+    base_url: str,
+    tmp_path_factory,
+    e2e_backend: E2EBackend,
 ) -> dict[str, Path]:
     root = tmp_path_factory.mktemp("e2e-auth")
     states = {}
@@ -325,7 +333,11 @@ def _failed(request) -> bool:
 
 
 def _finish(
-    session: Session, name: str, request, tmp_path: Path, app_log: Path
+    session: Session,
+    name: str,
+    request,
+    tmp_path: Path,
+    app_log: Path,
 ) -> None:
     if not _failed(request):
         session.close(trace=None)
@@ -352,12 +364,21 @@ def _finish(
     session.close(trace=trace)
     allure.attach.file(trace, name=f"{name}: trace", extension="zip")
     allure.attach.file(
-        app_log, name="app log", attachment_type=allure.attachment_type.TEXT
+        app_log,
+        name="app log",
+        attachment_type=allure.attachment_type.TEXT,
     )
 
 
 def _session(
-    role: str, name: str, browser, base_url, auth_states, request, tmp_path, app_log
+    role: str,
+    name: str,
+    browser,
+    base_url,
+    auth_states,
+    request,
+    tmp_path,
+    app_log,
 ):
     session = Session(browser, base_url, auth_states[role])
     yield session
@@ -366,26 +387,57 @@ def _session(
 
 @pytest.fixture
 def admin(
-    browser, base_url, auth_states, request, tmp_path, app_log
+    browser,
+    base_url,
+    auth_states,
+    request,
+    tmp_path,
+    app_log,
 ) -> Iterator[Session]:
     yield from _session(
-        "ADMIN", "admin", browser, base_url, auth_states, request, tmp_path, app_log
+        "ADMIN",
+        "admin",
+        browser,
+        base_url,
+        auth_states,
+        request,
+        tmp_path,
+        app_log,
     )
 
 
 @pytest.fixture
 def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[Session]:
     yield from _session(
-        "VA", "va", browser, base_url, auth_states, request, tmp_path, app_log
+        "VA",
+        "va",
+        browser,
+        base_url,
+        auth_states,
+        request,
+        tmp_path,
+        app_log,
     )
 
 
 @pytest.fixture
 def coworker(
-    browser, base_url, auth_states, request, tmp_path, app_log
+    browser,
+    base_url,
+    auth_states,
+    request,
+    tmp_path,
+    app_log,
 ) -> Iterator[Session]:
     yield from _session(
-        "VA", "coworker", browser, base_url, auth_states, request, tmp_path, app_log
+        "VA",
+        "coworker",
+        browser,
+        base_url,
+        auth_states,
+        request,
+        tmp_path,
+        app_log,
     )
 
 

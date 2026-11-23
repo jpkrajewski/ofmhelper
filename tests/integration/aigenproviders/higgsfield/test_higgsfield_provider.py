@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import threading
 import time
 from unittest import mock
@@ -51,7 +53,7 @@ class Wire:
         sent = httpx.Headers(client.headers)
         sent.update(kwargs.pop("headers", None) or {})
         self.calls.append(
-            {"method": method, "url": str(full), "headers": dict(sent), **kwargs}
+            {"method": method, "url": str(full), "headers": dict(sent), **kwargs},
         )
         answer = self.routes[(method, full.path)]
         if isinstance(answer, Exception):
@@ -222,7 +224,9 @@ def test_an_unreadable_status_is_retryable(wire, provider, body):
 
 
 def test_an_unreadable_status_keeps_the_paid_request_for_recovery(
-    wire, provider, monkeypatch
+    wire,
+    provider,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_AIGEN_VIDEO_POLL_TIMEOUT_S", "1")
     monkeypatch.setenv("OFM_AIGEN_POLL_INTERVAL_S", "0.05")
@@ -286,7 +290,7 @@ QUEUE_FULL = {
         "retryable": True,
         "limit": 40,
         "retry_after_seconds": 30,
-    }
+    },
 }
 
 
@@ -301,7 +305,12 @@ QUEUE_FULL = {
     ids=["header", "body", "neither", "bad-header"],
 )
 def test_a_rate_limited_submit_is_sent_once_with_the_wait(
-    wire, provider, no_backoff, body, headers, wait
+    wire,
+    provider,
+    no_backoff,
+    body,
+    headers,
+    wait,
 ):
     fake = wire({SUBMIT: (429, body, headers)})
 
@@ -315,7 +324,11 @@ def test_a_rate_limited_submit_is_sent_once_with_the_wait(
 
 @pytest.mark.parametrize("status", [408, 502, 503, 504])
 def test_an_unanswered_submit_is_resent_under_one_key_then_remembers_nothing(
-    wire, provider, no_backoff, status, monkeypatch
+    wire,
+    provider,
+    no_backoff,
+    status,
+    monkeypatch,
 ):
     waits: list[float] = []
     monkeypatch.setattr(self_heal, "_sleep", waits.append)
@@ -394,7 +407,12 @@ def test_a_webp_subject_goes_up_as_webp(wire, provider, tmp_path, name):
 
 @pytest.mark.parametrize(("suffix", "fmt"), [(".tiff", "TIFF"), (".bmp", "BMP")])
 def test_a_bmp_or_tiff_subject_goes_up_as_a_jpeg_copy(
-    wire, provider, tmp_path, monkeypatch, suffix, fmt
+    wire,
+    provider,
+    tmp_path,
+    monkeypatch,
+    suffix,
+    fmt,
 ):
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     subject = tmp_path / f"abc__subject{suffix}"
@@ -429,7 +447,10 @@ def test_a_reused_reference_is_uploaded_once(wire, provider, image):
 
 
 def test_a_resumed_run_whose_subject_is_gone_still_gets_its_url(
-    wire, provider, tmp_path, monkeypatch
+    wire,
+    provider,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
     monkeypatch.setattr(
@@ -460,7 +481,9 @@ def test_another_account_never_reuses_the_upload(wire, provider, image):
 
 
 def test_a_file_type_higgsfield_refuses_is_rejected_before_any_call(
-    wire, provider, tmp_path
+    wire,
+    provider,
+    tmp_path,
 ):
     fake = wire({})
     notes = tmp_path / "notes.txt"
@@ -488,7 +511,10 @@ def test_a_mov_reference_goes_up_as_its_mp4_copy(wire, provider, tmp_path, monke
 
 
 def test_a_video_that_cannot_be_converted_fails_before_any_call(
-    wire, provider, tmp_path, monkeypatch
+    wire,
+    provider,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     fake = wire({})
@@ -503,7 +529,10 @@ def test_a_video_that_cannot_be_converted_fails_before_any_call(
 
 
 def test_an_image_over_the_limits_goes_up_as_a_shrunk_copy(
-    wire, provider, tmp_path, monkeypatch
+    wire,
+    provider,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
@@ -542,8 +571,8 @@ def _upload_at_once(monkeypatch, path, count=3):
     threads = [
         threading.Thread(
             target=lambda: urls.append(
-                HiggsfieldProvider("key-id:key-secret").upload(path)
-            )
+                HiggsfieldProvider("key-id:key-secret").upload(path),
+            ),
         )
         for _ in range(count)
     ]
@@ -563,7 +592,8 @@ def test_one_file_asked_for_at_once_is_uploaded_once(monkeypatch, image):
 
 
 def test_an_oversized_subject_asked_for_at_once_is_shrunk_and_sent_once(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")

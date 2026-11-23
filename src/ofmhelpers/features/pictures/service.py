@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Any, Protocol
 lazy from collections.abc import Callable
@@ -64,7 +66,9 @@ def form_view(owner_id: int, actor: str, preset: int | None) -> FormView:
         selected=preset if preset in ids else (ids[0] if ids else None),
         providers=provider_choices(list(PICTURE_TARGETS), notices=False),
         selected_provider=start_provider(
-            actor, frozenset({TASK}), list(PICTURE_TARGETS)
+            actor,
+            frozenset({TASK}),
+            list(PICTURE_TARGETS),
         ),
         max_images={name: t.max_images for name, t in PICTURE_TARGETS.items()},
         preset_max_images=settings.pictures.preset_max_images,
@@ -99,7 +103,9 @@ def image_thumb(preset_id: int, index: int, owner_id: int) -> Path:
         return file_thumb(Path(preset.images[index]))
     except PREVIEW_ERRORS:
         logger.warning(
-            "pictures: no thumbnail of %s", preset.images[index], exc_info=True
+            "pictures: no thumbnail of %s",
+            preset.images[index],
+            exc_info=True,
         )
         msg = "No thumbnail"
         raise NotFoundError(msg) from None
@@ -136,7 +142,9 @@ def _checked(images: list[str]) -> list[str]:
 
 
 def create_preset(
-    form: PresetFields, owner_id: int, assets_root: Path
+    form: PresetFields,
+    owner_id: int,
+    assets_root: Path,
 ) -> PicturePreset:
     aspect = _preset_aspect(form.aspect_ratio)
     paths = _checked(_saved_images(form.images, assets_root))
@@ -205,7 +213,10 @@ def _key(form: Submitted, target: PictureTarget, owner_id: int) -> str:
 
 def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
     paths = build_ordered_paths(
-        form.pictures_manifest, form.pictures, assets_root, user_id=owner_id
+        form.pictures_manifest,
+        form.pictures,
+        assets_root,
+        user_id=owner_id,
     )
     most = settings.pictures.max_pictures
     if not 1 <= len(paths) <= most:
@@ -228,7 +239,9 @@ class PictureRun(BaseModel):
 
 
 def _runs(
-    chosen: PicturePreset, target: PictureTarget, paths: list[str]
+    chosen: PicturePreset,
+    target: PictureTarget,
+    paths: list[str],
 ) -> list[PictureRun]:
     if len(chosen.images) + 1 > target.max_images:
         msg = (
@@ -314,5 +327,10 @@ def run_picture(
     }
     fields = values(PICTURE_TARGETS[provider], chosen).model_dump()
     return run_ai(
-        job_id, api_key, assets_root, provider=provider, model=model, **fields
+        job_id,
+        api_key,
+        assets_root,
+        provider=provider,
+        model=model,
+        **fields,
     )

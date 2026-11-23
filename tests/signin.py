@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import time
 from base64 import b64encode
@@ -48,7 +50,9 @@ def session_cookie(user: User) -> str:
 
 
 def sign_in(
-    client: TestClient, email: str = USER_EMAIL, role: Role = Role.USER
+    client: TestClient,
+    email: str = USER_EMAIL,
+    role: Role = Role.USER,
 ) -> User:
     user = make_user(email, role)
     client.cookies.delete(SESSION_COOKIE)

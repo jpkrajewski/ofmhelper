@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 import mmap
 import random
@@ -43,7 +45,11 @@ def _timing_filters(profile: DeviceProfile, plan: TimingPlan) -> str:
 
 
 def _video_filter(
-    profile: DeviceProfile, src: SourceInfo, plan: TimingPlan, *, mirror: bool
+    profile: DeviceProfile,
+    src: SourceInfo,
+    plan: TimingPlan,
+    *,
+    mirror: bool,
 ) -> str:
     v = profile.video
     size = frame_size(profile, src)
@@ -67,7 +73,11 @@ def _audio_filter(profile: DeviceProfile, src: SourceInfo) -> str:
 
 
 def encode_args(
-    profile: DeviceProfile, src: SourceInfo, plan: TimingPlan, *, mirror: bool = False
+    profile: DeviceProfile,
+    src: SourceInfo,
+    plan: TimingPlan,
+    *,
+    mirror: bool = False,
 ) -> list[str]:
     v, a = profile.video, profile.audio
     level = v.level / _LEVEL_IDC_PER_LEVEL
@@ -144,7 +154,10 @@ def _handler_kind(trak: Atom) -> str:
 
 class _Retagger:
     def __init__(
-        self, profile: DeviceProfile, recording: Recording, size: Size
+        self,
+        profile: DeviceProfile,
+        recording: Recording,
+        size: Size,
     ) -> None:
         self.profile = profile
         self.recording = recording
@@ -235,7 +248,7 @@ class _Retagger:
             tables = sample_tables.SampleTables.from_stbl(stbl)
             children += [
                 sample_tables.sync_group_description(
-                    self.profile.video.encoded_sync_nal_unit_type
+                    self.profile.video.encoded_sync_nal_unit_type,
                 ),
                 sample_tables.sync_sample_to_group(tables),
                 sample_tables.cslg(tables),

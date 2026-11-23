@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, File, Request, UploadFile
@@ -20,7 +22,9 @@ from ofmhelpers.web.templates_config import render
 __all__ = ["FILES_PREFIX", "TASK", "_run_combine", "router"]
 
 router = APIRouter(
-    prefix=PREFIX, tags=["character-sheet"], dependencies=[Access(Area.CHARACTER_SHEET)]
+    prefix=PREFIX,
+    tags=["character-sheet"],
+    dependencies=[Access(Area.CHARACTER_SHEET)],
 )
 
 

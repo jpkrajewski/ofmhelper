@@ -147,21 +147,8 @@ line-length = 88
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    # Checks run in Docker against a bind-mounted checkout; from a Windows host
-    # every file shows up executable there, so this would flag every file.
-    "EXE002",
-    # Formatter owns layout; these fight `ruff format`.
-    "COM812",
-    "E501",
-    # No copyright headers in this repo.
-    "CPY001",
-    # No docstrings at all (CLAUDE.md). Parameters may go unannotated; every
-    # function in src/ declares what it returns (ANN201-206 stay on), and
-    # tests/unit/architecture checks that it is never a dict, a tuple or Any.
+    # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    "ANN001",
-    "ANN002",
-    "ANN003",
     "ANN401",
     # stdout IS the log here (Docker captures it). Note ruff's T201 fix
     # DELETES the print rather than converting it -- never autofix this.
@@ -182,11 +169,6 @@ ignore = [
     # call-site readability traps.
     "FBT001",
     "FBT002",
-    # Deliberate fault isolation at external boundaries: a job runner, an
-    # API-key sweep loop, or a per-post parse must record the failure and
-    # keep going rather than take the worker down. Every site does something
-    # with the exception (logs it, stores it on the job, falls back).
-    "BLE001",
     # ruff 0.17's default conventions want `import datetime as dt`: churn in 15
     # files for no gain, and the module name reads better here.
     "ICN001",
@@ -198,6 +180,9 @@ ignore = [
 
 # Annotations these classes read when the class is created: an import they use
 # is a runtime import.
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "(?i)copyright \\(c\\) \\d{4}"
+
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = [
     "pydantic.BaseModel",
@@ -240,6 +225,15 @@ ignore-variadic-names = true
 "src/ofmhelpers/web/routers/inventory/phones.py" = ["FAST003"]
 # `{user_id}` reaches role / active / delete through `OtherUser`.
 "src/ofmhelpers/web/routers/admin/users.py" = ["FAST003"]
+# Long lines are template or data content (HTML report, LLM prompt templates,
+# a usage command, SQL fragments), not code layout.
+"src/ofmhelpers/media/repurpose/lab/report.py" = ["E501"]
+"src/ofmhelpers/features/trials/captions.py" = ["E501"]
+"scripts/sync_kie_catalog.py" = ["E501"]
+"tests/integration/db/test_audit.py" = ["E501"]
+# Browser-driver scripts embed minified JS in triple-quoted page templates.
+"tests/e2e/test_backlog_pages.py" = ["E501"]
+"tests/e2e/test_notifications_menu.py" = ["E501"]
 "src/ofmhelpers/web/dependencies.py" = ["TC001", "TC002"]
 "src/ofmhelpers/web/forms.py" = ["TC001", "TC002"]
 # Lazy singletons that rebuild when the configured URL changes -- `global`

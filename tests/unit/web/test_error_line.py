@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.features.jobs.schema import (
@@ -101,7 +103,10 @@ def test_a_long_answer_is_cut_and_the_reason_stays():
     ],
 )
 def test_a_failed_card_puts_who_and_why_first_and_what_was_said_under_it(
-    error, head, said, about_keys
+    error,
+    head,
+    said,
+    about_keys,
 ):
     assert error_text(error) == ErrorText(head=head, said=said, about_keys=about_keys)
 

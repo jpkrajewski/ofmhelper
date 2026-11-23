@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import threading
@@ -39,7 +41,7 @@ class FakeKie:
                 "code": 200,
                 "msg": "File uploaded successfully",
                 "data": {"downloadUrl": f"https://{RESULT_HOST}/uploads/{number}"},
-            }
+            },
         )
 
     def create(self, request: requests.PreparedRequest) -> FakeReply:
@@ -52,7 +54,7 @@ class FakeKie:
             self.tasks[task_id] = {"model": model, "polls": 0}
             self.created.append(task_id)
         return FakeReply.json_body(
-            {"code": 200, "msg": "success", "data": {"taskId": task_id}}
+            {"code": 200, "msg": "success", "data": {"taskId": task_id}},
         )
 
     def record(self, request: requests.PreparedRequest) -> FakeReply:
@@ -71,7 +73,7 @@ class FakeKie:
             data |= {
                 "state": "success",
                 "resultJson": json.dumps(
-                    {"resultUrls": [f"https://{RESULT_HOST}/results/{task_id}.{ext}"]}
+                    {"resultUrls": [f"https://{RESULT_HOST}/results/{task_id}.{ext}"]},
                 ),
                 "creditsConsumed": 12.5,
                 "costTime": 1200,
@@ -79,7 +81,9 @@ class FakeKie:
         return FakeReply.json_body({"code": 200, "msg": "success", "data": data})
 
     def handle_api(
-        self, request: requests.PreparedRequest, _proxies: Mapping[str, str]
+        self,
+        request: requests.PreparedRequest,
+        _proxies: Mapping[str, str],
     ) -> FakeReply:
         path = urlsplit(request.url or "").path
         if path.endswith("/createTask") and request.method == "POST":
@@ -92,15 +96,18 @@ class FakeKie:
 
     @staticmethod
     def handle_files(
-        request: requests.PreparedRequest, _proxies: Mapping[str, str]
+        request: requests.PreparedRequest,
+        _proxies: Mapping[str, str],
     ) -> FakeReply:
         path = urlsplit(request.url or "").path
         if path.endswith(".mp4"):
             return FakeReply(
-                body=fake_media.mp4(), headers={"Content-Type": "video/mp4"}
+                body=fake_media.mp4(),
+                headers={"Content-Type": "video/mp4"},
             )
         return FakeReply(
-            body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+            body=fake_media.image(fmt="PNG"),
+            headers={"Content-Type": "image/png"},
         )
 
 

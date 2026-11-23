@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import os
 import shutil
@@ -62,7 +64,8 @@ def test_an_image_shows_a_thumbnail_and_opens_in_the_browser(client, root):
     assert 'href="/file-manager/view?root=kieai_out&amp;path=result.png"' in page
 
     thumb = client.get(
-        "/file-manager/thumb", params={"root": "kieai_out", "path": "result.png"}
+        "/file-manager/thumb",
+        params={"root": "kieai_out", "path": "result.png"},
     )
     assert thumb.status_code == 200
     assert thumb.headers["content-type"] == "image/webp"
@@ -70,7 +73,8 @@ def test_an_image_shows_a_thumbnail_and_opens_in_the_browser(client, root):
         assert max(img.size) <= 480
 
     viewed = client.get(
-        "/file-manager/view", params={"root": "kieai_out", "path": "result.png"}
+        "/file-manager/view",
+        params={"root": "kieai_out", "path": "result.png"},
     )
     assert viewed.status_code == 200
     assert viewed.headers["content-type"] == "image/png"
@@ -98,7 +102,8 @@ def test_a_video_gets_its_first_frame_as_thumbnail(client, root):
         check=True,
     )
     thumb = client.get(
-        "/file-manager/thumb", params={"root": "kieai_out", "path": "clip.mp4"}
+        "/file-manager/thumb",
+        params={"root": "kieai_out", "path": "clip.mp4"},
     )
     assert thumb.status_code == 200
     assert thumb.headers["content-type"] == "image/webp"
@@ -109,24 +114,28 @@ def test_a_broken_video_has_no_thumbnail_but_still_lists(client, root):
 
     assert "broken.mp4" in _page(client)
     thumb = client.get(
-        "/file-manager/thumb", params={"root": "kieai_out", "path": "broken.mp4"}
+        "/file-manager/thumb",
+        params={"root": "kieai_out", "path": "broken.mp4"},
     )
     assert thumb.status_code == 404
 
 
 def test_a_non_media_file_has_no_thumbnail_and_downloads_instead_of_running(
-    client, root
+    client,
+    root,
 ):
     (root / "page.html").write_text("<script>alert(1)</script>")
 
     page = _page(client)
     assert "/file-manager/thumb?root=kieai_out&amp;path=page.html" not in page
     thumb = client.get(
-        "/file-manager/thumb", params={"root": "kieai_out", "path": "page.html"}
+        "/file-manager/thumb",
+        params={"root": "kieai_out", "path": "page.html"},
     )
     assert thumb.status_code == 404
     viewed = client.get(
-        "/file-manager/view", params={"root": "kieai_out", "path": "page.html"}
+        "/file-manager/view",
+        params={"root": "kieai_out", "path": "page.html"},
     )
     assert viewed.headers["content-type"] == "application/octet-stream"
     assert "attachment" in viewed.headers["content-disposition"]
@@ -323,7 +332,9 @@ def test_a_user_sees_no_ones_files(tmp_path, assets):
 
 
 def test_a_run_result_outside_the_roots_is_not_served_or_deleted(
-    client, tmp_path, assets
+    client,
+    tmp_path,
+    assets,
 ):
     ann = users.add_user(UserForm(email="ann@example.com"))
     outside = tmp_path / "outside.png"

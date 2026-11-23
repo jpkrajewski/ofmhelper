@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from functools import cached_property
 from http import HTTPStatus
@@ -40,7 +42,7 @@ _PAGE_HEADERS = frozendict(
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-User": "?1",
         "Sec-Fetch-Dest": "document",
-    }
+    },
 )
 
 _PROFILE_FLAGS = {
@@ -149,7 +151,7 @@ class InstagramClient:
         if r.ok and not pages.crawler_sees_a_profile(r.text):
             return ProfileNotFoundError("profile not found")
         return InstagramRateLimitedError(
-            "Instagram withheld the profile page — retrying later"
+            "Instagram withheld the profile page — retrying later",
         )
 
     def reels(self, user_id: str) -> Iterator[ReelSummary]:
@@ -197,9 +199,9 @@ class InstagramClient:
                 "include_multi_captions": True,
                 "last": None,
                 "username": username,
-                "__relay_internal__pv__PolarisMultiCaptionCarouselEnabledrelayprovider": True,
+                "__relay_internal__pv__PolarisMultiCaptionCarouselEnabledrelayprovider": True,  # noqa: E501
                 "__relay_internal__pv__PolarisShortDramaEnabledrelayprovider": False,
-                "__relay_internal__pv__PolarisReelsRecoDebugOverlayEnabledrelayprovider": False,
+                "__relay_internal__pv__PolarisReelsRecoDebugOverlayEnabledrelayprovider": False,  # noqa: E501
             }
             page = self._query(
                 TimelinePage,
@@ -236,7 +238,8 @@ class InstagramClient:
             jar = load_jar(self._cookies)
         except CookieFileError:
             logger.warning(
-                "the Instagram login is not a readable cookies.txt", exc_info=True
+                "the Instagram login is not a readable cookies.txt",
+                exc_info=True,
             )
             return None
         session = _retrying(requests.Session())
@@ -248,10 +251,11 @@ class InstagramClient:
                 "X-ASBD-ID": self._settings.asbd_id,
                 "X-Requested-With": "XMLHttpRequest",
                 "X-CSRFToken": next(
-                    (c.value or "" for c in jar if c.name == "csrftoken"), ""
+                    (c.value or "" for c in jar if c.name == "csrftoken"),
+                    "",
                 ),
                 "Referer": f"{ROOT}/",
-            }
+            },
         )
         return session
 
@@ -289,7 +293,10 @@ class InstagramClient:
         return tokens
 
     def reels_logged_in(
-        self, username: str, user_id: str, limit: int
+        self,
+        username: str,
+        user_id: str,
+        limit: int,
     ) -> list[ReelSummary] | None:
         tokens = self._login_tokens(username)
         if tokens is None:

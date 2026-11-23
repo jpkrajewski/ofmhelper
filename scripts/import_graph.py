@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import json
 import sys
@@ -163,14 +165,17 @@ def base_of(module: str, path: Path, level: int) -> str:
 
 
 def targets(
-    node: ast.Import | ast.ImportFrom, module: str, path: Path, modules: set[str]
+    node: ast.Import | ast.ImportFrom,
+    module: str,
+    path: Path,
+    modules: set[str],
 ) -> list[str]:
     if isinstance(node, ast.Import):
         written = [alias.name for alias in node.names]
     else:
         base = base_of(module, path, node.level) if node.level else ""
         prefix = ".".join(
-            filter(None, [PACKAGE if node.level else "", base, node.module or ""])
+            filter(None, [PACKAGE if node.level else "", base, node.module or ""]),
         )
         written = [
             f"{prefix}.{alias.name}"
@@ -201,7 +206,8 @@ def graph() -> Graph:
     eager = {(e.source, e.target) for e in edges if not e.lazy}
     kept = [e for e in edges if not e.lazy or (e.source, e.target) not in eager]
     return Graph(
-        modules=sorted(modules), edges=sorted(kept, key=lambda e: (e.source, e.target))
+        modules=sorted(modules),
+        edges=sorted(kept, key=lambda e: (e.source, e.target)),
     )
 
 
@@ -259,7 +265,7 @@ def one_module(found: Graph, module: str) -> str:
             *imports,
             f"imported by {len(importers)}:",
             *importers,
-        ]
+        ],
     )
 
 
@@ -308,9 +314,12 @@ mermaid.initialize({{startOnLoad: true}});
 const edges = {edges};
 document.getElementById("find").addEventListener("input", (event) => {{
   const name = event.target.value.trim();
-  const out = edges.filter((e) => e.source === name).map((e) => "-> " + e.target + (e.lazy ? " (lazy)" : ""));
-  const into = edges.filter((e) => e.target === name).map((e) => "<- " + e.source + (e.lazy ? " (lazy)" : ""));
-  document.getElementById("one").textContent = [name + " imports " + out.length, ...out, "imported by " + into.length, ...into].join("\\n");
+  const out = edges.filter((e) => e.source === name).map((e) => "-> "
+      "" + e.target + (e.lazy ? " (lazy)" : ""));
+  const into = edges.filter((e) => e.target === name).map((e) => "<- "
+      "" + e.source + (e.lazy ? " (lazy)" : ""));
+  document.getElementById("one").textContent = [name + " imports "
+      "" + out.length, ...out, "imported by " + into.length, ...into].join("\\n");
 }});
 </script></body></html>
 """

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import urlsplit
 
 from starlette.datastructures import URL, Headers

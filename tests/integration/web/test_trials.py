@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import re
 import subprocess
@@ -90,11 +92,15 @@ def _posted(drive: FakeDrive) -> str:
 def _login(drive: FakeDrive, *videos: str) -> int:
     phone = devices.add_device(
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
-        )
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Anna",
+        ),
     )
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username="ann.ig")
+        phone,
+        LoginFields(service="instagram", username="ann.ig"),
     )
     assert added is not None
     storage_jobs.sync()
@@ -202,7 +208,8 @@ def test_own_caption_makes_the_copy_again_with_it(drive, made):
     (reel,) = _state(login).reels
 
     client.post(
-        f"/trials/{login}/reel/{reel.key}/caption", data={"caption": "  my   own "}
+        f"/trials/{login}/reel/{reel.key}/caption",
+        data={"caption": "  my   own "},
     )
 
     assert made[-1] == "my own"
@@ -247,7 +254,9 @@ _PROD_COPY_S = 630
 
 
 def test_a_job_has_time_for_prod_copies_made_one_after_another(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     limits: list[int] = []
     monkeypatch.setattr(
@@ -303,7 +312,7 @@ def test_fifty_generate_clicks_at_once_start_one_job(drive, made, real_queue):
 
     with ThreadPoolExecutor(50) as pool:
         answers = list(
-            pool.map(lambda _: client.post(f"/trials/{login}/generate"), range(50))
+            pool.map(lambda _: client.post(f"/trials/{login}/generate"), range(50)),
         )
 
     assert {r.status_code for r in answers} == {200}
@@ -332,7 +341,9 @@ def test_a_caption_applies_while_generate_trials_runs_on_the_others(drive, made)
     first, second = _state(login).reels
     generating = _running_job()
     trial_state.change(
-        users.agency_id(), login, lambda s: setattr(s, "job_id", generating)
+        users.agency_id(),
+        login,
+        lambda s: setattr(s, "job_id", generating),
     )
 
     page = client.get(f"/trials/{login}").text
@@ -343,7 +354,10 @@ def test_a_caption_applies_while_generate_trials_runs_on_the_others(drive, made)
     assert _state(login).job_id == generating
     busy = _running_job()
     trial_state.change_reel(
-        users.agency_id(), login, second.key, lambda r: setattr(r, "job_id", busy)
+        users.agency_id(),
+        login,
+        second.key,
+        lambda r: setattr(r, "job_id", busy),
     )
     client.post(f"/trials/{login}/reel/{second.key}/regenerate")
     assert len(made) == 3
@@ -363,7 +377,8 @@ def test_select_is_kept_at_once_and_upload_takes_it(drive, made):
     first, _second = _state(login).reels
 
     r = client.post(
-        f"/trials/{login}/reel/{first.key}/select", data={"selected": "true"}
+        f"/trials/{login}/reel/{first.key}/select",
+        data={"selected": "true"},
     )
 
     assert r.json() == {"selected": True}
@@ -391,7 +406,8 @@ def test_a_reel_the_folder_does_not_have_is_a_404_on_every_reel_route(drive, mad
     }
 
     assert {name: r.status_code for name, r in answers.items()} == dict.fromkeys(
-        answers, 404
+        answers,
+        404,
     )
     assert {name: r.json()["detail"] for name, r in answers.items()} == {
         "regenerate": "No such reel",
@@ -462,7 +478,8 @@ def test_a_second_upload_while_one_runs_starts_nothing(drive, made):
     trial_state.change_reel(users.agency_id(), login, first.key, uploading)
 
     r = client.post(
-        f"/trials/{login}/upload", data={"approved": [first.key, second.key]}
+        f"/trials/{login}/upload",
+        data={"approved": [first.key, second.key]},
     )
 
     assert r.json() == {"uploading": []}
@@ -490,7 +507,8 @@ def test_cards_answers_only_the_cards_asked_for(drive, made):
 
 
 def test_dev_reading_the_live_folders_uploads_into_a_twin_in_its_dev_root(
-    drive, monkeypatch
+    drive,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")
@@ -501,7 +519,10 @@ def test_dev_reading_the_live_folders_uploads_into_a_twin_in_its_dev_root(
     uid = users.agency_id()
     reels = [
         trial_state.ReelState(
-            key=key, name=f"{key}.mp4", out=f"out/{key}.mp4", status="generated"
+            key=key,
+            name=f"{key}.mp4",
+            out=f"out/{key}.mp4",
+            status="generated",
         )
         for key in ("k1", "k2")
     ]
@@ -623,7 +644,8 @@ def test_generate_makes_only_what_is_new_in_posted(drive, made):
 
 
 def test_a_trashed_posted_folder_reads_as_gone_not_unreadable_or_nothing_new(
-    drive, made
+    drive,
+    made,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -639,8 +661,10 @@ def test_a_trashed_posted_folder_reads_as_gone_not_unreadable_or_nothing_new(
     assert made == ["caption 0"]
 
 
-def test_a_posted_folder_drive_answers_404_for_is_kept_and_the_page_shows_the_drive_problem(
-    drive, made, monkeypatch
+def test_a_posted_folder_drive_answers_404_for_is_kept_and_the_page_shows_the_drive_problem(  # noqa: E501
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -696,7 +720,9 @@ def test_generate_with_nothing_new_says_so_and_can_be_clicked_again(drive, made)
 
 
 def test_new_reels_that_would_not_download_are_counted_not_called_nothing_new(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4", "b.mp4")
 
@@ -715,7 +741,9 @@ def test_new_reels_that_would_not_download_are_counted_not_called_nothing_new(
 
 
 def test_a_new_reel_the_ai_could_not_caption_is_counted_and_made_next_time(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     written = tasks.understand
@@ -739,7 +767,9 @@ def test_a_new_reel_the_ai_could_not_caption_is_counted_and_made_next_time(
 
 
 def test_posted_unreadable_asks_to_connect_and_never_says_nothing_new(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -790,7 +820,9 @@ def test_the_grid_shows_the_newest_made_first(drive, made):
 
 
 def test_made_copies_come_first_then_what_is_being_made_then_what_failed(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "good.mp4", "bad.mp4")
     pipeline = tasks.pipeline_run
@@ -826,7 +858,10 @@ def test_a_folder_made_before_the_order_is_put_in_order_and_a_stale_read_keeps_i
     def video(key: str, day: int) -> DriveFile:
         when = f"2026-11-{day:02d}T10:00:00Z"
         return DriveFile(
-            id=key, name=f"{key}.mp4", mimeType="video/mp4", createdTime=when
+            id=key,
+            name=f"{key}.mp4",
+            mimeType="video/mp4",
+            createdTime=when,
         )
 
     made_as = {"out": "out/x.mp4", "status": "generated"}
@@ -873,7 +908,8 @@ def test_a_card_offers_five_captions_with_the_one_on_the_copy_marked(drive, made
 
 
 def test_choosing_a_caption_makes_the_copy_again_with_it_and_keeps_the_choices(
-    drive, made
+    drive,
+    made,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -881,7 +917,8 @@ def test_choosing_a_caption_makes_the_copy_again_with_it_and_keeps_the_choices(
     (reel,) = _state(login).reels
 
     client.post(
-        f"/trials/{login}/reel/{reel.key}/caption", data={"caption": "third one"}
+        f"/trials/{login}/reel/{reel.key}/caption",
+        data={"caption": "third one"},
     )
 
     assert made == ["caption 0", "third one"]
@@ -928,7 +965,9 @@ def test_a_reel_made_before_choices_gets_them_and_keeps_its_copy(drive, made):
 
 
 def test_captions_the_ai_cannot_write_say_so_and_leave_the_copy(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -977,7 +1016,7 @@ def test_upload_replaces_the_videos_in_trials_with_the_batch(drive, made):
     assert state.reel(b.key).status == "uploaded"
     assert state.reel(c.key).status == "uploaded"
     assert {state.reel(b.key).uploaded_as, state.reel(c.key).uploaded_as} == set(
-        names
+        names,
     ) - {"notes.txt"}
     page = client.get(f"/trials/{login}").text
     assert page.count('name="approved"') == 3
@@ -1217,7 +1256,9 @@ def test_regenerate_waits_in_the_same_line(drive, made, real_queue):
 
 
 def test_the_status_line_counts_what_failed_while_the_run_goes_on(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4", "b.mp4")
 
@@ -1237,7 +1278,10 @@ def test_the_status_line_counts_what_failed_while_the_run_goes_on(
 
 
 def test_a_new_generate_takes_the_failed_reels_again(
-    drive, made, monkeypatch, real_queue
+    drive,
+    made,
+    monkeypatch,
+    real_queue,
 ):
     login = _login(drive, "a.mp4")
 
@@ -1293,7 +1337,9 @@ def test_a_generate_cut_off_by_a_deploy_goes_on_where_it_stopped(drive, made):
 
 @pytest.mark.usefixtures("nobody_holds")
 def test_a_restarted_generate_waits_on_the_media_queue_with_its_time_limit(
-    drive, made, real_queue
+    drive,
+    made,
+    real_queue,
 ):
     login = _login(drive, "a.mp4", "b.mp4")
     _client().get(f"/trials/{login}")
@@ -1399,7 +1445,10 @@ def test_reels_held_by_a_job_that_died_are_selected_again_with_the_reason(drive,
     ids=["cut off twice already", "one reel's remake"],
 )
 def test_a_job_that_cannot_start_over_still_fails_as_interrupted(
-    drive, made, label, params
+    drive,
+    made,
+    label,
+    params,
 ):
     login = _login(drive, "a.mp4")
     job_id = _cut_off(login, label, **params)
@@ -1485,7 +1534,10 @@ def test_a_copy_made_today_or_being_worked_on_is_left(drive, made, posters):
 
 
 def test_uploading_a_deleted_copy_makes_the_same_one_again_first(
-    drive, made, posters, monkeypatch
+    drive,
+    made,
+    posters,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -1513,7 +1565,10 @@ def test_uploading_a_deleted_copy_makes_the_same_one_again_first(
 
 
 def test_an_upload_that_makes_a_copy_again_waits_its_turn_to_encode(
-    drive, made, posters, real_queue
+    drive,
+    made,
+    posters,
+    real_queue,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -1528,7 +1583,10 @@ def test_an_upload_that_makes_a_copy_again_waits_its_turn_to_encode(
 
 
 def test_an_upload_of_copies_on_disk_does_not_wait_behind_encodes(
-    drive, made, posters, real_queue
+    drive,
+    made,
+    posters,
+    real_queue,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -1556,7 +1614,10 @@ def test_a_copy_picked_for_drive_is_kept_past_a_day(drive, made, posters):
 
 
 def test_an_upload_says_it_waits_then_how_long_making_copies_again_takes(
-    drive, made, posters, real_queue
+    drive,
+    made,
+    posters,
+    real_queue,
 ):
     login = _login(drive, "a.mp4", "b.mp4")
     client = _client()
@@ -1597,7 +1658,9 @@ def test_regenerate_and_a_caption_work_on_a_deleted_copy(drive, made, posters):
 
 
 def test_a_deleted_copy_whose_source_left_drive_says_so_and_the_rest_go_up(
-    drive, made, posters
+    drive,
+    made,
+    posters,
 ):
     login = _login(drive, "a.mp4", "b.mp4")
     client = _client()
@@ -1619,7 +1682,10 @@ def test_a_deleted_copy_whose_source_left_drive_says_so_and_the_rest_go_up(
 
 
 def test_a_copy_from_before_recipes_were_kept_is_made_again_the_same(
-    drive, made, posters, monkeypatch
+    drive,
+    made,
+    posters,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -1649,7 +1715,10 @@ def test_a_copy_from_before_recipes_were_kept_is_made_again_the_same(
 
 
 def test_a_source_never_made_into_a_copy_goes_after_a_day_and_comes_back(
-    drive, made, posters, monkeypatch
+    drive,
+    made,
+    posters,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -1673,7 +1742,11 @@ def test_a_source_never_made_into_a_copy_goes_after_a_day_and_comes_back(
 
 
 def test_the_sweep_cleans_every_folder_and_a_broken_one_stops_nothing(
-    drive, made, posters, monkeypatch, tmp_path
+    drive,
+    made,
+    posters,
+    monkeypatch,
+    tmp_path,
 ):
     login = _login(drive, "a.mp4")
     _client().post(f"/trials/{login}/generate")
@@ -1734,7 +1807,9 @@ def test_an_unread_posted_folder_queues_no_clean(drive, made, monkeypatch):
     _client().post(f"/trials/{login}/generate")
     cleans: list[int] = []
     monkeypatch.setattr(
-        cleanup, "clean", lambda uid, login_id, now: cleans.append(login_id)
+        cleanup,
+        "clean",
+        lambda uid, login_id, now: cleans.append(login_id),
     )
 
     posted.read_all()
@@ -1776,7 +1851,10 @@ class _Ran:
 
 
 def test_what_the_pipeline_drew_is_kept_with_the_recipe_and_survives_a_restore(
-    drive, made, posters, monkeypatch
+    drive,
+    made,
+    posters,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4")
     client = _client()
@@ -1836,7 +1914,9 @@ def test_a_folder_nobody_read_since_the_update_keeps_its_copies(drive, made, pos
 
 
 def test_a_generate_lets_a_waiting_job_in_after_each_reel_and_goes_on(
-    drive, made, monkeypatch
+    drive,
+    made,
+    monkeypatch,
 ):
     login = _login(drive, "a.mp4", "b.mp4", "c.mp4")
     waits = iter([True, False])
@@ -1877,7 +1957,10 @@ def test_a_requeued_job_waits_at_the_back_of_its_line_and_stays_running(
 
 
 def test_regenerate_and_an_upload_go_before_a_waiting_generate(
-    drive, made, posters, real_queue
+    drive,
+    made,
+    posters,
+    real_queue,
 ):
     login = _login(drive, "a.mp4", "b.mp4")
     client = _client()

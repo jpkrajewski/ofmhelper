@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import signal
 from collections.abc import AsyncGenerator, Callable
@@ -88,7 +90,7 @@ def sweeps() -> list[Sweep]:
             run=link_sync.queue_due_syncs,
             interval_s=lambda: settings.links.sync_check_interval_s,
             enabled=lambda: settings.links.syncing_in_background(
-                settings.infra.production
+                settings.infra.production,
             ),
         ),
         Sweep(

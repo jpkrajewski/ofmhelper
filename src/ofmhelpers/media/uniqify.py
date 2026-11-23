@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import datetime
 import json
 import random
@@ -60,7 +62,7 @@ class StrengthPreset(BaseModel, frozen=True):
                     _NEUTRAL[name] + (v - _NEUTRAL[name]) * factor for v in value
                 )
                 for name, value in self
-            }
+            },
         )
 
 
