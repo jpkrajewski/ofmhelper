@@ -42,10 +42,9 @@ def _frame(prompt: str) -> Image.Image:
 
 
 def _video(frame: Path, out: Path) -> None:
-    seconds = settings.aigen.fake_video_duration_s
     command = [
-        "ffmpeg", "-y", "-loop", "1", "-i", str(frame), "-t", str(seconds),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
+        "ffmpeg", "-y", "-loop", "1", "-i", str(frame), "-t", "1",
+        "-vf", "scale=640:480", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
     ]  # fmt: skip
     try:
         subprocess.run(command, capture_output=True, check=True)  # noqa: S603
@@ -63,7 +62,7 @@ class FakeProvider(Provider):
     name = "fake"
     label = "Fake AI (testing)"
     rank = 1000
-    needs_key = False
+    needs_key = True
 
     @classmethod
     def default_key(cls) -> str | None:

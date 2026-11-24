@@ -52,6 +52,7 @@ def _fake_ai_job(client: TestClient, prompt: str) -> str:
         data={
             "provider": "fake",
             "model": "fake:image",
+            "api_key": "fake-key",
             "prompt": prompt,
             "delay": "0",
             "outcome": "error",
@@ -117,6 +118,7 @@ def test_an_admin_cannot_reuse_a_users_file_by_path(admin, va, assets_dir):
         data={
             "provider": "fake",
             "model": "fake:image",
+            "api_key": "fake-key",
             "prompt": "p",
             "reference_image_urls_manifest": json.dumps(
                 [{"kind": "existing", "path": stored["path"]}],
@@ -147,6 +149,7 @@ def test_va_cannot_reuse_an_admin_file_by_path(admin, va, assets_dir):
         data={
             "provider": "fake",
             "model": "fake:image",
+            "api_key": "fake-key",
             "prompt": "p",
             "reference_image_urls_manifest": json.dumps(
                 [{"kind": "existing", "path": admin_file["path"]}],

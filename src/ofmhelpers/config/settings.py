@@ -420,6 +420,10 @@ class WebSettings(BaseSettings):
         default={"480P": 0.0588, "720P": 0.1176, "1080P": 0.2352},
         validation_alias="OFM_CLONE_APIYI_USD_PER_VIDEO_S",
     )
+    clone_fake_usd_per_video_s: dict[str, float] = Field(
+        default={"480P": 0.005, "720P": 0.01, "1080P": 0.02},
+        validation_alias="OFM_CLONE_FAKE_USD_PER_VIDEO_S",
+    )
 
     def restarting(self, production: bool) -> bool:  # noqa: FBT001
         return production if self.recovery_restarts is None else self.recovery_restarts
@@ -629,10 +633,6 @@ class AigenSettings(BaseSettings):
         default=86400,
         ge=60,
         validation_alias="OFM_AIGEN_RAW_SWEEP_S",
-    )
-    fake_video_duration_s: int = Field(
-        default=3,
-        validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS",
     )
     hosted_ttl_s: int = Field(
         default=3 * 3600,

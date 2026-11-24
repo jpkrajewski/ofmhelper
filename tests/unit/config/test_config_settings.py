@@ -162,7 +162,6 @@ def test_aigen_settings_keep_the_kie_era_defaults(clean_env):
     assert s.resume_max_age_s == 48 * 3600
     assert (s.poll_timeout_s, s.video_poll_timeout_s) == (1000, 1800)
     assert s.download_timeout_s == 60
-    assert s.fake_video_duration_s == 3
 
 
 def test_aigen_settings_still_read_the_old_kie_env_names(monkeypatch):

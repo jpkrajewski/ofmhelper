@@ -123,6 +123,25 @@
             "format": "uri"
           },
           "x-media": "audio"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "480P",
+            "720P",
+            "1080P"
+          ],
+          "default": "720P"
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 30,
+          "default": 2
+        },
+        "audio": {
+          "type": "boolean",
+          "default": true
         }
       }
     }

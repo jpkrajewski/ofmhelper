@@ -41,6 +41,9 @@ from ofmhelpers.features.clone_links.constants import (
 from ofmhelpers.features.clone_links.models import LinkPreview
 from ofmhelpers.features.clone_links.stop import stopped
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.features.storage.constants import StorageConstants
+from ofmhelpers.features.storage.space import StorageServiceSpace
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.web.routers.generation import clone_links
@@ -488,3 +491,22 @@ def test_a_card_never_shows_another_persons_review(queued):
 
     assert "ann-file" in states[mine]
     assert "bob-file" not in states[reused]
+
+
+def test_clone_links_do_not_offer_the_nonbillable_fake_provider():
+    space = StorageServiceSpace(
+        client=None,
+        user_id=1,
+        read_live=False,
+        constants=StorageConstants(),
+    )
+
+    view = clone_links_page.form_view("1", 1, space)
+
+    for provider in view.providers:
+        assert provider.name != "fake"
+
+
+def test_clone_links_reject_the_nonbillable_fake_provider():
+    with pytest.raises(RefusedError, match="That provider cannot clone"):
+        clone_links_service._target("fake")

@@ -92,6 +92,9 @@ def test_the_page_shows_the_search_with_counts_cost_and_download_all(client):
         html.index("3.0M plays") < html.index("1.5M plays") < html.index("900k plays")
     )
     assert html.count(f'href="/viral/files/{job.id}/') == 3
+    assert html.count("send-to-clone") == 3
+    assert html.count('aria-label="Send this reel"') == 3
+    assert "js/download.js" in html
 
 
 def test_download_all_is_one_zip_most_played_first(client):

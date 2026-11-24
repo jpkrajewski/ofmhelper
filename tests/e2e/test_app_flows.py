@@ -116,7 +116,8 @@ def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
     va.goto("/generate")
     va.page.select_option("#provider-select", "fake")
     va.page.select_option("#model-select", "fake:image")
-    expect(va.page.locator("#api-key-field")).to_be_hidden()
+    expect(va.page.locator("#api-key-field")).to_be_visible()
+    va.page.fill("#api-key", "fake-key")
     expect(va.page.locator('#model-fields [name="outcome"]')).to_be_visible()
     va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', "e2e: a red studio backdrop")
@@ -144,6 +145,7 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
     va.goto("/generate")
     va.page.select_option("#provider-select", "fake")
     va.page.select_option("#model-select", "fake:image")
+    va.page.fill("#api-key", "fake-key")
     va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', prompt)
     with va.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:

@@ -24,6 +24,7 @@ from ofmhelpers.integrations.ai_providers.catalog import catalog
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
+from ofmhelpers.media.video_probe import duration_s, video_size
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import job_status_payload
 
@@ -60,6 +61,7 @@ def _fake(client, files=None, **fields):
         "model": FAKE_IMAGE,
         "prompt": "a cat",
         "delay": "0",
+        "api_key": "fake-key",
         **fields,
     }
     return client.post("/ai/run", data=data, files=files, headers=keyed())
@@ -219,6 +221,17 @@ def test_batch_is_capped_at_the_max(client):
 def test_batch_is_ignored_for_a_video_model(client):
     ids = _fake(client, model="fake:video", batch="5").json()["job_ids"]
     assert len(ids) == 1
+
+
+def test_fake_video_is_one_second_and_480p(client):
+    response = _fake(client, model="fake:video")
+    job = get_job(response.json()["job_id"])
+
+    assert job.status == "done"
+    video = Path(job.local_paths()[0])
+    assert duration_s(video, 10) == pytest.approx(1)
+    size = video_size(video, 10)
+    assert (size.width, size.height) == (640, 480)
 
 
 def test_the_error_outcome_fails_with_the_message_typed_in(client):

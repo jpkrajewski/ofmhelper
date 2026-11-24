@@ -53,7 +53,7 @@ def run_clone(  # noqa: PLR0913, PLR0917
     return export_results(
         job_id,
         results,
-        export_choice(export, capcut),
+        "original" if provider == "fake" else export_choice(export, capcut),
         ExportOptions(mirror=mirror),
         Path(assets_root),
         failures=export_failures,

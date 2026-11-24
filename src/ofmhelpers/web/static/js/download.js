@@ -15,6 +15,8 @@
         const card = btn.closest(".result-item[data-job-id]");
         if (!card) return;
         const buttons = card.querySelectorAll(SEND_TO);
+        const status = btn.closest("#results-panel")?.querySelector(".generation-status");
+        if (status) status.textContent = "";
         buttons.forEach((b) => {
             b.disabled = true;
         });
@@ -32,6 +34,7 @@
             buttons.forEach((b) => {
                 b.disabled = false;
             });
+            if (status) status.textContent = "Could not open the selected tool. Try again.";
             console.error("send to clone failed", err);
         }
     }

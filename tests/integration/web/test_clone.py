@@ -86,6 +86,21 @@ def test_page_defaults(client):
     assert 'class="file-add-input" multiple' in html
 
 
+def test_fake_ai_is_available_for_clone(client):
+    html = client.get("/clone").text
+
+    assert 'value="fake"' in html
+    assert "Fake AI (testing)" in html
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_fake_clone_requires_an_api_key(client):
+    r = _post(client, ["a.mp4"], {"provider": "fake", "api_key": ""})
+
+    assert r.status_code == 400
+    assert r.json()["detail"] == "API key is required"
+
+
 @pytest.mark.usefixtures("fake_runs")
 def test_run_queues_one_card_per_video_newest_first(client):
     r = _post(client, ["b.mp4", "a.mp4"])
@@ -532,7 +547,7 @@ def test_run_on_higgsfield_sends_its_own_field_names(client, tmp_path, monkeypat
 
 @pytest.mark.usefixtures("fake_runs")
 def test_run_rejects_a_provider_that_cannot_clone(client):
-    assert _post(client, ["a.mp4"], {"provider": "fake"}).status_code == 400
+    assert _post(client, ["a.mp4"], {"provider": "not-a-provider"}).status_code == 400
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -571,7 +586,7 @@ def test_page_offers_the_providers_that_can_clone(client):
 
     assert '<option value="kie"' in html
     assert '<option value="higgsfield"' in html
-    assert '<option value="fake"' not in html
+    assert '<option value="fake"' in html
 
 
 def _run_clone(assets_root, **choice):
@@ -747,6 +762,12 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     pricing = _pricing(client)
 
     assert set(pricing) == set(clone.CLONE_TARGETS), "every clone provider is priced"
+    assert pricing["fake"]["credits_per_video_s"] == {
+        "480P": 0.005,
+        "720P": 0.01,
+        "1080P": 0.02,
+    }
+    assert pricing["fake"]["unit"] == "USD"
     assert pricing["kie"]["credits_per_video_s"] == {"720P": 40.0}
     assert pricing["kie"]["usd_per_credit"] == 0.004
     assert pricing["kie"]["max_reference_s"] == 15

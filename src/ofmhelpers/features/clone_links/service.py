@@ -92,7 +92,7 @@ def read(text: str) -> list[str]:
 
 def _target(provider: str) -> CloneTarget:
     target = clone_targets().get(provider or settings.aigen.default_provider)
-    if target is None:
+    if target is None or target.price is None or not target.price.billable:
         msg = "That provider cannot clone"
         raise RefusedError(msg)
     return target

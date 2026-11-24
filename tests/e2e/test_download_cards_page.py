@@ -49,6 +49,33 @@ def test_each_file_is_a_card_and_clones_itself(va: Session, tmp_path: Path):
     assert "third.mp4" not in va.page.url
 
 
+@pytest.mark.parametrize("hook", ["send-to-long", "send-to-edit"])
+def test_a_failed_send_to_another_tool_shows_a_message_and_recovers(
+    va: Session,
+    tmp_path: Path,
+    hook: str,
+):
+    job = _download(tmp_path, "first.mp4")
+    va.goto("/download-assets")
+    button = _cards(va, job).locator(f".{hook}")
+
+    def fail_send(route):
+        route.fulfill(status=500, body="broken")
+
+    va.page.route("**/download-media/send", fail_send)
+    button.click()
+
+    status = va.page.locator("#results-panel .generation-status")
+    expect(status).to_have_text("Could not open the selected tool. Try again.")
+    expect(button).to_be_enabled()
+    unexpected = []
+    for error in va.js_errors:
+        if "Failed to load resource" in error or "send to clone failed" in error:
+            continue
+        unexpected.append(error)
+    assert unexpected == []
+
+
 def test_download_fetches_a_removed_video_again(
     va: Session,
     tmp_path: Path,

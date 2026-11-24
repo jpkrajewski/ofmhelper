@@ -28,6 +28,7 @@ class PriceRate(BaseModel):
     usd_per_credit: str | None = None
     unit: str = "credits"
     note: str
+    billable: bool = True
 
     @field_validator("per_second", "usd_per_credit")
     @classmethod

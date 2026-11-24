@@ -26,7 +26,7 @@
 {% endif %}
 </div>
 
-<div class="generate-gallery-col">
+<div class="generate-gallery-col" id="results-panel">
 {% if not current %}
     {{ ui.empty("No searches yet") }}
 {% elif current.status == "running" %}
@@ -46,11 +46,17 @@
         </div>
         {% endif %}
     </div>
+    <div class="generation-status" id="viral-send-status" role="status" aria-live="polite"></div>
     <div class="results">
         {% for reel in current.reels %}
-        <div class="result-item">
+        <div class="result-item" data-job-id="{{ current.job_id }}" data-file-index="{{ loop.index0 }}">
             {{ am.asset_media(reel.file) }}
             <p class="source">{{ rc.short_count(reel.plays) }} plays{% if reel.likes is not none %} · {{ rc.short_count(reel.likes) }} likes{% endif %}{% if reel.seconds %} · {{ reel.seconds|round|int }} s{% endif %}{% if reel.posted_at %} · {{ reel.posted_at.strftime("%b %-d, %Y") }}{% endif %}</p>
+            <div class="send-to">
+            {% call ui.segmented("Send this reel") %}
+                {{ ui.button("Clone", hook="send-to-clone") }}
+            {% endcall %}
+            </div>
             <div class="result-actions">
                 {{ ui.button("Download", href=reel.file.download_url, icon="download", hook="download-btn", attrs={"download": reel.file.download_name}) }}
                 {{ ui.icon_button("external", "Open on Instagram", href="https://www.instagram.com/reel/" ~ reel.code ~ "/", attrs={"target": "_blank", "rel": "noopener"}) }}
@@ -62,4 +68,5 @@
 </div>
 </div>
 <script src="{{ static_url('js/viral.js') }}"></script>
+<script src="{{ static_url('js/download.js') }}"></script>
 {% endblock %}

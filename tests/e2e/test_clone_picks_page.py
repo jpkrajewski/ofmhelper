@@ -10,6 +10,9 @@ import pytest
 from e2e_session import Session
 from playwright.sync_api import Request, expect
 
+from ofmhelpers.db.jobs.store import get_job
+from ofmhelpers.media.video_probe import duration_s, video_size
+
 pytestmark = pytest.mark.e2e
 
 CUT_TIMEOUT_MS = 60_000
@@ -43,6 +46,49 @@ def long_video(tmp_path: Path) -> Path:
 
 def _picker(va: Session, field: str):
     return va.page.locator(f'.file-picker[data-field="{field}"]')
+
+
+def test_fake_ai_runs_a_clone_with_the_typed_api_key(
+    va: Session,
+    subject_images: list[Path],
+    source_videos: list[Path],
+    tmp_path: Path,
+):
+    va.goto("/clone")
+    va.page.select_option("#provider-select", "fake")
+    expect(va.page.locator("#api-key-field")).to_be_visible()
+    va.page.fill("#api-key", "fake-injection-1234")
+    _picker(va, "image").locator(".file-add-input").set_input_files(
+        str(subject_images[0]),
+    )
+    _picker(va, "videos").locator(".file-add-input").set_input_files(
+        str(source_videos[0]),
+    )
+    expect(va.page.locator("#clone-cost")).to_be_visible()
+    expect(va.page.locator("#clone-cost-note")).to_have_text(
+        "Fake AI: $0.01 a second at 720P · testing only, nothing is billed",
+    )
+
+    with va.page.expect_response(lambda r: r.url.endswith("/clone/run")) as run:
+        va.page.click('#clone-form button[type="submit"]')
+        va.page.click("#clone-confirm-go")
+    job_id = run.value.json()["job_ids"][0]
+
+    card = va.page.locator("#clone-gallery .result-item").first
+    video = card.locator("video.result-video")
+    expect(video).to_be_visible(timeout=CUT_TIMEOUT_MS)
+    response = va.page.request.get(video.get_attribute("src"))
+    assert response.ok
+    result = tmp_path / "fake-clone.mp4"
+    result.write_bytes(response.body())
+    assert duration_s(result, 10) == pytest.approx(1)
+    size = video_size(result, 10)
+    assert (size.width, size.height) == (640, 480)
+    job = get_job(job_id)
+    assert job.meta.generations[0].key_tail == "1234"
+    assert job.cost_usd is None
+    assert job.cost_estimated is False
+    assert va.js_errors == []
 
 
 def test_a_chip_adds_its_words_and_takes_them_back_out(va: Session):

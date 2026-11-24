@@ -31,6 +31,7 @@ from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import CloneSource
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import CloneRefusedError
+from ofmhelpers.integrations.ai_providers.base import provider_class
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.media.exports import exports
 from ofmhelpers.monitoring.telemetry import in_this_trace
@@ -89,7 +90,7 @@ def check_choices(
         msg = "That provider cannot clone"
         raise CloneRefusedError(msg)
     api_key = Keys.of(owner).for_run(provider, target.model, api_key)
-    if not api_key:
+    if not api_key and provider_class(provider).needs_key:
         msg = "API key is required"
         raise CloneRefusedError(msg)
     export = export or settings.exports.default

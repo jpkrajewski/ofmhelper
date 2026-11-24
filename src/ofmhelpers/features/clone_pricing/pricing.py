@@ -23,6 +23,7 @@ class ClonePrice(BaseModel):
     max_reference_s: int
     note: str
     unit: str = "credits"
+    billable: bool = True
 
     def per_second(self, resolution: str) -> float:
         try:
@@ -41,6 +42,7 @@ def _price(target: CloneTarget, rate: PriceRate, web: WebSettings) -> ClonePrice
         max_reference_s=target.max_reference_s,
         note=rate.note,
         unit=rate.unit,
+        billable=rate.billable,
     )
 
 

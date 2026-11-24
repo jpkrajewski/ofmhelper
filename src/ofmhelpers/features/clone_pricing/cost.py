@@ -38,6 +38,8 @@ def _clone_estimate(params: dict[str, Any]) -> float | None:
         return None
     try:
         price = clone_price(run.provider)
+        if not price.billable:
+            return None
         return price.per_second(run.resolution) * price.usd_per_credit * run.seconds
     except UnpricedError:  # silent: no price: unknown, never 0
         return None

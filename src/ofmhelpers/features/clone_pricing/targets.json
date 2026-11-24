@@ -71,5 +71,20 @@
       "unit": "USD",
       "note": "$0.0588 a second at 720P, video and result both billed"
     }
+  },
+  "fake": {
+    "model": "fake:video",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "audio",
+    "aspect": null,
+    "resolutions": ["480P", "720P", "1080P"],
+    "max_reference_s": 15,
+    "price": {
+      "per_second": "clone_fake_usd_per_video_s",
+      "unit": "USD",
+      "note": "Fake AI: $0.01 a second at 720P · testing only, nothing is billed",
+      "billable": false
+    }
   }
 }

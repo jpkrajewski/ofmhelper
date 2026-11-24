@@ -28,6 +28,7 @@ SHOW = """() => {
 def _generate(session: Session, delay_s: int) -> str:
     session.page.select_option("#provider-select", "fake")
     session.page.select_option("#model-select", "fake:image")
+    session.page.fill("#api-key", "fake-key")
     session.page.fill('#model-fields [name="delay"]', str(delay_s))
     session.page.fill('textarea[name="prompt"]', "e2e: a lost connection")
     with session.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
@@ -89,6 +90,7 @@ def _slow_generate(va: Session, tmp_path: Path) -> None:
     va.goto("/generate")
     va.page.select_option("#provider-select", "fake")
     va.page.select_option("#model-select", "fake:image")
+    va.page.fill("#api-key", "fake-key")
     va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', "e2e: a slow uplink")
     va.page.locator(
@@ -168,6 +170,7 @@ def _fake_image_form(va: Session, picture: Path) -> None:
     va.goto("/generate")
     va.page.select_option("#provider-select", "fake")
     va.page.select_option("#model-select", "fake:image")
+    va.page.fill("#api-key", "fake-key")
     va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', "e2e: the same picture again")
     va.page.locator(f"{REFERENCES} .file-add-input").set_input_files(str(picture))

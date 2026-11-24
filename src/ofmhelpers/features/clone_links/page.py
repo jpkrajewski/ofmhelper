@@ -35,7 +35,11 @@ class FormView(BaseModel):
 
 
 def form_view(actor: str, user_id: int, space: StorageServiceSpace) -> FormView:
-    targets = list(clone_targets())
+    targets = [
+        name
+        for name, target in clone_targets().items()
+        if target.price and target.price.billable
+    ]
     return FormView(
         providers=provider_choices(targets),
         selected_provider=start_provider(actor, CLONE_TASKS, targets),
