@@ -1,0 +1,34 @@
+
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+
+  path_instructions:
+    - path: "src/ofmhelpers/**/*.py"
+      instructions: |
+        Review this Python code as production application code.
+        Pay particular attention to:
+        - Circular imports and dependency direction.
+        - SQLAlchemy 2.x usage and transaction boundaries.
+        - Pydantic v2 validation and serialization.
+        - Resource lifecycle and connection management.
+        - Concurrency and race conditions.
+        - Exception handling and logging.
+        - Type safety and API compatibility.
+        - Unnecessary abstractions and overengineering.
+
+        Do not suggest refactoring solely to reduce line count.
+        Do not recommend abstractions without a concrete benefit.
+
+    - path: "tests/**/*.py"
+      instructions: |
+        Check whether tests verify actual behavior, edge cases,
+        failure conditions, and regression scenarios.
+
+chat:
+  auto_reply: true
