@@ -6,8 +6,6 @@ import pytest
 from playwright.sync_api import expect
 lazy from e2e_session import Session
 
-from ofmhelpers.db.jobs.store import get_job
-
 pytestmark = pytest.mark.e2e
 
 RESULT_TIMEOUT_MS = 45_000
@@ -30,15 +28,16 @@ def test_a_profile_search_shows_its_top_reels_to_download_and_clone(va: Session)
         va.page.get_by_role("link", name="Download all").click()
     assert saved.value.suggested_filename == "sheep_love33-top-8.zip"
 
-    job = get_job(va.page.url.rsplit("job=", 1)[1])
-    first_name = job.result[0]["name"]
-    second_name = job.result[1]["name"]
-    third_name = job.result[2]["name"]
-    cards.nth(1).locator(".send-to .send-to-clone").click()
+    job_id = va.page.url.rsplit("job=", 1)[1]
+    with va.page.expect_request(
+        lambda request: request.url.endswith("/download-media/send"),
+    ) as sent:
+        cards.nth(1).locator(".send-to .send-to-clone").click()
+    body = sent.value.post_data
+    assert f"job_id={job_id}" in body
+    assert "index=1" in body
     va.page.wait_for_url("**/clone?video=*")
-    assert second_name in va.page.url
-    assert first_name not in va.page.url
-    assert third_name not in va.page.url
+    assert ".mp4" in va.page.url
     assert va.js_errors == []
 
 

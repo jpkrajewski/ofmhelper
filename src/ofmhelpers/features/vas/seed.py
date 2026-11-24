@@ -238,6 +238,8 @@ class _Work(BaseModel):
 def _priced_providers() -> list[str]:
     found = []
     for name, price in clone_pricing().items():
+        if not price.billable:
+            continue
         try:
             price.per_second(RESOLUTION)
         except UnpricedError:  # silent: an unpriced provider is skipped

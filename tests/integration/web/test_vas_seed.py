@@ -121,7 +121,11 @@ def test_a_made_up_month_is_the_vas_rows_priced_by_the_apps_own_prices(uploads):
     assert all(row.created_at <= NOW.timestamp() for row in rows)
     prices = clone_pricing()
     clones = [r for r in rows if r.task == "clone" and r.status == "done"]
-    assert {r.params["provider"] for r in clones} == set(prices)
+    billable = set()
+    for name, price in prices.items():
+        if price.billable:
+            billable.add(name)
+    assert {r.params["provider"] for r in clones} == billable
     for row in clones:
         price = prices[row.params["provider"]]
         per_second = price.per_second("720P") * price.usd_per_credit
