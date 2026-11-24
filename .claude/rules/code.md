@@ -5,44 +5,60 @@ paths:
   - "alembic/**/*.py"
 ---
 
-# Code: where things go and how this code is written
+Patterns to use: Composite, Dependency Injection, Facade.
 
-Moved word for word from `CLAUDE.md` (2026-11-11); loads when a Python file is touched.
+Uppercase constants are banned. _VALUE and VALUE must go into constants.py and be defined using frozen Pydantic models or Enums when they represent values of the same type, such as strings.
 
-## Layout
-One rule: `web/` is HTTP only. Where a new thing goes:
-- `web/` app, middleware, `routers/<area>/`, templates, static. A route: params -> one call -> render.
-- `features/<page>/` what a page or background job does (`service.py`, `jobs.py`, `models.py`). Math and static data in their own files, not next to the logic.
-- `integrations/` everything that talks to an outside service: `ai_providers/<name>/`, `storage/<name>/` (one `StorageClient` interface; `gdrive` today), `instagram`, `llm`, `short_links`, `apify`, `stacked`, `fanvue`, `downloaders`, `signin`, `socials`, `senders/<name>/` (where events go out: Telegram, ...; `features/events` emits).
-- `media/` local video and image work (ffmpeg, recorder, repurpose, exports).
-- `db/` session, models, one package per table: `db/<table>/repository.py`, `store.py`, `schema.py`. `config/`, `cache/`. No `utils/`: a helper lives in the module that uses it (`web/time_zones.py`, `integrations/outbound.py` `ProxyPool`).
-- Pydantic shapes: `schema.py` of the lowest module that makes them (`db/<table>/`, `integrations/<name>/`, `features/<page>/`). No shared schemas folder. A `schema.py` is a root module, like `constants.py`: it imports nothing from the project; the code that fills a shape imports the schema, never the other way (owner 2026-11-22; `media/repurpose/checker/schema.py`). Every `schema.py` follows it, no exceptions: `tests/unit/architecture` `test_constants_and_schemas_import_nothing_from_the_project`.
+Dynamic unpacking is banned. dict(value) is bad. Use explicit attribute access instead: x = value.x, z = value.z. Similarly, **dict(value) is an anti-pattern. Use {"x": value.x} so we can see exactly what is being passed.
 
-## Architecture
-- `DB -> Repository (cached) -> Service`; services never touch the DB.
-- Config: one settings group per module in `config/settings.py`, imported via `ofmhelpers.config.settings` (fresh per access).
-- Background work goes through a FIFO queue, `cache.JobQueue(name=QueueName.X).put(fn, ...)` (`enqueue` = the default queue); how many run at once = its worker processes (`media`: one, for big local encodes); priority = who gets the CPU first, default on top, `media` at the bottom. New queue: a `QueueName` member + its entry in `InfraSettings.queues` (`config/settings.py`), its compose service, both deploys (`tests/unit/test_worker_services.py`).
-- Caching only via `CachedRepository` + `@cached`/`@invalidates_cache`; no inline cache calls.
-- Middleware in `middleware/`, one concern per file, owning its policy and route helpers.
-- No module-level instances or `global`; shared instances via `lru_cache` accessor/singleton. Exceptions: `db/session.py` engine, `cache/redis.py` connection. `app`/`router` are fine.
-- One Redis connection: `cache/redis.py` `get_redis()`.
+PydanticModel.model_copy(update=...) is banned. Just do PydanticModel.x = value. This also ensures that attempts to modify immutable objects raise errors instead of bypassing immutability through model_copy(update=...).
 
-## Python 3.15 in this code
-- Heavy or typing-only imports: `lazy import` / `lazy from` at module level, never `if TYPE_CHECKING:`, no `from __future__ import annotations` (annotations are deferred natively). Ruff's `TC001`/`TC002` ask for it. A job-side heavy library also goes in `worker._LAZY_HEAVY`, so a forked job does not pay for it.
-- A lazy name used at import time (base class, decorator, module-level call) loads right there: no gain. A lazy import failing fails at first use: keep "is it installed?" checks eager.
-- Shared never-mutated dicts: `frozendict`. "No value given" markers: `sentinel("_NAME")`. File moves and copies: `Path.move` / `Path.copy`.
+Pydantic models that don't need imports from ofmhelpers belong in schemas.py. Models that import application code and transform data belong in models.py.
 
-## Data Models
-- Map all data to Pydantic (tool JSON, config, fixtures); no raw dicts or hand parsers. Large static data = package JSON + model.
-- Writing a Pydantic class or calling the model API: the `pydantic` skill first (its own docs for the release in its `VERSION`; the `skills` guard asks for it). JSON in = `Model.model_validate_json(text)`, an object in = `model_validate(obj, from_attributes=True)`; a spec filled step by step is not `frozen`.
-- `getattr`, `vars()` and `__dict__` are banned in the whole repo, `operator.attrgetter`, `__getattribute__` and `inspect.getattr_static` with them (owner 2026-11-22: "just ban vars and __dict__ everywhere"): read the typed field, iterate the model, validate an object with `from_attributes=True`, key a mapping by the name; a per-thread store is a `threading.local` subclass with typed attributes; a `cached_property` is replaced by plain assignment, dropped with `del`. Refused at edit time (`no_getattr` guard), at commit (`scripts/check_no_getattr.py`) and in CI (`tests/unit/architecture/test_no_getattr.py`, no baseline).
-- No `*args` / `**kwargs` in a function: name every parameter and type it (owner 2026-11-22: "ban *args and **kwargs in functions"). Checked by `tests/unit/architecture/test_no_star_args.py`, no baseline.
-- Validation/transforms on the model; logic in services.
-- Route shapes in the `schema.py` of the module that makes them; one-template forms stay in their router. Many models -> `models/` folder.
-- No UPPERCASE module constants (`_HASH_NAMES`, `_MIN_STEP`, `_SHAKE_BANDS`): every fixed value is a field with a default on a frozen Pydantic class in the folder's own `constants.py`, one class per area, read from an instance the code is given, or held as the `constants` field of the settings model that uses it. `constants.py` is a root module: it imports nothing from the project, and a base class its constants need lives in it too (owner 2026-11-22; the pattern: `media/repurpose/transformations/constants.py`, `VideoSettings.constants`). New and changed code follows it; existing modules move only in a refactor the owner asks for. A value someone may tune (a cap, tries, a timeout, concurrency) is not a constant: it is a field of the module's settings group in `config/settings.py` with its env name (owner 2026-11-22: the spoof try cap is `RepurposeSettings.max_tries`, not a constants class).
+Services are classes, not standalone functions. Services group related functions and receive clients and repositories through composition.
 
-## Logging
-- `logger = get_logger(__name__)` (`ofmhelpers.log`), module scope; lazy `%s` args; `exc_info=True` in `except`.
-- Every `except` raises, or logs with its trace (`logger.exception`, `exc_info=True`, `span.record_exception`); `contextlib.suppress` is quiet too. A deliberate quiet one (gone already, a parser's None, a refusal shown on the page) says why on its `except` line: `# silent: <reason>`. A gone-meanwhile `FileNotFoundError` is `logger.debug(..., exc_info=True)`, any other `OSError` a warning. Checked by `tests/unit/architecture/` `test_failures_leave_a_trace` (baseline `silent_excepts`).
-- No `print()` in library code (report CLIs excepted); only `web/main.py`/`worker.py`/`sweeps.py` call `configure_logging()`.
-- Tune: `OFM_LOG_LEVEL`, `OFM_LOG_FORMAT=json`, `OFM_LOG_ACCESS`.
+Web routes must inject services through Depends, not standalone functions. This also enforces how services are created.
+
+The core of this application is Storage and AI Creation. They must define their own services and functions.
+
+UI is just as important as the backend. Deliver working UI, click through it, and discover bugs or missing functionality.
+
+List comprehensions are banned because they are unreadable. Use regular for loops and explicitly define the types of items in lists.
+
+Use typing throughout the codebase.
+
+Do not repeat the same mistake twice.
+
+Exceptions belong in errors.py within the same module for consistency.
+
+Avoid abbreviated variable names. For example, c is an anti-pattern:
+
+if any(_says(e, c.login_words + c.throttled_words) for e in tries):
+
+Use full, descriptive variable names.
+
+Do not redefine constants locally. For example:
+
+from ofmhelpers.features.clone_links.constants import clone_links_constants
+
+THUMB_KEY = clone_links_constants().thumb_key
+TOO_SLOW = clone_links_constants().too_slow
+CANNOT_OPEN = clone_links_constants().cannot_open
+
+This is just cheating. Use the constants directly where they are needed.
+
+Make small changes that complete the task. Delete code when possible. Every code change should make the code cleaner.
+
+Swallowing errors is forbidden. Errors must be logged. Unimportant logs must not be propagated to Logfire.
+
+Write code that is understandable without comments or Markdown files. The codebase must be self-documenting through its code and tests.
+
+Runtime registration, global mutable state, import-time side effects, decorator-based metaprogramming, implicit dependency discovery, and dynamic discovery are forbidden.
+
+For example:
+
+def register_provider[P: type[Provider]](cls: P) -> P:
+    _registered().classes[cls.name] = cls
+    return cls
+
+This is forbidden. Explicit registration through a registry or dependency injection is mandatory.
