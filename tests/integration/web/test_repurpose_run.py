@@ -115,6 +115,18 @@ def test_the_same_key_with_another_video_of_the_same_size_is_refused(client, que
     assert len(queued) == 1
 
 
+def test_a_non_video_is_refused_at_the_boundary(client, queued):
+    r = client.post(
+        "/spoof/run",
+        data={"video_manifest": NEW, "copies": "1"},
+        files=[("video", ("notes.txt", b"not a video"))],
+        headers=keyed(),
+    )
+
+    assert r.status_code == 422
+    assert queued == []
+
+
 def test_no_video_is_refused(client, queued):
     r = client.post("/spoof/run", data={"copies": "1"}, headers=keyed())
 

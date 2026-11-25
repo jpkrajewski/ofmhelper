@@ -4,14 +4,10 @@ from contextlib import contextmanager
 lazy from collections.abc import Iterator
 lazy from pathlib import Path
 
-from fastapi import HTTPException, Request
-lazy from starlette.datastructures import UploadFile
+from fastapi import HTTPException, Request, UploadFile
 
 from ofmhelpers.features.assets import store
 from ofmhelpers.features.assets.store import (
-    IMAGE_KINDS,
-    MEDIA_KINDS,
-    VIDEO_KINDS,
     assets_root,
     assets_root_for_actor,
     assets_root_for_user,
@@ -22,28 +18,15 @@ from ofmhelpers.features.assets.store import (
     strip_asset_hash_prefix,
     uploads_root,
 )
-from ofmhelpers.features.kinds import (
-    AUDIO_EXTS,
-    IMAGE_EXTS,
-    VIDEO_EXTS,
-    classify_kind,
-)
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import AssetRefusedError
 from ofmhelpers.web.middleware import AuthMiddleware
 
 __all__ = [
-    "AUDIO_EXTS",
-    "IMAGE_EXTS",
-    "IMAGE_KINDS",
-    "MEDIA_KINDS",
-    "VIDEO_EXTS",
-    "VIDEO_KINDS",
     "assets_root",
     "assets_root_for",
     "assets_root_for_actor",
     "assets_root_for_user",
-    "classify_kind",
-    "convert_heic_upload",
     "in_asset_root",
     "make_job_dir",
     "refused_as_400",
@@ -70,14 +53,11 @@ def refused_as_400() -> Iterator[None]:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
-def require_upload_kind(name: str | None, allowed: frozenset[str]) -> str:
+def require_upload_kind(name: str | None, allowed: frozenset[FileKind]) -> str:
     with refused_as_400():
-        return store.require_upload_kind(name, allowed)
-
-
-def convert_heic_upload(upload: UploadFile) -> UploadFile:
-    with refused_as_400():
-        return store.convert_heic_upload(upload)
+        safe = store.safe_filename(name)
+        store.require_upload_kind(FileKind.from_ext(safe), allowed)
+        return safe
 
 
 def safe_filename(name: str | None) -> str:

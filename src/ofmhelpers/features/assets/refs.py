@@ -25,7 +25,7 @@ from ofmhelpers.features.assets.store import (
     in_asset_root,
     strip_asset_hash_prefix,
 )
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import (
     PREVIEW_ERRORS,
     write_atomic,
@@ -56,13 +56,13 @@ def _entry(file: StoredFile, used_at: float | None = None) -> RefEntry:
     return RefEntry(
         path=file.path,
         name=strip_asset_hash_prefix(name),
-        kind=classify_kind(name),
+        kind=FileKind.from_ext(name),
         mtime=file.mtime,
         used_at=used_at,
     )
 
 
-def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
+def stored_files(root: Path, kind: FileKind | None) -> list[StoredFile]:
     found: list[StoredFile] = []
     thumbs = thumbs_dir()
     for dirpath, dirnames, filenames in os.walk(root):
@@ -74,7 +74,7 @@ def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
             and in_asset_root(root, Path(dirpath, d, "_"))
         ]
         for name in filenames:
-            if kind and classify_kind(name) != kind:
+            if kind and FileKind.from_ext(name) != kind:
                 continue
             path = Path(dirpath, name)
             try:
@@ -91,7 +91,7 @@ def _newest(files: list[StoredFile], limit: int) -> list[RefEntry]:
 def listing(
     assets_root: Path,
     owner_id: int,
-    kind: str | None,
+    kind: FileKind | None,
     limit: int | None,
 ) -> list[RefEntry]:
     files = stored_files(assets_root, kind)
@@ -162,12 +162,12 @@ def visible(assets_root: Path, path: str) -> Path:
     return file_path
 
 
-def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
+def _make_thumb(source: Path, thumb: Path, kind: FileKind, size: int) -> None:
     if thumb.is_file():
         return
     thumb.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if kind == "image":
+        if kind == FileKind.IMAGE:
             write_atomic(thumb, lambda tmp: write_image_thumb(source, tmp, size))
         else:
             write_video_thumb(source, thumb, size)
@@ -179,8 +179,8 @@ def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
 
 def thumb(assets_root: Path, path: str, size: int) -> Path:
     file_path = visible(assets_root, path)
-    kind = classify_kind(file_path.name)
-    if kind not in ("image", "video"):
+    kind = FileKind.from_ext(file_path.name)
+    if kind not in (FileKind.IMAGE, FileKind.VIDEO):
         msg = "No thumbnail for this file type"
         raise NotFoundError(msg)
     digest = file_path.name.split("__", 1)[0]

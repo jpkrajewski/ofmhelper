@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import BaseModel
-lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.account.keys import Keys
@@ -24,10 +23,11 @@ from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
 from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import ImageUpload, VideoUpload
 
 TASK = "clone_long"
 LABEL = "Clone long"
@@ -85,9 +85,9 @@ class Submitted(Protocol):
     api_key: str
     prompt: str
     resolution: str
-    image: list[UploadFile]
+    image: list[ImageUpload]
     image_manifest: str
-    video: list[UploadFile]
+    video: list[VideoUpload]
     video_manifest: str
 
 
@@ -96,8 +96,8 @@ class Measured(BaseModel):
     shape: Shape
 
 
-def _one(paths: list[str], kind: str, label: str) -> str:
-    if len(paths) != 1 or classify_kind(paths[0]) != kind:
+def _one(paths: list[str], kind: FileKind, label: str) -> str:
+    if len(paths) != 1 or FileKind.from_ext(paths[0]) != kind:
         msg = f"Pick one {label}"
         raise RefusedError(msg)
     return paths[0]
@@ -153,7 +153,7 @@ def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
             assets_root,
             user_id=owner_id,
         ),
-        "image",
+        FileKind.IMAGE,
         "subject image",
     )
     video = _one(
@@ -163,7 +163,7 @@ def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
             assets_root,
             user_id=owner_id,
         ),
-        "video",
+        FileKind.VIDEO,
         "video",
     )
     measured = _measure(video)

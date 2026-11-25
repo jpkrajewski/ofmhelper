@@ -1,17 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
 from pathlib import Path
-
-lazy from fastapi import UploadFile
+lazy from collections.abc import Sequence
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.schema import Job, ResultFile
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.store import (
-    VIDEO_KINDS,
     make_job_dir,
-    require_upload_kind,
     save_upload,
     uploads_root,
 )
@@ -20,6 +17,7 @@ from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import RefusedError
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
+lazy from ofmhelpers.features.assets.models import VideoUpload
 
 TASK = "handmade_upload"
 LABEL = "Handmade"
@@ -32,8 +30,8 @@ def upload_root() -> Path:
     return uploads_root() / "handmade"
 
 
-def _checked(files: list[UploadFile]) -> list[UploadFile]:
-    picked = [f for f in files if f.filename]
+def _checked(files: Sequence[VideoUpload]) -> Sequence[VideoUpload]:
+    picked = files
     if not picked:
         msg = "Pick at least one video"
         raise RefusedError(msg)
@@ -43,14 +41,14 @@ def _checked(files: list[UploadFile]) -> list[UploadFile]:
         raise RefusedError(msg)
     biggest = settings.web.handmade_max_upload_mb
     for f in picked:
-        name = require_upload_kind(f.filename, VIDEO_KINDS)
+        name = f.filename
         if (f.size or 0) > biggest * _MB:
             msg = f"{name} is over {biggest} MB"
             raise RefusedError(msg)
     return picked
 
 
-def start(files: list[UploadFile], va_id: int) -> JobsQueued:
+def start(files: Sequence[VideoUpload], va_id: int) -> JobsQueued:
     ids = []
     for upload in _checked(files):
         job_dir = make_job_dir(upload_root())

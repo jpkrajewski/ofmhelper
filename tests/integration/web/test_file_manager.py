@@ -291,6 +291,19 @@ def test_upload_into_a_users_store_then_see_download_delete(client, assets):
     assert not stored.exists()
 
 
+def test_asset_upload_rejects_non_media(client, assets):
+    ann = users.add_user(UserForm(email="ann@example.com"))
+
+    r = client.post(
+        f"/file-manager/assets/{ann.id}/upload",
+        files=[("files", ("page.html", b"<script>", "text/html"))],
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 422
+    assert not (assets / "users" / str(ann.id)).exists()
+
+
 def test_a_users_store_never_serves_another_users_file(client, assets):
     ann = users.add_user(UserForm(email="ann@example.com"))
     bob = users.add_user(UserForm(email="bob@example.com"))

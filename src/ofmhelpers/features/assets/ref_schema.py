@@ -2,11 +2,13 @@
 
 from pydantic import BaseModel
 
+from ofmhelpers.features.kinds import FileKind
+
 
 class RefEntry(BaseModel):
     path: str
     name: str
-    kind: str
+    kind: FileKind
     mtime: float
     used_at: float | None = None
 

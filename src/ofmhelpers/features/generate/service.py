@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 lazy from collections.abc import Callable
 
-from pydantic import BaseModel, JsonValue, ValidationError
-from starlette.datastructures import FormData, UploadFile
+from pydantic import BaseModel, JsonValue, SkipValidation, ValidationError
+from starlette.datastructures import FormData
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -26,6 +26,7 @@ from ofmhelpers.integrations.ai_providers.base import (
 )
 from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
+lazy from ofmhelpers.features.assets.models import MediaUpload
 lazy from ofmhelpers.integrations.ai_providers.spec import Fields, ModelSpec
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,11 @@ class AiRunForm(BaseModel):
     model: str
     api_key: str = ""
     batch: int = 1
+
+
+class AiInput(BaseModel, arbitrary_types_allowed=True):
+    data: SkipValidation[FormData]
+    uploads: dict[str, SkipValidation[list[MediaUpload]]]
 
 
 class PreparedRun(BaseModel):
@@ -86,11 +92,11 @@ class _Media(BaseModel, frozen=True):
     by_field: dict[str, list[str]]
 
 
-def _media(form: FormData, spec: ModelSpec, assets_root: Path, user_id: int) -> _Media:
+def _media(form: AiInput, spec: ModelSpec, assets_root: Path, user_id: int) -> _Media:
     media = {}
     for field in spec.media_fields:
-        files = [v for v in form.getlist(field.name) if isinstance(v, UploadFile)]
-        manifest = str(form.get(f"{field.name}_manifest") or "[]")
+        files = form.uploads.get(field.name, [])
+        manifest = str(form.data.get(f"{field.name}_manifest") or "[]")
         paths = build_ordered_paths(manifest, files, assets_root, user_id=user_id)
         if paths:
             media[field.name] = paths
@@ -105,8 +111,8 @@ def model_spec(model: str) -> ModelSpec:
         raise NotFoundError(msg) from None
 
 
-def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
-    head = _head(form)
+def prepare_run(form: AiInput, assets_root: Path, user_id: int) -> PreparedRun:
+    head = _head(form.data)
     spec = _spec_for(head)
     api_key = Keys.of(user_id).for_run(spec.provider, spec.key, head.api_key)
     if provider_class(spec.provider).needs_key and not api_key:
@@ -114,7 +120,7 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
         raise GenerateRefusedError(msg)
     try:
         values = {
-            **_settings(form, spec).model_dump(),
+            **_settings(form.data, spec).model_dump(),
             **_media(form, spec, assets_root, user_id).by_field,
         }
         spec.check(values)
@@ -129,7 +135,7 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
 
 
 def start_runs(
-    form: FormData,
+    form: AiInput,
     assets_root: Path,
     user_id: int,
     actor: str,

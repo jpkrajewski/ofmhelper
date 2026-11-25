@@ -5,8 +5,6 @@ import secrets
 from pathlib import Path
 from typing import Any, Protocol
 
-lazy from fastapi import UploadFile
-
 from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.config import settings
 from ofmhelpers.db.drive_uploads import store as upload_store
@@ -24,6 +22,7 @@ from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import VideoUpload
 lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
 logger = logging.getLogger(__name__)
@@ -142,7 +141,7 @@ def page_view(
 
 
 class Submitted(Protocol):
-    video: list[UploadFile]
+    video: list[VideoUpload]
     video_manifest: str
     copies: int
 

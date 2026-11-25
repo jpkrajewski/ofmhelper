@@ -17,18 +17,10 @@ from ofmhelpers.web.routers.task_helpers.responses import (
 from ofmhelpers.web.routers.task_helpers.routes import add_job_routes
 from ofmhelpers.web.routers.task_helpers.serving import media_response, serve_job_file
 from ofmhelpers.web.routers.task_helpers.uploads import (
-    AUDIO_EXTS,
-    IMAGE_EXTS,
-    IMAGE_KINDS,
-    MEDIA_KINDS,
-    VIDEO_EXTS,
-    VIDEO_KINDS,
     assets_root,
     assets_root_for,
     assets_root_for_actor,
     assets_root_for_user,
-    classify_kind,
-    convert_heic_upload,
     in_asset_root,
     make_job_dir,
     register_generated_asset,
@@ -42,12 +34,6 @@ from ofmhelpers.web.routers.task_helpers.uploads import (
 )
 
 __all__ = [
-    "AUDIO_EXTS",
-    "IMAGE_EXTS",
-    "IMAGE_KINDS",
-    "MEDIA_KINDS",
-    "VIDEO_EXTS",
-    "VIDEO_KINDS",
     "add_job_routes",
     "asset_card",
     "assets_root",
@@ -55,8 +41,6 @@ __all__ = [
     "assets_root_for_actor",
     "assets_root_for_user",
     "build_ordered_paths",
-    "classify_kind",
-    "convert_heic_upload",
     "download_name",
     "in_asset_root",
     "job_assets",

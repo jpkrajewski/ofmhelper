@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from ofmhelpers.db.downloads import store as downloads
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.jobs.schema import AssetCard, FailedSource, error_reason
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 lazy from ofmhelpers.db.jobs.schema import Job
 
@@ -27,7 +27,7 @@ def asset_card(  # noqa: PLR0913, PLR0917
     again_error: str | None = None,
 ) -> AssetCard:
     local_url = f"{files_prefix}/{index}"
-    kind = classify_kind(name)
+    kind = FileKind.from_ext(name)
     if removed:
         card = _removed_card(name, index, local_url, job_id, source)
         if again_error is None:
@@ -38,11 +38,11 @@ def asset_card(  # noqa: PLR0913, PLR0917
                 "removed_error": again_error,
             },
         )
-    previewed = local and kind in ("image", "video")
+    previewed = local and kind in (FileKind.IMAGE, FileKind.VIDEO)
     preview_url = f"{local_url}/preview" if previewed else None
     if (
         previewed
-        and kind == "video"
+        and kind == FileKind.VIDEO
         and not previews.preview_path(job_id, index, kind).is_file()
     ):
         preview_url = local_url
@@ -55,7 +55,9 @@ def asset_card(  # noqa: PLR0913, PLR0917
         download_name=download_name(name, job_id),
         local_fallback_url=local_url if remote_url else None,
         preview_url=preview_url,
-        poster_url=f"{local_url}/poster" if previewed and kind == "video" else None,
+        poster_url=f"{local_url}/poster"
+        if previewed and kind == FileKind.VIDEO
+        else None,
         source=source,
     )
 
@@ -67,9 +69,11 @@ def _removed_card(
     job_id: str,
     source: str | None,
 ) -> AssetCard:
-    kind = classify_kind(name)
-    poster = kind == "video" and previews.poster_path(job_id, index).is_file()
-    preview = kind == "image" and previews.preview_path(job_id, index, kind).is_file()
+    kind = FileKind.from_ext(name)
+    poster = kind == FileKind.VIDEO and previews.poster_path(job_id, index).is_file()
+    preview = (
+        kind == FileKind.IMAGE and previews.preview_path(job_id, index, kind).is_file()
+    )
     return AssetCard(
         name=name,
         index=index,

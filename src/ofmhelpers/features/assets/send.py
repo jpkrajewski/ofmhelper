@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.assets.store import register_generated_asset
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.redirect import Redirect
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 
@@ -37,7 +37,7 @@ def _kept_videos(
         if path is None:
             continue
         src = Path(path)
-        if not src.is_file() or classify_kind(src.name) != "video":
+        if not src.is_file() or FileKind.from_ext(src.name) != FileKind.VIDEO:
             continue
         kept = register_generated_asset(src, assets_root)
         if kept is not None:

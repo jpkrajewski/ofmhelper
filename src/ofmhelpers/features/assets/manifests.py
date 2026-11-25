@@ -6,12 +6,12 @@ from pathlib import Path
 lazy from collections.abc import Sequence
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
-lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.features.assets import ref_usage
 from ofmhelpers.features.assets.store import in_asset_root, save_asset
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import AssetRefusedError
+lazy from ofmhelpers.features.assets.models import MediaUpload
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +30,24 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     return resolved
 
 
-def keep_files(raw_paths: Sequence[str], allowed_root: Path, kind: str) -> list[str]:
+def keep_files(
+    raw_paths: Sequence[str],
+    allowed_root: Path,
+    kind: FileKind,
+) -> list[str]:
     kept: list[str] = []
     for raw in raw_paths:
         try:
             resolved = resolve_existing_ref(raw, allowed_root)
         except AssetRefusedError:  # silent: a stale path, the page offers fewer
             continue
-        if classify_kind(resolved.name) == kind:
+        if FileKind.from_ext(resolved.name) == kind:
             kept.append(str(resolved))
     return kept
 
 
 def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
-    return keep_files(raw_paths, allowed_root, "video")
+    return keep_files(raw_paths, allowed_root, FileKind.VIDEO)
 
 
 class ManifestEntry(BaseModel):
@@ -58,7 +62,7 @@ def _manifest_adapter() -> TypeAdapter[list[ManifestEntry]]:
 
 def build_ordered_paths(
     manifest_json: str,
-    new_files: Sequence[UploadFile],
+    new_files: Sequence[MediaUpload],
     allowed_root: Path,
     *,
     user_id: int,

@@ -52,7 +52,7 @@ from ofmhelpers.web.dependencies import (
     Storage,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, PaidForm
+from ofmhelpers.web.forms import ImageFiles, PaidForm, VideoFiles
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.responses import NO_STORE
@@ -97,9 +97,9 @@ class CloneForm(PaidForm):
     audio: bool = False
     export: str = ""
     mirror: bool = False
-    image: Files
+    image: ImageFiles
     image_manifest: str = "[]"
-    videos: Files
+    videos: VideoFiles
     videos_manifest: str = "[]"
 
 

@@ -2,10 +2,12 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Request
 from fastapi.responses import Response
+from pydantic import AfterValidator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import ImageUpload
 from ofmhelpers.features.character_sheet import service
 from ofmhelpers.features.character_sheet.service import (
     FILES_PREFIX,
@@ -28,6 +30,15 @@ router = APIRouter(
 )
 
 
+def _within_limits(files: list[ImageUpload]) -> list[ImageUpload]:
+    minimum = settings.web.character_sheet_min_images
+    maximum = settings.web.character_sheet_max_images
+    if not minimum <= len(files) <= maximum:
+        msg = f"Upload between {minimum} and {maximum} files"
+        raise ValueError(msg)
+    return files
+
+
 @router.get("")
 def form(request: Request, actor: Actor) -> Response:
     return render(
@@ -44,9 +55,13 @@ def form(request: Request, actor: Actor) -> Response:
 def run(
     actor: Actor,
     assets_root: AssetsRoot,
-    files: Annotated[list[UploadFile] | None, File()] = None,
+    files: Annotated[
+        list[ImageUpload],
+        File(media_type="image/*"),
+        AfterValidator(_within_limits),
+    ],
 ) -> JobQueued:
-    return service.start(files or [], actor, assets_root)
+    return service.start(files, actor, assets_root)
 
 
 add_job_routes(

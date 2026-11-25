@@ -9,12 +9,10 @@ lazy from pydantic import JsonValue
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import files_naming
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.integrations.ai_providers import tasks
 
 logger = logging.getLogger(__name__)
-
-_MEDIA = {"image", "video", "audio"}
 
 
 def _strings(value: JsonValue) -> Iterator[str]:
@@ -48,7 +46,12 @@ def stale(now: float) -> list[Path]:
     out = Path(settings.aigen.out_dir)
     keep_s = settings.aigen.raw_keep_s
     try:
-        files = [p for p in out.iterdir() if classify_kind(p.name) in _MEDIA]
+        files = [
+            p
+            for p in out.iterdir()
+            if FileKind.from_ext(p.name)
+            in (FileKind.IMAGE, FileKind.VIDEO, FileKind.AUDIO)
+        ]
     except FileNotFoundError:
         logger.debug("raw-file sweep: %s not made yet", out, exc_info=True)
         return []

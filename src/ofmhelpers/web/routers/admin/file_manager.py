@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from ofmhelpers.features.assets.models import FileUpload, MediaUpload
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
 from ofmhelpers.features.clone_links.constants import CloneLinksTask
 from ofmhelpers.features.files import disk, library
@@ -50,7 +51,7 @@ FormText = Annotated[str, Form()]
 
 
 class DiskUploadForm(FormModel):
-    files: list[UploadFile]
+    files: list[FileUpload]
     path: str = ""
     root: str = DEFAULT_ROOT
 
@@ -113,7 +114,10 @@ def asset_delete(user_id: int, found: Asset) -> Response:
 
 
 @router.post("/assets/{user_id}/upload")
-def asset_upload(user_id: int, files: Annotated[list[UploadFile], File()]) -> Response:
+def asset_upload(
+    user_id: int,
+    files: Annotated[list[MediaUpload], File(min_length=1)],
+) -> Response:
     library.add_assets(user_id, files)
     return _back(user_id, UPLOADS)
 

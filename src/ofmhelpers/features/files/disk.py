@@ -12,8 +12,9 @@ lazy from starlette.datastructures import UploadFile
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets.store import safe_filename
 from ofmhelpers.features.files.schema import DirEntry, FileEntry
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import ConflictError, NotFoundError, RefusedError
+lazy from ofmhelpers.features.assets.models import MediaUpload
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ def folder(root_name: str, rel_dir: str) -> Folder:
                     rel_path=rel,
                     mtime=st.st_mtime,
                     size=_human_size(st.st_size),
-                    kind=classify_kind(entry.name),
+                    kind=FileKind.from_ext(entry.name),
                 ),
             )
     dirs.sort(key=lambda d: d.mtime, reverse=True)
@@ -164,7 +165,11 @@ def file(root_name: str, rel_path: str) -> Path:
     return file_path
 
 
-def upload(root_name: str, rel_dir: str, uploads: Sequence[UploadFile]) -> None:
+def upload(
+    root_name: str,
+    rel_dir: str,
+    uploads: Sequence[UploadFile | MediaUpload],
+) -> None:
     directory = _directory(root_name, rel_dir)
     for item in uploads:
         dest = directory / safe_filename(item.filename)

@@ -8,7 +8,6 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict
 from redis.exceptions import RedisError
-lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
@@ -53,6 +52,7 @@ from ofmhelpers.features.clone_pricing.targets import (
 )
 from ofmhelpers.features.jobs.models import CloneLinksCard
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import (
     NotFoundError,
     RefusedError,
@@ -61,6 +61,7 @@ from ofmhelpers.features.refusals import (
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.media.exports import exports
 lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
+lazy from ofmhelpers.features.assets.models import ImageUpload
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ class Submitted(Protocol):
     prompt: str
     audio: bool
     mirror: bool
-    image: list[UploadFile]
+    image: list[ImageUpload]
     image_manifest: str
     links: list[str]
     batch: str | None
@@ -272,7 +273,7 @@ class Generate(BaseModel):
         if not 1 <= len(paths) <= max_images:
             msg = f"Pick between 1 and {max_images} subject images"
             raise RefusedError(msg)
-        require_kind(paths, "image", "The subject")
+        require_kind(paths, FileKind.IMAGE, "The subject")
         return paths
 
     def start(self, form: Submitted) -> Sent:

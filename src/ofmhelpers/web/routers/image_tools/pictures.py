@@ -31,7 +31,7 @@ from ofmhelpers.web.dependencies import (
     OwnerId,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, FormModel, PaidForm, Stripped
+from ofmhelpers.web.forms import FormModel, ImageFiles, PaidForm, Stripped
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_polled
@@ -68,7 +68,7 @@ class PresetForm(FormModel):
     name: Stripped = Field(min_length=1, max_length=80)
     prompt: Stripped = Field(min_length=1, max_length=20000)
     aspect_ratio: str = Field("", max_length=16)
-    images: Files
+    images: ImageFiles
 
 
 class PresetEditForm(PresetForm):
@@ -161,7 +161,7 @@ def delete_preset(preset_id: int, owner_id: OwnerId) -> PresetDeleted:
 class PictureRunForm(PaidForm):
     provider: str = Field(default_factory=default_provider)
     preset: int
-    pictures: Files
+    pictures: ImageFiles
     pictures_manifest: str = "[]"
 
 
