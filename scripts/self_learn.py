@@ -14,6 +14,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "reports" / "self-learn"
 MARKER = OUT / "last.txt"
+SHIP_OPEN = ROOT / "reports" / "hooks" / "ship.open"
 AUDIT = ROOT / "reports" / "hooks" / "audit.jsonl"
 DEFAULT_DAYS = 7
 METADATA_LINE = '{"type":"'
@@ -602,6 +603,14 @@ def last_pass() -> datetime:
 def main(argv: list[str]) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     if argv[:1] == ["--done"]:
+        if SHIP_OPEN.exists() and argv[1:2] != ["--allow-empty"]:
+            d = digest(project_logs(), AUDIT, last_pass())
+            if not d.costs:
+                print(
+                    "self_learn: no sessions found during an open ship; "
+                    "review the evidence or pass --allow-empty to acknowledge it",
+                )
+                return 1
         MARKER.write_text(
             datetime.now(UTC).isoformat(timespec="seconds"),
             encoding="utf-8",

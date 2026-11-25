@@ -505,3 +505,47 @@ def test_a_queued_record_of_a_wrong_shape_is_skipped(tmp_path):
     d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
 
     assert [p.text for p in d.prompts] == ["go"]
+
+
+def test_done_refuses_an_empty_digest_during_an_open_ship(monkeypatch, tmp_path):
+    marker = tmp_path / "last.txt"
+    monkeypatch.setattr(self_learn, "MARKER", marker)
+    monkeypatch.setattr(self_learn, "OUT", tmp_path)
+    monkeypatch.setattr(self_learn, "SHIP_OPEN", tmp_path / "ship.open")
+    (tmp_path / "ship.open").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(self_learn, "last_pass", lambda: NOW)
+    monkeypatch.setattr(
+        self_learn,
+        "digest",
+        lambda *_: self_learn.Digest(
+            since="",
+            until="",
+            prompts=[],
+            failures=[],
+            blocks=[],
+            test_runs=[],
+            reviews=[],
+            costs=[],
+            task_stops=0,
+            interrupted=0,
+            rejected=0,
+            refused_pushes=0,
+        ),
+    )
+
+    assert self_learn.main(["--done"]) == 1
+    assert not marker.exists()
+
+
+def test_done_accepts_an_explicit_empty_digest_acknowledgement(
+    monkeypatch,
+    tmp_path,
+):
+    marker = tmp_path / "last.txt"
+    monkeypatch.setattr(self_learn, "MARKER", marker)
+    monkeypatch.setattr(self_learn, "OUT", tmp_path)
+    monkeypatch.setattr(self_learn, "SHIP_OPEN", tmp_path / "ship.open")
+    (tmp_path / "ship.open").write_text("x", encoding="utf-8")
+
+    assert self_learn.main(["--done", "--allow-empty"]) == 0
+    assert marker.exists()

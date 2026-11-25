@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 
 import pytest
 import worker_tasks
@@ -8,6 +9,7 @@ from rq import SimpleWorker, Worker
 from rq.job import Job
 
 from ofmhelpers.background import recovery
+from ofmhelpers.background.worker import ConfiguredWorker
 from ofmhelpers.cache import (
     JobQueue,
     QueueName,
@@ -20,6 +22,7 @@ from ofmhelpers.cache import (
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.log import configure_logging
+from ofmhelpers.monitoring.log_records import ContextFilter, JsonFormatter, RedactFilter
 
 
 @pytest.fixture(autouse=True)
@@ -133,6 +136,30 @@ def test_worker_log_has_queue_and_rq_job_id(capsys):
     record = next(payload for payload in payloads if payload["msg"] == "worker context")
     assert record["context"]["queue"] == "default"
     assert record["context"]["rq_job_id"] == rq_job.id
+
+
+def test_configured_worker_emits_one_json_record_after_a_real_fork(tmp_path):
+    configure_logging(force=True)
+    rq_job = enqueue(worker_tasks.log_context)
+    log_path = tmp_path / "worker.jsonl"
+    root = logging.getLogger()
+    with log_path.open("w", encoding="utf-8") as stream:
+        handler = logging.StreamHandler(stream)
+        handler.setFormatter(JsonFormatter())
+        handler.addFilter(ContextFilter())
+        handler.addFilter(RedactFilter())
+        root.addHandler(handler)
+        try:
+            ConfiguredWorker([get_queue()], connection=get_redis()).work(burst=True)
+        finally:
+            root.removeHandler(handler)
+            handler.close()
+
+    payloads = [json.loads(line) for line in log_path.read_text().splitlines()]
+    records = [payload for payload in payloads if payload["msg"] == "worker context"]
+    assert len(records) == 1
+    assert records[0]["context"]["queue"] == "default"
+    assert records[0]["context"]["rq_job_id"] == rq_job.id
 
 
 def _queue_run(queue: str) -> tuple[str, str]:
