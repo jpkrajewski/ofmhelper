@@ -77,6 +77,25 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 - Templates/JS/CSS: `$C run --rm tests uv run --frozen djlint src/ofmhelpers/web/templates --lint` and `$C run --rm tests biome lint`.
 - `pyproject.toml`/`uv.lock`/test-stage change: `$C --profile test build tests`.
 
+## Code quality metrics
+- Run `bash scripts/quality.sh`. It prints ONE JSON object and writes the same object to `reports/quality/results.json`; regenerate it after a change. It covers `src/**/*.py`, `tests/**/*.py`, and `alembic/**/*.py`. Run one invocation at a time: concurrent runs share their temporary directory.
+- `passed` is the overall gate result. Every `tools.<name>` has `exit_code` and `passed`; `results` holds JSON output and `output` holds text/errors. `summary.counts` is the coverage, `summary.offenders` the top-20 lists, and `summary.dependency_areas` the area entropy. `tools.custom_metrics.results` holds every callable, class, module dependency, and MI row.
+- Radon CC/raw/MI output is under `tools.radon_cc`, `tools.radon_raw`, and `tools.radon_mi`. Pylint `results` is the duplicate list; status 8 is R0801 and is accepted, other unexpected bits fail. Xenon limits are measured regression ceilings (absolute F, module average C, overall average A), not quality targets. Import Linter `output` names the exact upward/sibling imports that break the configured contract.
+
+### Choose what to fix
+1. **Correctness first.** Security, data loss, money, production failures, and broken application behavior always outrank metric cleanup. A metric is a pointer, not proof of a defect.
+2. **Broken measurement next.** A missing tool, malformed JSON, missing summary, or analyzer exception makes the affected section untrustworthy. Fix `scripts/quality.sh` / `scripts/quality_metrics.py` with a failing regression test before acting on its rankings.
+3. **New regressions before old hotspots.** Compare the current diff and previous result. A new Xenon or Import Linter failure introduced by the change comes before an old F-ranked function elsewhere. Never weaken a limit, add `ignore_imports`, or create a baseline to make the run green.
+4. **Import Linter failures:** read `tools.import_linter.output`, then `.claude/rules/layers.md` and the import callers. If the declared direction is the intended architecture, move the dependency down or inject it; do not patch around it. If the contract itself is wrong, the owner decides that architecture change. Do not refactor merely to silence a finding.
+5. **Then inspect concrete offenders by path/lineno.** High cyclomatic complexity plus deep nesting in changed or frequently executed code is usually the best cleanup candidate. Large classes and low MI come next when their responsibilities show a real problem. Pylint duplicates are review candidates, not a gate; deduplicate only when the copies should change together.
+6. **Verify one item at a time.** Run the affected tests and `bash scripts/quality.sh`; prove the addressed entry is gone or improved and no new gate failed. Put unrelated findings in `backlog/IMPROVEMENTS.md`; never turn a report into a repo-wide refactor.
+
+### Interpret the numbers
+- Complexity counts decision paths: A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F=41+. Higher is a test/readability risk, not an automatic order to rewrite. `line_span = endline - lineno + 1`; nesting counts the supported control-flow statements. MI is higher-is-better and is informational only.
+- Complexity density is `100 * complexity / line_span`, a project-defined density, not a 0-1 score. When Radon says `endline == lineno` for a multi-line callable, the analyzer uses the AST end line instead; `test_radon_one_line_endline_uses_ast_span_for_multiline_callable` guards that fallback.
+- `complexity: null` means Radon omitted that callable/class (including some function-local declarations), not complexity zero. AST-derived span and nesting remain valid.
+- Dependency entropy is the Shannon entropy of distinct internal outgoing targets in bits. Always read it beside `dependency_count`; it is descriptive, unnormalized, and not a good/bad score. Raw LOC/LLOC/SLOC and area entropy never justify a refactor alone.
+
 ## Testing
 - ONLY via `scripts/test.sh [preset|pytest args]`: (none) = unit + integration; `e2e` = browser, its own app with fakes (page/template/JS/job-flow change); `push` = default + heavy ffmpeg (what CI runs); `all`; `live` = real TikTok/Instagram/kie.ai/Higgsfield/Drive sandbox, local only; `deploy` = the release gate.
 - `live` and `deploy` ONLY when I say commit, push or deploy. `paid` (real generations, cost money) ONLY when I explicitly ask: `scripts/test.sh paid`.

@@ -71,11 +71,13 @@ dev = [
     "allure-pytest>=2.16.2",
     "djlint>=1.36",
     "httpx2>=2.9.1",
+    "import-linter==2.16",
     "mypy>=2.4.0",
     # Browser for tests/e2e (uv run playwright install chromium).
     "playwright>=1.64.0",
     "pre-commit>=4.6.1",
     # Test-only: the runtime image installs `--no-dev` and nothing in src/ imports it.
+    "pylint==4.1.3",
     "pytest>=9.1.1",
     "pytest-json-report>=1.5.0",
     "pytest-repeat>=0.9.4",
@@ -83,6 +85,7 @@ dev = [
     # CI shards the suite by recorded durations (.test_durations).
     "pytest-split>=0.11.0",
     "pytest-xdist>=3.8.0",
+    "radon==6.0.1",
     "responses>=0.26.3",
     "ruff>=0.17.2",
     # scripts/*.sh: the deploy paths' remote scripts are single-quoted
@@ -91,6 +94,7 @@ dev = [
     "time-machine>=3.5.1",
     # .github/workflows security (Trail of Bits): this repo is public and
     # the deploy workflow holds the server's SSH key.
+    "xenon==0.9.3",
     "zizmor>=1.31.1",
 ]
 # repurpose/lab: the knob search (Optuna's NSGA-II). Only where the lab
@@ -102,6 +106,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
+constraint-dependencies = [
+    "grimp==3.19",
+    "tomlkit==0.15.2",
+]
 # pdqhash ships only an sdist, so every image build compiles it, and uv does
 # not lock the tools a build runs: without these pins the production builder
 # takes whatever setuptools/wheel/Cython PyPI serves that minute, outside
@@ -298,3 +306,33 @@ per-file-ignores = { "reachmodel.html" = "H021", "_clone_batch.html" = "H021" }
 
 [tool.ruff.lint.isort]
 known-first-party = ["ofmhelpers"]
+
+# Xenon ceilings measured on 2026-11-25: maximum block complexity 51 (F),
+# highest per-module mean 10.5 (C), overall block mean 2.895 (A). Radon ranks
+# are A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F=41+. scripts/quality.sh uses
+# these inclusive regression ceilings.
+[tool.pylint.similarities]
+min-similarity-lines = 8
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = true
+ignore-signatures = true
+
+[tool.importlinter]
+root_package = "ofmhelpers"
+exclude_type_checking_imports = true
+
+[[tool.importlinter.contracts]]
+id = "application-layers"
+name = "Application layers"
+type = "layers"
+containers = ["ofmhelpers"]
+layers = [
+    "web | background",
+    "features",
+    "integrations | media",
+    "log",
+    "db | cache | monitoring | config",
+    "redact | acting",
+]
+exhaustive = true

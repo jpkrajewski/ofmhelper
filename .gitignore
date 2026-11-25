@@ -12,6 +12,7 @@ CLAUDE.local.md
 /BRAIN.md
 /IMPROVEMENTS.md
 /repurpose.md
+/docs/superpowers/
 deploy.local.env
 
 # Runtime data directories, anchored to the repo root with a leading slash.
