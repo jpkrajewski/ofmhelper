@@ -1,6 +1,6 @@
 # config
 
-Every env var is read here and nowhere else, and read at the call: no module keeps a `settings.<group>.<field>` from import (the one exception is `web/main.py`'s session middleware). Use `settings.<group>.<field>`; the groups, their fields and defaults are in `settings.py`. Logging is the deliberate exception: its stdlib-only bootstrap loads `logging.json` without importing this package, and `monitoring/log_records.py` reads only `OFM_SERVICE`, `OFM_RELEASE` and `OFM_ENV` as record metadata.
+Every env var is read here and nowhere else, and read at the call: no module keeps a `settings.<group>.<field>` from import (the one exception is `web/main.py`'s session middleware). Use `settings.<group>.<field>`; the groups, their fields and defaults are in `settings.py`. The logging bootstrap is the deliberate exception: `log.py` loads `logging.json` without importing this package; record metadata still uses the normal settings groups.
 
 - `VaultSettings.keys` (`OFM_VAULT_KEY`): comma-separated Fernet keys, first encrypts (db/encrypted.py). Lose them = lose every /phones login.
 - `OFM_ENV` (production|development) is required, no default, so a deployment that does not say which it is does not start; the server's `.env` says production, `docker-compose.dev.yml` and `tests/conftest.py` say development. `OFM_FAKE_EXTERNALS` fakes every outside service (e2e); `OFM_FAKES_DIR` holds the fakes' cross-process state.
