@@ -29,7 +29,7 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     clone_values,
 )
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import (
     Provider,
@@ -153,7 +153,11 @@ def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
             reason = _why_not(result.error or "", has_cookies=bool(cookies))
             raise LinkFetchError(reason)
         video = next(
-            (p for p in result.output_paths if classify_kind(p.name) == "video"),
+            (
+                p
+                for p in result.output_paths
+                if FileKind.from_ext(p.name) == FileKind.VIDEO
+            ),
             None,
         )
         if video is None:

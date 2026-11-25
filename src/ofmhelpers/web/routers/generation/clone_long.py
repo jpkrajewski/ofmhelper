@@ -24,7 +24,7 @@ from ofmhelpers.web.dependencies import (
     OwnerId,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
+from ofmhelpers.web.forms import ImageFiles, PaidForm, Stripped, Upper, VideoFiles
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.responses import NO_STORE
@@ -46,9 +46,9 @@ gallery = Gallery({TASK})
 class LongCloneForm(PaidForm):
     prompt: Stripped = Field("", max_length=2000)
     resolution: Upper = DEFAULT_RESOLUTION
-    image: Files
+    image: ImageFiles
     image_manifest: str = "[]"
-    video: Files
+    video: VideoFiles
     video_manifest: str = "[]"
 
 

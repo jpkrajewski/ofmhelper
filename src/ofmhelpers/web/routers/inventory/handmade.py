@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Request
 from fastapi.responses import Response
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import VideoUpload
 from ofmhelpers.features.clone.service import drive_picker
 from ofmhelpers.features.handmade import service
 from ofmhelpers.features.handmade.service import TASK, run_handmade
@@ -72,7 +73,7 @@ def gallery_page(
 @router.post("/run", status_code=202, dependencies=[Can(Action.UPLOAD_HANDMADE)])
 def run(
     viewer: Viewing,
-    files: Annotated[list[UploadFile] | None, File()] = None,
+    files: Annotated[list[VideoUpload] | None, File(media_type="video/*")] = None,
 ) -> JobsQueued:
     return service.start(files or [], viewer.user.id)
 

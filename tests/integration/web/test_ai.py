@@ -14,7 +14,7 @@ from signin import sign_in_agency
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.repository import JobRepository
 from ofmhelpers.db.jobs.schema import JobPreview
-from ofmhelpers.db.jobs.store import create_job, get_job, set_job_preview
+from ofmhelpers.db.jobs.store import create_job, get_job, list_jobs, set_job_preview
 from ofmhelpers.features.account.keys import SAVED_KEY
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.downloads import videos as download_videos_router
@@ -378,6 +378,47 @@ def test_a_kie_run_sends_the_catalog_body_and_keeps_the_hosted_copy(client, kie)
     job = get_job(r.json()["job_id"])
     assert job.status == "done"
     assert job.result_files()[0].remote_url == "https://cdn.kie/out.mp4"
+
+
+def test_invalid_reference_image_is_rejected_before_a_job_is_created(client, kie):
+    before = len(list_jobs())
+
+    r = client.post(
+        "/ai/run",
+        headers=keyed(),
+        data={
+            "provider": "kie",
+            "model": "kie:wan/3-0-video",
+            "api_key": "k",
+            "prompt": "dance",
+            "reference_image_urls_manifest": NEW,
+        },
+        files={"reference_image_urls": ("face.png", b"not an image", "image/png")},
+    )
+
+    assert r.status_code == 400
+    assert len(list_jobs()) == before
+
+
+def test_corrupt_heic_reference_is_refused_before_a_job_is_created(client, kie):
+    before = len(list_jobs())
+
+    r = client.post(
+        "/ai/run",
+        headers=keyed(),
+        data={
+            "provider": "kie",
+            "model": "kie:wan/3-0-video",
+            "api_key": "k",
+            "prompt": "dance",
+            "reference_image_urls_manifest": NEW,
+        },
+        files={"reference_image_urls": ("broken.heic", b"not a heic", "image/heic")},
+    )
+
+    assert r.status_code == 400
+    assert r.json()["detail"] == "Unreadable HEIC image"
+    assert len(list_jobs()) == before
 
 
 def test_a_failed_download_keeps_the_job_on_the_hosted_copy(client, kie, monkeypatch):

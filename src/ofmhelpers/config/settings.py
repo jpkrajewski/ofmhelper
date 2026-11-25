@@ -181,6 +181,11 @@ class WebSettings(BaseSettings):
         ge=1,
         validation_alias="OFM_NO_CREDITS_NOTICE_EVERY_S",
     )
+    max_upload_mb: int = Field(
+        default=2048,
+        ge=1,
+        validation_alias="OFM_MAX_UPLOAD_MB",
+    )
     handmade_max_upload_mb: int = Field(
         default=1024,
         ge=1,
@@ -205,9 +210,25 @@ class WebSettings(BaseSettings):
         validation_alias="OFM_DOWNLOAD_NAME_DIGITS",
     )
     character_sheet_max_images: int = Field(
-        default=10,
+        default=4,
+        ge=1,
         validation_alias="OFM_CHARACTER_SHEET_MAX_IMAGES",
     )
+    character_sheet_min_images: int = Field(
+        default=2,
+        ge=1,
+        validation_alias="OFM_CHARACTER_SHEET_MIN_IMAGES",
+    )
+
+    @model_validator(mode="after")
+    def _ordered_character_sheet_image_limits(self) -> WebSettings:
+        if self.character_sheet_min_images > self.character_sheet_max_images:
+            msg = (
+                "OFM_CHARACTER_SHEET_MIN_IMAGES must not exceed "
+                "OFM_CHARACTER_SHEET_MAX_IMAGES"
+            )
+            raise ValueError(msg)
+        return self
 
     rate_limit_enabled: bool = Field(
         default=True,

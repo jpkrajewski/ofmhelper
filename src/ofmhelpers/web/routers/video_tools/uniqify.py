@@ -3,11 +3,12 @@
 from typing import Annotated
 lazy from pathlib import Path
 
-from fastapi import APIRouter, Form, Request, UploadFile
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import Response
 from pydantic import Field, field_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import VideoUpload
 from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.uniqify import service
 from ofmhelpers.features.uniqify.service import run_uniqify as _run_uniqify
@@ -35,7 +36,7 @@ FILES_PREFIX = f"{router.prefix}/files"
 
 
 class UniqifyForm(FormModel):
-    file: UploadFile
+    file: VideoUpload
     copies: int = Field(5, ge=1)
     strength: Strength = Strength.HARD
     mirror_pct: float = Field(0.0, ge=0, le=100)

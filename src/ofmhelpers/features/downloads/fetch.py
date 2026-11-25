@@ -11,7 +11,7 @@ from ofmhelpers.db.jobs.schema import DownloadResult
 from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.store import register_generated_asset
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.log import get_logger
@@ -111,7 +111,7 @@ def _keep(
 
 
 def _drop_previews(job_id: str, position: int, path: Path) -> None:
-    kind = classify_kind(path.name)
+    kind = FileKind.from_ext(path.name)
     for stale in (
         previews.preview_path(job_id, position, kind),
         previews.poster_path(job_id, position),

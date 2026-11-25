@@ -6,11 +6,14 @@ from fastapi import UploadFile
 from pydantic import Field, JsonValue, StringConstraints, model_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import ImageUpload, VideoUpload
 from ofmhelpers.monitoring.telemetry import LoggedFields
 
 Stripped = Annotated[str, StringConstraints(strip_whitespace=True)]
 Upper = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True)]
 Files = Annotated[list[UploadFile], Field(default_factory=list)]
+ImageFiles = Annotated[list[ImageUpload], Field(default_factory=list)]
+VideoFiles = Annotated[list[VideoUpload], Field(default_factory=list)]
 
 
 def at_most[N: (int, float)](value: N, limit: N) -> N:

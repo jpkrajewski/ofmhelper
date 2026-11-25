@@ -34,7 +34,7 @@ from ofmhelpers.web.dependencies import (
     Storage,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, PaidForm
+from ofmhelpers.web.forms import ImageFiles, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import default_prompt
@@ -60,7 +60,7 @@ class CloneLinksForm(PaidForm):
     audio: bool = False
     export: str = Field(default_factory=lambda: settings.exports.default)
     mirror: bool = False
-    image: Files
+    image: ImageFiles
     image_manifest: str = "[]"
     links: list[str] = Field(default_factory=list)
     batch: str | None = Field(None, pattern=clone_links_constants().batch_pattern)

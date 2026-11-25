@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, computed_field
 
+from ofmhelpers.features.kinds import FileKind
+
 FALLBACK = "Failed"
 _WHO = re.compile(r"^([A-Za-z][\w.\- ]{1,23}): (.+)$", re.DOTALL)
 _SAID_MAX = 240
@@ -242,7 +244,7 @@ def download_reason(error: str | None) -> str:
 class AssetCard(BaseModel):
     name: str
     index: int
-    kind: str
+    kind: FileKind
     view_url: str
     download_url: str
     download_name: str
@@ -299,7 +301,7 @@ class CloneQueued(BaseModel):
 
 class ReferenceAsset(BaseModel):
     name: str
-    kind: str
+    kind: FileKind
     view_url: str
 
 

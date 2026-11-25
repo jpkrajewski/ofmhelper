@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import contextvars
+import io
 import json
 import os
 import subprocess
@@ -11,6 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from idempotent import keyed
+from PIL import Image
 from rq.timeouts import JobTimeoutException
 from signin import make_user, sign_in
 
@@ -131,8 +133,17 @@ def _provider(monkeypatch, provider_cls, generated: Path, sent: list, status=Non
     monkeypatch.setattr(provider_cls, "download", download)
 
 
-def _post(client, video: Path | None, data=None, images=1):
-    files = [("image", (f"face{i}.png", b"img", "image/png")) for i in range(images)]
+def _png() -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (8, 8)).save(out, "PNG")
+    return out.getvalue()
+
+
+def _post(client, video: Path | None, data=None, images=1, image: bytes | None = None):
+    files = [
+        ("image", (f"face{i}.png", _png() if image is None else image, "image/png"))
+        for i in range(images)
+    ]
     if video is not None:
         files.append(("video", (video.name, video.read_bytes(), "video/mp4")))
     return client.post(
@@ -147,6 +158,15 @@ def _post(client, video: Path | None, data=None, images=1):
         },
         files=files,
     )
+
+
+def test_run_rejects_invalid_image_content(client):
+    before = len(list_jobs())
+
+    r = _post(client, None, image=b"not an image")
+
+    assert r.status_code == 422
+    assert len(list_jobs()) == before
 
 
 def test_the_page_offers_one_image_one_video_and_the_prices(client):

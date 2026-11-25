@@ -318,3 +318,11 @@ def test_the_compose_database_password_comes_from_the_environment(monkeypatch):
     assert InfraSettings(_env_file=None).database_url == (
         "postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers"
     )
+
+
+def test_character_sheet_image_limits_must_be_ordered(monkeypatch):
+    monkeypatch.setenv("OFM_CHARACTER_SHEET_MIN_IMAGES", "5")
+    monkeypatch.setenv("OFM_CHARACTER_SHEET_MAX_IMAGES", "4")
+
+    with pytest.raises(ValidationError, match="MIN_IMAGES must not exceed"):
+        WebSettings(_env_file=None)

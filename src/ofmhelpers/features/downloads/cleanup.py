@@ -13,7 +13,7 @@ from ofmhelpers.db.downloads.schema import Download
 from ofmhelpers.db.jobs.schema import Named
 from ofmhelpers.db.jobs.store import naming_each
 from ofmhelpers.features.assets.store import assets_root_for_user
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 from ofmhelpers.log import get_logger
@@ -177,10 +177,10 @@ def _thumbnail(seen: _Judged) -> None:
         job_id=seen.file.job_id,
         index=seen.file.position,
     )
-    kind = classify_kind(seen.path.name)
-    if kind == "video":
+    kind = FileKind.from_ext(seen.path.name)
+    if kind == FileKind.VIDEO:
         shown.poster()
-    elif kind == "image":
+    elif kind == FileKind.IMAGE:
         shown.make()
 
 
@@ -213,8 +213,8 @@ def _delete_files(seen: _Judged, now: datetime) -> int:
     folder = seen.path.parent
     if folder != DownloadConfig().output_dir and not any(folder.iterdir()):
         folder.rmdir()
-    if classify_kind(seen.path.name) == "video":
-        previews.preview_path(file.job_id, file.position, "video").unlink(
+    if FileKind.from_ext(seen.path.name) == FileKind.VIDEO:
+        previews.preview_path(file.job_id, file.position, FileKind.VIDEO).unlink(
             missing_ok=True,
         )
         previews.failed_path(file.job_id, file.position).unlink(missing_ok=True)

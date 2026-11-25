@@ -14,7 +14,6 @@ lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 from redis.exceptions import RedisError
-lazy from fastapi import UploadFile
 
 from ofmhelpers.cache.queue import JobQueue
 from ofmhelpers.config import settings
@@ -29,7 +28,7 @@ from ofmhelpers.features.assets.store import (
 from ofmhelpers.features.edit.clips import Clip, checked
 from ofmhelpers.features.edit.options import Framing
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.features.refusals import EditRefusedError
 from ofmhelpers.log import get_logger
@@ -42,6 +41,7 @@ from ofmhelpers.media.video_probe import (
     video_size,
 )
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import VideoUpload
 lazy from ofmhelpers.media.size import Size
 
 logger = get_logger(__name__)
@@ -122,7 +122,7 @@ def _touch(path: Path) -> None:
 
 
 def _stored_video(video: str, assets_root: Path) -> Path:
-    kept = keep_files([video], assets_root, "video")
+    kept = keep_files([video], assets_root, FileKind.VIDEO)
     if not kept:
         raise EditRefusedError(_GONE)
     return Path(kept[0])
@@ -172,14 +172,11 @@ def open_video(video: str, assets_root: Path) -> EditVideo:
 
 
 def upload(
-    file: UploadFile,
+    file: VideoUpload,
     assets_root: Path,
     actor: str,
     run: Callable[..., Any],
 ) -> EditVideo:
-    if classify_kind(file.filename or "") != "video":
-        msg = "Pick a video file"
-        raise EditRefusedError(msg)
     cap_mb = settings.web.edit_max_upload_mb
     if file.size is not None and file.size > cap_mb * 1024 * 1024:
         msg = f"Videos up to {cap_mb} MB open here"

@@ -10,6 +10,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.assets import refs
 from ofmhelpers.features.assets.ref_schema import MissingRefs, RefEntry, StoredRefs
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import media_response
@@ -36,7 +37,7 @@ Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 def list_refs(
     assets_root: AssetsRoot,
     owner_id: OwnerId,
-    kind: Annotated[str | None, Query()] = None,
+    kind: Annotated[FileKind | None, Query()] = None,
     limit: Annotated[int | None, Depends(_limit)] = None,
 ) -> list[RefEntry]:
     return refs.listing(assets_root, owner_id, kind, limit)

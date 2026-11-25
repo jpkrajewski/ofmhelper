@@ -5,7 +5,6 @@ from typing import Any, Protocol
 lazy from collections.abc import Callable
 
 from pydantic import BaseModel
-lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.picture_presets import store as picture_presets
@@ -18,7 +17,6 @@ from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.features.generate.service import run_ai
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import JobsQueued
-from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.pictures.targets import (
     PICTURE_TARGETS,
     PRESET_ASPECTS,
@@ -38,6 +36,7 @@ from ofmhelpers.features.refusals import (
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import ResultFile
+lazy from ofmhelpers.features.assets.models import ImageUpload
 
 logger = get_logger(__name__)
 
@@ -83,7 +82,7 @@ class PresetFields(Protocol):
     name: str
     prompt: str
     aspect_ratio: str
-    images: list[UploadFile]
+    images: list[ImageUpload]
 
 
 def visible(preset_id: int, owner_id: int) -> PicturePreset:
@@ -120,17 +119,8 @@ def _preset_aspect(value: str) -> str | None:
     return value
 
 
-def _saved_images(uploads: list[UploadFile], root: Path) -> list[str]:
-    paths = []
-    for upload in uploads:
-        if not upload.filename:
-            continue
-        saved = save_asset(upload, root)
-        if classify_kind(saved) != "image":
-            msg = "A preset takes images only"
-            raise RefusedError(msg)
-        paths.append(saved)
-    return paths
+def _saved_images(uploads: list[ImageUpload], root: Path) -> list[str]:
+    return [save_asset(upload, root) for upload in uploads]
 
 
 def _checked(images: list[str]) -> list[str]:
@@ -191,7 +181,7 @@ class Submitted(Protocol):
     provider: str
     api_key: str
     preset: int
-    pictures: list[UploadFile]
+    pictures: list[ImageUpload]
     pictures_manifest: str
 
 
@@ -221,9 +211,6 @@ def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
     most = settings.pictures.max_pictures
     if not 1 <= len(paths) <= most:
         msg = f"Add 1 to {most} pictures to recreate"
-        raise RefusedError(msg)
-    if any(classify_kind(p) != "image" for p in paths):
-        msg = "Pictures only"
         raise RefusedError(msg)
     return paths
 
