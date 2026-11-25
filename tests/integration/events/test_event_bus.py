@@ -23,7 +23,7 @@ from ofmhelpers.integrations.senders.telegram.fake import (
     flood,
     moved,
 )
-from ofmhelpers.log import _HideJobArguments
+from ofmhelpers.monitoring.log_records import RedactFilter
 
 _BASE = "https://ascend.test/"
 _CHAT, _GROUP = "111", "-1002222"
@@ -303,9 +303,9 @@ class TestOnTheRealQueue:
 
         assert fake_telegram().sent == []
 
-    def test_rq_failure_lines_hold_no_target(self, caplog):
-        hide = _HideJobArguments()
-        logging.getLogger("rq.worker").addFilter(hide)
+    def test_rq_failure_lines_keep_the_target_and_mask_secrets(self, caplog):
+        redact = RedactFilter()
+        logging.getLogger("rq.worker").addFilter(redact)
         fake_telegram().fail_next.append(
             error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
         )
@@ -315,12 +315,12 @@ class TestOnTheRealQueue:
             with caplog.at_level(logging.ERROR, logger="rq.worker"):
                 self._drain()
         finally:
-            logging.getLogger("rq.worker").removeFilter(hide)
+            logging.getLogger("rq.worker").removeFilter(redact)
 
         failures = [r for r in caplog.records if r.name == "rq.worker"]
         assert failures
-        shown = {r.arguments for r in failures}  # type: ignore[attr-defined]
-        assert shown == {"[hidden]"}
+        assert all(r.arguments for r in failures)  # type: ignore[attr-defined]
+        assert all("telegram" in str(r.arguments) for r in failures)  # type: ignore[attr-defined]
 
 
 def test_a_message_that_replaces_deletes_the_one_before_in_each_chat():

@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "json": {
+      "()": "ofmhelpers.monitoring.log_records.JsonFormatter"
+    }
+  },
+  "filters": {
+    "redact": {
+      "()": "ofmhelpers.monitoring.log_records.RedactFilter"
+    },
+    "context": {
+      "()": "ofmhelpers.monitoring.log_records.ContextFilter"
+    }
+  },
+  "handlers": {
+    "stdout": {
+      "class": "logging.StreamHandler",
+      "stream": "ext://sys.stdout",
+      "formatter": "json",
+      "filters": ["context", "redact"]
+    },
+    "logfire": {
+      "()": "ofmhelpers.monitoring.telemetry.logfire_handler",
+      "filters": ["context", "redact"]
+    }
+  },
+  "root": {
+    "handlers": ["stdout", "logfire"],
+    "level": "INFO"
+  },
+  "loggers": {
+    "uvicorn": {
+      "handlers": [],
+      "propagate": true
+    },
+    "uvicorn.error": {
+      "handlers": [],
+      "propagate": true
+    },
+    "uvicorn.access": {
+      "handlers": [],
+      "propagate": true,
+      "level": "INFO"
+    },
+    "rq": {
+      "level": "INFO",
+      "propagate": true
+    },
+    "rq.worker": {
+      "propagate": true
+    },
+    "httpx": {
+      "level": "WARNING"
+    },
+    "httpx2": {
+      "level": "WARNING"
+    },
+    "httpcore": {
+      "level": "WARNING"
+    },
+    "urllib3": {
+      "level": "WARNING"
+    },
+    "requests": {
+      "level": "WARNING"
+    },
+    "apscheduler": {
+      "level": "WARNING"
+    },
+    "openpyxl": {
+      "level": "WARNING"
+    }
+  }
+}

@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
 lazy from ofmhelpers.features.jobs.runner import Requeued
 
@@ -24,6 +26,10 @@ def requeue_once(note):
 
 def note_down(name):
     get_redis().rpush("ran", name)
+
+
+def log_context():
+    logging.getLogger("worker_tasks").info("worker context")
 
 
 def note_the_line():

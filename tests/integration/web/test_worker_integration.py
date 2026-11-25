@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import json
+
 import pytest
 import worker_tasks
 from rq import SimpleWorker, Worker
@@ -7,6 +9,7 @@ from rq.job import Job
 
 from ofmhelpers.background import recovery
 from ofmhelpers.cache import (
+    JobQueue,
     QueueName,
     active_job_ids,
     enqueue,
@@ -16,6 +19,7 @@ from ofmhelpers.cache import (
 )
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.log import configure_logging
 
 
 @pytest.fixture(autouse=True)
@@ -99,6 +103,36 @@ def test_worker_log_description_never_carries_the_job_arguments():
     assert rq_job.description == "ofmhelpers.features.jobs.runner.run_job"
     _drain_queue()
     assert get_job(job_id).status == "done"
+
+
+def test_put_once_description_never_carries_the_job_arguments():
+    key = "logging-description-test"
+
+    assert JobQueue(name=QueueName.DEFAULT).put_once(
+        key,
+        worker_tasks.note_down,
+        ("secret-api-key",),
+    )
+
+    rq_job = get_queue().fetch_job(key)
+    assert rq_job.description == "worker_tasks.note_down"
+    assert "secret-api-key" not in rq_job.description
+
+
+def test_worker_log_has_queue_and_rq_job_id(capsys):
+    configure_logging(force=True)
+    rq_job = enqueue(worker_tasks.log_context)
+
+    _drain_queue()
+
+    payloads = [
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("{")
+    ]
+    record = next(payload for payload in payloads if payload["msg"] == "worker context")
+    assert record["context"]["queue"] == "default"
+    assert record["context"]["rq_job_id"] == rq_job.id
 
 
 def _queue_run(queue: str) -> tuple[str, str]:

@@ -81,7 +81,6 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "OFM_GDRIVE_CHECK_INTERVAL_S": "86400",
         "OFM_GDRIVE_POSTING_BEFORE_H": "0",
         "OFM_GDRIVE_POSTING_AFTER_H": "0",
-        "OFM_LOG_ACCESS": "true",
         "OOPSIE_API_KEY_ADMIN": OOPSIE_FAKE_KEY,
         "BOUNCY_API_KEY_ADMIN": BOUNCY_FAKE_KEY,
         "GEMINI_API_KEY": GEMINI_FAKE_KEY,

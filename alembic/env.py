@@ -1,18 +1,16 @@
 # Copyright (C) 2026 jpkrajewski
 
-from logging.config import fileConfig
-
 from sqlalchemy import Column, Index, engine_from_config, pool
 from sqlalchemy.schema import Constraint, SchemaItem
 
 from alembic import context
 from ofmhelpers.config import settings
 from ofmhelpers.db.models import Base
+from ofmhelpers.log import configure_logging
 
 config = context.config
 
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name, disable_existing_loggers=False)
+configure_logging()
 
 config.set_main_option("sqlalchemy.url", settings.infra.database_url)
 

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import json
 import logging
 
 import pytest
@@ -8,7 +9,8 @@ from pydantic import ValidationError
 from ofmhelpers.integrations.senders.schema import MAX_TITLE, Event
 from ofmhelpers.integrations.senders.telegram import message_text
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
-from ofmhelpers.log import _config, _HideJobArguments
+from ofmhelpers.log import configure_logging
+from ofmhelpers.monitoring.log_records import RedactFilter
 from ofmhelpers.redact import MASK, redact
 
 _TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"
@@ -107,25 +109,39 @@ def test_a_time_a_ratio_or_a_dated_id_is_not_taken_for_a_token(text):
     assert redact(text) == text
 
 
-def test_rq_failure_lines_lose_the_jobs_arguments():
+def test_rq_failure_lines_keep_safe_arguments_and_mask_secrets():
+    api_key = "sk-" + "a1B2c3D4" * 6
     record = logging.makeLogRecord(
         {
             "name": "rq.worker",
             "levelno": logging.ERROR,
             "msg": "boom",
             "arguments": ("telegram", "-1001234567", {"title": "t"}),
-            "kwargs": {"api_key": "sk-secret"},
+            "kwargs": {"api_key": api_key, "attempt": 2},
             "func": "ofmhelpers.features.events.dispatch.deliver",
         },
     )
 
-    assert _HideJobArguments().filter(record)
+    assert RedactFilter().filter(record)
 
-    shown = logging.Formatter("%(arguments)s|%(kwargs)s|%(func)s").format(record)
-    assert shown == "[hidden]|[hidden]|ofmhelpers.features.events.dispatch.deliver"
+    assert record.arguments == ("telegram", "-1001234567", {"title": "t"})
+    assert record.kwargs == {"api_key": MASK, "attempt": 2}
 
 
-def test_the_app_logging_puts_that_filter_on_rqs_worker_logger():
-    loggers = _config("INFO", "text", access_log=False).loggers
+def test_rq_arguments_reach_the_json_record(capsys):
+    api_key = "sk-" + "a1B2c3D4" * 6
+    configure_logging(force=True)
 
-    assert loggers["rq.worker"].filters == ["hide_job_arguments"]
+    logging.getLogger("rq.worker").error(
+        "boom",
+        extra={
+            "arguments": ("telegram", "-1001234567"),
+            "kwargs": {"api_key": api_key, "attempt": 2},
+            "func": "ofmhelpers.features.events.dispatch.deliver",
+        },
+    )
+
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert payload["arguments"] == ["telegram", "-1001234567"]
+    assert payload["kwargs"] == {"api_key": MASK, "attempt": 2}
+    assert payload["func"] == "ofmhelpers.features.events.dispatch.deliver"

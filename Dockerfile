@@ -123,4 +123,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # the leftmost entry -- whatever the client sent -- so a made-up header per
 # request escaped the failed-login limit. With a list, uvicorn takes the
 # rightmost untrusted hop: the address nginx saw (prod net 172.18.0.0/16).
-CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1,172.16.0.0/12"]
+CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1,172.16.0.0/12", "--log-config", "/app/src/ofmhelpers/logging.json"]
