@@ -549,3 +549,31 @@ def test_done_accepts_an_explicit_empty_digest_acknowledgement(
 
     assert self_learn.main(["--done", "--allow-empty"]) == 0
     assert marker.exists()
+
+
+def test_the_digest_warns_when_session_and_audit_evidence_is_missing(tmp_path):
+    logs = tmp_path / "logs"
+    audit = tmp_path / "audit.jsonl"
+    local = NOW.astimezone().replace(tzinfo=None)
+    audit.write_text(
+        json.dumps(
+            {
+                "at": (local - timedelta(minutes=1)).isoformat(timespec="seconds"),
+                "event": "Stop",
+                "tool": "",
+                "verdicts": [],
+            },
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = self_learn.render(self_learn.digest(logs, audit, NOW))
+
+    assert "Transcript files: 0 recent of 0 discovered" in report
+    assert (
+        f"Newest audit entry: "
+        f"{(local - timedelta(minutes=1)).isoformat(timespec='seconds')}" in report
+    )
+    assert "WARNING: no session transcripts parsed" in report
+    assert "WARNING: newest audit entry predates the digest window" in report

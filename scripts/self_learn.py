@@ -119,6 +119,9 @@ class Digest(BaseModel):
     reviews: list[Repeat] = []
     task_stops: int = 0
     refused_pushes: int = 0
+    transcripts_found: int = 0
+    transcripts_recent: int = 0
+    newest_audit: str = ""
 
 
 def project_logs() -> Path:
@@ -526,8 +529,25 @@ def guard_blocks(audit: Path, since: datetime) -> list[Repeat]:
     return [Repeat(what=w, count=c) for w, c in counts.most_common(TOP)]
 
 
+def newest_audit_entry(audit: Path) -> str:
+    newest = ""
+    if not audit.is_file():
+        return newest
+    for line in audit.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        stamp = entry.get("at", "")
+        newest = max(newest, stamp)
+    return newest
+
+
 def digest(logs: Path, audit: Path, since: datetime) -> Digest:
     found = sessions(logs, since)
+    transcript_paths = list(logs.glob("*.jsonl"))
+    cutoff = since.timestamp()
+    recent = sum(path.stat().st_mtime >= cutoff for path in transcript_paths)
     errors = Counter(e for s in found for e in s.errors)
     return Digest(
         since=since.isoformat(timespec="minutes"),
@@ -542,7 +562,27 @@ def digest(logs: Path, audit: Path, since: datetime) -> Digest:
         reviews=_merged(r for s in found for r in s.reviews),
         task_stops=sum(s.task_stops for s in found),
         refused_pushes=sum(s.refused_pushes for s in found),
+        transcripts_found=len(transcript_paths),
+        transcripts_recent=recent,
+        newest_audit=newest_audit_entry(audit),
     )
+
+
+def evidence_warnings(d: Digest) -> list[str]:
+    warnings = []
+    if not d.costs:
+        warnings.append(
+            "WARNING: no session transcripts parsed; "
+            "missing evidence is not a clean session",
+        )
+    if not d.newest_audit:
+        warnings.append("WARNING: no audit entries discovered")
+    else:
+        newest = _when(d.newest_audit).replace(tzinfo=None)
+        since = _when(d.since).astimezone().replace(tzinfo=None)
+        if newest < since:
+            warnings.append("WARNING: newest audit entry predates the digest window")
+    return warnings
 
 
 def render(d: Digest) -> str:
@@ -555,6 +595,13 @@ def render(d: Digest) -> str:
             f"interrupted by the owner: {d.interrupted}, "
             f"tool calls the owner rejected: {d.rejected}"
         ),
+        "",
+        (
+            f"Transcript files: {d.transcripts_recent} recent of "
+            f"{d.transcripts_found} discovered"
+        ),
+        f"Newest audit entry: {d.newest_audit or 'none'}",
+        *evidence_warnings(d),
         "",
         "## Owner prompts (corrections, repeats and frustration hide here)",
         *(f"- {p.at} {p.session}: {p.text}" for p in d.prompts),
