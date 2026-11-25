@@ -25,7 +25,7 @@ RANK = {
     "cache": 1,
     "config": 1,
 }
-TOP_LEVEL_MODULES = {"acting", "log", "redact"}
+TOP_LEVEL_MODULES = {"acting", "log", "logging", "redact"}
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}
 MAX_ROUTE_LINES = 25
 QUEUE_MACHINERY = ("features/jobs/", "features/events/")

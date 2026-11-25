@@ -12,7 +12,9 @@ def _tree(path: Path) -> ast.Module:
 
 def test_application_modules_use_stdlib_loggers_directly():
     offenders = []
-    for path in (REPO / "src" / "ofmhelpers").rglob("*.py"):
+    paths = (REPO / "src" / "ofmhelpers").rglob("*.py")
+    paths = [*paths, *(REPO / "alembic").rglob("*.py")]
+    for path in paths:
         for node in ast.walk(_tree(path)):
             if not isinstance(node, ast.ImportFrom) or node.module != "ofmhelpers.log":
                 continue
@@ -33,6 +35,16 @@ def test_logging_bootstrap_does_not_import_application_configuration():
             imported.add(node.module)
 
     assert not any(name.startswith("ofmhelpers") for name in imported)
+
+
+def test_alembic_uses_the_json_bootstrap():
+    tree = _tree(REPO / "alembic" / "env.py")
+    calls = {
+        ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)
+    }
+
+    assert "configure_logging" in calls
+    assert "fileConfig" not in calls
 
 
 def test_logging_is_not_an_application_settings_group():

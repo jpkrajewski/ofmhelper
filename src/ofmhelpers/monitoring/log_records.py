@@ -3,7 +3,6 @@
 import contextlib
 import json
 import logging
-import os
 import re
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -12,6 +11,7 @@ from opentelemetry import trace
 from rq.job import get_current_job
 
 from ofmhelpers.acting import Via, current
+from ofmhelpers.config import settings
 from ofmhelpers.redact import MASK, redact
 
 _sensitive_name = re.compile(
@@ -53,7 +53,7 @@ class JsonFormatter(logging.Formatter):
         record = cast("_LogRecord", record)
         try:
             context = record.context
-        except AttributeError:
+        except AttributeError:  # silent: context is optional
             context = {}
         payload: dict[str, Any] = {
             "ts": datetime.fromtimestamp(record.created, UTC).isoformat(
@@ -62,20 +62,20 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),
-            "service": os.environ.get("OFM_SERVICE", "ofmhelpers"),
-            "release": os.environ.get("OFM_RELEASE", "dev"),
-            "environment": os.environ.get("OFM_ENV", "development"),
+            "service": "ofmhelpers",
+            "release": settings.telemetry.release,
+            "environment": settings.infra.environment,
             "process": record.process,
             "thread": record.threadName,
             "context": context,
         }
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             payload["arguments"] = record.arguments
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             payload["kwargs"] = record.kwargs
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             payload["description"] = record.description
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             payload["func"] = record.func
         if record.exc_info:
             payload["exc"] = redact(self.formatException(record.exc_info))
@@ -91,13 +91,13 @@ class RedactFilter(logging.Filter):
         record.args = _redacted(record.args)
         try:
             record.context = _redacted(record.context)
-        except AttributeError:
+        except AttributeError:  # silent: context is optional
             record.context = {}
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             record.arguments = _redacted(record.arguments)
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             record.kwargs = _redacted(record.kwargs)
-        with contextlib.suppress(AttributeError):
+        with contextlib.suppress(AttributeError):  # silent: optional record fields
             record.description = redact(str(record.description))
         return True
 
@@ -107,7 +107,7 @@ class ContextFilter(logging.Filter):
         record = cast("_LogRecord", record)
         try:
             context = record.context
-        except AttributeError:
+        except AttributeError:  # silent: context is optional
             context = {}
             record.context = context
         span_context = trace.get_current_span().get_span_context()

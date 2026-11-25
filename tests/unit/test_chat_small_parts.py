@@ -7,7 +7,8 @@ import pytest
 
 from ofmhelpers.db.chats.schema import ChatEvent, ChatPosition, ChatRead, ReadScope
 from ofmhelpers.features.notifications.service import money
-from ofmhelpers.log import _HideLoginCodes
+from ofmhelpers.monitoring.log_records import RedactFilter
+from ofmhelpers.redact import MASK
 
 
 @pytest.mark.parametrize(
@@ -38,8 +39,11 @@ def _access_line(path):
 @pytest.mark.parametrize(
     ("path", "shown"),
     [
-        ("/chatting/fanvue/callback?code=SECRET&state=abc", "code=***&state=abc"),
-        ("/auth/google/callback?state=abc&code=SECRET", "state=abc&code=***"),
+        (
+            "/chatting/fanvue/callback?code=SECRET&state=abc",
+            f"code={MASK}&state={MASK}",
+        ),
+        ("/auth/google/callback?state=abc&code=SECRET", f"state={MASK}&code={MASK}"),
         ("/home", "/home"),
         ("/generate?promo=code", "promo=code"),
     ],
@@ -47,7 +51,7 @@ def _access_line(path):
 def test_an_access_line_never_holds_a_login_code(path, shown):
     record = _access_line(path)
 
-    assert _HideLoginCodes().filter(record) is True
+    assert RedactFilter().filter(record) is True
 
     assert shown in record.getMessage()
     assert "SECRET" not in record.getMessage()
@@ -56,7 +60,7 @@ def test_an_access_line_never_holds_a_login_code(path, shown):
 def test_an_ordinary_log_line_is_left_alone():
     record = logging.LogRecord("x", logging.INFO, "", 0, "plain %s", ("words",), None)
 
-    _HideLoginCodes().filter(record)
+    RedactFilter().filter(record)
 
     assert record.getMessage() == "plain words"
 
