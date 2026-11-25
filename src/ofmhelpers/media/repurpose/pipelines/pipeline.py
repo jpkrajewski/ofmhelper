@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from itertools import repeat
 from pathlib import Path
 from typing import Self
@@ -8,7 +9,6 @@ lazy from collections.abc import Iterator
 import logfire
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.audio_check import BrokenAudioError, verify_audio
 from ofmhelpers.media.repurpose.pipelines.models import (
     PipelineSpec,
@@ -20,7 +20,7 @@ from ofmhelpers.media.repurpose.repurpose import Repurpose
 lazy from ofmhelpers.media.repurpose.checker import check
 lazy from ofmhelpers.media.repurpose.transformations.video import VideoSettings
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class StillLooksLikeSourceError(RuntimeError): ...

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from pathlib import Path
 from typing import Any, Protocol
 lazy from collections.abc import Callable
@@ -36,10 +37,9 @@ from ofmhelpers.features.refusals import (
     input_refused,
 )
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import ResultFile
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "pictures"
 LABEL = "Pictures"

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 lazy from collections.abc import Callable
@@ -12,9 +13,8 @@ from rq.job import Job, JobStatus, get_current_job
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import JOB_QUEUES, QueueName
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def get_queue(name: QueueName = QueueName.DEFAULT) -> Queue:

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -58,11 +59,10 @@ from ofmhelpers.features.refusals import (
     TryAgainError,
 )
 from ofmhelpers.integrations.ai_providers import tasks
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import exports
 lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class BatchStopped(BaseModel):

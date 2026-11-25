@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 
 from ofmhelpers.config import settings
@@ -14,10 +15,9 @@ from ofmhelpers.db.users.schema import (
     UserForm,
     normalized_email,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.users.schema import Identity, SavedKeys
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)

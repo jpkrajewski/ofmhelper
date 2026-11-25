@@ -1,16 +1,16 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from pydantic import BaseModel
 
 from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.senders.telegram.client import TelegramClient
 lazy from ofmhelpers.integrations.senders.telegram.models import Message
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _OFFSET = "telegram:updates:offset"
 _OFFSET_TTL_S = 7 * 86400

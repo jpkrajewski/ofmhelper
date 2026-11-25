@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import shutil
 import time
 from pathlib import Path
@@ -17,9 +18,8 @@ from ofmhelpers.features.edit.service import (
     prepared_dir,
 )
 from ofmhelpers.features.previews.render import previews_dir
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _strings(value: JsonValue) -> Iterator[str]:

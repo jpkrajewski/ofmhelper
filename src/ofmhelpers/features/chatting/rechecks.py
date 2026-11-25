@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import threading
 import time
 from contextlib import contextmanager
@@ -12,10 +13,9 @@ lazy from redis.lock import Lock
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.chats.schema import ChatPlatform, ChatRead, OpenWait
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _DUE = "chatting:wait-rechecks"
 _TOLD = "chatting:wait-told:"

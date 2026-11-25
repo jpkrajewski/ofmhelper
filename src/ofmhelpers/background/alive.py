@@ -1,10 +1,11 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.cache.queue import queue_loads
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.sentry import heartbeat
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def report_alive() -> None:

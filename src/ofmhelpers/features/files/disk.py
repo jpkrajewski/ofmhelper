@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import shutil
 from pathlib import Path
 from types import MappingProxyType
@@ -13,9 +14,8 @@ from ofmhelpers.features.assets.store import safe_filename
 from ofmhelpers.features.files.schema import DirEntry, FileEntry
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import ConflictError, NotFoundError, RefusedError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 DEFAULT_ROOT = "uploads"
 KEPT_OUT_OF_UPLOADS = ("backups",)

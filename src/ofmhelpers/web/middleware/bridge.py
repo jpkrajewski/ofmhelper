@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import re
 import time
 from typing import Literal
@@ -16,10 +17,9 @@ from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.short_links.schema import SelfClick
 from ofmhelpers.features.links import bridge as self_links
-from ofmhelpers.log import get_logger
 from ofmhelpers.web.templates_config import render
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class _Beacon(BaseModel):

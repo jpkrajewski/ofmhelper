@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 from functools import cached_property
 from http import HTTPStatus
 from typing import Any
@@ -29,9 +30,8 @@ from ofmhelpers.integrations.instagram.models import (
     TimelinePage,
     TimelinePost,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 ROOT = "https://www.instagram.com"
 

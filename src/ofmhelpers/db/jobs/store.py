@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from collections.abc import Callable, Collection
 from functools import lru_cache
@@ -30,10 +31,9 @@ from ofmhelpers.db.jobs.schema import (
     UserDay,
 )
 from ofmhelpers.db.users.store import agency_id, get_user
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import JobCost, JobMeta
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)

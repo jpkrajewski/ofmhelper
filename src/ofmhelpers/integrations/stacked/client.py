@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import time
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -36,9 +37,8 @@ from ofmhelpers.integrations.stacked.models import (
     WebhookDestination,
     WebhooksPage,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class KeyInfo(BaseModel):

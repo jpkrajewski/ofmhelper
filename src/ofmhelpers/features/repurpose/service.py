@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 from pathlib import Path
 from typing import Any, Protocol
@@ -19,14 +20,13 @@ from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.repurpose.models import RepurposeCard
 from ofmhelpers.features.storage.constants import StorageTask
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = StorageTask.SPOOFED
 PREFIX = "/spoof"

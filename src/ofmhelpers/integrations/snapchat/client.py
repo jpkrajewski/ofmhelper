@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import re
 from http import HTTPStatus
 
@@ -14,9 +15,8 @@ from ofmhelpers.integrations.snapchat.schema import (
     SnapchatProfile,
     SpotlightPost,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 ROOT = "https://www.snapchat.com"
 _NEXT_DATA = re.compile(

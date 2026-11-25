@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import time
 from typing import Any
 
@@ -14,10 +15,9 @@ from ofmhelpers.db.event_targets import store as event_targets
 from ofmhelpers.db.users import store as users
 from ofmhelpers.integrations.senders import SendError, senders
 from ofmhelpers.integrations.senders.schema import Event
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.senders import Sender
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _sleep = time.sleep
 _SLOT_S = 48 * 3600

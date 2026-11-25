@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from pathlib import Path
 lazy from collections.abc import Sequence
 
@@ -8,14 +9,13 @@ import sqlalchemy as sa
 from alembic import op
 from ofmhelpers.config import settings
 from ofmhelpers.db.encrypted import encrypt
-from ofmhelpers.log import get_logger
 
 revision: str = "b1c2d3e4f5a7"
 down_revision: str | None = "a1c2e3f4b5d6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _move_shared_file() -> None:

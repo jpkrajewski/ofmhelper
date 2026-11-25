@@ -1,4 +1,5 @@
 # Copyright (C) 2026 jpkrajewski
+import logging
 import re
 from typing import Any
 lazy from collections.abc import Callable
@@ -22,10 +23,9 @@ from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.http import parsed
 from ofmhelpers.integrations.ai_providers.spec import Fields
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 SUBMIT_PATH = "/wan/api/v1/services/aigc/video-generation/video-synthesis"
 TASKS_PATH = "/v1/tasks"

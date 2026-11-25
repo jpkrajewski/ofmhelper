@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -10,9 +11,8 @@ lazy from fastapi.responses import Response
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.signin import SignInError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 STATE_COOKIE = "ofm_signin"
 _COOKIE_PATH = "/auth/"

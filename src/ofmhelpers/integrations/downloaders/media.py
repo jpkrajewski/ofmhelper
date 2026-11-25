@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 import shutil
 import subprocess
@@ -16,10 +17,9 @@ from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders import generic, images, kvs, savers
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.integrations.downloaders.sites import images_first
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.video_probe import duration_s
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _OUTPUT_ROOT = generic.DownloadConfig().output_dir
 

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import math
 from collections.abc import Callable
 from typing import Any, Self
@@ -32,11 +33,10 @@ from ofmhelpers.features.trials.state import (
     change_reel,
     load,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard
 lazy from ofmhelpers.db.jobs.schema import Job
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "trials"
 RUNS: frozendict[str, Callable[..., object]] = frozendict(

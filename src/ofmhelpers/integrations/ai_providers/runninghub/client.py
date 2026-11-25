@@ -1,4 +1,5 @@
 # Copyright (C) 2026 jpkrajewski
+import logging
 from pathlib import Path
 from typing import Any, NoReturn
 lazy from collections.abc import Mapping
@@ -15,10 +16,9 @@ from ofmhelpers.integrations.ai_providers.runninghub.models import (
     raise_for,
 )
 from ofmhelpers.integrations.ai_providers.uploads import memoized, upload_cache_key
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import fitted
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 API = "/openapi/v2"
 

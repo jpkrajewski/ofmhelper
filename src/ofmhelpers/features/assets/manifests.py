@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 lazy from collections.abc import Sequence
@@ -11,9 +12,8 @@ from ofmhelpers.features.assets import ref_usage
 from ofmhelpers.features.assets.store import in_asset_root, save_asset
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import AssetRefusedError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:

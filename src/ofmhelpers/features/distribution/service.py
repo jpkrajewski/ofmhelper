@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import datetime as dt
+import logging
 import time
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -21,12 +22,11 @@ from ofmhelpers.integrations.pinterest import (
     only_pinterest,
     session_expires_at,
 )
-from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
     from ofmhelpers.db.distribution.schema import Channel, PostCounts
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PLATFORM = "pinterest"
 NOT_LOGGED_IN = "Not logged in to Pinterest: log in on pinterest.com and export again"

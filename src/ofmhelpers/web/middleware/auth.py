@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 import time
 from urllib.parse import quote, urlsplit
@@ -28,12 +29,11 @@ from ofmhelpers.features.users.viewing import (
     viewing_ended,
     viewing_started,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.sentry import name_user
 from ofmhelpers.web.access import Action, Area, opens
 lazy from ofmhelpers.db.users.schema import Viewer
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _KEYS = ("user_id", "email", "role")
 _STAMP = "stamp"

@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.senders.telegram.client import (
     TelegramClient,
@@ -8,10 +10,9 @@ from ofmhelpers.integrations.senders.telegram.client import (
     telegram_client,
 )
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.senders.schema import Event
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _CUT = "…"
 _GAP = "\n\n"

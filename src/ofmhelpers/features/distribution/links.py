@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.db.distribution import store
 from ofmhelpers.db.self_links import store as self_links
 from ofmhelpers.db.short_links import store as short_links
@@ -7,10 +9,9 @@ from ofmhelpers.db.short_links.catalog import provider_infos
 from ofmhelpers.db.short_links.schema import PlannedLink
 from ofmhelpers.features.links import sync
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.distribution.schema import ModelPreset
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PROVIDER = "self"
 

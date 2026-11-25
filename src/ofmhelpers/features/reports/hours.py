@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
@@ -8,10 +9,9 @@ from ofmhelpers.db.report_runs.schema import DayCount
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links.errors import LinkError
 from ofmhelpers.integrations.short_links.providers import get_link_provider
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.short_links.models import ShortLink
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _HOURS = 24
 

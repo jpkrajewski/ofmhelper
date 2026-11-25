@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
@@ -18,9 +19,8 @@ from ofmhelpers.features.signin.state import (
 from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.storage import storage_choice
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Callback(BaseModel):

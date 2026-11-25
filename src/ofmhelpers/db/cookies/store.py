@@ -1,14 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 
 from ofmhelpers.db.cookies.repository import CookieRepository
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.watched_profiles.store import watchers
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.cookies.schema import StoredCookies
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "for_user",

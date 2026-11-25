@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import os
 import shutil
 import time
@@ -8,9 +9,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from ofmhelpers.features.server.models import Folder, Host, Usage
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PROC = Path("/proc")
 

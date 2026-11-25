@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import math
 import threading
 import time
@@ -22,10 +23,9 @@ from ofmhelpers.features.reels.thumbs import kept_thumb
 from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders.generic import video_info
 from ofmhelpers.integrations.downloaders.models import VideoInfo
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.telemetry import in_this_trace
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Price(BaseModel):

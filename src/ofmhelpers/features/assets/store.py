@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import os
 import secrets
 import shutil
@@ -18,11 +19,10 @@ from ofmhelpers.features.kinds import (
     classify_kind,
 )
 from ofmhelpers.features.refusals import AssetRefusedError
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.heic import HEIC_EXTENSIONS, heic_to_jpeg
 lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 EDIT_STAGING = ".edit"
 

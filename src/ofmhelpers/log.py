@@ -15,7 +15,3 @@ def configure_logging(*, force: bool = False) -> None:
     with Path(__file__).with_name("logging.json").open(encoding="utf-8") as config_file:
         logging.config.dictConfig(json.load(config_file))
     _configured = True
-
-
-def get_logger(name: str) -> logging.Logger:
-    return logging.getLogger(name)

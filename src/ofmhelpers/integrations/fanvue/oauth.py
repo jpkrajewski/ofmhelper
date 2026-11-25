@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from http import HTTPStatus
 from urllib.parse import urlencode
@@ -12,9 +13,8 @@ from ofmhelpers.db.chats.schema import ChatTokens
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.fanvue.errors import FanvueError
 from ofmhelpers.integrations.fanvue.models import TokenReply
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:

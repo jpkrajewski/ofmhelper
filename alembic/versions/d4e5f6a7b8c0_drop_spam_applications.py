@@ -1,18 +1,18 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
 from alembic import op
-from ofmhelpers.log import get_logger
 
 revision: str = "d4e5f6a7b8c0"
 down_revision: str | None = "c3d4e5f6a7b9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _LINK = r"(https?://|www\.|\[/?url|<a\s|\[/?link)"
 _FIELDS = (

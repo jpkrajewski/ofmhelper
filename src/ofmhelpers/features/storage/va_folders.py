@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.db.drive_folders import store
@@ -12,10 +14,9 @@ from ofmhelpers.integrations.storage import (
     FolderGoneError,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.users.schema import User
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class StorageServiceVaFolders(BaseModel, frozen=True, arbitrary_types_allowed=True):

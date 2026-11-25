@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from types import MappingProxyType
 lazy from pathlib import Path
 
@@ -16,9 +17,8 @@ from ofmhelpers.features.trials.state import (
     change,
     load,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _BATCH = 20
 

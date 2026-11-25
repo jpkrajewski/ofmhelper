@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import math
 import mimetypes
 from contextlib import contextmanager
@@ -43,14 +44,13 @@ from ofmhelpers.integrations.ai_providers.uploads import (
     remote_file_exists,
     upload_cache_key,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.video_mp4 import CONVERTIBLE_SUFFIXES
 lazy from ofmhelpers.integrations.ai_providers.higgsfield.fake import (
     install as install_fake,
 )
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 UPLOAD_TYPES = frozenset(
     {

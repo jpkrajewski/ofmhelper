@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import mimetypes
 from pathlib import Path
 
@@ -35,12 +36,11 @@ from ofmhelpers.integrations.storage import (
     FolderGoneError,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.storage.jobs import upload_files
 
 type Folder = StoredFolder | VaFolder
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _files(job_id: str, readers: Readers) -> list[_UploadFile]:

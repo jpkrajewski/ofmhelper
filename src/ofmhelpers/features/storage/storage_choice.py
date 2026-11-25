@@ -1,11 +1,12 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.storage import jobs as storage_jobs
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.users.schema import StorageProvider
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def use(user_id: int, provider: StorageProvider) -> None:

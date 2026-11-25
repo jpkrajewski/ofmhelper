@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import math
 import subprocess
 import time
@@ -44,11 +45,10 @@ from ofmhelpers.integrations.ai_providers.errors import (
 )
 from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders.media import downloaded
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions
 from ofmhelpers.media.video_probe import duration_s
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _owner(job: Job | None) -> int | None:

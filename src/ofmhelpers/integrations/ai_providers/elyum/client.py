@@ -1,4 +1,5 @@
 # Copyright (C) 2026 jpkrajewski
+import logging
 import mimetypes
 import re
 from typing import Any, NoReturn
@@ -22,9 +23,8 @@ from ofmhelpers.integrations.ai_providers.uploads import (
     reference_copy,
     upload_cache_key,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 API = "/v1"
 ACCEPTED_SUFFIXES = frozenset(

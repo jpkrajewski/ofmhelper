@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import math
 import tempfile
 import time
@@ -30,10 +31,9 @@ from ofmhelpers.integrations.llm import (
     llm_class,
 )
 from ofmhelpers.integrations.llm.frames import contact_sheet, still_times, video_seconds
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.llm.base import Answered
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class _NoAnswer(BaseModel):

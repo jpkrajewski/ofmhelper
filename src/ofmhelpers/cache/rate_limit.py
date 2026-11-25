@@ -1,13 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from redis.exceptions import RedisError
 lazy from starlette.requests import Request
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 LOGIN_BUCKET = "login_failures"
 WRITE_BUCKET = "write"

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import mimetypes
 import time
 from pathlib import Path
@@ -33,14 +34,13 @@ from ofmhelpers.integrations.storage import (
     RECONNECT,
     DriveError,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
 lazy from ofmhelpers.db.drive_folders.schema import DriveFile
 lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
 lazy from ofmhelpers.features.storage.service import StorageService
 lazy from ofmhelpers.integrations.storage import StorageClient
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def start_reviews(job_id: str, user_id: int, paths: list[str | None]) -> list[int]:

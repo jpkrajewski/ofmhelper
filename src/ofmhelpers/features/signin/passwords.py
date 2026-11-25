@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from urllib.parse import urlencode
 
 lazy from fastapi import Request
@@ -19,9 +20,8 @@ from ofmhelpers.features.signin.state import STATE_COOKIE, unseal
 from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.signin.owner import owner_code, password_ok
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _TOO_MANY = "Too many failed attempts. Try again later."
 

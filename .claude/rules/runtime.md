@@ -21,5 +21,5 @@ Source: The Twelve-Factor App (https://12factor.net/, one page per factor: `http
 8. **Concurrency** (`/concurrency`): more load = more worker processes per queue (`InfraSettings.queues`), not threads inside one. Web is HTTP only (the sweeps are their own service, exactly one); worker services have no `container_name`, so they scale.
 9. **Disposability** (`/disposability`): a process can be killed at any moment. Fast start, clean stop on SIGTERM, jobs resumable or safely repeatable.
 10. **Dev/prod parity** (`/dev-prod-parity`): same images, same services, same versions; dev differs only by the overlay file and runs on prod data.
-11. **Logs** (`/logs`): the app writes events to stdout through `get_logger`; it never manages log files. Collection is Logfire's job.
+11. **Logs** (`/logs`): modules use stdlib `logging.getLogger(__name__)`; the stdlib-only bootstrap loads `logging.json` and emits JSON Lines to stdout and Logfire. Docker owns container log files and rotates them (`json-file`, 25 MB, three generations); the app never manages log files.
 12. **Admin processes** (`/admin-processes`): one-off work (migrations, backfills) runs from the same image and code as the app (`migrate` service, `python -m ...`), never a script outside the repo.

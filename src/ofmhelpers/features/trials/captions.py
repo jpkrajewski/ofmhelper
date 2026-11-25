@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -10,9 +11,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.trials import media
 from ofmhelpers.features.trials.state import CAPTION_MAX
 from ofmhelpers.integrations.llm import LLMError, LLMUse, MediaKind, Prompt, get_llm
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 CHOICES = 5
 

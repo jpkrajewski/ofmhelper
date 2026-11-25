@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 from functools import cache, wraps
 from typing import Protocol, TypeVar, cast, get_type_hints
 lazy from collections.abc import Callable, Sequence
@@ -11,11 +12,10 @@ lazy from redis import Redis
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
 T = TypeVar("T")
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class RepositoryCacheLike(Protocol):

@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import asyncio
+import logging
 import time
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -17,14 +18,13 @@ from ofmhelpers.db.drive_folders import store as drive_folders
 from ofmhelpers.db.jobs.schema import JobStatus
 from ofmhelpers.db.jobs.store import list_jobs_page
 from ofmhelpers.features.notifications.schema import Notification, Notifications, Reader
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.chats.schema import OpenWait
 lazy from ofmhelpers.db.drive_folders.models import DriveTarget
 lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.trials.constants import TrialsPhase, trials_constants
 lazy from ofmhelpers.features.trials.schema import Made
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _CHANNEL = "notifications"
 _CHATS = "chats"

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 lazy from pathlib import Path
 
@@ -10,13 +11,12 @@ from ofmhelpers.features.previews.render import (
     write_video_preview,
     write_video_thumb,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 from ofmhelpers.media.recorder import load_profile
 from ofmhelpers.media.repurpose.devices import load_device
 from ofmhelpers.media.video_probe import duration_s
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _AI_HEIGHT = 640
 _AI_FPS = 10

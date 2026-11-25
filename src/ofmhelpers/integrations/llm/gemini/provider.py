@@ -1,4 +1,5 @@
 # Copyright (C) 2026 jpkrajewski
+import logging
 import re
 import time
 from http import HTTPStatus
@@ -30,11 +31,10 @@ from ofmhelpers.integrations.llm.models import (
     TextPart,
     Usage,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
 lazy from ofmhelpers.integrations.llm.models import Prompt
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _REFUSED = {
     "SAFETY",

@@ -1,14 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
 from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache.redis import get_redis
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @contextmanager

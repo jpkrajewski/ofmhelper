@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from typing import Any
 lazy from collections.abc import Mapping
@@ -15,9 +16,8 @@ from ofmhelpers.integrations.apify.models import (
     LimitsEnvelope,
     RunEnvelope,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 API = "https://api.apify.com/v2"
 _WAIT_S = 60

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from urllib.parse import urlsplit
 lazy from collections.abc import Callable
@@ -31,11 +32,10 @@ from ofmhelpers.features.reports.format import (
 from ofmhelpers.features.reports.schedule import Due, due, local
 from ofmhelpers.integrations.senders.schema import MAX_TEXT
 from ofmhelpers.integrations.short_links.providers import link_providers
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.report_runs.schema import ReportRun
 lazy from ofmhelpers.db.short_links.models import ShortLink
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 NAME = "daily"
 _FAILED_KEY = "reports:daily:failed"

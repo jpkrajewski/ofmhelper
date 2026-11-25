@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from typing import Protocol
 lazy from collections.abc import Iterator, Mapping
 
@@ -19,9 +20,8 @@ from ofmhelpers.integrations.stacked.errors import (
     StackedAuthError,
     StackedForbiddenError,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class KeyRing(Protocol):

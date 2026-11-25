@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from pathlib import Path
 from typing import Any
 lazy from collections.abc import Callable
@@ -25,10 +26,9 @@ from ofmhelpers.integrations.ai_providers.base import (
 )
 from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import Fields, ModelSpec
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "ai"
 

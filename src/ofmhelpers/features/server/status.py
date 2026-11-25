@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from pathlib import Path
 
@@ -13,9 +14,8 @@ from ofmhelpers.db.jobs.store import running_jobs
 from ofmhelpers.db.users.store import list_users
 from ofmhelpers.features.server import host
 from ofmhelpers.features.server.models import Host, RunningJob, ServerStatus
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def duration(seconds: float) -> str:

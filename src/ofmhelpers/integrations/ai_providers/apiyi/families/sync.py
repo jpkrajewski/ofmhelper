@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import base64
+import logging
 import secrets
 from abc import abstractmethod
 from pathlib import Path
@@ -17,10 +18,9 @@ from ofmhelpers.integrations.ai_providers.apiyi.families import Family
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _SUFFIX = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 

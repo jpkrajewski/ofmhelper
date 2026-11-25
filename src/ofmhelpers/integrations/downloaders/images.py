@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import subprocess
 import time
 from pathlib import Path
@@ -10,9 +11,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations.cookie_jar import cookie_file
 from ofmhelpers.integrations.downloaders import fake
 from ofmhelpers.integrations.downloaders.models import DownloadResult
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _LOGIN_WALLS = {
     "redirect to login page": (

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
@@ -8,9 +9,8 @@ from sqlalchemy.types import TypeDecorator
 lazy from sqlalchemy.engine import Dialect
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class VaultError(RuntimeError): ...

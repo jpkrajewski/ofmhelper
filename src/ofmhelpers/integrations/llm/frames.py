@@ -1,18 +1,17 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import math
 import tempfile
 from pathlib import Path
-lazy import logging
 
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, ConfigDict
 
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.hdr import sdr_filters
 
-logger: logging.Logger = get_logger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 _END_MARGIN_S = 0.1
 _LABEL_PAD = 4

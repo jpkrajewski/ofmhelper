@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import datetime as dt
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Never
@@ -44,13 +45,12 @@ from ofmhelpers.integrations.storage import (
     FolderItems,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.telemetry import in_this_trace
 lazy from ofmhelpers.config.types import AccountFolder
 lazy from ofmhelpers.db.drive_folders.schema import StoredFolders
 lazy from ofmhelpers.features.storage import jobs
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def enabled() -> bool:

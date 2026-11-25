@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import time
 
 from ofmhelpers.config import settings
@@ -8,10 +9,9 @@ from ofmhelpers.db.chats import store as chats
 from ofmhelpers.db.chats.schema import DeliveryKind
 from ofmhelpers.db.report_runs import store as report_runs
 from ofmhelpers.features.events import Event, emit
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.reports.daily import NAME as DAILY_NAME
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 SLOT = "chatting.mass"
 _DAY = 86400

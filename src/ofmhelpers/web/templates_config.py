@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -18,14 +19,13 @@ from ofmhelpers.db.tracked_accounts.schema import ago
 from ofmhelpers.features.storage.posting import window as posting_window
 from ofmhelpers.features.users.presence import idle_limit_s
 from ofmhelpers.features.users.viewing import makers
-from ofmhelpers.log import get_logger
 from ofmhelpers.web.access import Action, Area, opens
 from ofmhelpers.web.nav import nav, nav_of
 from ofmhelpers.web.time_zones import TIME_ZONES, time_zone
 lazy from ofmhelpers.db.users.schema import Viewer
 lazy from ofmhelpers.features.users.viewing import Maker
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"

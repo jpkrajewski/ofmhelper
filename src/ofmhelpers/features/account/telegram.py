@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 import time
 
@@ -15,10 +16,9 @@ from ofmhelpers.features.events.dispatch import deliver_to
 from ofmhelpers.features.refusals import UnavailableError
 from ofmhelpers.integrations.senders.schema import Event
 from ofmhelpers.integrations.senders.telegram.client import TelegramError, bot_name
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.senders.telegram.inbox import Start
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 SENDER = "telegram"
 NOT_SET_UP = "Telegram is not set up on this server"

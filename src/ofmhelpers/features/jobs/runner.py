@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from typing import Any
 lazy from collections.abc import Callable
 
@@ -43,11 +44,10 @@ from ofmhelpers.integrations.ai_providers.errors import (
 )
 from ofmhelpers.integrations.apify.client import ApifyCreditError
 from ofmhelpers.integrations.llm.errors import LLMAuthError
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.sentry import user_scope
 from ofmhelpers.redact import redact
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 DEACTIVATED = "Not run: the account was deactivated"
 

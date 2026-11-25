@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from itertools import islice
 
@@ -30,10 +31,9 @@ from ofmhelpers.integrations.socials.platforms.base import Platform
 from ofmhelpers.integrations.socials.platforms.instagram_apify import (
     ApifyInstagramSource,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MEDIA_URL: TypeAdapter[str] = TypeAdapter(MediaUrl)
 

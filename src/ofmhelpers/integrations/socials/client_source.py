@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import random
 import time
 from typing import ClassVar
@@ -18,12 +19,11 @@ from ofmhelpers.integrations.socials.sources import (
     Refusal,
     ScanTarget,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.socials.models import AccountStats
 
 type Fetch = Callable[[str, str | None, str | None], AccountStats]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class _OfflineError(Exception): ...

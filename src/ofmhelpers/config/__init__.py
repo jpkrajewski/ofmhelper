@@ -30,7 +30,6 @@ from ofmhelpers.config.settings import (
     KieAISettings,
     LinksSettings,
     LLMSettings,
-    LoggingSettings,
     PicturesSettings,
     PinterestSettings,
     ReportsSettings,
@@ -245,10 +244,6 @@ class Settings:
     @property
     def chatting(self) -> ChattingSettings:
         return self._group(ChattingSettings)
-
-    @property
-    def logging(self) -> LoggingSettings:
-        return self._group(LoggingSettings)
 
     @property
     def reports(self) -> ReportsSettings:

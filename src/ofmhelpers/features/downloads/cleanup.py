@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
@@ -16,9 +17,8 @@ from ofmhelpers.features.assets.store import assets_root_for_user
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _BATCH = 50
 type Rule = Literal["unused", "cloned", "max"]

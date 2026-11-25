@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from http import HTTPStatus
 from urllib.parse import urlencode
 
@@ -16,9 +17,8 @@ from ofmhelpers.integrations.storage.dropbox.schema import (
     DropboxAccount,
     DropboxGrant,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:

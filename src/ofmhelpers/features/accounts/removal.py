@@ -1,15 +1,15 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 lazy from collections.abc import Callable
 
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.catalog import services
 from ofmhelpers.db.tracked_accounts.store import untrack
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.devices.models import Device, DeviceLogin
 lazy from ofmhelpers.features.storage.service import StorageServiceFolders
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _tracked_ids(logins: list[DeviceLogin]) -> list[int]:

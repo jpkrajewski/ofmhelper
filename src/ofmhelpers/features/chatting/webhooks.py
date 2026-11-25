@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from typing import Any
 lazy from collections.abc import Mapping
@@ -22,11 +23,10 @@ from ofmhelpers.features.chatting.sources import configured_sources
 from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.features.reports.mass import tell_mass
 from ofmhelpers.integrations.chat_source import ChatSourceError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.chats.schema import ChatModel, ChatModels
 lazy from ofmhelpers.integrations.chat_source import ChatSource
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _SHARED_DESTINATION = "shared"
 _BULK_SEND = "bulk:"

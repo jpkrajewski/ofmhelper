@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -20,7 +21,6 @@ from ofmhelpers.integrations.short_links.errors import (
     QuotaError,
     RateLimitedError,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.short_links.catalog.schema import (
     LinkDays,
     LinkHours,
@@ -33,7 +33,7 @@ lazy from ofmhelpers.db.short_links.catalog.schema import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class RequestHeaders(BaseModel):

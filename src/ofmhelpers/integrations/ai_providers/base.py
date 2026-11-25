@@ -2,6 +2,7 @@
 
 import importlib
 import inspect
+import logging
 import pkgutil
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
@@ -19,13 +20,12 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.schema import KeySlot
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class TaskState(BaseModel):

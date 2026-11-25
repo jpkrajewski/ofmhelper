@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -44,10 +45,9 @@ from ofmhelpers.integrations.instagram import (
     ProfileHandle,
     ReelDownload,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.telemetry import in_this_trace
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _DOWNLOADS = TypeAdapter(list[ReelDownload])
 

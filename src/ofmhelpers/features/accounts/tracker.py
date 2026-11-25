@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -25,10 +26,9 @@ from ofmhelpers.integrations.socials import (
     get_platform,
     scan_through,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 UNREACHED = "No source could read it now -- retried at the next scan"
 

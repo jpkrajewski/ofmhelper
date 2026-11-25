@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from pathlib import Path
 lazy from collections.abc import Iterator
@@ -10,9 +11,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import files_naming
 from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.integrations.ai_providers import tasks
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MEDIA = {"image", "video", "audio"}
 

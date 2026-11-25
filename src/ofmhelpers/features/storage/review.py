@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
@@ -17,10 +18,9 @@ from ofmhelpers.integrations.storage import (
     ScopedDrive,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.config.types import AccountFolder
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @contextmanager

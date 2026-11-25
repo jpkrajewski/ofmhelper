@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 lazy from collections.abc import Callable
 
@@ -18,10 +19,9 @@ from ofmhelpers.integrations.senders.telegram.client import (
     bot_name,
     telegram_client,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.senders.schema import Event
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 ASKS: dict[str, Callable[[], list[Event]]] = {
     "money": daily.money_now,

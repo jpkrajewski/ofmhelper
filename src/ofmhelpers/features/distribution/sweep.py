@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import random
 import time
 from itertools import groupby
@@ -16,11 +17,10 @@ from ofmhelpers.features.distribution.sources import Sources
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.features.storage.client import storage_of
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.distribution.schema import Channel, ModelPreset
 lazy from ofmhelpers.features.storage.service import StorageService
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 CUT_OFF = "Cut off (the server restarted while it was being pinned); tried again"
 _DAY_S = 86400

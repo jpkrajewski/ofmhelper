@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import io
+import logging
 lazy from pathlib import Path
 
 import requests
@@ -9,9 +10,8 @@ from PIL import Image, UnidentifiedImageError
 from ofmhelpers.config import settings
 from ofmhelpers.features.previews.render import previews_dir, write_atomic
 from ofmhelpers.integrations import egress
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def thumb_path(code: str) -> Path:

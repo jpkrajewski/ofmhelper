@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import asyncio
+import logging
 import signal
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -37,11 +38,11 @@ from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.trials import posted as trials_posted
 from ofmhelpers.features.users import idle as va_idle
 from ofmhelpers.features.viral import cleanup as viral_cleanup
-from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.log import configure_logging
 from ofmhelpers.monitoring.sentry import HEARTBEAT_S, configure_sentry
 from ofmhelpers.monitoring.telemetry import configure_telemetry, flush_telemetry
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _always() -> bool:

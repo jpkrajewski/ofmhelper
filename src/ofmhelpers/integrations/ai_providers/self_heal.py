@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import random
 import re
 import time
@@ -15,7 +16,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import (
     ModelSpec,
     OutputKind,
@@ -25,7 +25,7 @@ lazy from ofmhelpers.integrations.ai_providers.spec import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _JITTER = 0.25
 CALLBACK_PATH = "/events/ai"

@@ -1,16 +1,16 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from abc import abstractmethod
 from typing import ClassVar
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.tracked_accounts.models import PlatformNames
 from ofmhelpers.integrations.socials.client_source import LoginSource, ProxySource
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.socials.models import AccountStats
 lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Platform(PlatformNames):

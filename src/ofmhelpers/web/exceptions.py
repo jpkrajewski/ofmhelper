@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
 from typing import Any
@@ -26,11 +27,10 @@ from ofmhelpers.features.refusals import (
 )
 from ofmhelpers.features.refusals import NotFoundError as MissingError
 from ofmhelpers.features.trials.folder import NotFoundError
-from ofmhelpers.log import get_logger
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.middleware.frame_guard import FRAME_HEADERS
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 MESSAGE = "Something went wrong. Try again."
 

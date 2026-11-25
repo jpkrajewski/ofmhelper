@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 lazy from pathlib import Path
 
@@ -20,10 +21,9 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 VIDEOS = "/v1/videos"
 CONTENT = "/content"

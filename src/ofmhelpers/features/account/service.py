@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 lazy from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict, SkipValidation
@@ -29,9 +30,8 @@ from ofmhelpers.integrations.stacked import (
     StackedError,
     StackedForbiddenError,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 UNKNOWN_PROVIDER = "Unknown provider"
 _LINK_NOTES = {

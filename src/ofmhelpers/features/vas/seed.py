@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import argparse
+import logging
 import random
 import uuid
 from datetime import datetime, timedelta
@@ -18,9 +19,9 @@ from ofmhelpers.features.clone_pricing.pricing import UnpricedError, clone_prici
 from ofmhelpers.features.clone_pricing.targets import clone_targets
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.log import configure_logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PREFIX = "seed-"
 DAYS_BACK = (0, 1, 2, 3, 5, 6, 9, 12, 16, 20)

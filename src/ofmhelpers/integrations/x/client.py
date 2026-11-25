@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 import re
 from http import HTTPStatus
 
@@ -15,9 +16,8 @@ from ofmhelpers.integrations.x.schema import (
     XPost,
     XProfile,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 ROOT = "https://x.com"
 LOGGED_OUT_POSTS = 5

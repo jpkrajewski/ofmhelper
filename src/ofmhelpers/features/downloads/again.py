@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,12 +10,11 @@ from ofmhelpers.db.downloads import store
 from ofmhelpers.db.jobs.store import get_job, hide_job, running_with_links
 from ofmhelpers.features.jobs.schema import JobQueued, error_reason
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.downloads.schema import Download
 lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.downloads.restarts import RESTARTS
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASKS = frozenset({"download_media", "download_videos", "download_images"})
 NO_DOWNLOAD = "No such download"

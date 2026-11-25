@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import contextvars
+import logging
 import math
 import shutil
 import threading
@@ -35,9 +36,8 @@ from ofmhelpers.features.refusals import input_refused
 from ofmhelpers.integrations.ai_providers import runner, tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider, uploader
 from ofmhelpers.integrations.ai_providers.errors import ProviderGenerationError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Target(CloneTarget):

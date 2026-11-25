@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import datetime as dt
+import logging
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,13 +12,12 @@ from ofmhelpers.features.storage.service import (
     StorageServiceFolders,
     StorageServiceReview,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.distribution.schema import ModelPreset
 lazy from ofmhelpers.db.drive_folders.models import DriveCard
 lazy from ofmhelpers.db.drive_folders.schema import DriveFile
 lazy from ofmhelpers.features.storage.models import ReviewPlace
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _KINDS = frozendict({"image": PostKind.image, "video": PostKind.video})
 _EPOCH = dt.datetime.fromtimestamp(0, dt.UTC)

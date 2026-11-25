@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import importlib.util
+import logging
 import random
 import subprocess
 from functools import lru_cache
@@ -27,11 +28,10 @@ from ofmhelpers.integrations.downloaders.models import (
     YtDlpOptions,
 )
 from ofmhelpers.integrations.outbound import ProxyPool
-from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 from ofmhelpers.media.video_probe import duration_s
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class _ProxySettings(Protocol):

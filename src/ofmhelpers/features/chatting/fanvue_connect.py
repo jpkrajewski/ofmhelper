@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 
 from redis.exceptions import RedisError
@@ -12,9 +13,8 @@ from ofmhelpers.features.chatting.webhooks import sync_done_key
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.integrations.fanvue import FanvueClient, oauth
 from ofmhelpers.integrations.pkce import pkce_pair
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _PLATFORM = ChatPlatform.FANVUE
 _AGENCY_ROLES = frozenset({"agency", "agency_admin"})

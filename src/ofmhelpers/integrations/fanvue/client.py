@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from http import HTTPStatus
 from typing import Any
@@ -27,9 +28,8 @@ from ofmhelpers.integrations.fanvue.models import (
     SubscriptionItem,
     SubscriptionsPage,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class BearerHeader(BaseModel):

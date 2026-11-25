@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from pydantic import BaseModel, Field
@@ -7,9 +8,8 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _PREFIX = "aigen:task:"
 

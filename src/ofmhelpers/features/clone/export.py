@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import subprocess
 from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
@@ -10,10 +11,9 @@ from ofmhelpers.db.jobs.schema import ResultFile
 from ofmhelpers.db.jobs.store import merge_params
 from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.refusals import ResumableError
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions, get_export
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 EXPORT_FAILURES = "export_failures"
 

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import random
 import zlib
 from functools import partial
@@ -37,13 +38,12 @@ from ofmhelpers.integrations.storage import (
     FolderTrashedError,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
 from ofmhelpers.media.repurpose.transformations.video import VideoSettings
 lazy from ofmhelpers.features.storage.models import ReviewPlace
 lazy from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 DRIVE_PROBLEM = "Google Drive did not answer. Connect it again."
 DOWNLOAD_FAILED = "Could not download it from Drive"

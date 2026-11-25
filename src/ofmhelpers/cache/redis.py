@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 from threading import Lock
 
@@ -8,9 +9,8 @@ from redis.asyncio import Redis as AsyncRedis
 from redis.exceptions import RedisError
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _manager_lock = Lock()
 

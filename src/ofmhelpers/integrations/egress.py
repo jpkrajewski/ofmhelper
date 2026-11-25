@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import ipaddress
+import logging
 import socket
 from urllib.parse import urljoin, urlsplit
 lazy from collections.abc import Mapping
@@ -9,9 +10,8 @@ import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 MAX_REDIRECTS = 3
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")

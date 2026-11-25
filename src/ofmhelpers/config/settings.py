@@ -1352,14 +1352,6 @@ class VaultSettings(BaseSettings):
         return [k.strip() for k in self.keys.get_secret_value().split(",") if k.strip()]
 
 
-class LoggingSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    level: str = Field(default="INFO", validation_alias="OFM_LOG_LEVEL")
-    format: str = Field(default="text", validation_alias="OFM_LOG_FORMAT")
-    access_log: bool = Field(default=True, validation_alias="OFM_LOG_ACCESS")
-
-
 class ExportSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

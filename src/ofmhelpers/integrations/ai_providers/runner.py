@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -15,7 +16,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderNoCreditsError,
     ProviderTimeoutError,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.base import Provider, TaskState
 lazy from ofmhelpers.integrations.ai_providers.spec import (
     ModelSpec,
@@ -23,7 +23,7 @@ lazy from ofmhelpers.integrations.ai_providers.spec import (
     Payload,
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 OnResultUrls = Callable[[list[str]], None]
 

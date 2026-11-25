@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import re
 from pathlib import Path
 from typing import cast
@@ -12,9 +13,8 @@ lazy from yt_dlp.extractor.generic import GenericIE
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import egress
 from ofmhelpers.integrations.downloaders.models import DownloadResult
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _BROWSER = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
