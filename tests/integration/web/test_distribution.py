@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in_agency
 
+from ofmhelpers.config import settings
 from ofmhelpers.db.devices import store as devices
 from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.distribution import store
@@ -156,11 +157,33 @@ def test_bulk_upload_adds_each_account_with_every_models_content(pinterest, driv
         ],
     )
 
-    assert page.status_code == 200
+    assert page.status_code == 200, page.text
     assert sorted(c.account_name for c in _channels()) == ["pin_one", "pin_two"]
     assert [store.repository().counts(c.id).queued for c in _channels()] == [5, 5]
     assert "Added @pin_one" in page.text
     assert "5 files to pin" in page.text
+
+
+def test_an_empty_upload_is_refused():
+    page = _signed_in().post(
+        "/distribution/accounts",
+        files=[("files", ("empty.txt", b"", "text/plain"))],
+    )
+
+    assert page.status_code == 422
+    assert _channels() == []
+
+
+def test_the_global_upload_limit_is_enforced(monkeypatch):
+    monkeypatch.setattr(settings.web, "max_upload_mb", 1)
+
+    page = _signed_in().post(
+        "/distribution/accounts",
+        files=[("files", ("big.txt", b"x" * (1024 * 1024 + 1), "text/plain"))],
+    )
+
+    assert page.status_code == 422
+    assert _channels() == []
 
 
 def test_a_file_without_a_pinterest_login_is_reported_and_the_rest_go_on(

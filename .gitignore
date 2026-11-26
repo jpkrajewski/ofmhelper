@@ -25,7 +25,8 @@ deploy.local.env
 /output/
 /secrets/
 /cookies/
-backlog.txt
+/backlog.txt
+/backlog/
 # The server move notes: names the provider, region and host (public repo).
 /SERVER.md
 

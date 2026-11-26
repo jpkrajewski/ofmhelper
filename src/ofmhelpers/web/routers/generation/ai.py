@@ -43,7 +43,7 @@ async def _form(request: Request) -> service.AiInput:
     data = await request.form()
     try:
         spec = service.model_spec(str(data.get("model") or ""))
-    except NotFoundError:
+    except NotFoundError:  # silent: prepare_run returns the unknown-model refusal
         return service.AiInput(data=data, uploads={})
     validators = {
         FileKind.IMAGE: validate_image_upload,

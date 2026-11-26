@@ -11,6 +11,7 @@ from signin import sign_in
 from sqlalchemy import text
 
 from ofmhelpers.cache import get_redis
+from ofmhelpers.config import settings
 from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts.store import (
@@ -148,6 +149,22 @@ def test_a_too_big_file_is_refused_with_both_sizes(ann, monkeypatch):
     r = _upload(ann[0], _all_sites_export(ANN_SECRET, 1_400_000))
     assert r.status_code == 400
     assert re.search(r"That file is 1\.\d MB; a cookies\.txt may be up to 1 MB", r.text)
+    assert cookies.for_user(ann[1]) is None
+
+
+def test_an_empty_file_is_refused_before_upload(ann):
+    r = _upload(ann[0], b"")
+
+    assert r.status_code == 422
+    assert cookies.for_user(ann[1]) is None
+
+
+def test_the_global_upload_limit_is_enforced(ann, monkeypatch):
+    monkeypatch.setattr(settings.web, "max_upload_mb", 1)
+
+    r = _upload(ann[0], b"x" * (1024 * 1024 + 1))
+
+    assert r.status_code == 422
     assert cookies.for_user(ann[1]) is None
 
 

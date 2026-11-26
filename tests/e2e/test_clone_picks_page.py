@@ -207,6 +207,42 @@ def test_an_html_answer_to_start_shows_plain_words_and_leaves_no_stuck_card(
     assert va.js_errors == []
 
 
+def test_a_validation_answer_to_start_shows_its_plain_message(
+    va: Session,
+    subject_images: list[Path],
+    source_videos: list[Path],
+):
+    va.goto("/clone")
+    va.page.select_option("#provider-select", "kie")
+    va.page.fill("#api-key", "e2e-wrong-key")
+    _picker(va, "image").locator(".file-add-input").set_input_files(
+        [str(subject_images[0])],
+    )
+    _picker(va, "videos").locator(".file-add-input").set_input_files(
+        [str(source_videos[0])],
+    )
+    va.page.route(
+        "**/clone/run",
+        lambda route: route.fulfill(
+            status=422,
+            json={"detail": [{"msg": "Value error, File is empty"}]},
+        ),
+    )
+
+    va.page.click('#clone-form button[type="submit"]')
+    va.page.click("#clone-confirm-go")
+
+    expect(va.page.locator("#clone-form .generation-status")).to_have_text(
+        "File is empty",
+    )
+    assert va.js_errors == [
+        (
+            "Failed to load resource: the server responded with a status of 422 "
+            "(Unprocessable Entity)"
+        ),
+    ]
+
+
 def test_a_gallery_that_cannot_load_is_asked_again_slower_and_slower(va: Session):
     asked: list[float] = []
 
