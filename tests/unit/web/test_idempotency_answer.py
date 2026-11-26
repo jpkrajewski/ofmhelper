@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
 from ofmhelpers.web.idempotency import (

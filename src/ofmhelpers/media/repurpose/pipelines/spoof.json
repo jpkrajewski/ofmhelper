@@ -1,0 +1,9 @@
+{
+  "device": "iphone16_h264",
+  "return_on_unique": true,
+  "stages": [
+    {"preset": "spoof", "max_attempts": 3, "tries_per_attempt": 3, "strength_increase": 0.02},
+    {"preset": "spoof_fallback", "max_attempts": 2, "tries_per_attempt": 2, "strength_increase": 0.01},
+    {"preset": "hard", "max_attempts": 1, "tries_per_attempt": 2}
+  ]
+}

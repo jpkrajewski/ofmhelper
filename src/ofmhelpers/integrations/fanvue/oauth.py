@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from http import HTTPStatus
 from urllib.parse import urlencode
@@ -25,7 +27,7 @@ def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
-        }
+        },
     )
     return f"{settings.fanvue.authorize_url}?{query}"
 
@@ -76,7 +78,7 @@ def _refresh_call(refresh_token: str) -> requests.Response:
     for attempt in range(1, tries + 1):
         try:
             r = _token_call(
-                {"grant_type": "refresh_token", "refresh_token": refresh_token}
+                {"grant_type": "refresh_token", "refresh_token": refresh_token},
             )
         except requests.RequestException as e:
             if attempt == tries:

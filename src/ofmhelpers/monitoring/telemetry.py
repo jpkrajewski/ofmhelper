@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import contextvars
 import gc
 import os
@@ -9,7 +11,7 @@ lazy import logging
 lazy from collections.abc import Callable, Mapping
 
 import logfire
-from logfire._internal.exporters.otlp import OTLPExporterHttpSession
+from logfire._internal.exporters.otlp import _DISK_RETRYERS, OTLPExporterHttpSession
 from logfire._internal.http_transport import install_connection_policy
 from opentelemetry.sdk.trace import Event, SpanProcessor
 from pydantic import BaseModel, model_serializer
@@ -98,7 +100,7 @@ _LOGGED_ARGUMENTS = frozenset(
         "user_id",
         "video_manifest",
         "videos_manifest",
-    }
+    },
 )
 _HIDDEN = "[hidden]"
 
@@ -136,11 +138,11 @@ def configure_telemetry(service: str) -> None:
     _configured.append(service)
 
 
-def in_this_trace[T](fn: Callable[..., T]) -> Callable[..., T]:
+def in_this_trace[A, T](fn: Callable[[A], T]) -> Callable[[A], T]:
     context = contextvars.copy_context()
 
-    def call(*args: Any, **kwargs: Any) -> T:
-        return context.copy().run(fn, *args, **kwargs)
+    def call(item: A) -> T:
+        return context.copy().run(fn, item)
 
     return call
 
@@ -170,11 +172,16 @@ def _renew_connections_at_fork() -> None:
 
 
 def _renew_connections(sessions: weakref.WeakSet[OTLPExporterHttpSession]) -> None:
-    for session in sessions:
-        install_connection_policy(session)
-        retryer = session.__dict__.pop("retryer", None)
+    for kept in _DISK_RETRYERS:
+        retryer = kept()
         if retryer is not None:
             retryer.thread = None
+    for session in sessions:
+        install_connection_policy(session)
+        try:
+            del session.retryer
+        except AttributeError:  # silent: no retryer was made before the fork
+            continue
 
 
 def _drop_connect_spans() -> None:
@@ -186,13 +193,15 @@ def instrument_app(app: FastAPI) -> None:
         app,
         excluded_urls="/health,/static/.*,/chatting/fanvue/callback",
         request_attributes_mapper=lambda request, attributes: _request_attributes(
-            request, attributes
+            request,
+            attributes,
         ).model_dump(),
     )
 
 
 def _request_attributes(
-    _request: Request | WebSocket, attributes: dict[str, Any]
+    _request: Request | WebSocket,
+    attributes: dict[str, Any],
 ) -> SpanAttributes:
     values = attributes.get("values") or {}
     errors = attributes.get("errors") or []
@@ -204,7 +213,7 @@ def _request_attributes(
                 {key: value for key, value in error.items() if key != "input"}
                 for error in errors
             ],
-        }
+        },
     )
 
 
@@ -220,7 +229,7 @@ def _logged_arguments(values: Mapping[str, Any]) -> SpanAttributes:
     return SpanAttributes(values=logged)
 
 
-def _is_plain(value: Any) -> bool:
+def _is_plain(value: object) -> bool:
     if isinstance(value, list | tuple):
         return all(_is_plain(item) for item in value)
     return value is None or isinstance(value, str | int | float | date)
@@ -236,7 +245,7 @@ def _masked[T](value: T) -> T:
 
 def _masked_attributes(attributes: Mapping[str, Any] | None) -> SpanAttributes:
     return SpanAttributes(
-        values={name: _masked(value) for name, value in (attributes or {}).items()}
+        values={name: _masked(value) for name, value in (attributes or {}).items()},
     )
 
 

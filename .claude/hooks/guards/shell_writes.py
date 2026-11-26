@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
 from pathlib import Path
@@ -14,24 +16,37 @@ from guards.event import (
     defined_names,
     git_timeout,
 )
-from guards.no_comments import checker
+from guards.no_comments import GETATTR_CHECKER, checker
 from guards.skills import loaded, required
 
 NAME = "shell_writes"
+RUFF_WRITE = (
+    r"\bruff(?:\.exe)?\s+(?![^;&|\n#]*--(?:check|diff)\b)"
+    r"(?:(?:-\S+\s+)*format\b|[^;&|\n#]*--fix\b)"
+)
 SCRIPTED_WRITE = re.compile(
     r"\bsed\s+-i|\bpython|\bperl\b|\bawk\b|\bcat\s+>|\btee\b|[^0-9&]>\s*[\w./\"']|"
     r"Set-Content|Out-File|Add-Content|\bcp\s|\bmv\s|\bgit\s+apply\b|\bpatch\b|"
-    r"\bruff\b[^;&|]*(?:--fix|format)|\bprettier\b[^;&|]*--write"
+    rf"{RUFF_WRITE}|\bprettier\b[^;&|]*--write",
 )
-UNNAMED_WRITE = re.compile(r"\bgit\s+apply\b|\bpatch\b|\bruff\b|\bprettier\b")
+UNNAMED_WRITE = re.compile(rf"\bgit\s+apply\b|\bpatch\b|{RUFF_WRITE}|\bprettier\b")
 UNCHECKED = (
-    "The files this shell call wrote could not be checked ({error}); git was slow or failed. "
+    "The files this shell call wrote could not be "
+    "checked ({error}); git was slow or failed. "
     "Run the CRLF, comment and skill checks by hand on the files you wrote."
 )
-CRLF = "CRLF written into {files} (Windows text mode; .gitattributes is eol=lf): rewrite them with LF."
-COMMENTS = "Comments or docstrings written from the shell: {spots} (CLAUDE.md NO COMMENTS, EVER)."
+CRLF = (
+    "CRLF written into {files} (Windows text mode; "
+    ".gitattributes is eol=lf): rewrite them with LF."
+)
+COMMENTS = (
+    "Comments or docstrings written from the "
+    "shell: {spots} (CLAUDE.md NO COMMENTS, EVER)."
+)
+GETATTR = "getattr written from the shell (banned, owner 2026-11-22): {spots}"
 SKILLS = (
-    "Edited from the shell without the STANDARDS skill(s) {skills}: load them now and re-check "
+    "Edited from the shell without the STANDARDS "
+    "skill(s) {skills}: load them now and re-check "
     "{files} against them. Prefer the Edit tool for source files."
 )
 
@@ -46,10 +61,16 @@ class ChangedFile(BaseModel):
         return defined_names(now) - defined_names(before)
 
     def skills(self) -> list[str]:
-        plain = required(self.path, self.is_new, adds_names=False)
-        if plain == required(self.path, self.is_new, adds_names=True):
+        text = (ROOT / self.path).read_text(encoding="utf-8", errors="replace")
+        plain = required(self.path, self.is_new, adds_names=False, written=text)
+        if plain == required(self.path, self.is_new, adds_names=True, written=text):
             return plain
-        return required(self.path, self.is_new, adds_names=bool(self.added_names()))
+        return required(
+            self.path,
+            self.is_new,
+            adds_names=bool(self.added_names()),
+            written=text,
+        )
 
 
 def committed_text(path: str) -> str:
@@ -75,7 +96,8 @@ def changed_by_this_call(event: HookEvent) -> list[ChangedFile]:
     cutoff = event.started_at
     found = [
         ChangedFile(
-            path=line[3:].split(" -> ")[-1].strip('"'), is_new=line.startswith("??")
+            path=line[3:].split(" -> ")[-1].strip('"'),
+            is_new=line.startswith("??"),
         )
         for line in listed.stdout.splitlines()
     ]
@@ -100,12 +122,15 @@ def problems(event: HookEvent, files: list[ChangedFile]) -> list[str]:
     paths = [f.path for f in files]
     crlf = [p for p in paths if b"\r\n" in (ROOT / p).read_bytes()]
     spots = checker().problems(ROOT, paths)
+    banned = checker(GETATTR_CHECKER).problems(ROOT, paths)
     missing = sorted({s for f in files for s in f.skills() if not loaded(event, s)})
     found = []
     if crlf:
         found.append(CRLF.format(files=", ".join(crlf)))
     if spots:
         found.append(COMMENTS.format(spots=", ".join(spots)))
+    if banned:
+        found.append(GETATTR.format(spots="; ".join(banned)))
     if missing:
         found.append(SKILLS.format(skills=", ".join(missing), files=", ".join(paths)))
     return found

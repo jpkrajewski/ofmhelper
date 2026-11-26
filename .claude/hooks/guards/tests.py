@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 import time
 
@@ -33,25 +35,34 @@ PIPED = (
 )
 SCOPED = (
     "CLAUDE.md Testing: while working run only the tests of what you touched: "
-    "scripts/test.sh tests/path/test_x.py ... The full suite, push, all, e2e, live and deploy "
+    "scripts/test.sh tests/path/test_x.py ... The "
+    "full suite, push, all, e2e, live and deploy "
     "run in the ship skill, on the owner's word."
 )
-PAID = "Paid tests spend money at providers: only when the owner's own prompt asks for a paid run."
+PAID = (
+    "Paid tests spend money at providers: only "
+    "when the owner's own prompt asks for a paid run."
+)
 BUSY = (
-    "A test run is already going (since {since}): there is one postgres-test and two runs clash. "
+    "A test run is already going (since {since}): "
+    "there is one postgres-test and two runs clash. "
     "Wait for it to end, or stop it first."
 )
 REPORT = (
-    "When this run ends, report from reports/latest/summary.txt: pass/fail/skip counts, "
+    "When this run ends, report from "
+    "reports/latest/summary.txt: pass/fail/skip counts, "
     "each failure with its error text, the 10 slowest tests."
 )
 GREEN_ONCE = (
-    "the gate is green at {at} on this exact tree (HEAD^{{tree}} {tree}): run scoped tests; "
-    'pre-push and CI rerun the suite. Only the owner\'s prompt "gate" (the bare word) reruns it.'
+    "the gate is green at {at} on this exact tree "
+    "(HEAD^{{tree}} {tree}): run scoped tests; "
+    "pre-push and CI rerun the suite. Only the owner's "
+    'prompt "gate" (the bare word) reruns it.'
 )
 TREE_UNKNOWN = (
     "the gate is green at {at}, and whether HEAD is still that tree is unknown "
-    "(git rev-parse HEAD^{{tree}}: {error}), so the full suite is not rerun. Fix that first, "
+    "(git rev-parse HEAD^{{tree}}: {error}), so the "
+    "full suite is not rerun. Fix that first, "
     'or the owner\'s prompt "gate" (the bare word) reruns it.'
 )
 
@@ -108,7 +119,7 @@ def needs_owner(args: list[str]) -> bool:
     return not args or args[0] in OWNER_PRESETS or args == ["e2e"]
 
 
-def judge(statement: Statement, event: HookEvent) -> Verdict | None:
+def judge(statement: Statement, event: HookEvent) -> Verdict | None:  # noqa: PLR0911
     args = test_sh_args(statement)
     if args is None:
         return deny(NAME, ONLY_TEST_SH) if runs_pytest(statement) else None

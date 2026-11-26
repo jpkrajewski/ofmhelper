@@ -47,11 +47,18 @@
     {% endif %}
 
     {% call ui.card("Google Drive uploads") %}
-        <p>{{ "Connected" if user.drive_connected else "Not connected" }}</p>
+        <p>{{ "Connected" if user.drive_connected else "Not connected" }}{% if user.drive_connected and google_in_use %} {{ ui.badge("In use") }}{% endif %}</p>
         {% if providers|selectattr("name", "equalto", "google")|list %}
         {{ ui.button(("Reconnect" if user.drive_connected else "Connect") ~ " Google Drive", href="/auth/google/start?link=1&next=/account") }}
         {% endif %}
     {% endcall %}
+
+    {% if dropbox is not none %}
+    {% call ui.card("Dropbox") %}
+        <p>{{ ("Connected as " ~ dropbox.email) if dropbox.email else "Not connected" }}{% if dropbox.in_use %} {{ ui.badge("In use") }}{% endif %}</p>
+        {{ ui.button(("Reconnect" if dropbox.email else "Connect") ~ " Dropbox", href="/account/dropbox/connect") }}
+    {% endcall %}
+    {% endif %}
 
     {% if telegram is not none %}
     {% call ui.card("Telegram") %}

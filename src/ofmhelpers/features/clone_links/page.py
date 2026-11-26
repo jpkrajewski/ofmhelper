@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
@@ -7,11 +9,12 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     offered_resolutions,
 )
-from ofmhelpers.features.drive.space import DriveSpace, drive_space
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
+from ofmhelpers.features.storage.schema import DriveSpace
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 from ofmhelpers.media.exports import Export, exports
+lazy from ofmhelpers.features.storage.service import StorageServiceSpace
 
 
 class FormView(BaseModel):
@@ -31,8 +34,12 @@ class FormView(BaseModel):
     reel_mb: int
 
 
-def form_view(actor: str, user_id: int) -> FormView:
-    targets = list(clone_targets())
+def form_view(actor: str, user_id: int, space: StorageServiceSpace) -> FormView:
+    targets = [
+        name
+        for name, target in clone_targets().items()
+        if target.price and target.price.billable
+    ]
     return FormView(
         providers=provider_choices(targets),
         selected_provider=start_provider(actor, CLONE_TASKS, targets),
@@ -46,6 +53,6 @@ def form_view(actor: str, user_id: int) -> FormView:
         default_export=settings.exports.default,
         default_mirror=settings.exports.mirror,
         drive_ready=bool(refresh_token(user_id)),
-        drive_space=drive_space(user_id, ask=False),
+        drive_space=space.cached(),
         reel_mb=settings.clone_links.reel_mb,
     )

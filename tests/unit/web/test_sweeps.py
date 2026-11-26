@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -256,13 +258,15 @@ def test_a_sweep_with_no_queue_runs_here():
 
 
 def test_the_sweeps_that_walk_the_disk_or_run_ffmpeg_are_the_workers():
-    heavy = {s.name for s in sweeps.sweeps() if s.queue is not None}
+    heavy = {s.name for s in sweeps.sweeps() if s.queue == QueueName.PREVIEWS}
 
     assert heavy == {
         "edit cleanup",
-        "trials cleanup",
         "downloads cleanup",
         "viral cleanup",
         "raw files",
     }
-    assert {s.queue for s in sweeps.sweeps() if s.queue} == {QueueName.PREVIEWS}
+    assert {s.queue for s in sweeps.sweeps() if s.queue} == {
+        QueueName.PREVIEWS,
+        QueueName.DEFAULT,
+    }

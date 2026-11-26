@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import uuid
 lazy from pathlib import Path
 
@@ -20,8 +22,8 @@ def scaled_to(side: int) -> str:
 _TURNS = {90: "transpose=clock", 180: "hflip,vflip", 270: "transpose=cclock"}
 
 
-def turn_filter(turn: int, mirror: bool) -> str | None:
-    return _filters(_TURNS.get(turn), "hflip" if mirror else None) or None
+def turn_filter(turn: int, mirror: bool) -> str | None:  # noqa: FBT001
+    return _filters([_TURNS.get(turn), "hflip" if mirror else None]) or None
 
 
 def crop_filter(ratio: Size | None, x: float, y: float, scale: float = 1.0) -> str:
@@ -37,11 +39,11 @@ def crop_filter(ratio: Size | None, x: float, y: float, scale: float = 1.0) -> s
     )
 
 
-def _filters(*parts: str | None) -> str:
+def _filters(parts: list[str | None]) -> str:
     return ",".join(p for p in parts if p)
 
 
-def cut(
+def cut(  # noqa: PLR0913
     src: Path,
     start: float,
     end: float,
@@ -70,9 +72,11 @@ def cut(
             "0:a:0?",
             "-vf",
             _filters(
-                picture,
-                f"setpts=PTS/{speed:g}" if faster else None,
-                scaled_to(short_side),
+                [
+                    picture,
+                    f"setpts=PTS/{speed:g}" if faster else None,
+                    scaled_to(short_side),
+                ],
             ),
             *(["-af", f"atempo={speed:g}"] if faster else []),
             "-c:v",
@@ -95,7 +99,7 @@ def cut(
     )
 
 
-def proxy(
+def proxy(  # noqa: PLR0913
     src: Path,
     dest: Path,
     *,
@@ -147,7 +151,7 @@ def proxy(
     )
 
 
-def filmstrip(
+def filmstrip(  # noqa: PLR0913
     src: Path,
     seconds: float,
     dest: Path,
@@ -178,7 +182,7 @@ def filmstrip(
     )
 
 
-def frame(
+def frame(  # noqa: PLR0913
     src: Path,
     at: float,
     *,
@@ -201,7 +205,7 @@ def frame(
             "-map",
             "0:v:0",
             "-vf",
-            _filters(picture, scaled_to(short_side)),
+            _filters([picture, scaled_to(short_side)]),
             "-frames:v",
             "1",
             "-q:v",
@@ -219,7 +223,7 @@ def frame(
 _JOIN_AUDIO = ("-c:a", "aac", "-ar", "48000", "-ac", "2")
 
 
-def part(
+def part(  # noqa: PLR0913
     src: Path,
     start: float,
     end: float,
@@ -266,10 +270,12 @@ def part(
             "0:a:0" if sound else "1:a:0",
             "-vf",
             _filters(
-                picture,
-                f"setpts=PTS/{speed:g}" if faster else None,
-                fit,
-                f"fps={fps:g}",
+                [
+                    picture,
+                    f"setpts=PTS/{speed:g}" if faster else None,
+                    fit,
+                    f"fps={fps:g}",
+                ],
             ),
             *(["-af", f"atempo={speed:g}"] if faster and sound else []),
             "-c:v",

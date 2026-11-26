@@ -1,12 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import json
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, Header, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -85,8 +87,9 @@ def _is_json(response: Response) -> bool:
 
 
 def _raw_answer(response: Response) -> bytes | None:
-    raw = getattr(response, "body", None)
-    return None if raw is None else bytes(raw)
+    if isinstance(response, (FileResponse, StreamingResponse)):
+        return None
+    return bytes(response.body)
 
 
 def _succeeded(response: Response) -> bool:
@@ -114,7 +117,7 @@ def _stored_body(response: Response, raw: bytes | None) -> JsonValue:
         return _raw_envelope("", response)
     if _is_json(response):
         try:
-            return json.loads(raw)
+            return cast("JsonValue", json.loads(raw))
         except ValueError:
             logger.warning("idempotency: answer is not valid JSON", exc_info=True)
     if len(raw) > RAW_MAX:
@@ -213,7 +216,9 @@ class IdempotentRoute(APIRoute):
                 return _replayed(claimed.response_status, claimed.response_body)
             if claimed.outcome is Outcome.BUSY:
                 return JSONResponse(
-                    {"detail": BUSY}, status_code=409, headers={"Retry-After": "1"}
+                    {"detail": BUSY},
+                    status_code=409,
+                    headers={"Retry-After": "1"},
                 )
             if claimed.outcome is Outcome.ABANDONED:
                 return JSONResponse({"detail": ABANDONED}, status_code=409)

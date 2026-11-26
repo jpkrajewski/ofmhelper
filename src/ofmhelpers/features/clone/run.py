@@ -1,8 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
-from typing import Any
 
 from ofmhelpers.features.clone.export import (
-    EXPORT_FAILURES,
     export_choice,
     export_results,
     exported_file,
@@ -13,7 +13,7 @@ from ofmhelpers.media.exports import ExportOptions
 lazy from ofmhelpers.db.jobs.schema import ResultFile
 
 
-def run_clone(
+def run_clone(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
@@ -23,11 +23,14 @@ def run_clone(
     duration: int,
     reference_images: list[str],
     reference_videos: list[str],
-    audio: bool = False,
+    audio: bool = False,  # noqa: FBT001, FBT002
     export: str | None = None,
-    mirror: bool = False,
-    capcut: bool = False,
-    **page_keys: Any,
+    mirror: bool = False,  # noqa: FBT001, FBT002
+    capcut: bool = False,  # noqa: FBT001, FBT002
+    export_failures: int = 0,
+    model: str | None = None,  # noqa: ARG001
+    link: str | None = None,  # noqa: ARG001
+    batch: str | None = None,  # noqa: ARG001
 ) -> list[ResultFile]:
     target = clone_targets()[provider]
     values = clone_values(
@@ -50,9 +53,9 @@ def run_clone(
     return export_results(
         job_id,
         results,
-        export_choice(export, capcut),
+        "original" if provider == "fake" else export_choice(export, capcut),
         ExportOptions(mirror=mirror),
         Path(assets_root),
-        failures=int(page_keys.get(EXPORT_FAILURES) or 0),
+        failures=export_failures,
         exported=exported_file,
     )

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -49,7 +51,8 @@ def test_a_page_shows_only_the_runs_of_the_days_asked_for(client, page, task, _l
 
     assert _shown(client.get(page).text) == [new, mid, old]
     one_day = client.get(
-        page, params={"date_from": "2026-11-11", "date_to": "2026-11-11"}
+        page,
+        params={"date_from": "2026-11-11", "date_to": "2026-11-11"},
     )
     assert _shown(one_day.text) == [mid]
     assert _shown(client.get(page, params={"date_from": "2026-11-11"}).text) == [
@@ -64,7 +67,8 @@ def test_dates_the_other_way_round_and_blank_ones_are_taken(client, page, task, 
     old, mid, _new = _three_days(client, task)
 
     swapped = client.get(
-        page, params={"date_from": "2026-11-11", "date_to": "2026-11-10"}
+        page,
+        params={"date_from": "2026-11-11", "date_to": "2026-11-10"},
     )
     assert _shown(swapped.text) == [mid, old]
     blank = client.get(page, params={"date_from": "2026-11-12", "date_to": ""})
@@ -75,7 +79,11 @@ def test_dates_the_other_way_round_and_blank_ones_are_taken(client, page, task, 
 
 @pytest.mark.parametrize(("page", "task", "live"), PAGES)
 def test_the_scroll_and_the_live_poll_stay_inside_the_filter(
-    client, page, task, live, monkeypatch
+    client,
+    page,
+    task,
+    live,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_GALLERY_LIMIT", "1")
     monkeypatch.setenv("OFM_DOWNLOAD_GALLERY_PAGE", "1")
@@ -84,7 +92,8 @@ def test_the_scroll_and_the_live_poll_stay_inside_the_filter(
     dates = "?date_from=2026-11-10&amp;date_to=2026-11-11"
 
     first = client.get(
-        page, params={"date_from": "2026-11-10", "date_to": "2026-11-11"}
+        page,
+        params={"date_from": "2026-11-10", "date_to": "2026-11-11"},
     )
 
     assert _shown(first.text) == [mid]
@@ -128,7 +137,10 @@ def test_a_day_is_the_readers_own_day(client):
 
 @pytest.mark.parametrize(("page", "_task", "_live"), PAGES)
 def test_the_filter_is_a_from_and_a_to_button_with_the_days_picked(
-    client, page, _task, _live
+    client,
+    page,
+    _task,
+    _live,
 ):
     asked = {"date_from": "2026-11-01", "date_to": "2026-11-12"}
     html = client.get(page, params=asked).text
@@ -165,7 +177,8 @@ def test_another_persons_runs_stay_out_whatever_the_dates(client):
     _job_at(other, "clone", datetime(2026, 11, 11, 12, 0, tzinfo=WARSAW))
 
     html = client.get(
-        "/clone", params={"date_from": "2026-11-01", "date_to": "2026-11-30"}
+        "/clone",
+        params={"date_from": "2026-11-01", "date_to": "2026-11-30"},
     ).text
 
     assert _shown(html) == []
@@ -178,7 +191,11 @@ def test_the_store_filters_the_span_in_sql_and_counts_inside_it(client):
     end = datetime(2026, 11, 12, tzinfo=WARSAW).timestamp()
 
     inside = list_jobs_page(
-        {"clone"}, 0, 10, actor, created=Created(since=start, until=end)
+        {"clone"},
+        0,
+        10,
+        actor,
+        created=Created(since=start, until=end),
     )
     since = list_jobs_page({"clone"}, 0, 1, actor, created=Created(since=start))
 

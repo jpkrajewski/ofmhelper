@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from html.parser import HTMLParser
 
 import pytest
@@ -55,7 +57,8 @@ def test_admin_opens_every_page():
 
 
 @pytest.mark.parametrize(
-    "path", ["/todo", "/helpers", "/models", "/competition", "/replicate", "/approve/x"]
+    "path",
+    ["/todo", "/helpers", "/models", "/competition", "/replicate", "/approve/x"],
 )
 def test_removed_pages_are_gone(path):
     client = TestClient(app)

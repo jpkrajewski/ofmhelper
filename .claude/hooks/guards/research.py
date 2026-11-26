@@ -1,4 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
+import subprocess
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -11,7 +14,9 @@ from guards.event import (
     Verdict,
     block,
     context,
+    defined_names,
     deny,
+    git_timeout,
     modified_at,
 )
 from guards.shell_writes import SCRIPTED_WRITE, changed_by_this_call
@@ -26,6 +31,21 @@ SHELLS = frozenset({"Bash", "PowerShell"})
 AGENTS = frozenset({"Agent", "Task"})
 STOPS = frozenset({"Stop", "SubagentStop"})
 CODE_ROOTS = ("src/", "scripts/", ".claude/hooks/")
+CODE_SUFFIXES = (
+    ".py",
+    ".pyi",
+    ".js",
+    ".mjs",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".sh",
+    ".ps1",
+    ".css",
+    ".html",
+    ".sql",
+)
+HEAD_HIT = re.compile(r"^HEAD:(.*?):\d+:(.*)$")
 SKILL_DIRS = (".claude/skills/", ".claude/rules/")
 CODEGRAPH_SHELL = re.compile(r"\bcodegraph\s+explore\b")
 KIMI_RESEARCH = re.compile(r"kimi/ask\.py\s+research\b")
@@ -50,7 +70,8 @@ FAILURE_MODES = (
     (
         "service down or slow",
         re.compile(
-            r"\bdown\b|slow|time ?outs?|unavailable|unreachable|offline", re.IGNORECASE
+            r"\bdown\b|slow|time ?outs?|unavailable|unreachable|offline",
+            re.IGNORECASE,
         ),
     ),
     (
@@ -64,7 +85,8 @@ FAILURE_MODES = (
     (
         "many clicks, two tabs, retries",
         re.compile(
-            r"click|two tabs|double|concurren|\brac(?:e|es|y)\b|retr(?:y|ies)|duplicate|idempoten",
+            r"click|two "
+            r"tabs|double|concurren|\brac(?:e|es|y)\b|retr(?:y|ies)|duplicate|idempoten",
             re.IGNORECASE,
         ),
     ),
@@ -94,31 +116,39 @@ TEMPLATE = (
     "Pattern in repo: <file and symbol the new code copies, or none>\n"
     "Web: <URLs read; required when the pattern is none>\n"
     "Skills: <skills and .claude/rules that apply>\n"
-    "Breaks when: <what the code does when> the service is down or slow | the backend answers "
-    "5xx, HTML or non-JSON | it crashes after a side effect | 50 clicks, two tabs, retries | "
+    "Breaks when: <what the code does when> the "
+    "service is down or slow | the backend answers "
+    "5xx, HTML or non-JSON | it crashes after a side "
+    "effect | 50 clicks, two tabs, retries | "
     "junk input | scale | a JS crash"
 )
 HOW = (
-    "1. codegraph_explore for the pattern in this repo (the shell's codegraph explore counts). "
+    "1. codegraph_explore for the pattern in this "
+    "repo (the shell's codegraph explore counts). "
     "2. If there is none: WebSearch how it is done at enterprise scale. "
     '3. Search the skills: git grep -n -i "<terms>" -- .claude/skills .claude/rules '
     "'*CLAUDE.md', or load the skill. "
     "4. Write reports/research/<slug>.md with these lines:\n" + TEMPLATE
 )
 STEPS = (
-    "Research before new code (a new file under src/, scripts/ or .claude/hooks/, or a new "
+    "Research before new code (a new file under "
+    "src/, scripts/ or .claude/hooks/, or a new "
     "def/class/function line): such an edit is denied until, since this task started: "
     + HOW
 )
 DENIED = (
     "Research before new code: {path} adds new code. Missing since this task started: "
-    "{missing}.\n" + HOW
+    "{missing}. Moving code instead? Cut it from "
+    "its old file first: a name the old file "
+    "no longer defines is not new.\n" + HOW
 )
 SHELL_CODE = (
-    "New code was written from the shell ({paths}) before the research: the Write/Edit gate "
+    "New code was written from the shell ({paths}) "
+    "before the research: the Write/Edit gate "
     "never saw it. Missing since this task started: {missing}.\n"
     + HOW
-    + "\nThen recheck those files against the research, and write new code with Write or Edit."
+    + "\nThen recheck those files against the research, "
+    "and write new code with Write or Edit."
 )
 
 
@@ -142,7 +172,7 @@ class ResearchNote(BaseModel):
                 fields[current] += " " + line.strip()
         return cls(path=path, **fields)
 
-    def problems(self, searched_web: bool) -> list[str]:
+    def problems(self, searched_web: bool) -> list[str]:  # noqa: FBT001
         values = self.model_dump(exclude={"path"})
         found = [
             f"the line `{label}:`" for label, name in LABELS if not filled(values[name])
@@ -175,16 +205,64 @@ def never_blocked(path: str) -> bool:
 
 
 def is_new_code_file(path: str) -> bool:
-    return path.startswith(CODE_ROOTS) and not never_blocked(path)
+    return (
+        path.startswith(CODE_ROOTS)
+        and path.lower().endswith(CODE_SUFFIXES)
+        and not never_blocked(path)
+    )
+
+
+def still_defines(file: str, name: str) -> bool:
+    target = ROOT / file
+    if not target.is_file():
+        return False
+    return name in defined_names(target.read_text(encoding="utf-8", errors="replace"))
+
+
+def moved_out_names(names: set[str], path: str) -> set[str]:
+    if not names:
+        return set()
+    patterns = [
+        rf"^[[:blank:]]*(async +def|def|class|export +(default +)?(async +)?function|"
+        rf"(async +)?function)[ *]+{re.escape(name)}([^A-Za-z0-9_$]|$)"
+        for name in sorted(names)
+    ]
+    try:
+        found = subprocess.run(
+            ["git", "-C", str(ROOT), "grep", "-n", "-E"]
+            + [arg for pattern in patterns for arg in ("-e", pattern)]
+            + ["HEAD", "--"]
+            + [root.rstrip("/") for root in CODE_ROOTS],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=git_timeout(),
+            check=False,
+        )
+    except subprocess.SubprocessError:  # silent: a slow git keeps the names new
+        return set()
+    moved: set[str] = set()
+    for line in found.stdout.splitlines():
+        spot = HEAD_HIT.match(line)
+        if not spot or spot[1] == path:
+            continue
+        moved |= {
+            name
+            for name in defined_names(spot[2]) & names
+            if not still_defines(spot[1], name)
+        }
+    return moved
 
 
 def adds_new_code(event: HookEvent) -> bool:
     path = event.relative
     if never_blocked(path):
         return False
+    names = event.added_names()
+    fresh = names - moved_out_names(names, path)
     if is_new_code_file(path) and not (ROOT / path).exists():
-        return True
-    return bool(event.added_names())
+        return bool(fresh) or not names
+    return bool(fresh)
 
 
 def names_skill_dir(text: str) -> bool:
@@ -226,7 +304,10 @@ def shell_new_code(event: HookEvent) -> list[str]:
         f.path
         for f in changed_by_this_call(event)
         if not never_blocked(f.path)
-        and ((f.is_new and is_new_code_file(f.path)) or f.added_names())
+        and (
+            (f.is_new and is_new_code_file(f.path))
+            or bool((added := f.added_names()) - moved_out_names(added, f.path))
+        )
     ]
 
 
@@ -253,7 +334,7 @@ def fresh_notes(started: float) -> list[ResearchNote]:
     ]
 
 
-def note_problems(started: float, searched: bool) -> list[str]:
+def note_problems(started: float, searched: bool) -> list[str]:  # noqa: FBT001
     notes = fresh_notes(started)
     if not notes:
         return ["a note reports/research/<slug>.md written since this task started"]
@@ -284,7 +365,8 @@ def judge(event: HookEvent) -> Verdict | None:
         return None
     if missing := missing_research(event):
         return deny(
-            NAME, DENIED.format(path=event.relative, missing="; ".join(missing))
+            NAME,
+            DENIED.format(path=event.relative, missing="; ".join(missing)),
         )
     return None
 
@@ -333,10 +415,10 @@ def check(event: HookEvent) -> Verdict | None:
 GUARD = Guard(
     name=NAME,
     events=frozenset(
-        {"UserPromptSubmit", "SubagentStart", "PostToolUse", "PreToolUse", *STOPS}
+        {"UserPromptSubmit", "SubagentStart", "PostToolUse", "PreToolUse", *STOPS},
     ),
     tools=frozenset(
-        {*EDITS, *SHELLS, *AGENTS, *WEB_TOOLS, "Grep", "Skill", CODEGRAPH_TOOL}
+        {*EDITS, *SHELLS, *AGENTS, *WEB_TOOLS, "Grep", "Skill", CODEGRAPH_TOOL},
     ),
     check=check,
 )

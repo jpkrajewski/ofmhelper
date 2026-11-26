@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import subprocess
 import time
@@ -9,8 +11,10 @@ NAME = "stopped_commit"
 FRESH_S = 7200
 GIT_TIMEOUT_S = 4
 STRANDED = (
-    "A stopped run left pre-commit's copy of the unstaged changes in {patch}, and it still "
-    "applies: those changes (another session's included) are missing from the working tree. "
+    "A stopped run left pre-commit's copy of the "
+    "unstaged changes in {patch}, and it still "
+    "applies: those changes (another session's "
+    "included) are missing from the working tree. "
     'Restore them now: git apply "{patch}", then git status.'
 )
 

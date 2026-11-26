@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from sqlalchemy import and_, or_, select, update
@@ -28,7 +30,7 @@ def _upload(row: DriveUploadRow) -> DriveUpload:
 class DriveUploadRepository(CachedRepository):
     cache_namespace = "drive_upload"
 
-    def queue(
+    def queue(  # noqa: PLR0913, PLR0917
         self,
         job_id: str,
         file_index: int,
@@ -70,7 +72,7 @@ class DriveUploadRepository(CachedRepository):
                         and_(row.status == "queued", row.created_at < stale_before),
                     ),
                 )
-                .returning(row.id)
+                .returning(row.id),
             )
             return found.scalar_one_or_none()
 
@@ -90,7 +92,9 @@ class DriveUploadRepository(CachedRepository):
             return row.drive_file_id if row else None
 
     def for_jobs(
-        self, job_ids: list[str], uploaders: frozenset[int] | None = None
+        self,
+        job_ids: list[str],
+        uploaders: frozenset[int] | None = None,
     ) -> list[DriveUpload]:
         if not job_ids:
             return []
@@ -107,8 +111,8 @@ class DriveUploadRepository(CachedRepository):
         with session_scope() as s:
             found = s.execute(
                 select(DriveUploadRow.drive_file_id).where(
-                    DriveUploadRow.drive_file_id.in_(file_ids)
-                )
+                    DriveUploadRow.drive_file_id.in_(file_ids),
+                ),
             ).scalars()
             return [file_id for file_id in found if file_id]
 
@@ -117,7 +121,7 @@ class DriveUploadRepository(CachedRepository):
             s.execute(
                 update(DriveUploadRow)
                 .where(DriveUploadRow.id == upload_id)
-                .values(status="removed", error=reason)
+                .values(status="removed", error=reason),
             )
 
     def follow_drive(self, login_id: int, present: set[str], before: float) -> int:
@@ -133,7 +137,7 @@ class DriveUploadRepository(CachedRepository):
                             DriveUploadRow.error == GONE_IN_DRIVE,
                         ),
                     ),
-                )
+                ),
             ).scalars()
             changed = [
                 r for r in rows if (r.drive_file_id in present) != (r.status == "done")
@@ -162,5 +166,5 @@ class DriveUploadRepository(CachedRepository):
                     drive_url=drive_url,
                     error=error,
                     finished_at=time.time(),
-                )
+                ),
             )

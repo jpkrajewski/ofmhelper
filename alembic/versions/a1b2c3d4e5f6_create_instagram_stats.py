@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -20,7 +22,9 @@ def upgrade() -> None:
         sa.Column("checked_at", sa.Float(), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["instagram_accounts.id"], ondelete="CASCADE"
+            ["account_id"],
+            ["instagram_accounts.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("account_id"),
     )

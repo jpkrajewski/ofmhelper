@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 lazy from collections.abc import Iterator
@@ -105,16 +107,16 @@ def test_downloads_are_read_from_the_jobs_that_made_them(db):
             text(
                 "INSERT INTO users (email, name, role, active, created_at,"
                 " google_refresh_token, password_hash) VALUES"
-                " ('a@example.com', '', 'user', true, 0, '', '') RETURNING id"
-            )
+                " ('a@example.com', '', 'user', true, 0, '', '') RETURNING id",
+            ),
         ).scalar_one()
 
-        def job(job_id, task, status, result, *, owner=user, at=1000.5):
+        def job(job_id, task, status, result, *, owner=user, at=1000.5):  # noqa: PLR0913
             conn.execute(
                 text(
                     "INSERT INTO jobs (id, task, user_id, status, created_at, params,"
                     " result) VALUES (:id, :task, :owner, :status, :at, '{}',"
-                    " CAST(:result AS jsonb))"
+                    " CAST(:result AS jsonb))",
                 ),
                 {
                     "id": job_id,
@@ -156,8 +158,8 @@ def test_downloads_are_read_from_the_jobs_that_made_them(db):
                 "SELECT job_id, position, url, file_path, user_id, stored, asset_path,"
                 " extract(epoch FROM created_at)::float,"
                 " extract(epoch FROM last_used_at)::float, removed_at"
-                " FROM downloads ORDER BY job_id, position"
-            )
+                " FROM downloads ORDER BY job_id, position",
+            ),
         ).all()
     assert [tuple(r) for r in rows] == [
         (
@@ -229,7 +231,7 @@ def test_phone_logins_already_saved_are_tracked_once(db):
                     "INSERT INTO devices (label, model_id, custom_model, owner,"
                     " phone_number, notes, added_at, updated_at, retired_at)"
                     " VALUES (:label, 'iphone-13', '', '', '', '', 0, 0, :retired)"
-                    " RETURNING id"
+                    " RETURNING id",
                 ),
                 {"label": label, "retired": 1.0 if retired else None},
             ).scalar_one()
@@ -239,14 +241,14 @@ def test_phone_logins_already_saved_are_tracked_once(db):
                 text(
                     "INSERT INTO logins (service, provider, username, password,"
                     " backup_codes, notes, added_at, updated_at)"
-                    " VALUES (:service, '', :username, '', '', '', 0, 0) RETURNING id"
+                    " VALUES (:service, '', :username, '', '', '', 0, 0) RETURNING id",
                 ),
                 {"service": service, "username": username},
             ).scalar_one()
             conn.execute(
                 text(
                     "INSERT INTO device_logins (device_id, login_id, linked_at)"
-                    " VALUES (:device, :login, 0)"
+                    " VALUES (:device, :login, 0)",
                 ),
                 {"device": device, "login": login_id},
             )
@@ -259,8 +261,8 @@ def test_phone_logins_already_saved_are_tracked_once(db):
         conn.execute(
             text(
                 "INSERT INTO tracked_accounts (platform, handle, notes, added_at,"
-                " untracked_at) VALUES ('instagram', 'removed_one', '', 0, 1)"
-            )
+                " untracked_at) VALUES ('instagram', 'removed_one', '', 0, 1)",
+            ),
         )
 
     command.upgrade(cfg, "head")
@@ -269,8 +271,8 @@ def test_phone_logins_already_saved_are_tracked_once(db):
         rows = conn.execute(
             text(
                 "SELECT handle, untracked_at IS NOT NULL FROM tracked_accounts"
-                " ORDER BY handle"
-            )
+                " ORDER BY handle",
+            ),
         ).all()
     assert rows == [("dany.walking", False), ("removed_one", True)]
 
@@ -287,7 +289,7 @@ def test_posted_files_belong_to_the_folder_their_login_has_now(db):
                     "INSERT INTO logins (user_id, service, provider, username,"
                     " password, backup_codes, notes, added_at, updated_at)"
                     " VALUES (1, 'instagram', '', :username, '', '', '', 0, 0)"
-                    " RETURNING id"
+                    " RETURNING id",
                 ),
                 {"username": username},
             ).scalar_one()
@@ -296,7 +298,7 @@ def test_posted_files_belong_to_the_folder_their_login_has_now(db):
         conn.execute(
             text(
                 "INSERT INTO drive_account_folders (login_id, folder_id, name,"
-                " updated_at) VALUES (:login, 'live-folder', 'ann - Anna', 0)"
+                " updated_at) VALUES (:login, 'live-folder', 'ann - Anna', 0)",
             ),
             {"login": with_folder},
         )
@@ -304,7 +306,7 @@ def test_posted_files_belong_to_the_folder_their_login_has_now(db):
             conn.execute(
                 text(
                     "INSERT INTO drive_posted_files (file_id, login_id, name, kind,"
-                    " first_seen_at) VALUES (:file, :login, 'v.mp4', 'video', 0)"
+                    " first_seen_at) VALUES (:file, :login, 'v.mp4', 'video', 0)",
                 ),
                 {"file": file_id, "login": login_id},
             )
@@ -313,16 +315,21 @@ def test_posted_files_belong_to_the_folder_their_login_has_now(db):
 
     with db.connect() as conn:
         rows = conn.execute(
-            text("SELECT file_id, folder_id FROM drive_posted_files ORDER BY file_id")
+            text("SELECT file_id, folder_id FROM drive_posted_files ORDER BY file_id"),
         ).all()
     assert rows == [("f1", "live-folder"), ("f2", None)]
 
 
 def test_the_shared_cookies_file_becomes_the_password_admins_own(
-    db, monkeypatch, tmp_path
+    db,
+    monkeypatch,
+    tmp_path,
 ):
     shared = tmp_path / "cookies.txt"
-    jar = "# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tagency\n"
+    jar = (
+        "# Netscape HTTP Cookie "
+        "File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tagency\n"
+    )
     shared.write_text(jar, encoding="utf-8")
     monkeypatch.setenv("OFM_COOKIES_FILE", str(shared))
     cfg = _alembic()
@@ -337,8 +344,8 @@ def test_the_shared_cookies_file_becomes_the_password_admins_own(
                 for r in conn.execute(
                     text(
                         "SELECT c.user_id, c.cookies, c.file_name FROM user_cookies c"
-                        " JOIN users u ON u.id = c.user_id AND u.is_password_account"
-                    )
+                        " JOIN users u ON u.id = c.user_id AND u.is_password_account",
+                    ),
                 ).all()
             ]
 
@@ -377,7 +384,7 @@ def test_spam_applications_go_and_real_leads_stay(db):
                     "INSERT INTO applications (id, first_name, last_name, email,"
                     " phone, telegram_handle, instagram_handle, monthly_revenue,"
                     " experience_level, goals, created_at) VALUES (:id, 'A', 'B',"
-                    " 'a@b.co', '', :tg, :ig, '', '', :goals, 0)"
+                    " 'a@b.co', '', :tg, :ig, '', '', :goals, 0)",
                 ),
                 {"id": row_id, "tg": telegram, "ig": instagram, "goals": goals},
             )
@@ -395,8 +402,8 @@ def test_a_hidden_snapchat_count_becomes_unknown_and_others_stay(db):
             text(
                 "INSERT INTO users (email, name, role, active,"
                 " google_refresh_token, password_hash) VALUES"
-                " ('s@example.com', '', 'user', true, '', '') RETURNING id"
-            )
+                " ('s@example.com', '', 'user', true, '', '') RETURNING id",
+            ),
         ).scalar_one()
         for platform, handle, seen in (
             ("snapchat", "quiet", 0),
@@ -406,7 +413,7 @@ def test_a_hidden_snapchat_count_becomes_unknown_and_others_stay(db):
             account = conn.execute(
                 text(
                     "INSERT INTO tracked_accounts (user_id, platform, handle)"
-                    " VALUES (:user, :platform, :handle) RETURNING id"
+                    " VALUES (:user, :platform, :handle) RETURNING id",
                 ),
                 {"user": user, "platform": platform, "handle": handle},
             ).scalar_one()
@@ -414,7 +421,7 @@ def test_a_hidden_snapchat_count_becomes_unknown_and_others_stay(db):
                 text(
                     "INSERT INTO tracked_account_snapshots"
                     " (account_id, taken_at, followers, metrics)"
-                    " VALUES (:account, 1, :followers, '{}')"
+                    " VALUES (:account, 1, :followers, '{}')",
                 ),
                 {"account": account, "followers": seen},
             )
@@ -424,8 +431,8 @@ def test_a_hidden_snapchat_count_becomes_unknown_and_others_stay(db):
             rows = conn.execute(
                 text(
                     "SELECT a.handle, s.followers FROM tracked_account_snapshots s"
-                    " JOIN tracked_accounts a ON a.id = s.account_id ORDER BY a.handle"
-                )
+                    " JOIN tracked_accounts a ON a.id = s.account_id ORDER BY a.handle",
+                ),
             ).all()
         return [(handle, count) for handle, count in rows]
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -21,8 +23,9 @@ class CloneExampleRepository:
         with session_scope() as s:
             rows = s.execute(
                 select(CloneExampleRow).order_by(
-                    CloneExampleRow.position, CloneExampleRow.id
-                )
+                    CloneExampleRow.position,
+                    CloneExampleRow.id,
+                ),
             ).scalars()
             return [_example(r) for r in rows]
 
@@ -33,7 +36,7 @@ class CloneExampleRepository:
 
     def add(self, job_id: str, title: str, prompt: str) -> CloneExample:
         last = select(CloneExampleRow.position).order_by(
-            CloneExampleRow.position.desc()
+            CloneExampleRow.position.desc(),
         )
         with session_scope() as s:
             position = (s.execute(last.limit(1)).scalar_one_or_none() or 0) + 1
@@ -44,7 +47,7 @@ class CloneExampleRepository:
                     constraint="uq_clone_examples_job_id",
                     set_={"title": title, "prompt": prompt},
                 )
-                .returning(CloneExampleRow)
+                .returning(CloneExampleRow),
             ).scalar_one()
             return _example(row)
 
@@ -53,6 +56,6 @@ class CloneExampleRepository:
             gone = s.execute(
                 delete(CloneExampleRow)
                 .where(CloneExampleRow.id == example_id)
-                .returning(CloneExampleRow.id)
+                .returning(CloneExampleRow.id),
             )
             return bool(gone.all())

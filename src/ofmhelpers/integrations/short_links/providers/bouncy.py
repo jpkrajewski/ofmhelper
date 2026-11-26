@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
+lazy from collections.abc import Mapping
 
 from pydantic import BaseModel, Field
 lazy import requests
@@ -47,7 +50,7 @@ def _code(response: requests.Response) -> str | None:
     return body.get("code") if isinstance(body, dict) else None
 
 
-def _timestamp(value: Any) -> float | None:
+def _timestamp(value: Mapping[str, Any] | str | None) -> float | None:
     if isinstance(value, dict) and "_seconds" in value:
         return float(value["_seconds"])
     if isinstance(value, str):
@@ -88,7 +91,7 @@ def _spans(start: date, end: date, size: int) -> list[Span]:
     return spans
 
 
-def _remote(link: dict[str, Any], adult: bool | None = None) -> RemoteLink:
+def _remote(link: dict[str, Any], adult: bool | None = None) -> RemoteLink:  # noqa: FBT001
     return RemoteLink(
         remote_id=link["id"],
         slug=link.get("slug") or link["id"],
@@ -134,7 +137,9 @@ class BouncyProvider(LinkProvider):
             self.enable_adult(made["id"])
         except LinkError:
             logger.warning(
-                "bouncy %s: no 18+ gate, deleting it", made["id"], exc_info=True
+                "bouncy %s: no 18+ gate, deleting it",
+                made["id"],
+                exc_info=True,
             )
             try:
                 self.delete(made["id"])

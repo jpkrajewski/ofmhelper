@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Sequence
 lazy from http.cookiejar import Cookie
 

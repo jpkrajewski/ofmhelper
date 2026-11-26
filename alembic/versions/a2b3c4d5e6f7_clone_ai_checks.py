@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -66,7 +68,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
-            ["check_id"], ["clone_ai_checks.id"], ondelete="SET NULL"
+            ["check_id"],
+            ["clone_ai_checks.id"],
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("job_id", "file_index", name="uq_clone_from_links_file"),

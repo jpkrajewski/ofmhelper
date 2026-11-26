@@ -1,7 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File
 
+from ofmhelpers.features.assets.models import ImageUpload
 from ofmhelpers.features.downloads import clean
 from ofmhelpers.features.downloads.clean import run_clean as _run_clean
 from ofmhelpers.features.jobs.schema import JobQueued
@@ -22,9 +25,12 @@ router = APIRouter(
 def run(
     actor: Actor,
     assets_root: AssetsRoot,
-    files: Annotated[list[UploadFile] | None, File()] = None,
+    files: Annotated[
+        list[ImageUpload],
+        File(min_length=1, media_type="image/*"),
+    ],
 ) -> JobQueued:
-    return clean.start(files or [], actor, assets_root)
+    return clean.start(files, actor, assets_root)
 
 
 add_job_routes(

@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+lazy from pydantic import JsonValue
 
 TWEET = "tweet"
 MOCK_TWEET = "mock_tweet"
@@ -29,7 +32,7 @@ class ApifyTweetAuthor(_Item):
 
     @field_validator("id", mode="before")
     @classmethod
-    def _as_text(cls, value: object) -> object:
+    def _as_text(cls, value: JsonValue) -> str:
         return "" if value is None else str(value)
 
 
@@ -53,12 +56,12 @@ class ApifyTweet(_Item):
 
     @field_validator("id", mode="before")
     @classmethod
-    def _as_text(cls, value: object) -> object:
+    def _as_text(cls, value: JsonValue) -> str:
         return str(value)
 
     @field_validator("created_at", mode="before")
     @classmethod
-    def _twitter_time(cls, value: object) -> object:
+    def _twitter_time(cls, value: JsonValue) -> datetime | JsonValue:
         if isinstance(value, str):
             return datetime.strptime(value, "%a %b %d %H:%M:%S %z %Y")
         return value

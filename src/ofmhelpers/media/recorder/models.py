@@ -1,4 +1,6 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 import random
 from enum import IntEnum, StrEnum
 
@@ -144,11 +146,11 @@ class Recording(_Frozen):
     @classmethod
     def ending_now(
         cls,
-        tz: datetime.tzinfo,
+        tz: dt.tzinfo,
         place: Place | None = None,
         rng: random.Random | None = None,
     ) -> Recording:
-        end = datetime.datetime.now(tz)
+        end = dt.datetime.now(tz)
         if place is None:
             return cls(end=end, duration_s=0)
         at = place.sample(rng or random.Random())  # noqa: S311 - not cryptography
@@ -160,8 +162,8 @@ class Recording(_Frozen):
         )
 
     @property
-    def start(self) -> datetime.datetime:
-        return self.end - datetime.timedelta(seconds=self.duration_s)
+    def start(self) -> dt.datetime:
+        return self.end - dt.timedelta(seconds=self.duration_s)
 
     def value(self, field: PerRecording) -> str | None:
         if field is PerRecording.CREATION_DATE:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 lazy from pathlib import Path
 
@@ -72,11 +74,11 @@ def test_nano_banana_pro_sends_gemini_body_and_keeps_the_last_image(provider):
                     "parts": [
                         {"inlineData": {"mimeType": "image/png", "data": draft}},
                         {"inlineData": {"mimeType": "image/png", "data": final}},
-                    ]
+                    ],
                 },
                 "finishReason": "STOP",
-            }
-        ]
+            },
+        ],
     }
 
     [saved] = _run(
@@ -97,7 +99,9 @@ def test_nano_banana_pro_sends_gemini_body_and_keeps_the_last_image(provider):
 
 
 def test_nano_banana_references_go_inline_with_no_public_address(
-    provider, monkeypatch, image
+    provider,
+    monkeypatch,
+    image,
 ):
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
 
@@ -188,7 +192,9 @@ def test_gpt_image_references_go_as_files_to_edits(provider, image, model, field
     ["seedream-5-0-flash-260915", "seedream-5-5-261028"],
 )
 def test_seedream_sends_data_urls_without_a_watermark_and_saves_the_url(
-    provider, image, model
+    provider,
+    image,
+    model,
 ):
     [saved] = _run(
         provider,
@@ -232,7 +238,9 @@ def test_flux_text_to_image_sends_its_size_not_a_ratio(provider):
 
 
 def test_seedance_reference_run_sends_ark_content_and_saves_the_video(
-    provider, image, video
+    provider,
+    image,
+    video,
 ):
     [saved] = _run(
         provider,
@@ -362,7 +370,8 @@ def test_veo_1080p_takes_only_8_seconds():
 
 
 def test_an_image_model_on_the_admins_wan_key_runs_on_the_default_groups(
-    provider, monkeypatch
+    provider,
+    monkeypatch,
 ):
     monkeypatch.setenv("APIYI_API_KEY_WAN", "sk-adminWanKey0123456789abcdefghijkl")
     monkeypatch.setenv("APIYI_API_KEY_DEFAULT", FAKE_KEY)
@@ -390,7 +399,10 @@ def test_a_pictures_run_on_apiyi_is_nano_banana_pro_at_2k(provider, image):
             "prompt": "Refer to the first images, replicate the last one",
             "reference_images": [str(image), str(image)],
             "aspect_ratio": pictures.run_aspect(
-                "3:4", str(image), target.spec, target.aspect
+                "3:4",
+                str(image),
+                target.spec,
+                target.aspect,
             ),
             "resolution": pictures._resolution(target.spec, target.resolution),
         },

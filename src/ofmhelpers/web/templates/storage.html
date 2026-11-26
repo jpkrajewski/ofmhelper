@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Storage — Ascend Global LLC{% endblock %}
+{% block content %}
+{% set u = view.usage %}
+{{ ui.page_header("Storage", ("Scanned " ~ u.scanned_at|ago) if u else None) }}
+
+<div class="generation-status" id="st-status" role="status" aria-live="polite"></div>
+
+{% if not view.connected %}
+{% call ui.notice(kind="warn") %}
+    <span>Connect Google Drive to see what it holds</span>
+    {{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/storage") }}
+{% endcall %}
+{% else %}
+<div class="st-page"{% if view.scanning or view.moving %} data-refresh{% endif %}>
+    {% if u %}
+    {% set totals = u.totals %}
+    <div class="stat-grid">
+        {{ ui.stat("Google Drive used", u.quota.usage|filesizeformat, ("of " ~ u.quota.limit|filesizeformat) if u.quota.limit else None) }}
+        {% if u.quota.free is not none %}{{ ui.stat("Free", u.quota.free|filesizeformat) }}{% endif %}
+        {{ ui.stat("Account folders", totals.total|filesizeformat) }}
+    </div>
+    {% endif %}
+
+    {% if view.moving %}
+    {% call ui.notice() %}<span class="spinner"></span> Moving {{ view.moving.part|lower }} to the bin…{% endcall %}
+    {% elif view.moved %}
+    {% call ui.notice(kind="ok") %}
+        <span>Moved {{ view.moved.items }} items ({{ view.moved.bytes|filesizeformat }}) of {{ view.moved.part|lower }} to the Google Drive bin</span>
+        {{ ui.button("Open bin", href=view.bin_url, icon="external", attrs={"target": "_blank", "rel": "noopener"}) }}
+    {% endcall %}
+    {% elif view.move_failed %}
+    {{ ui.notice("Could not move everything to the bin. Try again.", kind="fail") }}
+    {% endif %}
+    {% if view.scan_failed %}{{ ui.notice("Could not read Google Drive. Showing the last scan.", kind="fail") }}{% endif %}
+
+    {% if u %}
+    {% if not view.moving %}
+    <div class="ph-toolbar">
+        <div class="toolbar-actions">
+            {% for part in view.parts if totals.of(part) %}
+            {{ ui.button("Move all " ~ part|lower ~ " to bin", icon="trash", hook="st-bin", attrs={"data-part": part, "data-confirm": (part|capitalize) ~ " of every account folder · " ~ totals.of(part)|filesizeformat}) }}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if u.folders %}
+    {% call ui.table(hook="st-table") %}
+        <thead>
+            <tr>
+                <th>Account folder</th>
+                <th>Total</th>
+                {% for part in view.parts %}<th>{{ part|capitalize }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in u.folders %}
+            <tr>
+                <td>{{ f.name }}</td>
+                <td>{{ f.sizes.total|filesizeformat if f.sizes.total else "—" }}</td>
+                {% for part in view.parts %}
+                {% set size = f.sizes.of(part) %}
+                <td>
+                    <span class="st-size">{{ size|filesizeformat if size else "—" }}</span>
+                    {% if size and not view.moving %}{{ ui.icon_button("trash", "Move " ~ part|lower ~ " of " ~ f.name ~ " to bin", hook="st-bin", attrs={"data-part": part, "data-folder": f.folder_id, "data-confirm": (part|capitalize) ~ " of " ~ f.name ~ " · " ~ size|filesizeformat}) }}{% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+    {% else %}
+    {{ ui.empty("No account folders in Google Drive yet") }}
+    {% endif %}
+    {% elif view.scanning %}
+    {% call ui.notice() %}<span class="spinner"></span> Reading Google Drive…{% endcall %}
+    {% endif %}
+</div>
+{% endif %}
+
+<dialog class="accounts-dialog" id="st-confirm">
+    <form method="dialog">
+        <h2>Move to the Google Drive bin?</h2>
+        <p id="st-confirm-text"></p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", attrs={"id": "st-confirm-back"}) }}
+            {{ ui.button("Move to bin", "primary", icon="trash", attrs={"id": "st-confirm-go"}) }}
+        </div>
+    </form>
+</dialog>
+
+<script src="{{ static_url('js/storage.js') }}"></script>
+{% endblock %}

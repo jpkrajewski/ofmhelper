@@ -1,14 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, timedelta
 
 import pytest
 from pydantic import ValidationError
 
-from ofmhelpers.db.short_links.schema import (
-    GenerateLinks,
-    LinkPeriod,
-    LinkSummary,
-    ShortLink,
-)
+from ofmhelpers.db.short_links.models import GenerateLinks, LinkSummary, ShortLink
+from ofmhelpers.db.short_links.schema import LinkPeriod
 from ofmhelpers.integrations.short_links import (
     Usage,
     detect_target,
@@ -124,7 +122,7 @@ def _link(days: list[tuple[int, int, int]], **fields) -> ShortLink:
                 for ago, v, c in days
             ],
             **fields,
-        }
+        },
     )
 
 

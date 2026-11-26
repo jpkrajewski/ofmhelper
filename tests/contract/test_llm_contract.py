@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Literal
 
 import pytest
@@ -58,7 +60,10 @@ def video(tmp_path):
 
 
 def _ask[A: BaseModel](
-    backend: str, provider: str, prompt: Prompt, answer: type[A]
+    backend: str,
+    provider: str,
+    prompt: Prompt,
+    answer: type[A],
 ) -> A:
     try:
         return get_llm(provider=provider).ask(prompt, answer)
@@ -74,7 +79,7 @@ def test_an_image_is_answered_in_the_asked_shape(backend, provider, tmp_path):
     found = _ask(
         backend,
         provider,
-        Prompt.of("Which colour fills this image?", image),
+        Prompt.of(["Which colour fills this image?", image]),
         ImageFacts,
     )
     assert isinstance(found, ImageFacts)
@@ -86,21 +91,28 @@ def test_a_video_is_answered_in_the_asked_shape(backend, provider, video):
     found = _ask(
         backend,
         provider,
-        Prompt.of("Is anything moving in this video, and how long is it?", video),
+        Prompt.of(["Is anything moving in this video, and how long is it?", video]),
         VideoFacts,
     )
     assert isinstance(found.seconds, int)
 
 
 def test_gemini_takes_a_video_too_big_to_inline_through_an_upload(
-    backend, video, monkeypatch
+    backend,
+    video,
+    monkeypatch,
 ):
     if backend == "fake":
         monkeypatch.setenv("GEMINI_API_KEY", GEMINI_KEY)
     elif not llm_class("gemini").default_key():
         pytest.skip("no GEMINI_API_KEY in .env")
     monkeypatch.setenv("OFM_LLM_INLINE_MAX_BYTES", "1")
-    found = _ask(backend, "gemini", Prompt.of("Is anything moving?", video), VideoFacts)
+    found = _ask(
+        backend,
+        "gemini",
+        Prompt.of(["Is anything moving?", video]),
+        VideoFacts,
+    )
     assert isinstance(found.moving, bool)
 
 
@@ -108,12 +120,14 @@ def test_a_wrong_key_is_refused(provider):
     label = PROVIDERS[provider][2]
     with pytest.raises(LLMAuthError, match=f"{label}: wrong API key"):
         get_llm(provider=provider, api_key="contract-test-invalid-key").ask(
-            Prompt.of("Say hi"), ImageFacts
+            Prompt.of(["Say hi"]),
+            ImageFacts,
         )
 
 
 def test_an_unknown_model_is_a_setup_error(provider):
     with pytest.raises(LLMConfigError):
         get_llm(provider=f"{provider}:no-such-model-0").ask(
-            Prompt.of("Say hi"), ImageFacts
+            Prompt.of(["Say hi"]),
+            ImageFacts,
         )

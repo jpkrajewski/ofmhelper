@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from typing import Any
 
@@ -5,7 +7,11 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.db.jobs.schema import Job, JobParams
-from ofmhelpers.features.jobs.schema import TaskCard
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
+from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.features.threads.tasks import TASK as THREADS_TASK
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
@@ -40,7 +46,7 @@ GENERATE_TOOLS = frozendict(
             task: Tool(label=label, router=router, form_params=as_ai_params)
             for task, (label, router) in LEGACY_TOOLS.items()
         },
-    }
+    },
 )
 
 DOWNLOAD_TOOLS = frozendict(
@@ -49,7 +55,7 @@ DOWNLOAD_TOOLS = frozendict(
         "download_videos": Tool(label="Download videos", router=videos.router),
         "download_images": Tool(label="Download images", router=images.router),
         "clean_images": Tool(label="Clean images", router=clean_image.router),
-    }
+    },
 )
 
 
@@ -58,8 +64,8 @@ TOOLS = frozendict(
         **GENERATE_TOOLS,
         **DOWNLOAD_TOOLS,
         "clone": Tool(label="Clone", router=clone.router),
-        clone_links.TASK: Tool(
-            label=clone_links.LABEL,
+        CloneLinksTask.RUN: Tool(
+            label=clone_links_constants().label,
             router=clone_links.router,
         ),
         clone_long.TASK: Tool(
@@ -76,7 +82,7 @@ TOOLS = frozendict(
             router=pictures.router,
             describe=pictures.describe,
         ),
-    }
+    },
 )
 
 
@@ -89,6 +95,8 @@ def task_card(job: Job) -> TaskCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=tool.describe(job) if tool.describe else tool.label,
-        poll_prefix=tool.prefix,
+        {
+            "task_label": tool.describe(job) if tool.describe else tool.label,
+            "poll_prefix": tool.prefix,
+        },
     )

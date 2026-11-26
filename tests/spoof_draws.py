@@ -1,6 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 
-from ofmhelpers.features.repurpose import service
 from ofmhelpers.media.repurpose import command
 from ofmhelpers.media.repurpose.devices import load_device
 from ofmhelpers.media.repurpose.presets import load_preset
@@ -13,13 +14,16 @@ SOURCE = Source(duration=11.0, width=2160, height=3840, has_audio=True)
 
 
 def drawn_step(seed: int) -> EncodeStep:
-    preset = load_preset(service.PRESET)
+    preset = load_preset("spoof")
     assert preset.device is not None
     device = load_device(preset.device)
     rng = random.Random(seed)  # noqa: S311 - seeded draws, not cryptography
     video = VideoTransformer(preset.video, SOURCE, device.output_size(SOURCE), rng)
     audio = AudioTransformer(
-        preset.audio, video.timeline.speed, device.audio.sample_rate, rng
+        preset.audio,
+        video.timeline.speed,
+        device.audio.sample_rate,
+        rng,
     )
     return EncodeStep(
         command=[],

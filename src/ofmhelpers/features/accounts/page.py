@@ -1,10 +1,13 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.devices.catalog import tracked_services
-from ofmhelpers.db.devices.schema import PhonesByAccount
+from ofmhelpers.db.devices.models import PhonesByAccount
 from ofmhelpers.db.devices.store import phones_by_account
-from ofmhelpers.db.short_links.schema import LinkPeriod, ShortLink
+from ofmhelpers.db.short_links.models import ShortLink
+from ofmhelpers.db.short_links.schema import LinkPeriod
 from ofmhelpers.db.short_links.store import links_by_account
 from ofmhelpers.db.tracked_accounts import store
 from ofmhelpers.db.tracked_accounts.schema import (
@@ -12,7 +15,6 @@ from ofmhelpers.db.tracked_accounts.schema import (
     AccountQuery,
     AccountSort,
     AccountSummary,
-    AddAccounts,
     AddResult,
     FollowerChart,
     Period,
@@ -24,6 +26,7 @@ from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.integrations.socials import platforms
 from ofmhelpers.integrations.socials.platforms.base import Platform
+lazy from ofmhelpers.db.tracked_accounts.models import AddAccounts
 
 
 class ListView(BaseModel):
@@ -65,7 +68,7 @@ def _periods() -> list[Period]:
     return [Period(days=d) for d in settings.accounts.periods_days]
 
 
-def _ask_for_cookies(limited: bool, user_id: int) -> bool:
+def _ask_for_cookies(limited: bool, user_id: int) -> bool:  # noqa: FBT001
     return limited and cookie_jar.saved(user_id) is None
 
 
@@ -109,7 +112,8 @@ def analytics_view(account_id: int, query: AccountQuery, scope: int) -> Analytic
         chart=history.follower_chart(period.days, s.rescan_interval_s),
         top=account.top_posts(period.days, s.top_posts),
         ask_for_cookies=_ask_for_cookies(
-            bool(account.metrics and account.metrics.limited), scope
+            bool(account.metrics and account.metrics.limited),
+            scope,
         ),
         period=period,
         periods=_periods(),

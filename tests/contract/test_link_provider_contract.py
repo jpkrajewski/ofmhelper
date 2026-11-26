@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import uuid
 from datetime import timedelta
 
@@ -69,7 +71,7 @@ def listed(provider, backend):
             domain=provider_infos()[provider.key].default_domain,
             destination="https://example.com/",
             title="contract test",
-        )
+        ),
     )
     try:
         yield provider
@@ -159,7 +161,7 @@ def _round_trip(provider) -> None:
             domain=info.default_domain,
             destination="https://example.com/",
             title="contract test",
-        )
+        ),
     )
     try:
         assert made.slug == slug
@@ -183,7 +185,7 @@ def test_real_bouncy_link_shows_the_18_plus_page(real_env):
     provider = get_link_provider("bouncy")(settings.links.admin_key("bouncy"))
     slug = f"ofmh-contract-{uuid.uuid4().hex[:8]}"
     made = provider.create(
-        NewLink(slug=slug, domain="bouncy.ai", destination="https://example.com/")
+        NewLink(slug=slug, domain="bouncy.ai", destination="https://example.com/"),
     )
     try:
         assert made.active, "Bouncy's active link limit is reached"

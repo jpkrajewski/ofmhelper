@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -25,9 +27,7 @@ RoleField = Annotated[Role, Form()]
 
 def _page(request: Request, me_id: int, shown: Shown) -> Response:
     view = service.page_view(me_id, shown)
-    response = render(
-        request, "users.html", **dict(view), status_code=shown.status_code
-    )
+    response = render(request, "users.html", dict(view), status_code=shown.status_code)
     response.headers.update(_PRIVATE)
     return response
 
@@ -45,7 +45,7 @@ def users_page(request: Request, me: CurrentUser) -> Response:
 
 
 @router.post("")
-def add(
+def add(  # noqa: PLR0913, PLR0917
     request: Request,
     me: CurrentUser,
     email: Annotated[str, Form()],
@@ -75,7 +75,8 @@ def set_password(
 
 @router.post("/{user_id}/owner")
 def change_owner(
-    user: OtherUser, owner_id: Annotated[int | None, Form()] = None
+    user: OtherUser,
+    owner_id: Annotated[int | None, Form()] = None,
 ) -> Response:
     service.set_owner(user, owner_id)
     return see_other("/users")

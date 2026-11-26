@@ -1,14 +1,13 @@
-from functools import wraps
-lazy from collections.abc import Callable
+# Copyright (C) 2026 jpkrajewski
+
+from contextlib import contextmanager
+lazy from collections.abc import Iterator
 lazy from pathlib import Path
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, UploadFile
 
 from ofmhelpers.features.assets import store
 from ofmhelpers.features.assets.store import (
-    IMAGE_KINDS,
-    MEDIA_KINDS,
-    VIDEO_KINDS,
     assets_root,
     assets_root_for_actor,
     assets_root_for_user,
@@ -19,28 +18,15 @@ from ofmhelpers.features.assets.store import (
     strip_asset_hash_prefix,
     uploads_root,
 )
-from ofmhelpers.features.kinds import (
-    AUDIO_EXTS,
-    IMAGE_EXTS,
-    VIDEO_EXTS,
-    classify_kind,
-)
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import AssetRefusedError
 from ofmhelpers.web.middleware import AuthMiddleware
 
 __all__ = [
-    "AUDIO_EXTS",
-    "IMAGE_EXTS",
-    "IMAGE_KINDS",
-    "MEDIA_KINDS",
-    "VIDEO_EXTS",
-    "VIDEO_KINDS",
     "assets_root",
     "assets_root_for",
     "assets_root_for_actor",
     "assets_root_for_user",
-    "classify_kind",
-    "convert_heic_upload",
     "in_asset_root",
     "make_job_dir",
     "refused_as_400",
@@ -59,20 +45,31 @@ def assets_root_for(request: Request) -> Path:
     return assets_root_for_user(AuthMiddleware.user(request).id)
 
 
-def refused_as_400[**P, T](fn: Callable[P, T]) -> Callable[P, T]:
-
-    @wraps(fn)
-    def call(*args: P.args, **kwargs: P.kwargs) -> T:
-        try:
-            return fn(*args, **kwargs)
-        except AssetRefusedError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from None
-
-    return call
+@contextmanager
+def refused_as_400() -> Iterator[None]:
+    try:
+        yield
+    except AssetRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
-require_upload_kind = refused_as_400(store.require_upload_kind)
-convert_heic_upload = refused_as_400(store.convert_heic_upload)
-safe_filename = refused_as_400(store.safe_filename)
-save_asset = refused_as_400(store.save_asset)
-save_upload = refused_as_400(store.save_upload)
+def require_upload_kind(name: str | None, allowed: frozenset[FileKind]) -> str:
+    with refused_as_400():
+        safe = store.safe_filename(name)
+        store.require_upload_kind(FileKind.from_ext(safe), allowed)
+        return safe
+
+
+def safe_filename(name: str | None) -> str:
+    with refused_as_400():
+        return store.safe_filename(name)
+
+
+def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
+    with refused_as_400():
+        return store.save_asset(upload, assets_root)
+
+
+def save_upload(job_dir: Path, upload: UploadFile) -> str:
+    with refused_as_400():
+        return store.save_upload(job_dir, upload)

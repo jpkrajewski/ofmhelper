@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -79,7 +81,8 @@ class FanvueSite:
         if not settings.fanvue.event_secret:
             return None
         return FanStats(
-            subs=self._subs.get(username, 0), cents=self._cents.get(username, 0)
+            subs=self._subs.get(username, 0),
+            cents=self._cents.get(username, 0),
         )
 
 

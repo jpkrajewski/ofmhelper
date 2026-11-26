@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.distribution import store
 from ofmhelpers.db.self_links import store as self_links
 from ofmhelpers.db.short_links import store as short_links

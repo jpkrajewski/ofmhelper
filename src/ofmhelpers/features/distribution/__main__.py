@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import json
 from pathlib import Path
@@ -21,8 +23,8 @@ def _preset(args: argparse.Namespace) -> None:
                 "saved": saved.key,
                 "title": saved.title,
                 "captions": len(saved.descriptions),
-            }
-        )
+            },
+        ),
     )
 
 
@@ -36,8 +38,8 @@ def _presets(args: argparse.Namespace) -> None:
                     "creator": found.creator,
                     "captions": len(found.descriptions),
                     "instagram": found.instagram,
-                }
-            )
+                },
+            ),
         )
 
 
@@ -47,7 +49,10 @@ def _main() -> None:
     days = commands.add_parser("report", help="day by day, per account")
     days.add_argument("--days", type=int, default=7)
     days.add_argument(
-        "--owner", type=int, default=None, help="one person's (default: all)"
+        "--owner",
+        type=int,
+        default=None,
+        help="one person's (default: all)",
     )
     days.set_defaults(run=_report)
     one = commands.add_parser("preset", help="save a model's preset (JSON file)")

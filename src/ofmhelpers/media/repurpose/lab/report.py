@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import csv
 import html
@@ -164,7 +166,7 @@ def _flat(t: TrialRow) -> _FlatRow:
             "change_db": t.change_db,
             "over_cap": t.over_cap,
             "knobs": " ".join(f"{k}={v:g}" for k, v in sorted(t.strengths.items())),
-        }
+        },
     )
 
 
@@ -182,7 +184,7 @@ def _validate(job: tuple[str, dict[str, float], str, int, str]) -> Measurement:
 
 
 def _side_by_side(source: Path, copy: Path, dst: Path) -> None:
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [
             binary("ffmpeg"),
             "-y",
@@ -268,12 +270,14 @@ def main(argv: list[str] | None = None) -> None:
         presets[name] = strengths
         made = preset(
             strengths,
-            label=f"stealth {name}: lab pick (video {v.trial if v else '-'}, audio {a.trial if a else '-'})",
+            label=f"stealth {name}: lab pick (video "
+            f"{v.trial if v else '-'}, audio {a.trial if a else '-'})",
         )
         body = made.model_dump(mode="json", exclude_unset=True)
         body["device"] = "strip"
         (report / "presets" / f"stealth_{name}.json").write_text(
-            json.dumps(body, indent=2), encoding="utf-8"
+            json.dumps(body, indent=2),
+            encoding="utf-8",
         )
 
     jobs = [
@@ -324,10 +328,11 @@ def main(argv: list[str] | None = None) -> None:
                 "sound found % (mean)": _avg([m.audio for m in ms]),
                 "VMAF (mean)": _avg([m.vmaf for m in ms]),
                 "VMAF (min)": min(
-                    (m.vmaf for m in ms if m.vmaf is not None), default=None
+                    (m.vmaf for m in ms if m.vmaf is not None),
+                    default=None,
                 ),
                 "sound change dB (mean)": _avg([m.audio_change_db for m in ms]),
-            }
+            },
         )
     examples = []
     for name in presets:
@@ -346,8 +351,10 @@ def main(argv: list[str] | None = None) -> None:
         for p in picks
     ]
     videos = "".join(
-        f"<figure><video controls preload='metadata' src='examples/{html.escape(f)}'></video>"
-        f"<figcaption>stealth_{html.escape(n)} · {html.escape(c)} (left source, right copy)</figcaption></figure>"
+        f"<figure><video controls preload='metadata' "
+        f"src='examples/{html.escape(f)}'></video>"
+        f"<figcaption>stealth_{html.escape(n)} · {html.escape(c)} "
+        f"(left source, right copy)</figcaption></figure>"
         for n, c, f in examples
     )
     page = f"""<!doctype html><meta charset=utf-8><title>Repurpose lab</title>

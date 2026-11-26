@@ -1,4 +1,5 @@
-import asyncio
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 import time
@@ -12,7 +13,7 @@ from rq.registry import FailedJobRegistry, ScheduledJobRegistry
 import ofmhelpers.features.events.dispatch as dispatch_module
 from ofmhelpers.cache import QueueName, get_queue, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.features.events import Event, emit, emits, listening
+from ofmhelpers.features.events import Event, emit, listening
 from ofmhelpers.integrations.senders.telegram import TelegramClient
 from ofmhelpers.integrations.senders.telegram.fake import (
     TOKEN,
@@ -83,7 +84,7 @@ def test_an_event_with_a_key_reaches_each_chat_once():
 
 def test_a_key_whose_send_failed_can_be_sent_again():
     fake_telegram().fail_next.append(
-        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
     )
     emit(_clicks(key="links.clicks:3000:42"))
 
@@ -135,7 +136,7 @@ def test_without_a_bot_token_nothing_is_sent(monkeypatch):
 
 def test_a_failed_send_fails_neither_the_producer_nor_the_other_chats():
     fake_telegram().fail_next.append(
-        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+        error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
     )
 
     emit(_clicks())
@@ -166,7 +167,7 @@ def test_a_flood_answer_is_waited_out_and_sent_in_place(waits, capfire):
 
 def test_a_chat_that_is_gone_is_given_up_at_once(capfire, caplog):
     fake_telegram().fail_next.append(
-        error(HTTPStatus.FORBIDDEN, "Forbidden: bot was kicked from the group chat")
+        error(HTTPStatus.FORBIDDEN, "Forbidden: bot was kicked from the group chat"),
     )
 
     emit(_clicks())
@@ -186,93 +187,12 @@ def test_a_group_that_became_a_supergroup_still_gets_it(caplog):
     assert _GROUP not in caplog.text.split("refused")[0]
 
 
-def test_emits_sends_what_build_makes_and_keeps_the_result():
-    @emits(lambda clicks, link: Event(name="links.clicks", title=f"{clicks} on {link}"))
-    def count(link: str) -> int:
-        return 3000
-
-    assert count("bio") == 3000
-    assert fake_telegram().sent == _sent_to(*_CHATS, text="3000 on bio")
-
-
-def test_emits_on_an_async_function():
-    @emits(lambda views, **_: Event(name="accounts.views", title=f"{views} views"))
-    async def views(*, day: str) -> int:
-        return 5000
-
-    assert asyncio.run(views(day="2026-11-06")) == 5000
-    assert fake_telegram().sent == _sent_to(*_CHATS, text="5000 views")
-
-
-def test_emits_on_a_method():
-    class Links:
-        @emits(lambda clicks, links: Event(name="n", title=f"{clicks} {links.name}"))
-        def clicks(self) -> int:
-            return 7
-
-        name = "bio"
-
-    assert Links().clicks() == 7
-    assert fake_telegram().sent == _sent_to(*_CHATS, text="7 bio")
-
-
-@pytest.mark.parametrize(
-    "build",
-    [
-        lambda clicks: None if clicks < 3000 else Event(name="n", title="t"),
-        lambda result: result["missing"],
-        lambda result: {"name": "n", "title": "t"},
-        lambda: Event(name="n", title="t"),
-    ],
-    ids=["none", "raises", "not an event", "wrong signature"],
-)
-def test_a_build_that_gives_no_event_sends_nothing_and_keeps_the_result(build):
-    @emits(build)
-    def few() -> int:
-        return 12
-
-    assert few() == 12
-    assert fake_telegram().sent == []
-
-
-def test_a_build_that_raises_says_which_function(caplog):
-    @emits(lambda result: result["missing"])
-    def refresh_links() -> dict:
-        return {}
-
-    refresh_links()
-
-    assert "event of test_a_build_that_raises_says_which_function." in caplog.text
-    assert "refresh_links not built" in caplog.text
-
-
-def test_a_function_that_raises_emits_nothing():
-    @emits(lambda *_: Event(name="n", title="t"))
-    def fails() -> None:
-        msg = "boom"
-        raise ValueError(msg)
-
-    with pytest.raises(ValueError, match="boom"):
-        fails()
-    assert fake_telegram().sent == []
-
-
 @pytest.mark.parametrize("thing", [None, {"name": "n", "title": "t"}, "3k clicks"])
 def test_emit_of_anything_but_an_event_is_logged_not_raised(thing, caplog):
     emit(thing)
 
     assert "emit takes an Event" in caplog.text
     assert fake_telegram().sent == []
-
-
-def test_what_emits_cannot_wrap_is_refused_when_decorating():
-    def gen():
-        yield 1
-
-    with pytest.raises(TypeError, match="generator"):
-        emits(lambda *_: None)(gen)
-    with pytest.raises(TypeError, match="under @classmethod"):
-        emits(lambda *_: None)(classmethod(lambda cls: 1))
 
 
 def test_the_chats_that_pressed_start_or_added_the_bot_are_listed_once():
@@ -333,17 +253,18 @@ class TestOnTheRealQueue:
     def test_a_send_has_a_short_time_limit_and_a_short_stay_when_failed(self):
         emit(_clicks())
         SimpleWorker([self._queue()], connection=get_redis()).work(
-            burst=True, max_jobs=1
+            burst=True,
+            max_jobs=1,
         )
 
         jobs = [self._queue().fetch_job(i) for i in self._queue().get_job_ids()]
         assert [(j.timeout, j.failure_ttl) for j in jobs if j] == [
-            (180, 14 * 24 * 3600)
+            (180, 14 * 24 * 3600),
         ] * 2
 
     def test_a_failed_send_is_tried_again_later_on_its_own(self):
         fake_telegram().fail_next.append(
-            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
         )
         emit(_clicks())
 
@@ -357,7 +278,9 @@ class TestOnTheRealQueue:
         assert job.retries_left == 1
 
     def test_a_send_failing_every_try_ends_in_the_failed_registry(
-        self, monkeypatch, capfire
+        self,
+        monkeypatch,
+        capfire,
     ):
         monkeypatch.setenv("OFM_EVENTS_RETRY_WAITS_S", "[]")
         fake_telegram().fail_next.append(error(HTTPStatus.BAD_GATEWAY, "Bad Gateway"))
@@ -371,7 +294,8 @@ class TestOnTheRealQueue:
     def test_switching_a_sender_off_stops_what_is_already_queued(self, monkeypatch):
         emit(_clicks())
         SimpleWorker([self._queue()], connection=get_redis()).work(
-            burst=True, max_jobs=1
+            burst=True,
+            max_jobs=1,
         )
         monkeypatch.setenv("OFM_EVENTS_SENDERS_OFF", "telegram")
 
@@ -383,7 +307,7 @@ class TestOnTheRealQueue:
         hide = _HideJobArguments()
         logging.getLogger("rq.worker").addFilter(hide)
         fake_telegram().fail_next.append(
-            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+            error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error"),
         )
         emit(_clicks())
 
@@ -395,7 +319,8 @@ class TestOnTheRealQueue:
 
         failures = [r for r in caplog.records if r.name == "rq.worker"]
         assert failures
-        assert {getattr(r, "arguments", None) for r in failures} == {"[hidden]"}
+        shown = {r.arguments for r in failures}  # type: ignore[attr-defined]
+        assert shown == {"[hidden]"}
 
 
 def test_a_message_that_replaces_deletes_the_one_before_in_each_chat():
@@ -406,7 +331,7 @@ def test_a_message_that_replaces_deletes_the_one_before_in_each_chat():
 
     assert fake_telegram().deleted == first
     assert [m.text.split("\n")[0] for m in fake_telegram().sent[2:]] == [
-        "4,000 clicks"
+        "4,000 clicks",
     ] * 2
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from urllib.parse import parse_qs, urlsplit
 
@@ -77,7 +79,9 @@ def test_a_link_of_a_person_deleted_since_is_refused_and_read_once():
     get_redis().set(
         "telegram:link:gone-person",
         PendingLink(
-            user_id=987_654_321, issued_at=time.time(), stamp=""
+            user_id=987_654_321,
+            issued_at=time.time(),
+            stamp="",
         ).model_dump_json(),
     )
     fake_telegram().wrote(555, text="/start gone-person")
@@ -141,8 +145,8 @@ def test_an_event_of_someone_goes_to_their_chat(role, linked, goes_to):
 
     dispatch(
         Event(name="vas.login", title="Ann logged in", owner_id=owner.id).model_dump(
-            mode="json"
-        )
+            mode="json",
+        ),
     )
 
     assert [chat for chat, _ in _sent_to()] == goes_to
@@ -154,8 +158,8 @@ def test_the_agencys_events_still_go_to_the_agencys_chats():
 
     dispatch(
         Event(name="reports.daily", title="Report", at=time.time()).model_dump(
-            mode="json"
-        )
+            mode="json",
+        ),
     )
 
     assert [chat for chat, _ in _sent_to()] == [AGENCY_CHAT]

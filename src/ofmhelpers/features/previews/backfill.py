@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import list_finished_jobs
@@ -11,7 +13,10 @@ GUARD_KEY = "previews:backfill"
 
 def backfill() -> int:
     if not get_redis().set(
-        GUARD_KEY, "1", nx=True, ex=settings.web.preview_backfill_guard_s
+        GUARD_KEY,
+        "1",
+        nx=True,
+        ex=settings.web.preview_backfill_guard_s,
     ):
         return 0
     queued = 0
@@ -19,7 +24,7 @@ def backfill() -> int:
         sources = job.local_paths()
         if is_warm(job.id, sources):
             continue
-        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, sources)
+        enqueue_to(QueueName.PREVIEWS, warm_previews, (job.id, sources))
         queued += 1
     logger.info("preview backfill: %d jobs queued", queued)
     return queued

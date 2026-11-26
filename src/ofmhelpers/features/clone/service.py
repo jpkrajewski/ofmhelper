@@ -1,19 +1,19 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict
-lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.drive_folders.schema import DriveUpload, UploadTarget
+from ofmhelpers.db.drive_folders.models import UploadTarget
 from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import ParamHistory, Readers, get_job
-from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_files
@@ -25,15 +25,19 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     clone_values,
 )
-from ofmhelpers.features.drive.uploads import targets as drive_targets
+from ofmhelpers.features.jobs.models import CloneCard
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.jobs.schema import CloneCard, CloneSource
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.jobs.schema import CloneSource
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import CloneRefusedError
+from ofmhelpers.integrations.ai_providers.base import provider_class
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.media.exports import exports
 from ofmhelpers.monitoring.telemetry import in_this_trace
+lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import ImageUpload, MediaUpload, VideoUpload
+lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
 TASK = "clone"
 PREFIX = "/clone"
@@ -74,7 +78,11 @@ def _shown_name(path: str) -> str:
 
 
 def check_choices(
-    provider: str, api_key: str, export: str, resolution: str, owner: int
+    provider: str,
+    api_key: str,
+    export: str,
+    resolution: str,
+    owner: int,
 ) -> RunChoices:
     provider = provider or settings.aigen.default_provider
     target = clone_targets().get(provider)
@@ -82,7 +90,7 @@ def check_choices(
         msg = "That provider cannot clone"
         raise CloneRefusedError(msg)
     api_key = Keys.of(owner).for_run(provider, target.model, api_key)
-    if not api_key:
+    if not api_key and provider_class(provider).needs_key:
         msg = "API key is required"
         raise CloneRefusedError(msg)
     export = export or settings.exports.default
@@ -109,8 +117,8 @@ def video_seconds(path: str, probe: Callable[[Path, int], float]) -> float:
         raise CloneRefusedError(msg) from exc
 
 
-def require_kind(paths: list[str], kind: str, label: str) -> None:
-    if any(classify_kind(p) != kind for p in paths):
+def require_kind(paths: list[str], kind: FileKind, label: str) -> None:
+    if any(FileKind.from_ext(p) != kind for p in paths):
         msg = f"{label} must be {kind} files"
         raise CloneRefusedError(msg)
 
@@ -136,18 +144,18 @@ def _require_max_length(paths: list[str], seconds: list[float], limit: int) -> N
             raise CloneRefusedError(msg)
 
 
-def plan_runs(
+def plan_runs(  # noqa: PLR0913, PLR0917
     choices: RunChoices,
     prompt: str,
-    audio: bool,
-    mirror: bool,
+    audio: bool,  # noqa: FBT001
+    mirror: bool,  # noqa: FBT001
     images: list[str],
     videos: list[str],
     probe: Callable[[str], float],
 ) -> list[CloneRun]:
     _require_counts(images, videos)
-    require_kind(images, "image", "The subject")
-    require_kind(videos, "video", "Videos")
+    require_kind(images, FileKind.IMAGE, "The subject")
+    require_kind(videos, FileKind.VIDEO, "Videos")
     target = choices.target
     with ThreadPoolExecutor(settings.web.clone_probe_workers) as pool:
         seconds = list(pool.map(in_this_trace(probe), videos))
@@ -157,8 +165,14 @@ def plan_runs(
         for video, duration in zip(videos, durations, strict=True):
             target.spec.check(
                 clone_values(
-                    target, prompt, choices.resolution, duration, audio, images, video
-                ).model_dump()
+                    target,
+                    prompt,
+                    choices.resolution,
+                    duration,
+                    audio,
+                    images,
+                    video,
+                ).model_dump(),
             )
     except InvalidInputError as exc:
         raise CloneRefusedError(str(exc)) from None
@@ -187,9 +201,9 @@ class Submitted(Protocol):
     prompt: str
     audio: bool
     mirror: bool
-    image: list[UploadFile]
+    image: list[ImageUpload]
     image_manifest: str
-    videos: list[UploadFile]
+    videos: list[VideoUpload]
     videos_manifest: str
 
 
@@ -202,9 +216,12 @@ class Submit(BaseModel):
     run: Callable[..., Any]
     probe: Callable[[str], float]
 
-    def _picked(self, manifest: str, files: list[UploadFile]) -> list[str]:
+    def _picked(self, manifest: str, files: Sequence[MediaUpload]) -> list[str]:
         return build_ordered_paths(
-            manifest, files, self.assets_root, user_id=self.owner
+            manifest,
+            files,
+            self.assets_root,
+            user_id=self.owner,
         )
 
     def _queue(self, run: CloneRun, api_key: str) -> str:
@@ -219,7 +236,11 @@ class Submit(BaseModel):
 
     def start(self, form: Submitted) -> list[str]:
         choices = check_choices(
-            form.provider, form.api_key, form.export, form.resolution, self.owner
+            form.provider,
+            form.api_key,
+            form.export,
+            form.resolution,
+            self.owner,
         )
         runs = plan_runs(
             choices,
@@ -257,11 +278,13 @@ def card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=export_label(job.params),
-        poll_prefix=PREFIX,
-        result_kind="video",
-        drive_uploads=uploads,
-        source=source(job.params),
+        {
+            "task_label": export_label(job.params),
+            "poll_prefix": PREFIX,
+            "result_kind": "video",
+            "drive_uploads": uploads,
+            "source": source(job.params),
+        },
     )
 
 
@@ -274,18 +297,18 @@ def cards(jobs: list[Job]) -> list[CloneCard]:
 
 def cards_of(job_ids: list[str], actor: str) -> list[CloneCard]:
     return cards(
-        [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
+        [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None],
     )
 
 
-def drive_picker(user_id: int) -> DrivePicker:
-    found = drive_targets(user_id)
+def drive_picker(uploads: StorageServiceUploads) -> DrivePicker:
+    found = uploads.targets()
     return DrivePicker(
         drive_targets=sorted(
             found,
             key=lambda t: (t.waiting is None, t.waiting or 0, -(t.followers or 0)),
         ),
-        drive_ready=bool(refresh_token(user_id)),
+        drive_ready=uploads.connected(),
     )
 
 
@@ -297,14 +320,20 @@ class SubjectPicks(BaseModel):
 def subject_picks(actor: str | frozenset[str], assets_root: Path) -> SubjectPicks:
     web = settings.web
     subjects = ParamHistory(
-        tasks=frozenset(SUBJECT_TASKS), actor=actor, field="reference_images"
+        tasks=frozenset(SUBJECT_TASKS),
+        actor=actor,
+        field="reference_images",
     )
     return SubjectPicks(
         last_used=_stored(
-            subjects.last_used_firsts, assets_root, web.clone_last_subjects
+            subjects.last_used_firsts,
+            assets_root,
+            web.clone_last_subjects,
         ),
         most_used=_stored(
-            subjects.most_used_firsts, assets_root, web.clone_top_subjects
+            subjects.most_used_firsts,
+            assets_root,
+            web.clone_top_subjects,
         ),
     )
 
@@ -329,19 +358,24 @@ def _stored(
 
 def _stored_copy(path: str, assets_root: Path) -> str | None:
     if kept := keep_files(
-        [path, str(assets_root / Path(path).name)], assets_root, "image"
+        [path, str(assets_root / Path(path).name)],
+        assets_root,
+        FileKind.IMAGE,
     ):
         return kept[0]
     digest = _digest(path)
     if not _SHA256.fullmatch(digest):
         return None
     others = sorted(str(p) for p in assets_root.glob(f"{digest}__*"))
-    return next(iter(keep_files(others, assets_root, "image")), None)
+    return next(iter(keep_files(others, assets_root, FileKind.IMAGE)), None)
 
 
 def upload_states(
-    job_ids: list[str], actors: Readers, team: frozenset[int]
+    job_ids: list[str],
+    actors: Readers,
+    team: frozenset[int],
 ) -> list[DriveUpload]:
     return upload_store.for_jobs(
-        [j for j in job_ids if get_job(j, actors) is not None], team
+        [j for j in job_ids if get_job(j, actors) is not None],
+        team,
     )

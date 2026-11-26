@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -46,12 +48,12 @@ def upgrade() -> None:
     )
     op.execute(
         "CREATE TRIGGER user_event_targets_stamp BEFORE INSERT OR UPDATE "
-        "ON user_event_targets FOR EACH ROW EXECUTE FUNCTION stamp_row('')"
+        "ON user_event_targets FOR EACH ROW EXECUTE FUNCTION stamp_row('')",
     )
     op.execute(
         "CREATE TRIGGER user_event_targets_audit AFTER INSERT OR UPDATE OR DELETE "
         "ON user_event_targets FOR EACH ROW EXECUTE FUNCTION "
-        "audit_row('', 'target', 'user_id,sender', 'user_id')"
+        "audit_row('', 'target', 'user_id,sender', 'user_id')",
     )
 
 

@@ -1,12 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import Field
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations.ai_providers.apiyi.families.dashscope import with_defaults
 from ofmhelpers.integrations.ai_providers.apiyi.families.sync import Made, SyncImages
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER, Text
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
-from ofmhelpers.media.image_fit import ImageLimits
 lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
 lazy from ofmhelpers.integrations.ai_providers.spec import Fields, ModelSpec, Payload
 
@@ -44,7 +46,7 @@ def _api_fields(spec: ModelSpec, payload: Payload) -> Fields:
         values={
             "model": spec.model_id,
             **{k: v for k, v in values.values.items() if k not in _OURS},
-        }
+        },
     )
 
 
@@ -91,7 +93,9 @@ class Seedream(SyncImages):
             limits = ImageLimits(max_bytes=each, max_side=4096)
             body["image"] = [client.data_url(r, limits) for r in refs]
         response = client.submit(
-            GENERATIONS, json=body, timeout=settings.apiyi.image_timeout_s
+            GENERATIONS,
+            json=body,
+            timeout=settings.apiyi.image_timeout_s,
         )
         return parsed(response, ImagesAnswer, PROVIDER).made()
 
@@ -112,6 +116,8 @@ class Flux(SyncImages):
                 key = "input_image" if n == 1 else f"input_image_{n}"
                 fields[key] = client.data_url(ref, self._LIMITS)
         response = client.submit(
-            GENERATIONS, json=fields, timeout=settings.apiyi.image_timeout_s
+            GENERATIONS,
+            json=fields,
+            timeout=settings.apiyi.image_timeout_s,
         )
         return parsed(response, ImagesAnswer, PROVIDER).made()

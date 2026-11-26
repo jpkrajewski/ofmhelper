@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider

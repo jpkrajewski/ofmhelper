@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -16,7 +18,7 @@ router = APIRouter(
 
 @router.get("")
 def list_page(request: Request) -> Response:
-    return render(request, "applications.html", applications=service.received())
+    return render(request, "applications.html", {"applications": service.received()})
 
 
 @router.post("/{application_id}/delete")

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -22,7 +24,7 @@ from ofmhelpers.web.dependencies import (
     OwnerId,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
+from ofmhelpers.web.forms import ImageFiles, PaidForm, Stripped, Upper, VideoFiles
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.responses import NO_STORE
@@ -44,9 +46,9 @@ gallery = Gallery({TASK})
 class LongCloneForm(PaidForm):
     prompt: Stripped = Field("", max_length=2000)
     resolution: Upper = DEFAULT_RESOLUTION
-    image: Files
+    image: ImageFiles
     image_manifest: str = "[]"
-    video: Files
+    video: VideoFiles
     video_manifest: str = "[]"
 
 
@@ -55,7 +57,7 @@ class LongCloneQueued(BaseModel):
 
 
 @router.get("")
-def page(
+def page(  # noqa: PLR0913, PLR0917
     request: Request,
     actor: Actor,
     viewer: Viewing,
@@ -67,11 +69,13 @@ def page(
     response = render(
         request,
         "clone_long.html",
-        gallery=clone_long.cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        api_keys=api_keys,
-        **dict(clone_long.form_view(actor, assets_root, video or [])),
+        {
+            "gallery": clone_long.cards(first.jobs),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "api_keys": api_keys,
+            **dict(clone_long.form_view(actor, assets_root, video or [])),
+        },
     )
     response.headers.update(NO_STORE)
     return response
@@ -83,8 +87,7 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     return render(
         request,
         "clone_long_gallery_fragment.html",
-        gallery=clone_long.cards(found.jobs),
-        next_offset=found.next_offset,
+        {"gallery": clone_long.cards(found.jobs), "next_offset": found.next_offset},
     )
 
 

@@ -1,6 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
 import mimetypes
 import re
 from typing import Any, NoReturn
+lazy from collections.abc import Mapping
 lazy from pathlib import Path
 
 lazy import requests
@@ -26,7 +28,7 @@ logger = get_logger(__name__)
 
 API = "/v1"
 ACCEPTED_SUFFIXES = frozenset(
-    {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mp3", ".wav"}
+    {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mp3", ".wav"},
 )
 _KEY_UNSAFE = re.compile(r"[^\x21-\x7e]")
 _KEY_MAX = 255
@@ -50,7 +52,14 @@ class ElyumClient:
         self._base = settings.elyum.base_url.rstrip("/") + API
         self._http = bearer_session(api_key)
 
-    def _call(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+    def _call(
+        self,
+        method: str,
+        path: str,
+        headers: Mapping[str, str] | None = None,
+        json: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | None = None,
+    ) -> requests.Response:
         return call(
             self._http,
             PROVIDER,
@@ -58,7 +67,9 @@ class ElyumClient:
             method,
             f"{self._base}/{path}",
             timeout=settings.elyum.request_timeout_s,
-            **kwargs,
+            headers=headers,
+            json=json,
+            files=files,
         )
 
     def upload(self, path: Path, max_bytes: int | None = None) -> str:
@@ -100,7 +111,9 @@ class ElyumClient:
         content_type = mimetypes.guess_type(sent.name)[0] or "application/octet-stream"
         with sent.open("rb") as fh:
             response = self._call(
-                "POST", "files", files={"file": (sent.name, fh, content_type)}
+                "POST",
+                "files",
+                files={"file": (sent.name, fh, content_type)},
             )
         file_id = parsed(response, ElyumFile, PROVIDER, "upload answer").id
         logger.info("elyum upload %s -> %s", path.name, file_id)

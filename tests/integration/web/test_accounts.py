@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -6,18 +8,19 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from signin import sign_in_agency
+from statements import counting
 
 from ofmhelpers.config.settings import AccountsSettings
 from ofmhelpers.db.models import AccountSnapshotRow, TrackedPostRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts import repository as tracked_accounts_repository
+from ofmhelpers.db.tracked_accounts.models import AddAccounts
 from ofmhelpers.db.tracked_accounts.schema import (
     NO_CREATOR,
     AccountHistory,
     AccountQuery,
     AccountSort,
     AccountSummary,
-    AddAccounts,
     FollowerChart,
     Snapshot,
     ago,
@@ -107,7 +110,7 @@ def _snapshot(handle: str, followers: int, age_s: float) -> None:
                 taken_at=time.time() - age_s,
                 followers=followers,
                 metrics={"followers": followers},
-            )
+            ),
         )
 
 
@@ -123,7 +126,8 @@ def test_add_tracks_and_scans(client, fetches):
         "/accounts/add",
         json={
             "platform": "instagram",
-            "handles": "@Yuki_Kanasiva\nhttps://www.instagram.com/other/ — note\n\nyuki_kanasiva",
+            "handles": "@Yuki_Kanasiva\nhttps://www.instagram.com/other/ "
+            "— note\n\nyuki_kanasiva",
             "creator": "  Yuki   K ",
         },
     )
@@ -220,7 +224,8 @@ def test_unknown_platform_is_rejected(client):
 def test_too_many_at_once_is_rejected(client, monkeypatch):
     monkeypatch.setenv("OFM_ACCOUNTS_MAX_ADD", "2")
     r = client.post(
-        "/accounts/add", json={"platform": "instagram", "handles": "a\nb\nc"}
+        "/accounts/add",
+        json={"platform": "instagram", "handles": "a\nb\nc"},
     )
     assert r.status_code == 400
     assert list_accounts() == []
@@ -241,7 +246,8 @@ def test_creator_assign_and_unassign(client):
 def test_creator_name_cannot_look_like_the_none_filter(client):
     track("instagram", "a")
     r = client.post(
-        "/accounts/creator", json={"ids": [_id("a")], "creator": NO_CREATOR}
+        "/accounts/creator",
+        json={"ids": [_id("a")], "creator": NO_CREATOR},
     )
     assert r.status_code == 422
 
@@ -368,7 +374,10 @@ def clock(monkeypatch) -> _Clock:
 
 def _post(code: str, age_s: float, now: float, views: int = 1) -> PostStat:
     return PostStat(
-        id=code, url=f"https://x/{code}", views=views, posted_at=now - age_s
+        id=code,
+        url=f"https://x/{code}",
+        views=views,
+        posted_at=now - age_s,
     )
 
 
@@ -675,7 +684,7 @@ def test_filters(client, three):
 
 def test_blank_filter_fields_mean_unset(client, three):
     r = client.get(
-        "/accounts?q=&sort=&platform=instagram&creator=&status=&page=&per_page="
+        "/accounts?q=&sort=&platform=instagram&creator=&status=&page=&per_page=",
     )
     assert r.status_code == 200
     assert _handles(client, q="", status="", sort="") == ["bb", "cc", "aa"]
@@ -692,8 +701,11 @@ def test_paging(client, three):
 
 def test_query_links_keep_filters():
     q = AccountQuery(q="yu", creator="Mia", sort=AccountSort.VIEWS, period=30, page=3)
-    assert q.link(page=4) == "/accounts?q=yu&creator=Mia&sort=views&period=30&page=4"
-    assert q.link(per_page=100) == (
+    assert (
+        q.link(changes={"page": 4})
+        == "/accounts?q=yu&creator=Mia&sort=views&period=30&page=4"
+    )
+    assert q.link(changes={"per_page": 100}) == (
         "/accounts?q=yu&creator=Mia&sort=views&period=30&per_page=100"
     )
     assert q.link("/accounts/5") == "/accounts/5?q=yu&creator=Mia&sort=views&period=30"
@@ -731,7 +743,8 @@ def test_default_period_must_be_offered(monkeypatch):
 
 def test_add_form_parses_handles():
     form = AddAccounts(
-        platform="instagram", handles="@A\nhttps://instagram.com/b/ x\na"
+        platform="instagram",
+        handles="@A\nhttps://instagram.com/b/ x\na",
     )
     assert form.parsed() == ["a", "b"]
 
@@ -816,7 +829,9 @@ def test_chart_needs_two_points():
 
 def test_chart_lays_out_points_and_rounds_the_y_range_to_nice_steps():
     chart = FollowerChart.of(
-        _snaps((0, 35_287), (DAY, 36_000), (2 * DAY, 38_900)), daily=True, gap_s=2 * DAY
+        _snaps((0, 35_287), (DAY, 36_000), (2 * DAY, 38_900)),
+        daily=True,
+        gap_s=2 * DAY,
     )
     assert chart.ready
     assert (chart.start.followers, chart.end.followers, chart.delta) == (
@@ -829,7 +844,8 @@ def test_chart_lays_out_points_and_rounds_the_y_range_to_nice_steps():
     assert [p.change for p in chart.points] == [None, 713, 2_900]
     assert [t.label for t in chart.y_ticks] == ["35k", "36k", "37k", "38k", "39k"]
     assert [t.y for t in chart.y_ticks] == pytest.approx(
-        [94.44, 72.22, 50, 27.78, 5.56], abs=0.01
+        [94.44, 72.22, 50, 27.78, 5.56],
+        abs=0.01,
     )
     assert all(0 <= p.y <= 100 for p in chart.points)
     assert chart.points[2].y < chart.points[1].y < chart.points[0].y
@@ -852,7 +868,9 @@ def test_flat_line_sits_mid_plot():
 
 def test_big_jump_keeps_every_point_in_the_plot():
     chart = FollowerChart.of(
-        _snaps((0, 100), (DAY, 120), (2 * DAY, 2_500_000)), daily=True, gap_s=2 * DAY
+        _snaps((0, 100), (DAY, 120), (2 * DAY, 2_500_000)),
+        daily=True,
+        gap_s=2 * DAY,
     )
     assert [round(p.y) for p in chart.points] == [100, 100, 9]
     assert [t.label for t in chart.y_ticks] == ["0", "1M", "2M"]
@@ -881,7 +899,9 @@ def test_daily_chart_puts_each_day_under_its_own_label():
 
 def test_long_daily_chart_labels_at_most_eight_days_ending_on_the_last():
     chart = FollowerChart.of(
-        _snaps(*((d * DAY, 1000 + d) for d in range(30))), daily=True, gap_s=1.5 * DAY
+        _snaps(*((d * DAY, 1000 + d) for d in range(30))),
+        daily=True,
+        gap_s=1.5 * DAY,
     )
     assert len(chart.x_ticks) == 8
     assert chart.x_ticks[-1].x == 100
@@ -898,7 +918,9 @@ def test_missed_syncs_break_the_line_with_a_dashed_gap():
     assert len(chart.gaps) == 2
     assert [d.followers for d in chart.dots] == [10, 20]
     lone = FollowerChart.of(
-        _snaps((0, 10), (5 * DAY, 15), (10 * DAY, 20)), daily=True, gap_s=1.5 * DAY
+        _snaps((0, 10), (5 * DAY, 15), (10 * DAY, 20)),
+        daily=True,
+        gap_s=1.5 * DAY,
     )
     assert lone.lines == []
     assert [d.followers for d in lone.dots] == [10, 15, 20]
@@ -980,7 +1002,8 @@ def test_analytics_page_without_enough_history_says_so(client):
 
 
 def test_due_accounts_are_claimed_once_and_rescanned_after_the_interval(
-    fetches, monkeypatch
+    fetches,
+    monkeypatch,
 ):
     track("instagram", "a")
     assert claim_due(6 * 3600, 3600) == [_id("a")]
@@ -995,7 +1018,7 @@ def test_sweep_queues_one_job_per_batch_with_staggered_proxies(monkeypatch):
     for h in "abcde":
         track("instagram", h)
     jobs = []
-    monkeypatch.setattr(account_tracker, "enqueue", lambda fn, *args: jobs.append(args))
+    monkeypatch.setattr(account_tracker, "enqueue", lambda _fn, args: jobs.append(args))
     due = account_tracker.queue_due_scans()
     assert len(due) == 5
     assert [(p, len(ids), start) for p, ids, start in jobs] == [
@@ -1088,3 +1111,24 @@ def test_proxy_pool_starts_where_told():
     pool = ProxyPool(["a", "b", "c"], start=4)
     assert [pool.next() for _ in range(3)] == ["b", "c", "a"]
     assert ProxyPool([], start=3).next() is None
+
+
+def test_every_periods_followers_come_in_one_query():
+    track("instagram", "a")
+    track("instagram", "b")
+    _snapshot("a", 800, 40 * DAY)
+    _snapshot("a", 900, 8 * DAY)
+    _snapshot("b", 50, 3 * DAY)
+    accounts = tracked_accounts_repository.TrackedAccountRepository()
+
+    with counting() as one:
+        accounts.list_all([2])
+    with counting() as five:
+        found = accounts.list_all([2, 3, 9, 41, 60])
+
+    snapshots = "tracked_account_snapshots"
+    assert len(five.reading(snapshots)) == len(one.reading(snapshots)) == 3
+    assert {a.handle: [(b.days, b.followers) for b in a.baselines] for a in found} == {
+        "a": [(2, 900), (3, 900), (9, 800)],
+        "b": [(2, 50), (3, 50)],
+    }

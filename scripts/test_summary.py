@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import sys
 from pathlib import Path
@@ -42,11 +44,13 @@ def main(report_path: str) -> int:
         for key in ("passed", "failed", "error", "skipped", "xfailed")
     )
     print(
-        f"SUMMARY exit {report.get('exitcode')}: {counts}, {len(not_collected)} not collected"
+        f"SUMMARY exit {report.get('exitcode')}: "
+        f"{counts}, {len(not_collected)} not collected",
     )
     for collector in not_collected:
         print(
-            f"NOT COLLECTED {collector.get('nodeid')}: {last_line(collector.get('longrepr', ''))}"
+            f"NOT COLLECTED {collector.get('nodeid')}: "
+            f"{last_line(collector.get('longrepr', ''))}",
         )
     for test in broken:
         phase, text = failure_text(test)

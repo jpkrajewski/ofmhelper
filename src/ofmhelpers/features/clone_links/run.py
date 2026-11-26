@@ -1,9 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
-import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 from urllib.parse import urlparse
 lazy from collections.abc import Callable
 
@@ -16,10 +17,10 @@ from ofmhelpers.db.jobs.schema import Job, ResultFile
 from ofmhelpers.db.jobs.store import get_job, merge_params
 from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.clone.export import (
-    EXPORT_FAILURES,
     export_choice,
     export_results,
 )
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.clone_links.review import start_reviews
 from ofmhelpers.features.clone_links.stop import stopped
 from ofmhelpers.features.clone_pricing.pricing import clip_duration
@@ -28,7 +29,7 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     clone_values,
 )
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import (
     Provider,
@@ -48,20 +49,6 @@ from ofmhelpers.media.exports import ExportOptions
 from ofmhelpers.media.video_probe import duration_s
 
 logger = get_logger(__name__)
-
-TARGET_LABEL = "Wan 3.0"
-
-STOPPED = "Stopped"
-GONE = "This run no longer exists"
-COULD_NOT_DOWNLOAD = "Could not download this reel"
-NEEDS_LOGIN = "Needs login: upload your cookies on the Cookies page"
-NO_VIDEO = "No video at this link"
-NOT_KEPT = "The video could not be kept"
-UNREADABLE = "The video cannot be read"
-REFETCH = "Still generating: this reel is downloaded again on the next try"
-NOT_SAVED = "Still generating: the video is saved on the next try"
-
-_LOGIN_WALL = re.compile(r"\blog ?in\b|\bsign in\b|cookies", re.IGNORECASE)
 
 
 def _owner(job: Job | None) -> int | None:
@@ -92,18 +79,15 @@ def _owner_of(job_id: str) -> int:
     owner = _owner(get_job(job_id))
     if owner is None:
         logger.warning("clone-links %s: no job row or no owner: not run", job_id)
-        raise RunGoneError(GONE)
+        raise RunGoneError(clone_links_constants().run_gone)
     return owner
 
 
-def _batch(params: dict[str, Any]) -> str | None:
-    batch = params.get("batch")
+def _batch(batch: object) -> str | None:
     return batch if isinstance(batch, str) and batch else None
 
 
-def _saved_source(params: dict[str, Any]) -> _Source | None:
-    video = params.pop("source_video", None)
-    seconds = params.pop("source_seconds", None)
+def _saved_source(video: str | None, seconds: float | None) -> _Source | None:
     if video is None or seconds is None:
         return None
     try:
@@ -116,11 +100,11 @@ def _saved_source(params: dict[str, Any]) -> _Source | None:
 def _refuse_if_stopped(job_id: str, batch: str | None) -> None:
     if tasks.recall(job_id) is None and stopped(batch):
         logger.info("clone-links %s: batch %s stopped: not run", job_id, batch)
-        raise LinkStoppedError(STOPPED)
+        raise LinkStoppedError(clone_links_constants().stopped)
 
 
 def _halt_key(batch: str) -> str:
-    return f"clone-links:halt:{batch}"
+    return clone_links_constants().halt_key.format(batch=batch)
 
 
 def _halt(batch: str | None, exc: ProviderAuthError | ProviderNoCreditsError) -> None:
@@ -152,9 +136,10 @@ def _refuse_if_halted(job_id: str, batch: str | None, provider: str) -> None:
 
 
 def _why_not(error: str, *, has_cookies: bool) -> str:
-    if not has_cookies and _LOGIN_WALL.search(error):
-        return NEEDS_LOGIN
-    return COULD_NOT_DOWNLOAD
+    constants = clone_links_constants()
+    if not has_cookies and constants.login_wall.search(error):
+        return constants.needs_login
+    return constants.could_not_download
 
 
 def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
@@ -168,21 +153,28 @@ def _download(url: str, assets_root: str, user_id: int | None) -> _Source:
             reason = _why_not(result.error or "", has_cookies=bool(cookies))
             raise LinkFetchError(reason)
         video = next(
-            (p for p in result.output_paths if classify_kind(p.name) == "video"), None
+            (
+                p
+                for p in result.output_paths
+                if FileKind.from_ext(p.name) == FileKind.VIDEO
+            ),
+            None,
         )
         if video is None:
             logger.info(
-                "clone-links: %s has no video (%d files)", url, len(result.output_paths)
+                "clone-links: %s has no video (%d files)",
+                url,
+                len(result.output_paths),
             )
-            raise LinkFetchError(NO_VIDEO)
+            raise LinkFetchError(clone_links_constants().no_video)
         kept = register_generated_asset(video, Path(assets_root))
         if kept is None:
-            raise LinkFetchError(NOT_KEPT)
+            raise LinkFetchError(clone_links_constants().not_kept)
         try:
             seconds = duration_s(kept, settings.web.ffmpeg_timeout_s)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             logger.warning("clone-links: %s unreadable", kept, exc_info=True)
-            raise LinkFetchError(UNREADABLE) from exc
+            raise LinkFetchError(clone_links_constants().run_unreadable) from exc
     logger.info("clone-links: %s -> %s (%.1f s)", url, kept.name, seconds)
     return _Source(source_video=str(kept.resolve()), source_seconds=seconds)
 
@@ -192,13 +184,13 @@ def _refuse_too_long(seconds: float, target: CloneTarget) -> None:
         return
     shown = math.ceil(round(seconds * 10, 6)) / 10
     msg = (
-        f"Too long for {TARGET_LABEL}: {shown:.1f} s "
+        f"Too long for {clone_links_constants().target_label}: {shown:.1f} s "
         f"(the most is {target.max_reference_s} s)"
     )
     raise InvalidInputError(msg)
 
 
-def _source(
+def _source(  # noqa: PLR0913, PLR0917
     job_id: str,
     link: str,
     assets_root: str,
@@ -223,7 +215,7 @@ def _source(
             link,
             exc_info=True,
         )
-        raise ProviderUnavailableError(REFETCH) from exc
+        raise ProviderUnavailableError(clone_links_constants().refetch) from exc
     merge_params(job_id, found.model_dump())
     return found
 
@@ -240,33 +232,40 @@ def _hosted_dest(provider: str, job_id: str, url: str, index: int) -> Path:
 def _fetched(client: Provider, url: str, dest: Path) -> Path:
     last: Exception | None = None
     for attempt, wait in enumerate(
-        [*settings.aigen.download_retry_waits_s, None], start=1
+        [*settings.aigen.download_retry_waits_s, None],
+        start=1,
     ):
         try:
             return client.download(url, dest)
         except (ProviderUnavailableError, OSError) as exc:
             last = exc
             logger.warning(
-                "clone-links: %s not saved (try %d)", url, attempt, exc_info=True
+                "clone-links: %s not saved (try %d)",
+                url,
+                attempt,
+                exc_info=True,
             )
         if wait is not None:
             time.sleep(wait)
-    raise ProviderUnavailableError(NOT_SAVED) from last
+    raise ProviderUnavailableError(clone_links_constants().run_not_saved) from last
 
 
-def _saved_here(
+def _saved_here(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
     provider: str,
     results: list[ResultFile],
-    params: dict[str, Any],
+    export_name: str | None,
+    capcut: bool,  # noqa: FBT001
+    mirror: bool,  # noqa: FBT001
+    export_failures: int,
 ) -> list[ResultFile]:
     if all(r.path is not None or not r.remote_url for r in results):
         return results
     client = get_provider(provider, api_key)
-    export = export_choice(params.get("export"), bool(params.get("capcut")))
-    options = ExportOptions(mirror=bool(params.get("mirror")))
+    export = export_choice(export_name, capcut)
+    options = ExportOptions(mirror=mirror)
     root = Path(assets_root)
     saved = []
     for index, result in enumerate(results):
@@ -283,14 +282,14 @@ def _saved_here(
             export,
             options,
             root,
-            failures=int(params.get(EXPORT_FAILURES) or 0),
+            failures=export_failures,
         )
         logger.info("clone-links %s: hosted result %d saved as %s", job_id, index, path)
         saved.extend(exported)
     return saved
 
 
-def run_clone_link(
+def run_clone_link(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
@@ -299,16 +298,23 @@ def run_clone_link(
     prompt: str,
     resolution: str,
     reference_images: list[str],
-    audio: bool = False,
+    audio: bool = False,  # noqa: FBT001, FBT002
+    export: str | None = None,
+    mirror: bool = False,  # noqa: FBT001, FBT002
+    capcut: bool = False,  # noqa: FBT001, FBT002
+    model: str | None = None,
+    batch: str | None = None,
+    source_video: str | None = None,
+    source_seconds: float | None = None,
+    export_failures: int = 0,
+    reference_videos: list[str] | None = None,  # noqa: ARG001
+    duration: int | None = None,
     *,
     run_clone: Callable[..., list[ResultFile]],
-    **params: Any,
 ) -> list[ResultFile]:
-    params.pop("reference_videos", None)
-    params.pop("duration", None)
-    saved = _saved_source(params)
+    saved = _saved_source(source_video, source_seconds)
     owner = _owner_of(job_id)
-    batch = _batch(params)
+    batch = _batch(batch)
     _refuse_if_stopped(job_id, batch)
     paid = tasks.recall(job_id) is not None
     if not paid:
@@ -319,8 +325,14 @@ def run_clone_link(
     duration = clip_duration(target.spec, seconds)
     target.spec.check(
         clone_values(
-            target, prompt, resolution, duration, audio, reference_images, video
-        ).model_dump()
+            target,
+            prompt,
+            resolution,
+            duration,
+            audio,
+            reference_images,
+            video,
+        ).model_dump(),
     )
     _refuse_if_stopped(job_id, batch)
     try:
@@ -336,11 +348,26 @@ def run_clone_link(
             reference_videos=[video],
             audio=audio,
             link=link,
-            **params,
+            export=export,
+            mirror=mirror,
+            capcut=capcut,
+            model=model,
+            batch=batch,
+            export_failures=export_failures,
         )
     except (ProviderAuthError, ProviderNoCreditsError) as exc:
         _halt(batch, exc)
         raise
-    results = _saved_here(job_id, api_key, assets_root, provider, results, params)
+    results = _saved_here(
+        job_id,
+        api_key,
+        assets_root,
+        provider,
+        results,
+        export,
+        capcut,
+        mirror,
+        export_failures,
+    )
     start_reviews(job_id, owner, [r.path for r in results])
     return results

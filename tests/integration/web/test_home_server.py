@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -94,7 +96,7 @@ def test_the_host_numbers_come_from_proc(tmp_path, monkeypatch):
     (proc / "stat").write_text("cpu  100 0 100 700 100 0 0 0 0 0\ncpu0 1 1 1 1\n")
     (proc / "meminfo").write_text(
         "MemTotal:       8000000 kB\nMemFree:  100 kB\nMemAvailable:   2000000 kB\n"
-        "SwapTotal:      1000000 kB\nSwapFree:       1000000 kB\n"
+        "SwapTotal:      1000000 kB\nSwapFree:       1000000 kB\n",
     )
     (proc / "loadavg").write_text("1.50 1.00 0.50 2/300 4242\n")
     (proc / "uptime").write_text("7200.55 1000.00\n")

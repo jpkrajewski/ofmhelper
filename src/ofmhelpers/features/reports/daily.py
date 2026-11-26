@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from urllib.parse import urlsplit
 lazy from collections.abc import Callable
@@ -11,7 +13,7 @@ from ofmhelpers.db.chats.schema import ChatPlatform
 from ofmhelpers.db.report_runs import store as report_runs
 from ofmhelpers.db.report_runs.schema import DayCount
 from ofmhelpers.db.short_links import store as link_store
-from ofmhelpers.db.short_links.schema import LinkSyncKey, ShortLink, ctr
+from ofmhelpers.db.short_links.schema import LinkSyncKey, ctr
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.events import Event, emit, listening
@@ -31,6 +33,7 @@ from ofmhelpers.integrations.senders.schema import MAX_TEXT
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.report_runs.schema import ReportRun
+lazy from ofmhelpers.db.short_links.models import ShortLink
 
 logger = get_logger(__name__)
 
@@ -93,7 +96,7 @@ def _fan(platform: ChatPlatform, username: str) -> _Fan:
     return _Fan(platform=platform, username=username.casefold())
 
 
-def _model_rows(
+def _model_rows(  # noqa: C901
     links: list[ShortLink],
     gained: Callable[[ShortLink], DayCount],
     since: float,
@@ -146,11 +149,12 @@ def _views_blocks() -> list[str]:
         if change is not None:
             link = account.profile_url.rstrip("/")
             per_model.setdefault(account.creator or _NO_MODEL, []).append(
-                (link, change.views)
+                (link, change.views),
             )
     blocks = []
     for name, found in sorted(
-        per_model.items(), key=lambda item: (-sum(v for _, v in item[1]), item[0])
+        per_model.items(),
+        key=lambda item: (-sum(v for _, v in item[1]), item[0]),
     ):
         found.sort(key=lambda pair: (-pair[1], pair[0]))
         total = sum(views for _, views in found)
@@ -202,7 +206,9 @@ class _ModelsBlock(BaseModel, frozen=True):
 
 
 def _models_block(
-    links: list[ShortLink], previous: ReportRun, now: float
+    links: list[ShortLink],
+    previous: ReportRun,
+    now: float,
 ) -> _ModelsBlock:
     window = window_title(local(previous.ran_at), local(now))
     rows = _model_rows(
@@ -224,7 +230,10 @@ def build(links: list[ShortLink], previous: ReportRun, now: float) -> list[Event
     title, models = models_block.title, models_block.chunks
 
     def events(
-        block: str, title: str, chunks: list[str], replaces: str | None = None
+        block: str,
+        title: str,
+        chunks: list[str],
+        replaces: str | None = None,
     ) -> list[Event]:
         return _events(
             f"reports.daily.{block}",

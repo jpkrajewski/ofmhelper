@@ -1,10 +1,15 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
+from functools import lru_cache
+from threading import Lock
 from typing import Any
-lazy from collections.abc import Iterator
+lazy from collections.abc import Iterator, Mapping, Sequence
 
 import sqlalchemy
 from sqlalchemy import Engine, event
 from sqlalchemy.orm import Session, sessionmaker
+lazy from sqlalchemy.engine.interfaces import DBAPICursor, ExecutionContext
 
 from ofmhelpers import acting
 from ofmhelpers.config import settings
@@ -18,24 +23,47 @@ _ACTING_SQL = (
 )
 _WRITES = ("INSERT", "UPDATE", "DELETE", "WITH")
 _STAMPED = "ofm_acting_stamped"
+_manager_lock = Lock()
 
-_engine: Engine | None = None
-_engine_url: str | None = None
+
+class _EngineManager:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._engine: Engine | None = None
+        self._url: str | None = None
+
+    def get(self, url: str) -> Engine:
+        with self._lock:
+            if self._engine is not None and url == self._url:
+                return self._engine
+            engine = sqlalchemy.create_engine(
+                url,
+                pool_pre_ping=True,
+                future=True,
+                hide_parameters=True,
+            )
+            event.listen(engine, "begin", _new_transaction)
+            event.listen(engine, "before_cursor_execute", _say_who_acts)
+            previous = self._engine
+            self._engine = engine
+            self._url = url
+            if previous is not None:
+                previous.dispose()
+            return engine
+
+
+@lru_cache(maxsize=1)
+def _engine_manager() -> _EngineManager:
+    return _EngineManager()
+
+
+def _get_engine_manager() -> _EngineManager:
+    with _manager_lock:
+        return _engine_manager()
 
 
 def get_engine() -> Engine:
-    global _engine, _engine_url
-    url = settings.infra.database_url
-    if _engine is None or url != _engine_url:
-        if _engine is not None:
-            _engine.dispose()
-        _engine = sqlalchemy.create_engine(
-            url, pool_pre_ping=True, future=True, hide_parameters=True
-        )
-        event.listen(_engine, "begin", _new_transaction)
-        event.listen(_engine, "before_cursor_execute", _say_who_acts)
-        _engine_url = url
-    return _engine
+    return _get_engine_manager().get(settings.infra.database_url)
 
 
 def _new_transaction(conn: sqlalchemy.Connection) -> None:
@@ -44,12 +72,14 @@ def _new_transaction(conn: sqlalchemy.Connection) -> None:
 
 def _say_who_acts(
     conn: sqlalchemy.Connection,
-    cursor: Any,
+    cursor: DBAPICursor,
     statement: str,
-    *_args: object,
+    _parameters: Mapping[str, Any] | Sequence[Any],
+    _context: ExecutionContext,
+    _executemany: bool,  # noqa: FBT001
 ) -> None:
     if conn.info.get(_STAMPED) or not statement.lstrip()[:6].upper().startswith(
-        _WRITES
+        _WRITES,
     ):
         return
     conn.info[_STAMPED] = True

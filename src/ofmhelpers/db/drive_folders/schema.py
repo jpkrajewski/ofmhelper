@@ -1,19 +1,15 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
-from datetime import date, datetime
+from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from ofmhelpers.config.types import AccountFolder
-from ofmhelpers.db.devices.schema import Device, _compact
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 
-_FOLDER_URL = "https://drive.google.com/drive/folders/{}"
-
-
 def folder_url(folder_id: str) -> str:
-    return _FOLDER_URL.format(folder_id)
+    return f"/drive/folders/{folder_id}"
 
 
 class DriveFile(BaseModel):
@@ -21,7 +17,8 @@ class DriveFile(BaseModel):
 
     id: str
     name: str
-    mime_type: str = Field(alias="mimeType")
+    mime_type: str = Field(default="", alias="mimeType")
+    is_folder: bool = False
     web_view_link: str = Field(default="", alias="webViewLink")
     has_thumbnail: bool = Field(default=False, alias="hasThumbnail")
     created_time: datetime | None = Field(default=None, alias="createdTime")
@@ -30,9 +27,13 @@ class DriveFile(BaseModel):
     thumbnail_link: str = Field(default="", alias="thumbnailLink")
     owned_by_me: bool = Field(default=False, alias="ownedByMe")
 
-    @property
-    def is_folder(self) -> bool:
-        return self.mime_type == FOLDER_MIME
+    @model_validator(mode="before")
+    @classmethod
+    def _folder_from_mime_type(cls, data: JsonValue) -> JsonValue:
+        if isinstance(data, dict) and "is_folder" not in data:
+            mime_type = data.get("mimeType", data.get("mime_type", ""))
+            return {**data, "is_folder": mime_type == FOLDER_MIME}
+        return data
 
     @property
     def kind(self) -> str:
@@ -54,26 +55,10 @@ class DriveFile(BaseModel):
         return f"https://drive.google.com/file/d/{self.id}/view"
 
 
-class DriveTarget(BaseModel):
+class PostedSeen(BaseModel, frozen=True):
     login_id: int
-    handle: str
-    device: Device
-    followers: int | None = None
-
-    @property
-    def followers_label(self) -> str:
-        if self.followers is None:
-            return ""
-        n = self.followers
-        return f"{_compact(n)} follower{'' if n == 1 else 's'}"
-
-    @property
-    def owner(self) -> str:
-        return self.device.owner or self.device.label
-
-    @property
-    def folder_name(self) -> str:
-        return f"{self.handle} - {self.owner}"
+    folder_id: str
+    files: list[DriveFile]
 
 
 class UploadPick(BaseModel):
@@ -84,23 +69,6 @@ class UploadPick(BaseModel):
     already: list[int] = Field(default_factory=list)
     already_vas: list[int] = Field(default_factory=list)
     back_url: str = "/clone"
-
-
-class UploadTarget(BaseModel):
-    login_id: int
-    folder_name: str
-    handle: str = ""
-    owner: str = ""
-    creator: str | None = None
-    waiting: int | None = None
-    followers: int | None = None
-
-    @property
-    def followers_label(self) -> str:
-        if self.followers is None:
-            return ""
-        n = self.followers
-        return f"{_compact(n)} follower{'' if n == 1 else 's'}"
 
 
 class DriveUpload(BaseModel):
@@ -180,52 +148,3 @@ class UploadedToday(BaseModel):
     @property
     def total(self) -> int:
         return self.clone + self.manual
-
-
-class DriveCard(BaseModel):
-    target: DriveTarget
-    account_folder_id: str | None = None
-    posted_folder_id: str | None = None
-    scan: AccountScan = Field(default_factory=AccountScan)
-    uploaded_today: UploadedToday = Field(default_factory=UploadedToday)
-    error: str | None = None
-    unread: bool = False
-
-    @property
-    def account_url(self) -> str | None:
-        return folder_url(self.account_folder_id) if self.account_folder_id else None
-
-    @property
-    def waiting(self) -> list[DriveFile]:
-        return self.scan.waiting
-
-    @property
-    def posted_total(self) -> int:
-        return len(self.scan.posted)
-
-    def count(self, kind: str) -> int:
-        return sum(1 for f in self.waiting if f.kind == kind)
-
-    @property
-    def search_text(self) -> str:
-        t = self.target
-        return f"{t.handle} {t.owner} {t.device.label}".lower()
-
-
-class DriveBoard(BaseModel):
-    day: date
-    cards: list[DriveCard] = Field(default_factory=list)
-    va_folders: list[VaFolder] = Field(default_factory=list)
-    other_folders: list[DriveFile] = Field(default_factory=list)
-    problem: str | None = None
-    connect_drive: bool = False
-    live: bool = True
-    as_of: float | None = None
-    root_folder_id: str = ""
-    root_name: str = ""
-    connected: bool = False
-    posted_folder_name: str = AccountFolder.POSTED
-
-    @property
-    def root_url(self) -> str | None:
-        return folder_url(self.root_folder_id) if self.root_folder_id else None

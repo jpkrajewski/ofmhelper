@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
@@ -9,6 +11,8 @@ from ofmhelpers.integrations.downloaders.urls import NotALinkError
 
 
 class RefusedError(ValueError):
+    detail: BaseModel | None = None
+
     def __init__(self, message: str, detail: BaseModel | None = None) -> None:
         super().__init__(message)
         self.detail = detail
@@ -36,6 +40,10 @@ class EditRefusedError(Exception): ...
 
 
 class UnavailableError(RuntimeError): ...
+
+
+class ResumableError(RuntimeError):
+    keep_request = True
 
 
 class TryAgainError(RuntimeError): ...

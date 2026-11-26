@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import os
 import re
@@ -12,7 +14,6 @@ lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 from redis.exceptions import RedisError
-lazy from fastapi import UploadFile
 
 from ofmhelpers.cache.queue import JobQueue
 from ofmhelpers.config import settings
@@ -27,7 +28,7 @@ from ofmhelpers.features.assets.store import (
 from ofmhelpers.features.edit.clips import Clip, checked
 from ofmhelpers.features.edit.options import Framing
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.features.refusals import EditRefusedError
 from ofmhelpers.log import get_logger
@@ -40,6 +41,7 @@ from ofmhelpers.media.video_probe import (
     video_size,
 )
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import VideoUpload
 lazy from ofmhelpers.media.size import Size
 
 logger = get_logger(__name__)
@@ -120,7 +122,7 @@ def _touch(path: Path) -> None:
 
 
 def _stored_video(video: str, assets_root: Path) -> Path:
-    kept = keep_files([video], assets_root, "video")
+    kept = keep_files([video], assets_root, FileKind.VIDEO)
     if not kept:
         raise EditRefusedError(_GONE)
     return Path(kept[0])
@@ -170,11 +172,11 @@ def open_video(video: str, assets_root: Path) -> EditVideo:
 
 
 def upload(
-    file: UploadFile, assets_root: Path, actor: str, run: Callable[..., Any]
+    file: VideoUpload,
+    assets_root: Path,
+    actor: str,
+    run: Callable[..., Any],
 ) -> EditVideo:
-    if classify_kind(file.filename or "") != "video":
-        msg = "Pick a video file"
-        raise EditRefusedError(msg)
     cap_mb = settings.web.edit_max_upload_mb
     if file.size is not None and file.size > cap_mb * 1024 * 1024:
         msg = f"Videos up to {cap_mb} MB open here"
@@ -206,7 +208,13 @@ class _PreparedPaths(BaseModel, frozen=True):
         return [self.proxy, self.strip, self.frames]
 
     def of(self, kind: PreparedKind) -> Path:
-        return Path(getattr(self, kind))
+        match kind:
+            case "proxy":
+                return self.proxy
+            case "strip":
+                return self.strip
+            case "frames":
+                return self.frames
 
 
 def _prepared_files(path: Path) -> _PreparedPaths:
@@ -271,7 +279,10 @@ def _in_line(job_id: str) -> Prepared:
 
 
 def queue_prepare(
-    path: Path, assets_root: Path, actor: str, run: Callable[..., Any]
+    path: Path,
+    assets_root: Path,
+    actor: str,
+    run: Callable[..., Any],
 ) -> Prepared:
     ready = _ready(path)
     if ready is not None:
@@ -296,7 +307,10 @@ def queue_prepare(
 
 
 def _queue_prepare_quietly(
-    path: Path, assets_root: Path, actor: str, run: Callable[..., Any]
+    path: Path,
+    assets_root: Path,
+    actor: str,
+    run: Callable[..., Any],
 ) -> Prepared:
     try:
         return queue_prepare(path, assets_root, actor, run)
@@ -462,7 +476,7 @@ def _grab(path: Path, at: float, framing: Framing) -> FrameGrab:
     return FrameGrab(data=data, name=_frame_name(path, at))
 
 
-def queue_cut(
+def queue_cut(  # noqa: PLR0913, PLR0917
     clips: list[Clip],
     framing: Framing,
     speed: float,
@@ -514,8 +528,13 @@ def cut_timeout_s(params: dict[str, Any]) -> int:
     return settings.web.edit_cut_timeout_s * clips + 60
 
 
-def _make_cut(
-    path: Path, start: float, end: float, framing: Framing, speed: float, root: Path
+def _make_cut(  # noqa: PLR0913, PLR0917
+    path: Path,
+    start: float,
+    end: float,
+    framing: Framing,
+    speed: float,
+    root: Path,
 ) -> Path:
     web = settings.web
     work = Path(settings.infra.uploads_root) / STAGING
@@ -577,13 +596,13 @@ def _make_join(clips: list[Clip], framing: Framing, speed: float, root: Path) ->
     return stored
 
 
-def run_cut(
+def run_cut(  # noqa: PLR0913, PLR0917
     video: str,
     start: float,
     end: float,
     assets_root: str,
     turn: int = 0,
-    mirror: bool = False,
+    mirror: bool = False,  # noqa: FBT001, FBT002
     aspect: str = "original",
     size: str = "1080",
     scale: float = 1.0,
@@ -604,7 +623,7 @@ def run_cut(
             "scale": scale,
             "x": x,
             "y": y,
-        }
+        },
     )
     try:
         if clips:
@@ -631,5 +650,6 @@ def cut_state(job_id: str, actor: str) -> CutState:
     if job.status == "failed":
         return CutState(status="failed", error=job.error or "Could not cut: try again")
     return CutState(
-        status="running", ahead=JobQueue(name=QueueName.EDIT).line().ahead(job_id)
+        status="running",
+        ahead=JobQueue(name=QueueName.EDIT).line().ahead(job_id),
     )

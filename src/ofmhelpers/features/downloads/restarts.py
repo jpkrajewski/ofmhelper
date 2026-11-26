@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.assets.store import assets_root_for_actor
 from ofmhelpers.features.downloads import images as download_images
 from ofmhelpers.features.downloads import media as download_media
@@ -14,20 +16,23 @@ def _download(job: Job) -> RunArgs:
             "assets_root": str(assets_root_for_actor(actor)),
             "user_id": int(actor) if actor and actor.isdigit() else None,
             "job_id": job.id,
-        }
+        },
     )
 
 
 RESTARTS = frozendict(
     {
         download_media.TASK: Restart(
-            run=download_media.run_downloads, kwargs=_download
+            run=download_media.run_downloads,
+            kwargs=_download,
         ),
         download_videos.TASK: Restart(
-            run=download_videos.run_downloads, kwargs=_download
+            run=download_videos.run_downloads,
+            kwargs=_download,
         ),
         download_images.TASK: Restart(
-            run=download_images.run_downloads, kwargs=_download
+            run=download_images.run_downloads,
+            kwargs=_download,
         ),
-    }
+    },
 )

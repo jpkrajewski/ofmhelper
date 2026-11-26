@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.senders.telegram.client import (
     TelegramClient,

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -34,24 +36,36 @@ class Base(DeclarativeBase):
 
 class Timestamps:
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
 
 class Authored:
     created_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     updated_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
 
 class UserRow(Timestamps, Authored, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "storage_provider IN ('gdrive', 'dropbox')",
+            name="ck_users_storage_provider",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
@@ -60,24 +74,40 @@ class UserRow(Timestamps, Authored, Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     google_refresh_token: Mapped[str] = mapped_column(
-        EncryptedText, nullable=False, default="", deferred=True
+        EncryptedText,
+        nullable=False,
+        default="",
+        deferred=True,
     )
     drive_connected: Mapped[bool] = column_property(
-        func.length(google_refresh_token) > 0
+        func.length(google_refresh_token) > 0,
     )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False, default="")
     drive_root_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    storage_provider: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="gdrive",
+        server_default="gdrive",
+    )
     is_password_account: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
     )
     owner_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     sessions_ended_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
 
@@ -87,7 +117,9 @@ class UserIdentityRow(Timestamps, Authored, Base):
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
     subject: Mapped[str] = mapped_column(String(255), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False, default="")
 
@@ -97,7 +129,9 @@ class PasswordLinkRow(Base):
 
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     expires_at: Mapped[float] = mapped_column(Float, nullable=False)
 
@@ -106,17 +140,49 @@ class UserApiKeyRow(Timestamps, Authored, Base):
     __tablename__ = "user_api_keys"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
     api_key: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+
+
+class StorageAccountRow(Timestamps, Authored, Base):
+    __tablename__ = "storage_accounts"
+    __table_args__ = (
+        CheckConstraint("provider IN ('dropbox')", name="ck_storage_accounts_provider"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    provider: Mapped[str] = mapped_column(Text, primary_key=True)
+    refresh_token: Mapped[str] = mapped_column(
+        EncryptedText,
+        nullable=False,
+        deferred=True,
+    )
+    account_id: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+    )
+    connected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
 
 
 class UserCookiesRow(Timestamps, Authored, Base):
     __tablename__ = "user_cookies"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     cookies: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
@@ -135,7 +201,10 @@ class ChatFanMessageRow(Base):
     __tablename__ = "chat_fan_messages"
     __table_args__ = (
         Index(
-            "ix_chat_fan_messages_model_sent", "platform", "model_username", "sent_at"
+            "ix_chat_fan_messages_model_sent",
+            "platform",
+            "model_username",
+            "sent_at",
         ),
         Index("ix_chat_fan_messages_channel", "platform", "channel_id"),
         Index(
@@ -162,7 +231,10 @@ class ChatModelMessageRow(Base):
     __tablename__ = "chat_model_messages"
     __table_args__ = (
         Index(
-            "ix_chat_model_messages_channel_sent", "platform", "channel_id", "sent_at"
+            "ix_chat_model_messages_channel_sent",
+            "platform",
+            "channel_id",
+            "sent_at",
         ),
         Index("ix_chat_model_messages_sent", "sent_at"),
     )
@@ -181,13 +253,18 @@ class ChatAccountRow(Base):
     username: Mapped[str] = mapped_column(String(255), nullable=False)
     is_agency: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     needs_reconnect: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
+        Boolean,
+        nullable=False,
+        default=False,
     )
     access_token: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     refresh_token: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     expires_at: Mapped[float] = mapped_column(Float, nullable=False)
     connected_from: Mapped[str] = mapped_column(
-        String(2048), nullable=False, default="", server_default=""
+        String(2048),
+        nullable=False,
+        default="",
+        server_default="",
     )
 
 
@@ -245,7 +322,8 @@ class JobRow(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     task: Mapped[str] = mapped_column(String(64), nullable=False)
     user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
@@ -256,11 +334,17 @@ class JobRow(Base):
     preview: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     hidden_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
     )
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     cost_estimated: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
     )
 
     __table_args__ = (
@@ -279,26 +363,35 @@ class DownloadRow(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     job_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+        String(64),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
     )
     url: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     asset_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     stored: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default=true()
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=true(),
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True),
+        nullable=False,
     )
     last_used_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True),
+        nullable=False,
     )
     removed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     __table_args__ = (
@@ -330,7 +423,9 @@ class WatchedProfileRow(Base):
     __tablename__ = "watched_profiles"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
     )
     username: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
     group_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -347,7 +442,9 @@ class ProfileGroupRow(Timestamps, Authored, Base):
     __tablename__ = "watched_profile_groups"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
 
@@ -377,7 +474,9 @@ class CreatorRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -391,12 +490,15 @@ class TrackedAccountRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     handle: Mapped[str] = mapped_column(String(64), nullable=False)
     creator_id: Mapped[int | None] = mapped_column(
-        ForeignKey("creators.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("creators.id", ondelete="SET NULL"),
+        nullable=True,
     )
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -404,7 +506,10 @@ class TrackedAccountRow(Timestamps, Authored, Base):
     untracked_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     platform_account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     failed_scans: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     profile: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -413,7 +518,10 @@ class TrackedAccountRow(Timestamps, Authored, Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "platform", "handle", name="uq_tracked_accounts_platform_handle"
+            "user_id",
+            "platform",
+            "handle",
+            name="uq_tracked_accounts_platform_handle",
         ),
         UniqueConstraint(
             "user_id",
@@ -430,7 +538,8 @@ class TrackedPostRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(
-        ForeignKey("tracked_accounts.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("tracked_accounts.id", ondelete="CASCADE"),
+        nullable=False,
     )
     post_id: Mapped[str] = mapped_column(String(64), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
@@ -451,7 +560,8 @@ class AccountSnapshotRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(
-        ForeignKey("tracked_accounts.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("tracked_accounts.id", ondelete="CASCADE"),
+        nullable=False,
     )
     taken_at: Mapped[float] = mapped_column(Float, nullable=False)
     followers: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -467,7 +577,9 @@ class DeviceRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     label: Mapped[str] = mapped_column(String(32), nullable=False)
     model_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
@@ -488,7 +600,9 @@ class LoginRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     service: Mapped[str] = mapped_column(String(32), nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False, default="")
@@ -512,7 +626,11 @@ class LoginRow(Timestamps, Authored, Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "service", "provider", "username", name="uq_logins_identity"
+            "user_id",
+            "service",
+            "provider",
+            "username",
+            name="uq_logins_identity",
         ),
     )
 
@@ -521,10 +639,12 @@ class DeviceLoginRow(Timestamps, Authored, Base):
     __tablename__ = "device_logins"
 
     device_id: Mapped[int] = mapped_column(
-        ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("devices.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     login_id: Mapped[int] = mapped_column(
-        ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("logins.id", ondelete="CASCADE"),
+        primary_key=True,
     )
 
     __table_args__ = (Index("ix_device_logins_login_id", "login_id"),)
@@ -534,7 +654,8 @@ class DriveAccountFolderRow(Base):
     __tablename__ = "drive_account_folders"
 
     login_id: Mapped[int] = mapped_column(
-        ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("logins.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -549,13 +670,16 @@ class DriveVaFolderRow(Base):
     __tablename__ = "drive_va_folders"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     folder_id: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     root_folder_id: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
 
@@ -566,13 +690,16 @@ class DriveUploadRow(Base):
     job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     file_index: Mapped[int] = mapped_column(Integer, nullable=False)
     login_id: Mapped[int | None] = mapped_column(
-        ForeignKey("logins.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("logins.id", ondelete="CASCADE"),
+        nullable=True,
     )
     va_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
     )
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     folder_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -584,13 +711,20 @@ class DriveUploadRow(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "job_id", "file_index", "login_id", name="uq_drive_uploads_file_folder"
+            "job_id",
+            "file_index",
+            "login_id",
+            name="uq_drive_uploads_file_folder",
         ),
         UniqueConstraint(
-            "job_id", "file_index", "va_id", name="uq_drive_uploads_file_va"
+            "job_id",
+            "file_index",
+            "va_id",
+            name="uq_drive_uploads_file_va",
         ),
         CheckConstraint(
-            "(login_id IS NULL) <> (va_id IS NULL)", name="ck_drive_uploads_one_folder"
+            "(login_id IS NULL) <> (va_id IS NULL)",
+            name="ck_drive_uploads_one_folder",
         ),
     )
 
@@ -599,7 +733,8 @@ class IdempotencyKeyRow(Base):
     __tablename__ = "idempotency_keys"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     path: Mapped[str] = mapped_column(Text, nullable=False)
@@ -608,15 +743,19 @@ class IdempotencyKeyRow(Base):
     response_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
     response_body: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('started', 'done')", name="ck_idempotency_keys_status"
+            "status IN ('started', 'done')",
+            name="ck_idempotency_keys_status",
         ),
         CheckConstraint("length(key) <= 255", name="ck_idempotency_keys_key_length"),
         Index("ix_idempotency_keys_created_at", "created_at"),
@@ -628,7 +767,8 @@ class DrivePostedFileRow(Base):
 
     file_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     login_id: Mapped[int] = mapped_column(
-        ForeignKey("logins.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("logins.id", ondelete="CASCADE"),
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(String(512), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -645,7 +785,9 @@ class ShortLinkRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     remote_id: Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -655,10 +797,12 @@ class ShortLinkRow(Timestamps, Authored, Base):
     destination: Mapped[str] = mapped_column(Text, nullable=False)
     target: Mapped[str | None] = mapped_column(String(32), nullable=True)
     creator_id: Mapped[int | None] = mapped_column(
-        ForeignKey("creators.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("creators.id", ondelete="SET NULL"),
+        nullable=True,
     )
     account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("tracked_accounts.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("tracked_accounts.id", ondelete="SET NULL"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -666,10 +810,17 @@ class ShortLinkRow(Timestamps, Authored, Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "provider", "domain", "slug", name="uq_short_links_address"
+            "user_id",
+            "provider",
+            "domain",
+            "slug",
+            name="uq_short_links_address",
         ),
         UniqueConstraint(
-            "user_id", "provider", "remote_id", name="uq_short_links_remote"
+            "user_id",
+            "provider",
+            "remote_id",
+            name="uq_short_links_remote",
         ),
         Index("ix_short_links_account_id", "account_id"),
         Index(
@@ -684,7 +835,7 @@ class ShortLinkRow(Timestamps, Authored, Base):
             "slug",
             unique=True,
             postgresql_where=text(
-                "provider = 'self' AND status IN ('creating', 'active', 'inactive')"
+                "provider = 'self' AND status IN ('creating', 'active', 'inactive')",
             ),
         ),
     )
@@ -694,7 +845,8 @@ class ShortLinkDayRow(Base):
     __tablename__ = "short_link_daily_stats"
 
     link_id: Mapped[int] = mapped_column(
-        ForeignKey("short_links.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("short_links.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     views: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -705,7 +857,8 @@ class LinkSyncRow(Base):
     __tablename__ = "short_link_syncs"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
     synced_at: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -720,7 +873,8 @@ class SelfLinkDomainRow(Timestamps, Authored, Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     host: Mapped[str] = mapped_column(String(253), nullable=False, unique=True)
     owner_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
 
@@ -730,7 +884,8 @@ class SelfLinkClickRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     link_id: Mapped[int] = mapped_column(
-        ForeignKey("short_links.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("short_links.id", ondelete="CASCADE"),
+        nullable=False,
     )
     ts: Mapped[float] = mapped_column(Float, nullable=False)
     kind: Mapped[str] = mapped_column(String(8), nullable=False)
@@ -753,10 +908,13 @@ class CloneAiCheckRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
     )
     job_id: Mapped[str | None] = mapped_column(
-        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     file_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     video: Mapped[str] = mapped_column(Text, nullable=False)
@@ -789,15 +947,18 @@ class CloneFromLinkRow(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(
-        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
     )
     file_index: Mapped[int] = mapped_column(Integer, nullable=False)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     check_id: Mapped[int | None] = mapped_column(
-        ForeignKey("clone_ai_checks.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("clone_ai_checks.id", ondelete="SET NULL"),
+        nullable=True,
     )
     folder_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     drive_file_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -805,7 +966,10 @@ class CloneFromLinkRow(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     path: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
     started_at: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -821,7 +985,8 @@ class PicturePresetRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
@@ -841,7 +1006,9 @@ class CloneExampleRow(Timestamps, Authored, Base):
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     job_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+        String(64),
+        ForeignKey("jobs.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     __table_args__ = (UniqueConstraint("job_id", name="uq_clone_examples_job_id"),)
@@ -852,10 +1019,13 @@ class PhoneRevisionRow(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     txid: Mapped[int] = mapped_column(BigInteger, nullable=False)
     change: Mapped[str] = mapped_column(Text, nullable=False)
@@ -863,7 +1033,10 @@ class PhoneRevisionRow(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "txid", "created_at", name="uq_phone_revisions_transaction"
+            "user_id",
+            "txid",
+            "created_at",
+            name="uq_phone_revisions_transaction",
         ),
         Index("ix_phone_revisions_user_id_id", "user_id", "id"),
     )
@@ -874,7 +1047,9 @@ class AuditLogRow(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     table_name: Mapped[str] = mapped_column(Text, nullable=False)
     row_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -886,7 +1061,9 @@ class AuditLogRow(Base):
     ref: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     trace_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     txid: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, server_default=text("txid_current()")
+        BigInteger,
+        nullable=False,
+        server_default=text("txid_current()"),
     )
     changes: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
@@ -902,7 +1079,8 @@ class UserEventTargetRow(Timestamps, Authored, Base):
     __tablename__ = "user_event_targets"
 
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     sender: Mapped[str] = mapped_column(Text, primary_key=True)
     target: Mapped[str] = mapped_column(Text, nullable=False)
@@ -913,25 +1091,34 @@ class DistributionChannelRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     platform: Mapped[str] = mapped_column(Text, nullable=False)
     account_name: Mapped[str] = mapped_column(Text, nullable=False)
     cookies: Mapped[str] = mapped_column(
-        EncryptedText, nullable=False, default="", deferred=True
+        EncryptedText,
+        nullable=False,
+        default="",
+        deferred=True,
     )
     paused_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     next_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     resume_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     cookies_expire_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     __table_args__ = (
@@ -949,12 +1136,14 @@ class DistributionPresetRow(Timestamps, Authored, Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     key: Mapped[str] = mapped_column(Text, nullable=False)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     link_id: Mapped[int | None] = mapped_column(
-        ForeignKey("short_links.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("short_links.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     __table_args__ = (
@@ -985,18 +1174,24 @@ class DistributionPostRow(Base):
     link: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
     published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     __table_args__ = (
         UniqueConstraint(
-            "channel_id", "file_id", name="uq_distribution_posts_channel_file"
+            "channel_id",
+            "file_id",
+            name="uq_distribution_posts_channel_file",
         ),
         Index("ix_distribution_posts_channel_status", "channel_id", "status"),
         Index("ix_distribution_posts_file_status", "file_id", "status"),

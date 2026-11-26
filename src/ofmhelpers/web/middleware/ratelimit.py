@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
@@ -38,7 +40,9 @@ WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 class WriteRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         s = settings.web
         if (
@@ -50,7 +54,10 @@ class WriteRateLimitMiddleware(BaseHTTPMiddleware):
 
         identifier = client_id(request)
         count = await run_in_threadpool(
-            _hit, _WRITE_BUCKET, identifier, s.write_rate_limit_window_s
+            _hit,
+            _WRITE_BUCKET,
+            identifier,
+            s.write_rate_limit_window_s,
         )
         if count > s.write_rate_limit_requests:
             logger.warning(

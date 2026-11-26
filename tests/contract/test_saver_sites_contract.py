@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.downloaders import generic, savers
 
 REEL = "https://www.instagram.com/reel/Dc-i7hPgI7_/"

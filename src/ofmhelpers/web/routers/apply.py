@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
@@ -18,12 +20,13 @@ _THANKS = "/?applied=1"
 def landing(request: Request) -> Response:
     if AuthMiddleware.session_user(request) is not None:
         return see_other(AuthMiddleware.HOME)
-    return render(request, "reachmodel.html", form_token=form_token())
+    return render(request, "reachmodel.html", {"form_token": form_token()})
 
 
 @router.post("/apply")
 def submit_application(
-    request: Request, posted: Annotated[Submitted, Form()]
+    request: Request,
+    posted: Annotated[Submitted, Form()],
 ) -> Response:
     submit(posted, client_id(request))
     return see_other(_THANKS)

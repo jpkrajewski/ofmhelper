@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from pathlib import Path
 
@@ -12,10 +14,17 @@ SANCTIONED = {"scripts/prod_to_dev.sh"}
 PROD_MARKS = ("deploy.local.env", "OFM_DEPLOY_HOST")
 LOCAL_SWITCH = re.compile(r"\b[A-Z][A-Z0-9_]*_LOCAL=(1|true)\b")
 LIVE = (
-    "CLAUDE.md PROTECT PAID AND LIVE SYSTEMS + Verify on dev: this reaches the production server. "
-    "Prove it on the dev stack instead (a script that can reach production gets a <NAME>_LOCAL=1 "
-    "switch that runs it against dev); running it against production is the owner's step "
-    "(their word ship/deploy). Prod data for dev comes only through scripts/prod_to_dev.sh."
+    "CLAUDE.md PROTECT PAID AND LIVE SYSTEMS + Verify "
+    "on dev: this reaches the production server. "
+    "Prove it on the dev stack instead (a script that "
+    "can reach production gets a <NAME>_LOCAL=1 "
+    "switch that runs it against dev); running it "
+    "against production is the owner's step "
+    "(their word ship/deploy). Prod data for dev "
+    "comes only through scripts/prod_to_dev.sh. "
+    "A read-only prod fact (what runs, load, errors, "
+    "sizes, timings) is never the owner's step: "
+    "answer it from Logfire (logfire skill), Sentry, SERVER.md or the prod snapshot."
 )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from typing import Any
 
@@ -21,7 +23,7 @@ def _profile(row: WatchedProfileRow) -> WatchedProfile:
             "scanned_at": row.scanned_at,
             "error": row.error,
             "result": row.result,
-        }
+        },
     )
 
 
@@ -38,7 +40,7 @@ class WatchedProfileRepository(CachedRepository):
                     existing.group_name = group
                 return False
             other = s.execute(
-                select(row).where(row.username == username).limit(1)
+                select(row).where(row.username == username).limit(1),
             ).scalar_one_or_none()
             scan = (
                 {
@@ -59,7 +61,7 @@ class WatchedProfileRepository(CachedRepository):
                     **scan,
                 )
                 .on_conflict_do_nothing(index_elements=["user_id", "username"])
-                .returning(row.username)
+                .returning(row.username),
             )
             return added.scalar_one_or_none() is not None
 
@@ -70,7 +72,7 @@ class WatchedProfileRepository(CachedRepository):
                 s.execute(
                     select(WatchedProfileRow)
                     .where(*mine(WatchedProfileRow.user_id, owner))
-                    .order_by(WatchedProfileRow.added_at, WatchedProfileRow.user_id)
+                    .order_by(WatchedProfileRow.added_at, WatchedProfileRow.user_id),
                 )
                 .scalars()
                 .all()
@@ -83,7 +85,7 @@ class WatchedProfileRepository(CachedRepository):
             s.execute(
                 insert(ProfileGroupRow)
                 .values(user_id=user_id, name=name)
-                .on_conflict_do_nothing(index_elements=["user_id", "name"])
+                .on_conflict_do_nothing(index_elements=["user_id", "name"]),
             )
 
     @cached
@@ -92,8 +94,8 @@ class WatchedProfileRepository(CachedRepository):
             created = (
                 s.execute(
                     select(ProfileGroupRow.name).where(
-                        *mine(ProfileGroupRow.user_id, owner)
-                    )
+                        *mine(ProfileGroupRow.user_id, owner),
+                    ),
                 )
                 .scalars()
                 .all()
@@ -105,7 +107,7 @@ class WatchedProfileRepository(CachedRepository):
                         WatchedProfileRow.group_name.is_not(None),
                         *mine(WatchedProfileRow.user_id, owner),
                     )
-                    .distinct()
+                    .distinct(),
                 )
                 .scalars()
                 .all()
@@ -122,7 +124,7 @@ class WatchedProfileRepository(CachedRepository):
                     WatchedProfileRow.user_id == user_id,
                 )
                 .values(group_name=group)
-                .returning(WatchedProfileRow.username)
+                .returning(WatchedProfileRow.username),
             )
             return bool(moved.all())
 
@@ -133,7 +135,7 @@ class WatchedProfileRepository(CachedRepository):
             removed = s.execute(
                 delete(row)
                 .where(row.username == username, row.user_id == user_id)
-                .returning(row.username)
+                .returning(row.username),
             )
             return bool(removed.all())
 
@@ -144,7 +146,7 @@ class WatchedProfileRepository(CachedRepository):
             removed = s.execute(
                 delete(row)
                 .where(row.username == username, row.result.is_(None))
-                .returning(row.username)
+                .returning(row.username),
             )
             return bool(removed.all())
 
@@ -165,7 +167,7 @@ class WatchedProfileRepository(CachedRepository):
                     ),
                 )
                 .values(claimed_at=now)
-                .returning(WatchedProfileRow.username)
+                .returning(WatchedProfileRow.username),
             )
             return sorted(set(claimed.scalars().all()))
 
@@ -175,12 +177,15 @@ class WatchedProfileRepository(CachedRepository):
             s.execute(
                 update(WatchedProfileRow)
                 .where(WatchedProfileRow.username == username)
-                .values(result=result)
+                .values(result=result),
             )
 
     @invalidates_cache
     def record_scan(
-        self, username: str, result: dict[str, Any] | None, error: str | None
+        self,
+        username: str,
+        result: dict[str, Any] | None,
+        error: str | None,
     ) -> None:
         now = time.time()
         values: dict[str, Any] = {"scanned_at": now, "claimed_at": None, "error": error}
@@ -191,7 +196,7 @@ class WatchedProfileRepository(CachedRepository):
                 update(WatchedProfileRow)
                 .where(WatchedProfileRow.username == username)
                 .values(**values)
-                .returning(WatchedProfileRow.group_name)
+                .returning(WatchedProfileRow.group_name),
             )
             group = next(iter(updated.scalars().all()), None)
             if result is not None:
@@ -207,5 +212,5 @@ class WatchedProfileRepository(CachedRepository):
                         views_total=result["views_total"],
                         views_max=result["views_max"],
                         views_median=result["views_median"],
-                    )
+                    ),
                 )

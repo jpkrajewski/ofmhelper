@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -8,9 +10,9 @@ from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.db.users.store import _repository as user_repository
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.integrations.storage.gdrive.fake import fake_drive
 from ofmhelpers.web.main import app
 
 PHONE = {
@@ -40,9 +42,10 @@ def _client(email: str) -> TestClient:
 def _account_folder(client: TestClient) -> int:
     phone = client.post("/phones/add", json=PHONE).json()["id"]
     login = client.post(
-        f"/phones/{phone}/logins", json={"service": "instagram", "username": "x.ig"}
+        f"/phones/{phone}/logins",
+        json={"service": "instagram", "username": "x.ig"},
     ).json()["id"]
-    drive_folders.sync()
+    storage_jobs.sync()
     return login
 
 
@@ -101,7 +104,8 @@ def test_the_new_employer_lists_none_of_the_old_employers_uploads(drive, tmp_pat
 
 
 def test_the_owner_lists_and_removes_the_upload_they_made_of_their_vas_run(
-    drive, tmp_path
+    drive,
+    tmp_path,
 ):
     x = _client(X)
     login = _account_folder(x)

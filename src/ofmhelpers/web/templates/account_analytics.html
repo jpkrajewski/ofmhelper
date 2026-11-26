@@ -5,7 +5,7 @@
 {% block content %}
 {% set growth = account.growth(period.days) %}
 {% set views = account.views(period.days) %}
-{{ ui.back_link(query.link(period=query.period), "Accounts") }}
+{{ ui.back_link(query.link(changes={'period': query.period}), "Accounts") }}
 
 <div class="accounts-identity">
     {% if account.profile and account.profile.avatar_url %}

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Runs one SQL query against the app's Logfire project and prints CSV.
 
 The first place to look when debugging dev or prod (CLAUDE.md "Debugging"):

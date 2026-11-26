@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.config import settings
@@ -25,10 +27,14 @@ def test_an_account_reads_its_credit(client):
 
 
 def test_a_profiles_reels_come_with_play_counts_and_sound(
-    client, paid_backend, tmp_path
+    client,
+    paid_backend,
+    tmp_path,
 ):
     run = client.run(
-        settings.viral.actor, reel_input(_PROFILE[paid_backend], 3), _RUN_TIMEOUT_S
+        settings.viral.actor,
+        reel_input(_PROFILE[paid_backend], 3),
+        _RUN_TIMEOUT_S,
     )
     assert run.status == RunStatus.SUCCEEDED
     assert run.cost_usd > 0

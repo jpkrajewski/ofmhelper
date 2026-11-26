@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, deny, git_timeout
@@ -6,7 +8,8 @@ NAME = "secrets"
 LOCAL_ENV = ROOT / "deploy.local.env"
 HOST_KEY = "OFM_DEPLOY_HOST"
 PUBLIC_REPO = (
-    "The production host from deploy.local.env is in {path}, a file git tracks: this repo is public. "
+    "The production host from deploy.local.env is in "
+    "{path}, a file git tracks: this repo is public. "
     "Read connection details from deploy.local.env (gitignored) instead."
 )
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import json
 import time
@@ -38,7 +40,9 @@ class TokenReply(BaseModel):
 
 @runtime_checkable
 class Provider(Protocol):
-    name: str
+    @property
+    def name(self) -> str: ...
+
     label: str
     callback_method: str
     local_consent: bool

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import zipfile
 from pathlib import Path
@@ -90,6 +92,9 @@ def test_the_page_shows_the_search_with_counts_cost_and_download_all(client):
         html.index("3.0M plays") < html.index("1.5M plays") < html.index("900k plays")
     )
     assert html.count(f'href="/viral/files/{job.id}/') == 3
+    assert html.count("send-to-clone") == 3
+    assert html.count('aria-label="Send this reel"') == 3
+    assert "js/download.js" in html
 
 
 def test_download_all_is_one_zip_most_played_first(client):
@@ -159,7 +164,7 @@ def test_another_users_search_is_neither_shown_nor_zipped(client):
 
 
 def test_the_most_played_ignores_reels_without_video_and_repeats():
-    def reel(code: str, plays: int, video: bool = True) -> ApifyReel:
+    def reel(code: str, plays: int, video: bool = True) -> ApifyReel:  # noqa: FBT001
         return ApifyReel(
             shortCode=code,
             url=f"https://www.instagram.com/p/{code}/",
@@ -178,7 +183,11 @@ def test_the_most_played_ignores_reels_without_video_and_repeats():
 
 def test_plays_fall_back_to_views_and_hidden_counts_are_unknown():
     reel = ApifyReel(
-        shortCode="xxxxx", url="u", videoViewCount=40, likesCount=-1, commentsCount=3
+        shortCode="xxxxx",
+        url="u",
+        videoViewCount=40,
+        likesCount=-1,
+        commentsCount=3,
     )
     assert reel.plays == 40
     assert reel.likes is None
@@ -207,7 +216,7 @@ def test_a_picture_only_reel_gets_its_sound_back(tmp_path):
 
 def test_an_age_restricted_profile_says_so():
     item = DatasetItem.model_validate(
-        {"url": "https://www.instagram.com/shy", "error": "Restricted profile"}
+        {"url": "https://www.instagram.com/shy", "error": "Restricted profile"},
     )
 
     with pytest.raises(viral_service.ViralError) as refused:

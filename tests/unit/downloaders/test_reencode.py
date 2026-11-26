@@ -1,10 +1,17 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sys
 import time
+
+import pytest
 
 from ofmhelpers.integrations.downloaders import generic
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 
-_HANG = "import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_bytes(b'p'); time.sleep(60)"
+_HANG = (
+    "import pathlib,sys,time; "
+    "pathlib.Path(sys.argv[1]).write_bytes(b'p'); time.sleep(60)"
+)
 _FAIL = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(b'p'); sys.exit(1)"
 _DONE = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(b'h264')"
 
@@ -21,6 +28,22 @@ def _original(tmp_path):
     path = tmp_path / "clip.mp4"
     path.write_bytes(b"hevc")
     return path
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://www.tiktok.com/@person/video/123", True),
+        ("https://vm.tiktok.com/abc", True),
+        ("www.tiktok.com/@person/video/123", True),
+        ("www.tiktok.com/@person/video/123?next=https://example.com", True),
+        ("https://www.tiktok.com./@person/video/123", True),
+        ("https://example.com/watch?next=tiktok.com", False),
+        ("https://tiktok.com.evil.example/@person/video/123", False),
+    ],
+)
+def test_tiktok_detection_checks_the_hostname(url: str, *, expected: bool):
+    assert generic.is_tiktok_url(url) is expected
 
 
 def test_a_hanging_re_encode_is_stopped_and_the_original_kept(monkeypatch, tmp_path):
@@ -49,7 +72,8 @@ def test_a_failing_re_encode_keeps_the_original_and_no_partial(monkeypatch, tmp_
 
 def test_the_re_encode_is_veryfast_at_crf_18(tmp_path):
     cmd = DownloadConfig(output_dir=tmp_path).ffmpeg_cmd(
-        tmp_path / "a.mp4", tmp_path / "b.mp4"
+        tmp_path / "a.mp4",
+        tmp_path / "b.mp4",
     )
 
     assert cmd[cmd.index("-preset") + 1] == "veryfast"

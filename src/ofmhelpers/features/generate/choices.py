@@ -1,10 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.ai_providers.catalog import catalog
 from ofmhelpers.integrations.ai_providers.schema import ModelChoice, ProviderChoice
 
 
 def provider_choices(
-    names: list[str] | None = None, *, notices: bool = True
+    names: list[str] | None = None,
+    *,
+    notices: bool = True,
 ) -> list[ProviderChoice]:
     classes = provider_classes()
     return [

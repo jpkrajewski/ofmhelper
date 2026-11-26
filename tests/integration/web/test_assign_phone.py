@@ -1,13 +1,15 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.phones import service as phones_service
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -35,7 +37,7 @@ def client(drive) -> TestClient:
 
 def _phone(label: str) -> int:
     return devices.add_device(
-        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner="Anna")
+        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner="Anna"),
     )
 
 
@@ -47,7 +49,8 @@ def _account(client: TestClient, handle: str) -> int:
 
 def _assign(client: TestClient, phone: int, account: int, **extra):
     return client.post(
-        f"/phones/{phone}/accounts", json={"account_id": account, **extra}
+        f"/phones/{phone}/accounts",
+        json={"account_id": account, **extra},
     )
 
 
@@ -102,7 +105,8 @@ def test_a_phone_that_has_an_account_refuses_until_replace(client, drive):
 
 
 def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     phone = _phone("Phone 07")
     old = _account(client, "sheep_love33")
@@ -110,7 +114,7 @@ def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
     new = _account(client, "yuki_kanasiva")
     steps: list[str] = []
     real_leaving = phones_service.logins_leaving
-    real_folder = phones_service._make_drive_folder
+    real_folder = phones_service.Phone._make_drive_folder
 
     def leaving(*args, **kwargs):
         steps.append("old account leaves")
@@ -121,7 +125,7 @@ def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
         return real_folder(*args, **kwargs)
 
     monkeypatch.setattr(phones_service, "logins_leaving", leaving)
-    monkeypatch.setattr(phones_service, "_make_drive_folder", folder)
+    monkeypatch.setattr(phones_service.Phone, "_make_drive_folder", folder)
 
     assert _assign(client, phone, new, replace=True).status_code == 201
 
@@ -156,7 +160,8 @@ def test_an_account_assigned_twice_to_its_phone_is_on_it_once(client, drive):
 
 
 def test_a_replace_that_fails_half_way_loses_nothing_and_finishes_when_sent_again(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     phone = _phone("Phone 07")
     old = _account(client, "sheep_love33")

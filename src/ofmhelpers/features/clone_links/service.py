@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -5,10 +7,10 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict
 from redis.exceptions import RedisError
-lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.db.clone_ai_checks.schema import ReviewReason
 from ofmhelpers.db.clone_from_links import store as clone_from_links
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.db.jobs.store import (
@@ -23,6 +25,10 @@ from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths
 from ofmhelpers.features.clone.service import export_label, require_kind
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.links import read_pasted
 from ofmhelpers.features.clone_links.models import (
     CheckRefused,
@@ -30,13 +36,11 @@ from ofmhelpers.features.clone_links.models import (
     RecreateLinks,
 )
 from ofmhelpers.features.clone_links.preview import (
-    THUMB_KEY,
     Price,
     preview_all,
     previewed,
     thumb_file,
 )
-from ofmhelpers.features.clone_links.review import NOT_CONNECTED
 from ofmhelpers.features.clone_links.stop import stop_batch
 from ofmhelpers.features.clone_pricing.pricing import UnpricedError, clone_price
 from ofmhelpers.features.clone_pricing.targets import (
@@ -45,8 +49,9 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
     offered_resolutions,
 )
+from ofmhelpers.features.jobs.models import CloneLinksCard
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.jobs.schema import CloneLinksCard
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import (
     NotFoundError,
     RefusedError,
@@ -56,17 +61,9 @@ from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import exports
 lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
+lazy from ofmhelpers.features.assets.models import ImageUpload
 
 logger = get_logger(__name__)
-
-TASK = "clone_links"
-LABEL = "Clone links"
-PREFIX = "/clone-links"
-FILES_PREFIX = f"{PREFIX}/files"
-THUMBS_PREFIX = f"{PREFIX}/thumb"
-BATCH = r"^[0-9a-f]{8,32}$"
-_SENT_TTL_S = 24 * 3600
-NOT_QUEUED = "Not queued: run it again"
 
 
 class BatchStopped(BaseModel):
@@ -96,7 +93,7 @@ def read(text: str) -> list[str]:
 
 def _target(provider: str) -> CloneTarget:
     target = clone_targets().get(provider or settings.aigen.default_provider)
-    if target is None:
+    if target is None or target.price is None or not target.price.billable:
         msg = "That provider cannot clone"
         raise RefusedError(msg)
     return target
@@ -126,21 +123,26 @@ def _price(provider: str, resolution: str) -> Price:
 
 def _require_drive(user_id: int) -> None:
     if not refresh_token(user_id):
-        raise RefusedError(NOT_CONNECTED)
+        raise RefusedError(ReviewReason.NOT_CONNECTED)
 
 
 def previews(
-    urls: list[str], provider: str, resolution: str, user_id: int, owner_id: int
+    urls: list[str],
+    provider: str,
+    resolution: str,
+    user_id: int,
+    owner_id: int,
 ) -> Iterator[LinkPreview]:
     _require_drive(user_id)
     links = read("\n".join(urls))
     provider = provider or settings.aigen.default_provider
     price = _price(provider, _resolution(resolution or DEFAULT_RESOLUTION))
-    return preview_all(links, owner_id, price, THUMBS_PREFIX)
+    return preview_all(links, owner_id, price, clone_links_constants().thumbs_prefix)
 
 
 def cover(key: str, owner_id: int) -> Path:
-    mine = bool(THUMB_KEY.match(key)) and previewed(key, owner_id)
+    valid = clone_links_constants().thumb_key.match(key)
+    mine = bool(valid) and previewed(key, owner_id)
     path = thumb_file(key) if mine else None
     if path is None or not path.is_file():
         msg = "No cover"
@@ -149,11 +151,15 @@ def cover(key: str, owner_id: int) -> Path:
 
 
 def _first_send(actor: str, batch: str) -> bool:
+    constants = clone_links_constants()
     try:
         return bool(
             get_redis().set(
-                f"clone-links:run:{actor}:{batch}", "1", nx=True, ex=_SENT_TTL_S
-            )
+                constants.run_key.format(actor=actor, batch=batch),
+                "1",
+                nx=True,
+                ex=constants.sent_ttl_s,
+            ),
         )
     except RedisError:
         logger.warning("could not mark batch %s as sent", batch, exc_info=True)
@@ -162,7 +168,9 @@ def _first_send(actor: str, batch: str) -> bool:
 
 def _forget_send(actor: str, batch: str) -> None:
     try:
-        get_redis().delete(f"clone-links:run:{actor}:{batch}")
+        get_redis().delete(
+            clone_links_constants().run_key.format(actor=actor, batch=batch),
+        )
     except RedisError:
         logger.warning("could not clear batch %s", batch, exc_info=True)
 
@@ -175,7 +183,7 @@ class Submitted(Protocol):
     prompt: str
     audio: bool
     mirror: bool
-    image: list[UploadFile]
+    image: list[ImageUpload]
     image_manifest: str
     links: list[str]
     batch: str | None
@@ -201,31 +209,37 @@ class Generate(BaseModel):
     run: Callable[..., Any]
 
     def _queue(self, api_key: str, params: dict[str, Any]) -> str:
-        job_id = create_job(TASK, params, actor=self.actor)
+        job_id = create_job(CloneLinksTask.RUN, params, actor=self.actor)
         try:
             enqueue_to(
                 QueueName.CLONE_LINKS,
                 run_job,
-                job_id,
-                self.run,
-                {
-                    "job_id": job_id,
-                    "api_key": api_key,
-                    "assets_root": str(self.assets_root),
-                    **params,
-                },
+                (
+                    job_id,
+                    self.run,
+                    {
+                        "job_id": job_id,
+                        "api_key": api_key,
+                        "assets_root": str(self.assets_root),
+                        **params,
+                    },
+                ),
             )
         except Exception:
             logger.warning(
-                "clone-links job %s could not be queued", job_id, exc_info=True
+                "clone-links job %s could not be queued",
+                job_id,
+                exc_info=True,
             )
-            fail_job(job_id, NOT_QUEUED)
+            fail_job(job_id, clone_links_constants().not_queued)
             raise
         return job_id
 
     def _key(self, form: Submitted) -> str:
         return Keys.of(self.owner_id).for_run(
-            form.provider, _target(form.provider).model, form.api_key
+            form.provider,
+            _target(form.provider).model,
+            form.api_key,
         )
 
     def _checked(self, form: Submitted) -> _Shared:
@@ -250,13 +264,16 @@ class Generate(BaseModel):
 
     def _subject(self, form: Submitted) -> list[str]:
         paths = build_ordered_paths(
-            form.image_manifest, form.image, self.assets_root, user_id=self.owner_id
+            form.image_manifest,
+            form.image,
+            self.assets_root,
+            user_id=self.owner_id,
         )
         max_images = settings.web.clone_max_images
         if not 1 <= len(paths) <= max_images:
             msg = f"Pick between 1 and {max_images} subject images"
             raise RefusedError(msg)
-        require_kind(paths, "image", "The subject")
+        require_kind(paths, FileKind.IMAGE, "The subject")
         return paths
 
     def start(self, form: Submitted) -> Sent:
@@ -267,12 +284,13 @@ class Generate(BaseModel):
         sent: list[Job] = []
         if batch is not None:
             first = _first_send(self.actor, batch)
-            sent = list_batch(TASK, batch, self.actor)
+            sent = list_batch(CloneLinksTask.RUN, batch, self.actor)
             if not first:
                 return Sent(jobs=sent, batch=batch)
         batch = batch or uuid.uuid4().hex
         shared = {**shared, "reference_images": images, "batch": batch}
-        queued = {job.params.get("link") for job in sent if job.error != NOT_QUEUED}
+        not_queued = clone_links_constants().not_queued
+        queued = {job.params.get("link") for job in sent if job.error != not_queued}
         api_key = self._key(form)
         try:
             job_ids = [
@@ -288,15 +306,18 @@ class Generate(BaseModel):
 
 
 def card(job: Job, review: CloneFromLink | None) -> CloneLinksCard:
-    found = job_assets(job, FILES_PREFIX)
+    constants = clone_links_constants()
+    found = job_assets(job, constants.files_prefix)
     return CloneLinksCard.from_job(
         job,
         found.assets,
         found.failed_sources,
-        task_label=export_label(job.params),
-        poll_prefix=PREFIX,
-        result_kind="video",
-        review=review,
+        {
+            "task_label": export_label(job.params),
+            "poll_prefix": constants.prefix,
+            "result_kind": "video",
+            "review": review,
+        },
     )
 
 
@@ -313,14 +334,15 @@ def cards_of(job_ids: list[str], actor: str, user_id: int) -> list[CloneLinksCar
     runs = [
         job
         for job_id in dict.fromkeys(job_ids)
-        if (job := get_job(job_id, actor)) is not None and job.task == TASK
+        if (job := get_job(job_id, actor)) is not None
+        and job.task == CloneLinksTask.RUN
     ]
     return cards(runs, user_id)
 
 
 def _own_run(job_id: str, actor: str) -> Job:
     job = get_job(job_id, actor)
-    if job is None or job.task != TASK:
+    if job is None or job.task != CloneLinksTask.RUN:
         msg = "Not found"
         raise NotFoundError(msg)
     return job
@@ -339,7 +361,7 @@ def _links_to_recreate(job: Job, actor: str) -> list[str]:
     else:
         runs = [
             run
-            for run in list_batch(TASK, batch, actor)
+            for run in list_batch(CloneLinksTask.RUN, batch, actor)
             if run.status == "failed"
             and (run.hidden_at is None or run.id == job.id)
             and not _finishing(run)
@@ -347,7 +369,8 @@ def _links_to_recreate(job: Job, actor: str) -> list[str]:
     if not runs:
         return []
     links = [run.params["link"] for run in runs]
-    redone = redone_links(TASK, actor, links, min(run.created_at for run in runs))
+    since = min(run.created_at for run in runs)
+    redone = redone_links(CloneLinksTask.RUN, actor, links, since)
     return [link for link in links if link not in redone]
 
 
@@ -366,8 +389,9 @@ def stop(job_id: str, actor: str) -> BatchStopped:
         logger.warning("clone-links batch %s not stopped", batch, exc_info=True)
         msg = "Not stopped: press Stop again"
         raise TryAgainError(msg) from exc
-    runs = list_batch(TASK, batch, actor)
+    runs = list_batch(CloneLinksTask.RUN, batch, actor)
     logger.info("clone-links batch %s stopped by %s", batch, actor)
     return BatchStopped(
-        batch=batch, running=sum(run.status == "running" for run in runs)
+        batch=batch,
+        running=sum(run.status == "running" for run in runs),
     )

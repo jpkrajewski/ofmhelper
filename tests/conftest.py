@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 import os
 from pathlib import Path
@@ -33,7 +35,6 @@ lazy from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
 lazy from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
 lazy from ofmhelpers.integrations.apify.fake import fake_apify
 lazy from ofmhelpers.integrations.fanvue.fake import fake_fanvue
-lazy from ofmhelpers.integrations.gdrive.fake import _fake_drive
 lazy from ofmhelpers.integrations.instagram.fake import fake_instagram
 lazy from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
 lazy from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
@@ -44,6 +45,7 @@ lazy from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 lazy from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
 lazy from ofmhelpers.integrations.signin import passwords
 lazy from ofmhelpers.integrations.stacked.fake import fake_stacked
+lazy from ofmhelpers.integrations.storage.gdrive.fake import _fake_drive
 lazy from ofmhelpers.media import fake_media
 
 settings_module = importlib.import_module("ofmhelpers.config.settings")
@@ -60,7 +62,7 @@ def _per_worker_database(url: str) -> str:
         return url
     parsed = make_url(url)
     return parsed.set(database=f"{parsed.database}_{_XDIST_WORKER}").render_as_string(
-        hide_password=False
+        hide_password=False,
     )
 
 
@@ -76,10 +78,10 @@ TEST_DATABASE_URL = _per_worker_database(
     os.environ.get(
         "OFM_TEST_DATABASE_URL",
         "postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test",
-    )
+    ),
 )
 TEST_REDIS_URL = _per_worker_redis(
-    os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1")
+    os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1"),
 )
 
 
@@ -156,8 +158,8 @@ def _wipe_sql(_test_database) -> str:
         found = conn.execute(
             text(
                 "SELECT quote_ident(sequencename) FROM pg_sequences"
-                " WHERE schemaname = current_schema()"
-            )
+                " WHERE schemaname = current_schema()",
+            ),
         )
         sequences = [row[0] for row in found]
     deletes = "".join(
@@ -214,7 +216,8 @@ def pytest_collection_modifyitems(config, items):
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "ci_only: slow and of little use locally; runs only where CI=true (GitHub Actions)",
+        "ci_only: slow and of little use locally; "
+        "runs only where CI=true (GitHub Actions)",
     )
 
 
@@ -252,12 +255,20 @@ def fake_externals(monkeypatch, tmp_path):
         cached.cache_clear()
 
 
+def _subclasses(cls: type) -> list[type]:
+    return [
+        found
+        for direct in cls.__subclasses__()
+        for found in (direct, *_subclasses(direct))
+    ]
+
+
 _SETTINGS_CLASSES = tuple(
-    cls
-    for cls in vars(settings_module).values()
-    if isinstance(cls, type)
-    and issubclass(cls, BaseSettings)
-    and cls.__module__ == settings_module.__name__
+    dict.fromkeys(
+        cls
+        for cls in _subclasses(BaseSettings)
+        if cls.__module__ == settings_module.__name__
+    ),
 )
 
 

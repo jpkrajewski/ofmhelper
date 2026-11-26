@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
 from typing import Any
@@ -10,7 +12,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel, ConfigDict, model_serializer
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ofmhelpers.features.drive.uploads import UploadRefusedError
 from ofmhelpers.features.generate.service import GenerateRefusedError
 from ofmhelpers.features.refusals import (
     AssetRefusedError,
@@ -40,7 +41,6 @@ REFUSALS: frozendict[type[Exception], int] = frozendict(
         EditRefusedError: 400,
         GenerateRefusedError: 400,
         RefusedError: 400,
-        UploadRefusedError: 400,
         ForbiddenError: 403,
         MissingError: 404,
         NotFoundError: 404,
@@ -48,7 +48,7 @@ REFUSALS: frozendict[type[Exception], int] = frozendict(
         TooSoonError: 429,
         UnavailableError: 502,
         TryAgainError: 503,
-    }
+    },
 )
 
 
@@ -57,7 +57,9 @@ async def unhandled(request: Request, exc: Exception) -> Response:
     if AuthMiddleware.is_fetch(request):
         return JSONResponse({"detail": MESSAGE}, status_code=500)
     return HTMLResponse(
-        f"<p>{MESSAGE}</p>", status_code=500, headers=dict(FRAME_HEADERS)
+        f"<p>{MESSAGE}</p>",
+        status_code=500,
+        headers=dict(FRAME_HEADERS),
     )
 
 
@@ -81,12 +83,12 @@ Handler = Callable[[Request, Any], Coroutine[Any, Any, Response]]
 
 def _refusal(status_code: int) -> Handler:
     async def answer(_request: Request, exc: Exception) -> Response:
-        detail = getattr(exc, "detail", None)
+        detail = exc.detail if isinstance(exc, RefusedError) else None
         return JSONResponse(
             {
                 "detail": detail.model_dump()
                 if isinstance(detail, BaseModel)
-                else str(exc)
+                else str(exc),
             },
             status_code=status_code,
         )
@@ -111,5 +113,5 @@ def exception_handlers() -> ExceptionHandlers:
             StarletteHTTPException: http_error,
             RequestValidationError: invalid_request,
             **{error: _refusal(status) for error, status in REFUSALS.items()},
-        }
+        },
     )

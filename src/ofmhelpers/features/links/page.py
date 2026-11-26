@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 lazy from collections.abc import Callable
 
@@ -8,16 +10,14 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.db.self_links import store as self_links
 from ofmhelpers.db.short_links import store as short_links
-from ofmhelpers.db.short_links.schema import (
+from ofmhelpers.db.short_links.models import (
     GenerateLinks,
     LinkPage,
-    LinkPeriod,
     LinkQuery,
-    LinkSort,
-    LinksQueued,
     LinkSummary,
     ProviderState,
 )
+from ofmhelpers.db.short_links.schema import LinkPeriod, LinkSort, LinksQueued
 from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.db.tracked_accounts.store import list_accounts, list_creators
 from ofmhelpers.features.jobs.runner import run_job
@@ -60,9 +60,14 @@ ADULT_TASK = "links_adult"
 DELETE_TASK = "links_delete"
 
 
-def _start(task: str, run: Callable[..., None], user_id: int, **what: object) -> None:
+def _start(
+    task: str,
+    run: Callable[..., None],
+    user_id: int,
+    what: dict[str, object],
+) -> None:
     job_id = create_job(task, dict(what), actor=str(user_id))
-    enqueue(run_job, job_id, run, {"user_id": user_id, **what})
+    enqueue(run_job, (job_id, run, {"user_id": user_id, **what}))
 
 
 def _period(query: LinkQuery) -> LinkPeriod:
@@ -178,7 +183,10 @@ def start_delete(ids: list[int], scope: int) -> Deleting:
 def generate(body: GenerateLinks, owner_id: int) -> LinksQueued:
     ids = planned(body, owner_id)
     _start(
-        CREATE_TASK, sync.create_links, owner_id, provider=body.provider, link_ids=ids
+        CREATE_TASK,
+        sync.create_links,
+        owner_id,
+        {"provider": body.provider, "link_ids": ids},
     )
     return LinksQueued(count=len(ids))
 
@@ -186,14 +194,14 @@ def generate(body: GenerateLinks, owner_id: int) -> LinksQueued:
 def gate(ids: list[int], scope: int) -> LinksQueued:
     live = own_live(scope, ids)
     if live:
-        _start(ADULT_TASK, sync.enable_adult, scope, link_ids=live)
+        _start(ADULT_TASK, sync.enable_adult, scope, {"link_ids": live})
     return LinksQueued(count=len(live))
 
 
 def delete(ids: list[int], scope: int) -> LinksQueued:
     found = start_delete(ids, scope)
     if found.live:
-        _start(DELETE_TASK, sync.delete_links, scope, link_ids=found.live)
+        _start(DELETE_TASK, sync.delete_links, scope, {"link_ids": found.live})
     return LinksQueued(count=found.dead + len(found.live))
 
 

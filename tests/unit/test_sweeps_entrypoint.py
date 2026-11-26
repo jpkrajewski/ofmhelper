@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import signal
 import subprocess
 import sys
@@ -19,7 +21,7 @@ _CHILD = textwrap.dedent(
     )
     asyncio.run(run([tick]))
     print("exited", flush=True)
-    """
+    """,
 )
 
 

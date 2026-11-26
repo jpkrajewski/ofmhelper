@@ -1,4 +1,6 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 import json
 import random
 from enum import StrEnum
@@ -14,7 +16,7 @@ _MAX_WIDTH = 720
 _AUDIO_BITRATE = "192k"
 _AUDIO_RATE = 44100
 _AUDIO_CHANNELS = 2
-_DEVICE_TIME_SPREAD = datetime.timedelta(days=7)
+_DEVICE_TIME_SPREAD = dt.timedelta(days=7)
 
 Range = tuple[float, float]
 
@@ -57,10 +59,10 @@ class StrengthPreset(BaseModel, frozen=True):
         return StrengthPreset.model_validate(
             {
                 name: tuple(
-                    neutral + (v - neutral) * factor for v in getattr(self, name)
+                    _NEUTRAL[name] + (v - _NEUTRAL[name]) * factor for v in value
                 )
-                for name, neutral in _NEUTRAL.items()
-            }
+                for name, value in self
+            },
         )
 
 
@@ -180,7 +182,7 @@ def has_audio(src: Path, timeout_s: int) -> bool:
     return bool(json.loads(out or "{}").get("streams"))
 
 
-def _device_metadata_args(now: datetime.datetime, rng: random.Random) -> list[str]:
+def _device_metadata_args(now: dt.datetime, rng: random.Random) -> list[str]:
     taken = now - rng.random() * _DEVICE_TIME_SPREAD
     iso = taken.strftime("%Y-%m-%dT%H:%M:%S.000000Z")
     return [
@@ -203,7 +205,7 @@ def _device_metadata_args(now: datetime.datetime, rng: random.Random) -> list[st
     ]
 
 
-def encode_variant(
+def encode_variant(  # noqa: PLR0913
     src: Path,
     dst: Path,
     params: VariantParams,
@@ -247,7 +249,7 @@ def encode_variant(
         "-1",
     ]
     if metadata is MetadataMode.DEVICE:
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         args += _device_metadata_args(now, rng)
         args += ["-movflags", "+faststart+use_metadata_tags"]
     else:
@@ -256,7 +258,7 @@ def encode_variant(
     run(args, timeout_s)
 
 
-def generate_variants(
+def generate_variants(  # noqa: PLR0913, PLR0917
     src: Path,
     out_dir: Path,
     stem: str,

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 import pytest
@@ -59,7 +61,8 @@ def test_apify_reads_every_account_and_only_the_last_7_days(fakes):
     accounts = _scan(*PUBLIC, "closed_doors")
 
     assert {h: _source(a) for h, a in accounts.items()} == dict.fromkeys(
-        (*PUBLIC, "closed_doors"), "apify"
+        (*PUBLIC, "closed_doors"),
+        "apify",
     )
     assert _proxy_reads() == []
     (profiles,) = _runs(PROFILE_SCRAPER)
@@ -103,7 +106,8 @@ def test_every_key_out_of_credit_falls_back_to_the_proxy_client(fakes, monkeypat
 
 
 def test_a_key_takes_only_what_its_credit_covers_the_next_key_the_rest(
-    fakes, monkeypatch
+    fakes,
+    monkeypatch,
 ):
     monkeypatch.setenv("APIFY_API_KEYS", f"{KEY_A},{KEY_B}")
     monkeypatch.setenv("OFM_ACCOUNTS_APIFY_EST_REELS", "9")
@@ -127,7 +131,8 @@ def test_half_a_reel_run_sends_its_accounts_on_never_half_saved(fakes, monkeypat
 
 
 def test_an_account_apify_cannot_find_goes_to_the_proxy_not_another_key(
-    fakes, monkeypatch
+    fakes,
+    monkeypatch,
 ):
     monkeypatch.setenv("APIFY_API_KEYS", f"{KEY_A},{KEY_B}")
     accounts = _scan("sheep_love33", "no_such_account")
@@ -164,7 +169,8 @@ def test_what_apify_read_is_saved_before_the_next_source_starts(fakes, monkeypat
 
 
 def test_a_failed_reel_run_keeps_the_paid_profiles_and_sends_only_public_on(
-    fakes, monkeypatch
+    fakes,
+    monkeypatch,
 ):
     monkeypatch.setenv("APIFY_API_KEYS", f"{KEY_A},{KEY_B}")
     fakes.credit_left[KEY_B] = 4.0

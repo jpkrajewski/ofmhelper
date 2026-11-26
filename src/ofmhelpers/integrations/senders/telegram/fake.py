@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import threading
 import time
@@ -7,7 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 lazy import requests
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
@@ -52,14 +54,14 @@ class FakeTelegram:
                         "text": text,
                         "date": int(time.time() if sent_at is None else sent_at),
                     },
-                }
+                },
             )
 
     def odd_update(self) -> None:
         with self._lock:
             self._last_id += 1
             self._updates.append(
-                {"update_id": self._last_id, "message": {"text": "money"}}
+                {"update_id": self._last_id, "message": {"text": "money"}},
             )
 
     def _updates_from(self, body: dict[str, Any]) -> FakeReply:
@@ -73,13 +75,14 @@ class FakeTelegram:
     def _delete(self, body: dict[str, Any]) -> FakeReply:
         with self._lock:
             found = self._by_id.pop(
-                (str(body["chat_id"]), int(body["message_id"])), None
+                (str(body["chat_id"]), int(body["message_id"])),
+                None,
             )
             if found is not None:
                 self.deleted.append(found)
         return _delete_reply(found)
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         if self.fail_next:
             return self.fail_next.pop(0)
         bot, _, method = urlsplit(request.url or "").path.strip("/").partition("/")
@@ -115,7 +118,7 @@ class FakeTelegram:
                 "message_id": message_id,
                 "chat": _chat(chat_id).model_dump(exclude_none=True),
                 "text": text,
-            }
+            },
         )
 
 
@@ -138,7 +141,7 @@ def _chat(chat_id: str) -> FakeChat:
     return FakeChat(id=int(chat_id), type=kind)
 
 
-def _ok(result: Any) -> FakeReply:
+def _ok(result: JsonValue | Mapping[str, Any] | list[Any]) -> FakeReply:
     return FakeReply.json_body({"ok": True, "result": result})
 
 

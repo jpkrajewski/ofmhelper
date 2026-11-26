@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import re
 lazy from pathlib import Path
@@ -26,6 +28,7 @@ SHOW = """() => {
 def _generate(session: Session, delay_s: int) -> str:
     session.page.select_option("#provider-select", "fake")
     session.page.select_option("#model-select", "fake:image")
+    session.page.fill("#api-key", "fake-key")
     session.page.fill('#model-fields [name="delay"]', str(delay_s))
     session.page.fill('textarea[name="prompt"]', "e2e: a lost connection")
     with session.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
@@ -52,7 +55,7 @@ def test_failed_polls_are_retried_until_the_job_answers(va: Session):
     card = _generate(va, delay_s=0)
 
     expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
-        timeout=RESULT_TIMEOUT_MS
+        timeout=RESULT_TIMEOUT_MS,
     )
     assert len(failed) == FAILED_POLLS
     expect(va.page.get_by_text("Lost track")).to_have_count(0)
@@ -72,7 +75,7 @@ def test_a_hidden_tab_does_not_poll_and_catches_up_when_shown(va: Session):
 
     va.page.evaluate(SHOW)
     expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
-        timeout=RESULT_TIMEOUT_MS
+        timeout=RESULT_TIMEOUT_MS,
     )
     assert _page_errors(va) == []
 
@@ -87,10 +90,11 @@ def _slow_generate(va: Session, tmp_path: Path) -> None:
     va.goto("/generate")
     va.page.select_option("#provider-select", "fake")
     va.page.select_option("#model-select", "fake:image")
+    va.page.fill("#api-key", "fake-key")
     va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', "e2e: a slow uplink")
     va.page.locator(
-        '#model-fields .file-picker[data-field="reference_image_urls"] .file-add-input'
+        '#model-fields .file-picker[data-field="reference_image_urls"] .file-add-input',
     ).set_input_files(str(picture))
     cdp = va.context.new_cdp_session(va.page)
     cdp.send(
@@ -110,16 +114,18 @@ def _slow_generate(va: Session, tmp_path: Path) -> None:
     va.page.click('#generate-form button[type="submit"]')
     uploading = va.page.locator(".result-item", has=va.page.locator("progress"))
     expect(uploading.locator(".source")).to_have_text(
-        re.compile(r"Uploading… \d{1,2}%")
+        re.compile(r"Uploading… \d{1,2}%"),
     )
 
 
 @pytest.mark.ci_only
 def test_a_slow_upload_shows_its_progress_asks_before_leaving_and_becomes_the_job(
-    va: Session, tmp_path: Path
+    va: Session,
+    tmp_path: Path,
 ):
     with va.page.expect_response(
-        lambda r: r.url.endswith("/ai/run"), timeout=RESULT_TIMEOUT_MS
+        lambda r: r.url.endswith("/ai/run"),
+        timeout=RESULT_TIMEOUT_MS,
     ) as run:
         _slow_generate(va, tmp_path)
         expect(va.page.get_by_text("generating…")).to_have_count(0)
@@ -138,7 +144,7 @@ def test_a_slow_upload_shows_its_progress_asks_before_leaving_and_becomes_the_jo
     card = f'.result-item[data-job-id="{run.value.json()["job_id"]}"]'
 
     expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
-        timeout=RESULT_TIMEOUT_MS
+        timeout=RESULT_TIMEOUT_MS,
     )
     expect(va.page.locator("progress")).to_have_count(0)
     expect(va.page.locator(".upload-wait")).to_be_hidden()
@@ -164,6 +170,7 @@ def _fake_image_form(va: Session, picture: Path) -> None:
     va.goto("/generate")
     va.page.select_option("#provider-select", "fake")
     va.page.select_option("#model-select", "fake:image")
+    va.page.fill("#api-key", "fake-key")
     va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', "e2e: the same picture again")
     va.page.locator(f"{REFERENCES} .file-add-input").set_input_files(str(picture))
@@ -175,7 +182,7 @@ def _run(va: Session) -> bytes:
     assert run.value.status == 202, run.value.text()
     card = f'.result-item[data-job-id="{run.value.json()["job_id"]}"]'
     expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
-        timeout=RESULT_TIMEOUT_MS
+        timeout=RESULT_TIMEOUT_MS,
     )
     return run.value.request.post_data_buffer or b""
 

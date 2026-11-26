@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -20,7 +22,8 @@ _RULES = (
 )
 
 _NOTES = """Watch this reel and answer as JSON:
-{"transcript": "<what is said, verbatim or empty>", "description": "<what happens, one or two plain sentences>"}"""
+{"transcript": "<what is said, verbatim or empty>", "description": "<what "
+    "happens, one or two plain sentences>"}"""
 
 _CAPTIONS = """A reel from a creator's phone: {description}
 Spoken: {transcript}
@@ -92,7 +95,7 @@ def _video_chain() -> list[_Step]:
 
 
 def understand(video: Path) -> ReelNotes:
-    prompt = Prompt.of(_NOTES, media.ai_proxy(video), system=_RULES)
+    prompt = Prompt.of([_NOTES, media.ai_proxy(video)], system=_RULES)
     return _ask(prompt, ReelNotes, _video_chain())
 
 
@@ -103,4 +106,4 @@ def captions_for(notes: ReelNotes) -> list[str]:
         choices=CHOICES,
     )
     chain = [_Step(use=LLMUse.CHAT, entry=settings.llm.default_chat), *_video_chain()]
-    return _ask(Prompt.of(prompt, system=_RULES), Captions, chain).captions
+    return _ask(Prompt.of([prompt], system=_RULES), Captions, chain).captions

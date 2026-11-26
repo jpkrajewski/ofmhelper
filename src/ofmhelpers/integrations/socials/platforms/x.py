@@ -1,7 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.tracked_accounts.schema import XNames
+from ofmhelpers.db.tracked_accounts.models import XNames
 from ofmhelpers.integrations.socials.errors import ClientErrors
 from ofmhelpers.integrations.socials.models import (
     AccountProfile,

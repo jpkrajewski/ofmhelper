@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 import itertools
 import sys
@@ -6,7 +8,8 @@ from repo_paths import REPO
 
 sys.path.insert(0, str(REPO / "scripts"))
 _spec = importlib.util.spec_from_file_location(
-    "affected_tests", REPO / "scripts/affected_tests.py"
+    "affected_tests",
+    REPO / "scripts/affected_tests.py",
 )
 assert _spec is not None
 assert _spec.loader is not None
@@ -22,7 +25,7 @@ def test_a_nav_change_runs_the_nav_and_chrome_tests():
 
 def test_the_sweeps_and_a_page_script_reach_their_tests():
     picked = affected_tests.affected(
-        ["src/ofmhelpers/background/sweeps.py", "src/ofmhelpers/web/static/js/edit.js"]
+        ["src/ofmhelpers/background/sweeps.py", "src/ofmhelpers/web/static/js/edit.js"],
     )
     assert "tests/unit/web/test_sweeps.py" in picked
     assert "tests/e2e/test_edit_page.py" in picked
@@ -30,14 +33,21 @@ def test_the_sweeps_and_a_page_script_reach_their_tests():
 
 def test_a_changed_test_file_runs_itself_and_an_unknown_file_runs_nothing():
     assert affected_tests.affected(["tests/unit/scripts/test_self_learn.py"]) == [
-        "tests/unit/scripts/test_self_learn.py"
+        "tests/unit/scripts/test_self_learn.py",
     ]
     assert affected_tests.affected(["README.md", "tests/missing/test_x.py"]) == []
 
 
+def test_a_parked_test_of_a_retired_page_is_never_picked():
+    parked = "tests/integration/web/test_reels.py"
+    assert (REPO / parked).is_file()
+
+    assert affected_tests.affected([parked]) == []
+
+
 def test_every_path_in_the_map_exists():
     links = affected_tests.AffectedMap.model_validate_json(
-        affected_tests.MAP.read_text(encoding="utf-8")
+        affected_tests.MAP.read_text(encoding="utf-8"),
     )
     missing = [r for link in links.links for r in link.run if not (REPO / r).is_file()]
     assert missing == []
@@ -45,10 +55,10 @@ def test_every_path_in_the_map_exists():
 
 def test_a_script_runs_its_own_test_file():
     assert "tests/unit/scripts/test_self_learn.py" in affected_tests.affected(
-        ["scripts/self_learn.py"]
+        ["scripts/self_learn.py"],
     )
     assert "tests/unit/scripts/test_test_sh.py" in affected_tests.affected(
-        ["scripts/test.sh"]
+        ["scripts/test.sh"],
     )
 
 

@@ -1,7 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import time
-from collections.abc import Sequence
 from urllib.parse import urlsplit
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -35,8 +37,8 @@ def upgrade() -> None:
             "SELECT DISTINCT l.service, l.username FROM logins l"
             " JOIN device_logins dl ON dl.login_id = l.id"
             " JOIN devices d ON d.id = dl.device_id"
-            " WHERE d.retired_at IS NULL"
-        )
+            " WHERE d.retired_at IS NULL",
+        ),
     ).all()
     keys = {k for k in (_tracked_handle(s, u) for s, u in logins) if k is not None}
     now = time.time()
@@ -46,7 +48,7 @@ def upgrade() -> None:
                 "INSERT INTO tracked_accounts (platform, handle, notes, added_at)"
                 " VALUES (:platform, :handle, '', :now)"
                 " ON CONFLICT ON CONSTRAINT uq_tracked_accounts_platform_handle"
-                " DO NOTHING"
+                " DO NOTHING",
             ),
             {"platform": platform, "handle": handle, "now": now},
         )

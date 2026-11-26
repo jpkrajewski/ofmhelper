@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 import re
 import time
@@ -9,6 +11,7 @@ from signin import sign_in
 from sqlalchemy import text
 
 from ofmhelpers.cache import get_redis
+from ofmhelpers.config import settings
 from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts.store import (
@@ -111,7 +114,9 @@ def test_replace_then_remove(ann):
     ],
 )
 def test_a_file_that_is_not_cookies_txt_is_refused_and_keeps_the_old(
-    ann, payload, reason
+    ann,
+    payload,
+    reason,
 ):
     client, user_id = ann
     _upload(client, _jar(ANN_SECRET))
@@ -147,6 +152,22 @@ def test_a_too_big_file_is_refused_with_both_sizes(ann, monkeypatch):
     assert cookies.for_user(ann[1]) is None
 
 
+def test_an_empty_file_is_refused_before_upload(ann):
+    r = _upload(ann[0], b"")
+
+    assert r.status_code == 422
+    assert cookies.for_user(ann[1]) is None
+
+
+def test_the_global_upload_limit_is_enforced(ann, monkeypatch):
+    monkeypatch.setattr(settings.web, "max_upload_mb", 1)
+
+    r = _upload(ann[0], b"x" * (1024 * 1024 + 1))
+
+    assert r.status_code == 422
+    assert cookies.for_user(ann[1]) is None
+
+
 def test_stored_encrypted_and_never_in_redis_or_logs(ann, caplog):
     client, user_id = ann
     caplog.set_level(logging.DEBUG)
@@ -154,7 +175,8 @@ def test_stored_encrypted_and_never_in_redis_or_logs(ann, caplog):
     client.get("/cookies")
     with session_scope() as s:
         raw = s.execute(
-            text("SELECT cookies FROM user_cookies WHERE user_id = :u"), {"u": user_id}
+            text("SELECT cookies FROM user_cookies WHERE user_id = :u"),
+            {"u": user_id},
         ).scalar_one()
     assert ANN_SECRET not in raw
     assert ANN_SECRET in (cookies.for_user(user_id) or "")
@@ -222,7 +244,8 @@ def test_the_last_resort_logs_in_as_the_accounts_owner_only(ann, bob, monkeypatc
     tries.clear()
 
     account_tracker.scan_accounts(
-        "instagram", [_id("anns_account", ann[1]), _id("bobs_account", bob[1])]
+        "instagram",
+        [_id("anns_account", ann[1]), _id("bobs_account", bob[1])],
     )
 
     logged_in = [(h, c) for h, c in tries if c is not None]
@@ -256,7 +279,9 @@ def test_an_upload_resyncs_only_the_uploaders_limited_accounts(ann, bob, fetched
 
 
 def test_a_watched_profiles_shared_scan_uses_the_earliest_watcher_with_cookies(
-    ann, bob, monkeypatch
+    ann,
+    bob,
+    monkeypatch,
 ):
     used: list[str | None] = []
 
@@ -294,7 +319,9 @@ def test_a_download_logs_in_as_whoever_started_it(ann, bob, monkeypatch):
 
     for client, _ in (ann, bob):
         r = client.post(
-            "/download-media/run", data={"urls": "https://x.test/p/1"}, headers=keyed()
+            "/download-media/run",
+            data={"urls": "https://x.test/p/1"},
+            headers=keyed(),
         )
         assert r.status_code == 202
 
@@ -329,7 +356,8 @@ def test_two_users_tracking_one_handle_never_share_a_login_read(ann, bob, monkey
     track("instagram", "shared", user_id=bob[1])
 
     account_tracker.scan_accounts(
-        "instagram", [_id("shared", ann[1]), _id("shared", bob[1])]
+        "instagram",
+        [_id("shared", ann[1]), _id("shared", bob[1])],
     )
 
     assert get_account(_id("shared", ann[1])).followers == 10

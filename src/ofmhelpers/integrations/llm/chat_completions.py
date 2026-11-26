@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import copy
 import json
@@ -10,6 +12,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations.llm.base import LLMProvider
 from ofmhelpers.integrations.llm.errors import (
     LLMAuthError,
@@ -28,7 +31,7 @@ from ofmhelpers.integrations.llm.models import (
     TextPart,
     Usage,
 )
-from ofmhelpers.media.image_fit import ImageLimits, fitted
+from ofmhelpers.media.image_fit import fitted
 lazy from ofmhelpers.integrations.llm.models import Prompt
 
 _AUTH = (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
@@ -47,7 +50,7 @@ _NOT_STRICT = frozenset(
         "minLength",
         "pattern",
         "title",
-    }
+    },
 )
 
 
@@ -57,11 +60,11 @@ class StrictSchema(BaseModel):
     json_schema: dict[str, Any] = Field(serialization_alias="schema")
 
 
-def strict_schema(answer: type[BaseModel]) -> StrictSchema:
+def strict_schema(answer: type[BaseModel]) -> StrictSchema:  # noqa: C901
     schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 
-    def walk(node: Any) -> None:
+    def walk(node: dict[str, Any] | list[Any]) -> None:
         if isinstance(node, list):
             for item in node:
                 walk(item)
@@ -166,7 +169,9 @@ class ChatCompletionsLLM(LLMProvider):
                 "messages": [
                     message.model_dump()
                     for message in self._messages(
-                        prompt, schema.json_schema, Path(work)
+                        prompt,
+                        schema.json_schema,
+                        Path(work),
                     )
                 ],
                 **({} if temperature is None else {"temperature": temperature}),
@@ -187,7 +192,10 @@ class ChatCompletionsLLM(LLMProvider):
         return self._reply(response)
 
     def _messages(
-        self, prompt: Prompt, schema: dict[str, Any], work: Path
+        self,
+        prompt: Prompt,
+        schema: dict[str, Any],
+        work: Path,
     ) -> list[ChatMessage]:
         content = [self._part(p, work) for p in prompt.parts]
         shape = f"{_JSON_ONLY}\n{json.dumps(schema, separators=(',', ':'))}"
@@ -198,7 +206,9 @@ class ChatCompletionsLLM(LLMProvider):
         ]
 
     def _part(
-        self, part: TextPart | MediaPart, work: Path
+        self,
+        part: TextPart | MediaPart,
+        work: Path,
     ) -> TextContent | ImageContent:
         if isinstance(part, TextPart):
             return TextContent(text=part.text)
@@ -229,7 +239,8 @@ class ChatCompletionsLLM(LLMProvider):
             raise LLMOutputError(msg)
         used = found.usage or _Usage()
         usage = Usage(
-            input_tokens=used.prompt_tokens, output_tokens=used.completion_tokens
+            input_tokens=used.prompt_tokens,
+            output_tokens=used.completion_tokens,
         )
         return Reply(text=choice.message.content, usage=usage)
 

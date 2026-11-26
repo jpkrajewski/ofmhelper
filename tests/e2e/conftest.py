@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import shutil
 import socket
@@ -15,21 +17,22 @@ from alembic.config import Config
 from e2e_session import Session, log_in
 from PIL import Image
 from playwright.sync_api import Browser, sync_playwright
+from psycopg.errors import DeadlockDetected
 from pydantic import BaseModel
 from repo_paths import REPO
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 lazy from cryptography.hazmat.primitives import serialization
 lazy from cryptography.hazmat.primitives.asymmetric import ec
-lazy from redis import Redis
 lazy from rq import Queue
 lazy from rq.registry import StartedJobRegistry
 
 from alembic import command
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_FAKE_KEY
 from ofmhelpers.integrations.short_links.fake import BOUNCY_FAKE_KEY, OOPSIE_FAKE_KEY
-lazy from ofmhelpers.cache import JOB_QUEUES, get_redis
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
+lazy from ofmhelpers.cache import QueueName, get_redis
 lazy from ofmhelpers.db.models import Base
 lazy from ofmhelpers.db.session import get_engine
 lazy from ofmhelpers.integrations.signin.passwords import hash_password
@@ -39,6 +42,8 @@ ACCOUNTS = {
     "VA": ("va@example.com", "e2e-va-password"),
 }
 _STARTUP_TIMEOUT_S = 60
+_TRUNCATE_TRIES = 3
+_TRUNCATE_RETRY_S = 1.0
 _REPORTS = pytest.StashKey[dict]()
 
 
@@ -154,7 +159,10 @@ def e2e_backend(_test_environment) -> E2EBackend:
 
 @pytest.fixture(scope="session")
 def base_url(
-    e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
+    e2e_backend: E2EBackend,
+    app_dir: Path,
+    fakes_dir: Path,
+    app_log: Path,
 ) -> Iterator[str]:
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
@@ -200,9 +208,20 @@ def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
     monkeypatch.setenv("OFM_REDIS_URL", e2e_backend.redis_url)
 
     tables = ", ".join(Base.metadata.tables)
-    with get_engine().begin() as conn:
-        conn.execute(text("SET LOCAL session_replication_role = replica"))
-        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    for attempt in range(_TRUNCATE_TRIES):
+        _wait_for_jobs()
+        try:
+            with get_engine().begin() as conn:
+                conn.execute(text("SET LOCAL session_replication_role = replica"))
+                conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+            break
+        except OperationalError as exc:
+            if (
+                not isinstance(exc.orig, DeadlockDetected)
+                or attempt + 1 == _TRUNCATE_TRIES
+            ):
+                raise
+            time.sleep(_TRUNCATE_RETRY_S)
     redis = get_redis()
     stale = [k for k in redis.scan_iter("*") if not k.startswith(b"rq:")]
     if stale:
@@ -226,26 +245,45 @@ def _seed_users(database_url: str) -> None:
                 " VALUES"
                 " (1, 'admin', 'Admin (password)', 'admin', true, '', '', true),"
                 " (2, :va, '', 'user', true, '', :hash, false)"
-                " ON CONFLICT (id) DO NOTHING"
+                " ON CONFLICT (id) DO NOTHING",
             ),
             {"va": va_email, "hash": _va_password_hash()},
         )
         conn.execute(text("SELECT setval('users_id_seq', (SELECT max(id) FROM users))"))
 
 
+def _busy_queues() -> list[str]:
+    redis = get_redis()
+    queues = [(name, Queue(name, connection=redis)) for name in QueueName]
+    counts = [
+        (
+            name,
+            queue.count + len(queue.intermediate_queue.get_job_ids()),
+            StartedJobRegistry(name, connection=redis).count,
+        )
+        for name, queue in queues
+    ]
+    return [
+        f"{name}: {waiting} waiting, {running} running"
+        for name, waiting, running in counts
+        if waiting or running
+    ]
+
+
+def _wait_for_jobs(timeout_s: float = 30) -> None:
+    deadline = time.monotonic() + timeout_s
+    while busy := _busy_queues():
+        if time.monotonic() >= deadline:
+            msg = f"the app's jobs never finished: {'; '.join(busy)}"
+            raise TimeoutError(msg)
+        time.sleep(0.1)
+
+
 @pytest.fixture
 def jobs_idle(e2e_backend: E2EBackend) -> Callable[[], None]:
 
     def wait(timeout_s: float = 30) -> None:
-        redis = Redis.from_url(e2e_backend.redis_url)
-        pairs = [
-            (Queue(name, connection=redis), StartedJobRegistry(name, connection=redis))
-            for name in JOB_QUEUES
-        ]
-        deadline = time.monotonic() + timeout_s
-        while any(queue.count or started.count for queue, started in pairs):
-            assert time.monotonic() < deadline, "the app's jobs never finished"
-            time.sleep(0.1)
+        _wait_for_jobs(timeout_s)
 
     return wait
 
@@ -266,7 +304,10 @@ def browser() -> Iterator[Browser]:
 
 @pytest.fixture(scope="session")
 def auth_states(
-    browser: Browser, base_url: str, tmp_path_factory, e2e_backend: E2EBackend
+    browser: Browser,
+    base_url: str,
+    tmp_path_factory,
+    e2e_backend: E2EBackend,
 ) -> dict[str, Path]:
     root = tmp_path_factory.mktemp("e2e-auth")
     states = {}
@@ -292,7 +333,11 @@ def _failed(request) -> bool:
 
 
 def _finish(
-    session: Session, name: str, request, tmp_path: Path, app_log: Path
+    session: Session,
+    name: str,
+    request,
+    tmp_path: Path,
+    app_log: Path,
 ) -> None:
     if not _failed(request):
         session.close(trace=None)
@@ -319,12 +364,21 @@ def _finish(
     session.close(trace=trace)
     allure.attach.file(trace, name=f"{name}: trace", extension="zip")
     allure.attach.file(
-        app_log, name="app log", attachment_type=allure.attachment_type.TEXT
+        app_log,
+        name="app log",
+        attachment_type=allure.attachment_type.TEXT,
     )
 
 
-def _session(
-    role: str, name: str, browser, base_url, auth_states, request, tmp_path, app_log
+def _session(  # noqa: PLR0913, PLR0917
+    role: str,
+    name: str,
+    browser,
+    base_url,
+    auth_states,
+    request,
+    tmp_path,
+    app_log,
 ):
     session = Session(browser, base_url, auth_states[role])
     yield session
@@ -332,27 +386,58 @@ def _session(
 
 
 @pytest.fixture
-def admin(
-    browser, base_url, auth_states, request, tmp_path, app_log
+def admin(  # noqa: PLR0913, PLR0917
+    browser,
+    base_url,
+    auth_states,
+    request,
+    tmp_path,
+    app_log,
 ) -> Iterator[Session]:
     yield from _session(
-        "ADMIN", "admin", browser, base_url, auth_states, request, tmp_path, app_log
+        "ADMIN",
+        "admin",
+        browser,
+        base_url,
+        auth_states,
+        request,
+        tmp_path,
+        app_log,
     )
 
 
 @pytest.fixture
-def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[Session]:
+def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[Session]:  # noqa: PLR0913, PLR0917
     yield from _session(
-        "VA", "va", browser, base_url, auth_states, request, tmp_path, app_log
+        "VA",
+        "va",
+        browser,
+        base_url,
+        auth_states,
+        request,
+        tmp_path,
+        app_log,
     )
 
 
 @pytest.fixture
-def coworker(
-    browser, base_url, auth_states, request, tmp_path, app_log
+def coworker(  # noqa: PLR0913, PLR0917
+    browser,
+    base_url,
+    auth_states,
+    request,
+    tmp_path,
+    app_log,
 ) -> Iterator[Session]:
     yield from _session(
-        "VA", "coworker", browser, base_url, auth_states, request, tmp_path, app_log
+        "VA",
+        "coworker",
+        browser,
+        base_url,
+        auth_states,
+        request,
+        tmp_path,
+        app_log,
     )
 
 

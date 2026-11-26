@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -137,7 +139,9 @@ def _tiles(html: str) -> list[str]:
 
 def test_a_va_gets_the_owners_and_the_other_vas_subjects_and_their_uses_count():
     owner, va, other_va = _team(
-        "boss@example.com", "va1@example.com", "va2@example.com"
+        "boss@example.com",
+        "va1@example.com",
+        "va2@example.com",
     )
     root = assets_root_for_user(owner.id)
     a, b, c = (_picture(root, d, d) for d in "abc")

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import re
@@ -80,7 +82,7 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
             "error": "404 not found",
             "link": "b.example/2",
             "reason": "Not found: the post is gone or the link is wrong",
-        }
+        },
     ]
 
     assert client.get(status["result"][0]["view_url"]).status_code == 200
@@ -122,7 +124,9 @@ def test_clean_images_keeps_two_images_with_one_name(client, monkeypatch, tmp_pa
 
 
 def test_a_cleaned_image_saves_under_a_name_of_its_own_job(
-    client, monkeypatch, tmp_path
+    client,
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
 
@@ -156,7 +160,7 @@ def test_empty_submissions_rejected_cleanly(client):
     r = client.post("/download-videos/run", data={"urls": "  \n  "})
     assert r.status_code == 400
     r = client.post("/clean-images/run")
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
@@ -205,7 +209,8 @@ def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(download_reels_router, "download_all", fake_download_all)
 
     result = download_reels_router.run_downloads(
-        ["https://a.example/1"], str(tmp_path / "assets")
+        ["https://a.example/1"],
+        str(tmp_path / "assets"),
     )
 
     stored = jobs_store._stored(result)
@@ -223,7 +228,8 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(download_images_router, "download_all", fake_download_all)
 
     result = download_images_router.run_downloads(
-        ["https://a.example/1"], str(tmp_path / "assets")
+        ["https://a.example/1"],
+        str(tmp_path / "assets"),
     )
 
     stored = jobs_store._stored(result)

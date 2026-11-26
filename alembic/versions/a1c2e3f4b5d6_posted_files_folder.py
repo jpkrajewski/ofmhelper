@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -17,7 +19,7 @@ def upgrade() -> None:
     )
     op.execute(
         "UPDATE drive_posted_files p SET folder_id = f.folder_id"
-        " FROM drive_account_folders f WHERE f.login_id = p.login_id"
+        " FROM drive_account_folders f WHERE f.login_id = p.login_id",
     )
 
 

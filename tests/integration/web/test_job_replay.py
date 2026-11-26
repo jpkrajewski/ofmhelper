@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.generate.legacy import legacy_tools
 from ofmhelpers.features.trials import folder as trials
+from ofmhelpers.features.trials.constants import TrialsPhase
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.registry import TOOLS
@@ -41,7 +44,9 @@ def test_a_download_runs_again_from_its_row(tmp_path, monkeypatch):
     client = TestClient(app)
     sign_in(client)
     job_id = client.post(
-        "/download-media/run", data={"urls": LINK}, headers=keyed()
+        "/download-media/run",
+        data={"urls": LINK},
+        headers=keyed(),
     ).json()["job_id"]
 
     done = replay.replay(job_id)
@@ -66,12 +71,14 @@ def test_a_paid_job_runs_on_its_providers_fake_key():
 
 
 def test_a_trials_job_runs_from_its_args():
-    job = get_job(_job("trials", label=trials.REMAKE, login=3, args={"keys": ["k1"]}))
+    job = get_job(
+        _job("trials", label=TrialsPhase.REMAKE, login=3, args={"keys": ["k1"]}),
+    )
     assert job is not None
 
     found = replay.replay_of(job)
 
-    assert found.run is trials.RUNS[trials.REMAKE]
+    assert found.run is trials.RUNS[TrialsPhase.REMAKE]
     assert found.kwargs["keys"] == ["k1"]
     assert found.kwargs["login_id"] == 3
 
@@ -81,7 +88,7 @@ def test_a_trials_job_runs_from_its_args():
     [
         ("viral_reels", {}, "pays Apify"),
         ("ai", {"provider": "openai-real"}, "no fake for provider"),
-        ("trials", {"label": trials.GENERATE, "login": 3}, "before rows kept"),
+        ("trials", {"label": TrialsPhase.GENERATE, "login": 3}, "before rows kept"),
         ("nothing_known", {}, "has no replay"),
     ],
 )

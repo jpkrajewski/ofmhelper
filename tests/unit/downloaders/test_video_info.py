@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import SimpleNamespace
 
 import pytest
@@ -142,7 +144,8 @@ def test_a_post_hidden_logged_out_skips_to_the_login(monkeypatch):
 
 def test_a_site_without_proxies_has_one_try_and_no_logged_out_reason(monkeypatch):
     fake = _install(
-        monkeypatch, lambda opts: RuntimeError("Sign in to confirm you're not a bot")
+        monkeypatch,
+        lambda opts: RuntimeError("Sign in to confirm you're not a bot"),
     )
 
     info = generic.video_info(SHORT, COOKIES)
@@ -171,7 +174,7 @@ def test_yt_dlp_takes_the_one_post_options_and_drops_generic():
     with _real_ydl(DownloadConfig.single_post()) as ydl:
         assert "Generic" not in ydl._ies
         assert {"Instagram", "TikTok", "Youtube", "FacebookRedirectURL"} <= set(
-            ydl._ies
+            ydl._ies,
         )
 
 

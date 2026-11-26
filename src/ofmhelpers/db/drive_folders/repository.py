@@ -1,5 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from contextlib import contextmanager
+from typing import Any
 lazy from collections.abc import Iterator
 
 from sqlalchemy import case, delete, func, select, update
@@ -7,7 +10,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
-from ofmhelpers.db.drive_folders.schema import AccountScan, StoredFolder, VaFolder
+from ofmhelpers.db.drive_folders.schema import (
+    AccountScan,
+    PostedSeen,
+    StoredFolder,
+    VaFolder,
+)
 from ofmhelpers.db.models import (
     DriveAccountFolderRow,
     DrivePostedFileRow,
@@ -36,8 +44,8 @@ class DriveFolderRepository(CachedRepository):
             rows = (
                 s.execute(
                     select(DriveAccountFolderRow).where(
-                        DriveAccountFolderRow.root_folder_id.in_(roots)
-                    )
+                        DriveAccountFolderRow.root_folder_id.in_(roots),
+                    ),
                 )
                 .scalars()
                 .all()
@@ -63,8 +71,8 @@ class DriveFolderRepository(CachedRepository):
             rows = (
                 s.execute(
                     select(DriveVaFolderRow).where(
-                        DriveVaFolderRow.user_id.in_(user_ids)
-                    )
+                        DriveVaFolderRow.user_id.in_(user_ids),
+                    ),
                 )
                 .scalars()
                 .all()
@@ -92,7 +100,7 @@ class DriveFolderRepository(CachedRepository):
                 s.execute(
                     insert(DriveVaFolderRow)
                     .values(user_id=folder.user_id, **values)
-                    .on_conflict_do_update(index_elements=["user_id"], set_=values)
+                    .on_conflict_do_update(index_elements=["user_id"], set_=values),
                 )
         except IntegrityError as exc:  # silent: the VA is gone, the caller logs it
             if not _parent_gone(exc, _VA_FK):
@@ -104,7 +112,7 @@ class DriveFolderRepository(CachedRepository):
     def sync_lock(self) -> Iterator[bool]:
         with session_scope() as s:
             held = bool(
-                s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar()
+                s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar(),
             )
             try:
                 yield held
@@ -114,7 +122,11 @@ class DriveFolderRepository(CachedRepository):
 
     @invalidates_cache
     def save_account_folder(
-        self, login_id: int, folder_id: str, name: str, root: str
+        self,
+        login_id: int,
+        folder_id: str,
+        name: str,
+        root: str,
     ) -> bool:
         values = {
             "folder_id": folder_id,
@@ -135,7 +147,7 @@ class DriveFolderRepository(CachedRepository):
                             **values,
                             "posted_folder_id": kept_posted,
                         },
-                    )
+                    ),
                 )
         except IntegrityError as exc:  # silent: the login is gone, the caller logs it
             if not _parent_gone(exc, _LOGIN_FK):
@@ -144,24 +156,25 @@ class DriveFolderRepository(CachedRepository):
         return True
 
     @invalidates_cache
-    def save_scans(self, scans: dict[int, dict], at: float) -> None:
+    def save_scans(self, scans: dict[int, dict[str, Any]], at: float) -> None:
         if not scans:
             return
         with session_scope() as s:
-            for login_id, scan in scans.items():
-                s.execute(
-                    update(DriveAccountFolderRow)
-                    .where(DriveAccountFolderRow.login_id == login_id)
-                    .values(scan=scan, scanned_at=at)
-                )
+            s.execute(
+                update(DriveAccountFolderRow),
+                [
+                    {"login_id": login_id, "scan": scan, "scanned_at": at}
+                    for login_id, scan in scans.items()
+                ],
+            )
 
     @invalidates_cache
     def forget_account_folder(self, login_id: int) -> None:
         with session_scope() as s:
             s.execute(
                 delete(DriveAccountFolderRow).where(
-                    DriveAccountFolderRow.login_id == login_id
-                )
+                    DriveAccountFolderRow.login_id == login_id,
+                ),
             )
 
     @invalidates_cache
@@ -170,37 +183,32 @@ class DriveFolderRepository(CachedRepository):
             s.execute(
                 update(DriveAccountFolderRow)
                 .where(DriveAccountFolderRow.login_id == login_id)
-                .values(posted_folder_id=folder_id, updated_at=time.time())
+                .values(posted_folder_id=folder_id, updated_at=time.time()),
             )
 
     @invalidates_cache
-    def record_posted(
-        self,
-        login_id: int,
-        folder_id: str,
-        files: list[tuple[str, str, str]],
-        seen_at: float,
-    ) -> int | None:
-        if not files:
-            return 0
+    def record_posted(self, seen: list[PostedSeen], seen_at: float) -> int | None:
         rows = [
             {
-                "file_id": file_id,
-                "login_id": login_id,
-                "folder_id": folder_id,
-                "name": name[:512],
-                "kind": kind,
+                "file_id": file.id,
+                "login_id": folder.login_id,
+                "folder_id": folder.folder_id,
+                "name": file.name[:512],
+                "kind": file.kind,
                 "first_seen_at": seen_at,
             }
-            for file_id, name, kind in files
+            for folder in seen
+            for file in folder.files
         ]
+        if not rows:
+            return 0
         try:
             with session_scope() as s:
                 added = s.execute(
                     insert(DrivePostedFileRow)
                     .values(rows)
                     .on_conflict_do_nothing(index_elements=["file_id"])
-                    .returning(DrivePostedFileRow.file_id)
+                    .returning(DrivePostedFileRow.file_id),
                 ).all()
         except IntegrityError as exc:  # silent: the login is gone, the caller logs it
             if not _parent_gone(exc, _LOGIN_FK):

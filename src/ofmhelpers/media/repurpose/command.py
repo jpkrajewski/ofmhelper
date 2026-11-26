@@ -1,4 +1,6 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 lazy import random
 lazy from pathlib import Path
 
@@ -27,22 +29,22 @@ class EncodeDraws(BaseModel, frozen=True):
     bframes: int | None
     fps: str | None
     audio_kbps: int
-    creation_time: datetime.datetime
+    creation_time: dt.datetime
 
 
 def draw_encode(
     device: Device,
     source: Source,
     rng: random.Random,
-    recorded_at: datetime.datetime | None = None,
+    recorded_at: dt.datetime | None = None,
 ) -> EncodeDraws:
     v, tags = device.video, device.tags
     if recorded_at is not None:
-        now = recorded_at.astimezone(datetime.UTC)
+        now = recorded_at.astimezone(dt.UTC)
     else:
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         if tags.creation_time == "recent":
-            now -= datetime.timedelta(days=rng.random() * tags.recent_days)
+            now -= dt.timedelta(days=rng.random() * tags.recent_days)
     bitrate = draw_int(v.bitrate_kbps, rng)
     return EncodeDraws(
         x264_preset=pick(v.preset, rng) or "fast",
@@ -62,7 +64,7 @@ def input_args(src: Path, video: VideoTransformer) -> list[str]:
     return [*args, "-t", f"{t.duration_s:.3f}", "-i", str(src)]
 
 
-def build(
+def build(  # noqa: PLR0913
     *,
     src: Path,
     dst: Path,
@@ -114,7 +116,7 @@ def _audio_encode(device: Device, encode: EncodeDraws) -> list[str]:
     return [*args, "-flags:a", "+bitexact"] if a.bitexact else args
 
 
-def _video_encode(device: Device, encode: EncodeDraws) -> list[str]:
+def _video_encode(device: Device, encode: EncodeDraws) -> list[str]:  # noqa: C901
     v = device.video
     args = ["-c:v", v.codec, "-profile:v", v.profile]
     if v.level:

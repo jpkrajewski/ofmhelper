@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from repo_paths import REPO
 lazy from uvicorn.middleware.proxy_headers import _TrustedHosts
 

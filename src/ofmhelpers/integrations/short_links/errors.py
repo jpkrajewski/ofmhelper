@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from ofmhelpers.db.short_links.catalog.schema import RemoteLink
 
 

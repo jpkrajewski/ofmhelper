@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -34,9 +36,9 @@ from ofmhelpers.features.clone_pricing.targets import (
     clone_targets,
 )
 from ofmhelpers.features.clone_pricing.targets import clone_values as _clone_values
-from ofmhelpers.features.drive.uploads import queue_uploads, remove_upload
 from ofmhelpers.features.jobs.schema import CloneQueued
 from ofmhelpers.features.redirect import Redirect
+from ofmhelpers.features.storage.service import StorageServiceUploads
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.web.access import Action, Area
 from ofmhelpers.web.dependencies import (
@@ -46,11 +48,11 @@ from ofmhelpers.web.dependencies import (
     ApiKeys,
     AssetsRoot,
     Can,
-    CurrentUser,
     OwnerId,
+    Storage,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, PaidForm
+from ofmhelpers.web.forms import ImageFiles, PaidForm, VideoFiles
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.responses import NO_STORE
@@ -95,9 +97,9 @@ class CloneForm(PaidForm):
     audio: bool = False
     export: str = ""
     mirror: bool = False
-    image: Files
+    image: ImageFiles
     image_manifest: str = "[]"
-    videos: Files
+    videos: VideoFiles
     videos_manifest: str = "[]"
 
 
@@ -106,38 +108,40 @@ def _video_seconds(path: str) -> float:
 
 
 def _rendered_cards(
-    request: Request, job_ids: list[str], actor: str, user_id: int
+    request: Request,
+    job_ids: list[str],
+    actor: str,
+    uploads: StorageServiceUploads,
 ) -> str:
-    picker = dict(drive_picker(user_id))
+    picker = dict(drive_picker(uploads))
     return "".join(
-        render_partial("_clone_card.html", request=request, job=card, **picker)
+        render_partial("_clone_card.html", {"request": request, "job": card, **picker})
         for card in cards_of(job_ids, actor)
     )
 
 
 @router.get("")
-def form(
+def form(  # noqa: PLR0913, PLR0917
     request: Request,
     actor: Actor,
     viewer: Viewing,
-    user: CurrentUser,
+    storage: Storage,
     api_keys: ApiKeys,
     assets_root: AssetsRoot,
     query: GalleryParams,
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
     first = gallery.page(viewer, query)
-    response = render(
-        request,
-        "clone.html",
-        gallery=cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        dates=query,
-        api_keys=api_keys,
+    context = {
+        "gallery": cards(first.jobs),
+        "next_offset": first.next_offset,
+        "hidden_count": gallery.hidden_count(viewer),
+        "dates": query,
+        "api_keys": api_keys,
         **dict(form_view(actor, viewer.team, assets_root, video or [])),
-        **dict(drive_picker(user.id)),
-    )
+        **dict(drive_picker(storage.uploads)),
+    }
+    response = render(request, "clone.html", context)
     response.headers.update(NO_STORE)
     return response
 
@@ -145,7 +149,7 @@ def form(
 @router.get("/gallery")
 def gallery_page(
     request: Request,
-    user: CurrentUser,
+    storage: Storage,
     viewer: Viewing,
     query: GalleryParams,
 ) -> Response:
@@ -153,33 +157,39 @@ def gallery_page(
     return render(
         request,
         "clone_gallery_fragment.html",
-        gallery=cards(found.jobs),
-        next_offset=found.next_offset,
-        **dict(drive_picker(user.id)),
+        {
+            "gallery": cards(found.jobs),
+            "next_offset": found.next_offset,
+            **dict(drive_picker(storage.uploads)),
+        },
     )
 
 
 @router.get("/gallery/latest")
 def gallery_latest(
-    request: Request, viewer: Viewing, user: CurrentUser, query: GalleryParams
+    request: Request,
+    viewer: Viewing,
+    storage: Storage,
+    query: GalleryParams,
 ) -> Response:
     return render_polled(
         request,
         "clone_gallery_fragment.html",
-        gallery=cards(gallery.page(viewer, query.newest()).jobs),
-        next_offset=None,
-        **dict(drive_picker(user.id)),
+        {
+            "gallery": cards(gallery.page(viewer, query.newest()).jobs),
+            "next_offset": None,
+            **dict(drive_picker(storage.uploads)),
+        },
     )
 
 
 @router.post("/drive-upload", dependencies=[Can(Action.DRIVE_UPLOAD)])
 def drive_upload(
-    user: CurrentUser, actors: Actors, body: UploadRequest
+    storage: Storage,
+    actors: Actors,
+    body: UploadRequest,
 ) -> UploadsQueued:
-    uploads = queue_uploads(user, body.job_ids, body.login_ids, actors, body.va_ids)
-    return UploadsQueued(
-        queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
-    )
+    return storage.uploads.queue(body.job_ids, body.login_ids, actors, body.va_ids)
 
 
 @router.post("/{job_id}/handoffs", summary="Open this run's video in another tool")
@@ -194,28 +204,33 @@ def handoff(
 
 
 @router.post(
-    "/drive-uploads/{upload_id}/remove", dependencies=[Can(Action.DRIVE_UPLOAD)]
+    "/drive-uploads/{upload_id}/remove",
+    dependencies=[Can(Action.DRIVE_UPLOAD)],
 )
 def drive_upload_remove(
-    user: CurrentUser, actors: Actors, upload_id: int
+    storage: Storage,
+    actors: Actors,
+    upload_id: int,
 ) -> DriveUpload:
-    return remove_upload(user, upload_id, actors)
+    return storage.uploads.remove(upload_id, actors)
 
 
 @router.get("/drive-uploads")
 def drive_upload_states(
-    viewer: Viewing, actors: Actors, job: Annotated[list[str], Query(max_length=200)]
+    viewer: Viewing,
+    actors: Actors,
+    job: Annotated[list[str], Query(max_length=200)],
 ) -> list[DriveUpload]:
     return upload_states(job, actors, viewer.team_ids)
 
 
 @router.post("/run", status_code=202, dependencies=[Idempotent])
-def run(
+def run(  # noqa: PLR0913, PLR0917
     request: Request,
     form: Annotated[CloneForm, Form()],
     actor: Actor,
     owner: OwnerId,
-    user: CurrentUser,
+    storage: Storage,
     assets_root: AssetsRoot,
 ) -> CloneQueued:
     submit = Submit(
@@ -227,13 +242,14 @@ def run(
     )
     job_ids = submit.start(form)
     return CloneQueued(
-        job_ids=job_ids, html=_rendered_cards(request, job_ids, actor, user.id)
+        job_ids=job_ids,
+        html=_rendered_cards(request, job_ids, actor, storage.uploads),
     )
 
 
 @router.get("/examples", summary="The SOP dialog's examples")
 def examples_list(request: Request) -> Response:
-    return render(request, "_clone_examples.html", examples=examples.shown())
+    return render(request, "_clone_examples.html", {"examples": examples.shown()})
 
 
 @router.get(

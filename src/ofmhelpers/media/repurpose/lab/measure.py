@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import subprocess
@@ -77,10 +79,15 @@ class Measurement(BaseModel):
 
 
 def reference(
-    draws: VideoDraws, fps: str | None, sample: Path, dst: Path, work: Path
+    draws: VideoDraws,
+    fps: str | None,
+    sample: Path,
+    dst: Path,
+    work: Path,
 ) -> None:
     ref = VideoTransformer.from_draws(
-        VideoSettings(), draws.model_copy(update=_NO_LOOK)
+        VideoSettings(),
+        draws.model_copy(update=_NO_LOOK),
     )
     run(
         [
@@ -113,8 +120,8 @@ def vmaf(copy: Path, ref: Path, work: Path) -> float:
     tool = settings.repurpose.lab_vmaf_ffmpeg
     if tool:
         log = work / "vmaf.json"
-        graph += f"[d][r]libvmaf=log_fmt=json:log_path={log}:n_threads=2:n_subsample=2:shortest=1"
-        subprocess.run(
+        graph += f"[d][r]libvmaf=log_fmt=json:log_path={log}:n_threads=2:n_subsample=2:shortest=1"  # noqa: E501
+        subprocess.run(  # noqa: S603
             [
                 tool,
                 "-v",
@@ -133,9 +140,12 @@ def vmaf(copy: Path, ref: Path, work: Path) -> float:
             capture_output=True,
             timeout=_TIMEOUT_S,
         )
-        return round(json.loads(log.read_text())["pooled_metrics"]["vmaf"]["mean"], 2)
+        return round(
+            float(json.loads(log.read_text())["pooled_metrics"]["vmaf"]["mean"]),
+            2,
+        )
     graph += "[d][r]ssim=shortest=1"
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: S603
         [
             binary("ffmpeg"),
             "-i",
@@ -163,8 +173,11 @@ def _pcm(path: Path, start: float | None, seconds: float | None) -> np.ndarray:
     if seconds:
         argv += ["-t", f"{seconds:.3f}"]
     argv += ["-i", str(path), "-vn", "-ac", "1", "-ar", str(_RATE), "-f", "f32le", "-"]
-    raw = subprocess.run(
-        argv, check=True, capture_output=True, timeout=_TIMEOUT_S
+    raw = subprocess.run(  # noqa: S603
+        argv,
+        check=True,
+        capture_output=True,
+        timeout=_TIMEOUT_S,
     ).stdout
     return np.frombuffer(raw, dtype=np.float32)
 
@@ -211,7 +224,7 @@ def _require_step(result: RunResult) -> EncodeStep:
     return result.step
 
 
-def measure(
+def measure(  # noqa: PLR0913
     trial: str,
     strengths: dict[str, float],
     part: Part,
@@ -252,7 +265,10 @@ def measure(
             if (full or part is Part.AUDIO) and report.audio:
                 t = step.video.timeline
                 out.audio_change_db = audio_change_db(
-                    copy, sample, t.start_s, t.duration_s
+                    copy,
+                    sample,
+                    t.start_s,
+                    t.duration_s,
                 )
             if keep:
                 keep.parent.mkdir(parents=True, exist_ok=True)

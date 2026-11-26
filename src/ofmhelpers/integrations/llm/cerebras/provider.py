@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy import httpx
 
 from ofmhelpers.config import settings

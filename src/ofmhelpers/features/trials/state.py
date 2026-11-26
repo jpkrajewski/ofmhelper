@@ -1,4 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -10,7 +13,7 @@ from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive.models import folder_url
+from ofmhelpers.db.drive_folders.schema import folder_url
 from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
@@ -79,7 +82,7 @@ class ReelState(BaseModel):
     def claim_captions(self, job_id: str) -> None:
         self.job_id, self.error = job_id, None
 
-    def select(self, selected: bool) -> None:
+    def select(self, selected: bool) -> None:  # noqa: FBT001
         self.approved = selected
 
     def mark_downloaded(self, local: str) -> None:
@@ -178,6 +181,13 @@ def work_dir(user_id: int, login_id: int) -> Path:
     return root / str(user_id) / str(login_id)
 
 
+def stored_folders() -> Iterator[tuple[int, int]]:
+    for found in (Path(settings.infra.uploads_root) / "trials").glob("*/*/state.json"):
+        login, user = found.parent, found.parent.parent
+        if user.name.isdigit() and login.name.isdigit():
+            yield int(user.name), int(login.name)
+
+
 def load(user_id: int, login_id: int) -> FolderState:
     path = work_dir(user_id, login_id) / "state.json"
     if path.is_file():
@@ -189,7 +199,12 @@ def save(user_id: int, state: FolderState) -> None:
     root = work_dir(user_id, state.login_id)
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=root, delete=False, prefix="state_", suffix=".tmp"
+        "w",
+        encoding="utf-8",
+        dir=root,
+        delete=False,
+        prefix="state_",
+        suffix=".tmp",
     ) as handle:
         handle.write(state.model_dump_json(indent=1))
         tmp = Path(handle.name)
@@ -198,7 +213,10 @@ def save(user_id: int, state: FolderState) -> None:
 
 @contextmanager
 def locked(
-    user_id: int, login_id: int, what: str = "state", wait_s: int = _LOCK_S
+    user_id: int,
+    login_id: int,
+    what: str = "state",
+    wait_s: int = _LOCK_S,
 ) -> Iterator[None]:
     lock = get_redis().lock(
         f"lock:trials:{what}:{user_id}:{login_id}",
@@ -226,7 +244,9 @@ def locked(
 
 
 def change(
-    user_id: int, login_id: int, edit: Callable[[FolderState], None]
+    user_id: int,
+    login_id: int,
+    edit: Callable[[FolderState], None],
 ) -> FolderState:
     with locked(user_id, login_id):
         state = load(user_id, login_id)
@@ -236,7 +256,10 @@ def change(
 
 
 def change_reel(
-    user_id: int, login_id: int, key: str, edit: Callable[[ReelState], None]
+    user_id: int,
+    login_id: int,
+    key: str,
+    edit: Callable[[ReelState], None],
 ) -> FolderState:
 
     def apply(state: FolderState) -> None:

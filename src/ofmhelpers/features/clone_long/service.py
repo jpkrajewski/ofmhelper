@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import contextvars
 import math
 import shutil
@@ -155,7 +157,7 @@ class LongClone:
         self.tools = VideoTools(settings.clone_long.ffmpeg_timeout_s)
 
     @classmethod
-    def prepare(
+    def prepare(  # noqa: PLR0913
         cls,
         *,
         provider: str,
@@ -187,12 +189,12 @@ class LongClone:
                 chain=switches.chain,
                 colour_match=switches.colour_match,
                 audio=switches.audio,
-            )
+            ),
         )
         with input_refused():
             for piece in plan.pieces:
                 target.spec.check(
-                    target.values(clone.params, piece.length, video).model_dump()
+                    target.values(clone.params, piece.length, video).model_dump(),
                 )
         return clone
 
@@ -318,7 +320,12 @@ class LongClone:
                 set_job_preview(job_id, JobPreview(remote_url=hosted[0], kind="video"))
 
         first, *extra = runner.generate(
-            client, spec, payload, job_id, preview if part == 0 else None, part=part
+            client,
+            spec,
+            payload,
+            job_id,
+            preview if part == 0 else None,
+            part=part,
         )
         for path in extra:
             path.unlink(missing_ok=True)
@@ -328,11 +335,44 @@ class LongClone:
         return saved
 
 
-def run_long_clone(
-    job_id: str, api_key: str, assets_root: str, **params: Any
+def run_long_clone(  # noqa: PLR0913, PLR0917
+    job_id: str,
+    api_key: str,
+    assets_root: str,
+    provider: str,
+    model: str,
+    prompt: str,
+    resolution: str,
+    image: str,
+    video: str,
+    width: int,
+    height: int,
+    seconds: float,
+    pieces: int,
+    credits: float,  # noqa: A002
+    usd: float,
+    chain: bool = False,  # noqa: FBT001, FBT002
+    colour_match: bool = False,  # noqa: FBT001, FBT002
+    audio: bool = False,  # noqa: FBT001, FBT002
 ) -> list[ResultFile]:
-    run = LongClone(LongCloneParams.model_validate(params))
-    return run.run(job_id, api_key, assets_root)
+    params = LongCloneParams(
+        provider=provider,
+        model=model,
+        prompt=prompt,
+        resolution=resolution,
+        image=image,
+        video=video,
+        width=width,
+        height=height,
+        seconds=seconds,
+        pieces=pieces,
+        credits=credits,
+        usd=usd,
+        chain=chain,
+        colour_match=colour_match,
+        audio=audio,
+    )
+    return LongClone(params).run(job_id, api_key, assets_root)
 
 
 def time_limit(params: dict[str, Any]) -> int:

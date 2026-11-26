@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.config import settings
@@ -7,6 +9,7 @@ from ofmhelpers.db.users.schema import (
     LinkedAccount,
     Role,
     Standing,
+    StorageProvider,
     User,
     UserForm,
     normalized_email,
@@ -15,9 +18,6 @@ from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.users.schema import Identity, SavedKeys
 
 logger = get_logger(__name__)
-
-PASSWORD_ADMIN = "admin"  # noqa: S105
-OWNER_PROVIDER = "owner"
 
 
 @lru_cache(maxsize=1)
@@ -60,12 +60,12 @@ def add_user(form: UserForm) -> User | None:
 
 def set_role(user_id: int, role: Role) -> User | None:
     if role.has_employer:
-        return _repository().update(user_id, role=role)
-    return _repository().update(user_id, role=role, owner_id=None)
+        return _repository().update(user_id, {"role": role})
+    return _repository().update(user_id, {"role": role, "owner_id": None})
 
 
 def set_owner(user_id: int, owner_id: int | None) -> User | None:
-    return _repository().update(user_id, owner_id=owner_id)
+    return _repository().update(user_id, {"owner_id": owner_id})
 
 
 def vas_of(owner_id: int) -> list[User]:
@@ -77,7 +77,7 @@ def vas_of(owner_id: int) -> list[User]:
 
 
 def set_active(user_id: int, *, active: bool) -> User | None:
-    return _repository().update(user_id, active=active)
+    return _repository().update(user_id, {"active": active})
 
 
 def delete_user(user_id: int) -> bool:
@@ -85,7 +85,9 @@ def delete_user(user_id: int) -> bool:
 
 
 def admit(
-    user: User | None, name: str = "", refresh_token: str | None = None
+    user: User | None,
+    name: str = "",
+    refresh_token: str | None = None,
 ) -> User | None:
     if user is None or not user.active:
         return None
@@ -98,9 +100,12 @@ def _claim_password_account(email: str, name: str) -> User | None:
     if not admins or normalized_email(email) != admins[0]:
         return None
     account = agency_admin()
-    if account is None or account.email != PASSWORD_ADMIN:
+    if account is None or account.email != settings.signin.password_admin:
         return None
-    return _repository().update(account.id, email=normalized_email(email), name=name)
+    return _repository().update(
+        account.id,
+        {"email": normalized_email(email), "name": name},
+    )
 
 
 def env_admin(email: str, name: str) -> User | None:
@@ -111,13 +116,16 @@ def env_admin(email: str, name: str) -> User | None:
 
 def sign_in_identity(identity: Identity) -> User | None:
     repo = _repository()
-    if identity.provider == OWNER_PROVIDER:
+    if identity.provider == settings.signin.owner_provider:
         return admit(password_admin())
     if identity.email_verified and is_env_admin(identity.email):
         user = env_admin(identity.email, identity.name)
         if user is not None:
             repo.link_identity(
-                user.id, identity.provider, identity.subject, identity.email
+                user.id,
+                identity.provider,
+                identity.subject,
+                identity.email,
             )
         return admit(user, identity.name, identity.refresh_token)
     linked = repo.user_for_identity(identity.provider, identity.subject)
@@ -126,7 +134,10 @@ def sign_in_identity(identity: Identity) -> User | None:
         user = by_email(identity.email)
         if user is not None:
             repo.link_identity(
-                user.id, identity.provider, identity.subject, identity.email
+                user.id,
+                identity.provider,
+                identity.subject,
+                identity.email,
             )
     elif user is not None and is_env_admin(user.email):
         user = env_admin(user.email, identity.name)
@@ -134,10 +145,13 @@ def sign_in_identity(identity: Identity) -> User | None:
 
 
 def link_identity(user_id: int, identity: Identity) -> bool:
-    if identity.provider == OWNER_PROVIDER:
+    if identity.provider == settings.signin.owner_provider:
         return False
     if not _repository().link_identity(
-        user_id, identity.provider, identity.subject, identity.email
+        user_id,
+        identity.provider,
+        identity.subject,
+        identity.email,
     ):
         return False
     _repository().signed_in(user_id, "", identity.refresh_token)
@@ -193,7 +207,7 @@ def agency_admin() -> User | None:
     if user is None:
         return password_admin()
     if not user.is_admin:
-        return _repository().update(user.id, role=Role.ADMIN)
+        return _repository().update(user.id, {"role": Role.ADMIN})
     return user
 
 
@@ -201,11 +215,14 @@ def password_admin() -> User | None:
     user = _repository().password_account()
     if user is None:
         added = _repository().add(
-            PASSWORD_ADMIN, Role.ADMIN, "Admin (password)", password_account=True
+            settings.signin.password_admin,
+            Role.ADMIN,
+            "Admin (password)",
+            password_account=True,
         )
         return added or _repository().password_account()
     if not user.is_admin or not user.active:
-        return _repository().update(user.id, role=Role.ADMIN, active=True)
+        return _repository().update(user.id, {"role": Role.ADMIN, "active": True})
     return user
 
 
@@ -213,12 +230,19 @@ def set_drive_root(user_id: int, folder_id: str | None) -> None:
     _repository().set_drive_root(user_id, folder_id)
 
 
+def set_storage_provider(user_id: int, provider: StorageProvider) -> None:
+    _repository().set_storage_provider(user_id, provider)
+
+
 def refresh_token(user_id: int) -> str:
     try:
         return _repository().refresh_token(user_id)
     except VaultError as exc:
         logger.warning(
-            "user %s: Google token unreadable: %s", user_id, exc, exc_info=True
+            "user %s: Google token unreadable: %s",
+            user_id,
+            exc,
+            exc_info=True,
         )
         return ""
 
@@ -228,7 +252,10 @@ def api_keys(user_id: int) -> SavedKeys:
         return _repository().api_keys(user_id)
     except VaultError as exc:
         logger.warning(
-            "user %s: saved API keys unreadable: %s", user_id, exc, exc_info=True
+            "user %s: saved API keys unreadable: %s",
+            user_id,
+            exc,
+            exc_info=True,
         )
         return SavedKeys()
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -40,7 +42,8 @@ def render(text: str, size: tuple[int, int], path: Path) -> Path:
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
     draw.rectangle(
-        [0, bar_y0, w, bar_y0 + bar_h], fill=(0, 0, 0, round(BAR_ALPHA * 255))
+        [0, bar_y0, w, bar_y0 + bar_h],
+        fill=(0, 0, 0, round(BAR_ALPHA * 255)),
     )
     font = ImageFont.truetype(find_font(), round(TEXT_BBOX_H * h / _FONT_BBOX_RATIO))
     bbox = draw.textbbox((0, 0), text, font=font)

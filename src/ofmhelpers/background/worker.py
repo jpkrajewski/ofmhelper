@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import importlib
 import multiprocessing
@@ -5,9 +7,13 @@ import os
 import signal
 import sys
 from multiprocessing.connection import wait
+lazy from collections.abc import Sequence
+lazy from multiprocessing.process import BaseProcess
+lazy from types import FrameType
 
 import logfire
 from rq import Worker
+from rq.worker import DequeueStrategy
 from rq.worker_pool import WorkerPool
 lazy from rq import Queue
 lazy from rq.executions import Execution
@@ -27,12 +33,31 @@ logger = get_logger("ofmhelpers.background.worker")
 
 
 class ConfiguredWorker(Worker):
-    def work(self, *args, **kwargs) -> bool:
+    def work(  # noqa: PLR0913, PLR0917
+        self,
+        burst: bool = False,  # noqa: FBT001, FBT002
+        logging_level: str | None = None,
+        date_format: str = "%H:%M:%S",
+        log_format: str = "%(asctime)s %(message)s",
+        max_jobs: int | None = None,
+        max_idle_time: int | None = None,
+        with_scheduler: bool = False,  # noqa: FBT001, FBT002
+        dequeue_strategy: DequeueStrategy = DequeueStrategy.DEFAULT,
+    ) -> bool:
         configure_telemetry("ascend-worker")
         configure_sentry("ascend-worker")
         configure_logging()
         install_fakes()
-        return super().work(*args, **kwargs)
+        return super().work(
+            burst,
+            logging_level,
+            date_format,
+            log_format,
+            max_jobs,
+            max_idle_time,
+            with_scheduler,
+            dequeue_strategy,
+        )
 
     def perform_job(self, job: Job, queue: Queue, execution: Execution) -> bool:
         taken = QueueJob.taken(job, queue)
@@ -95,7 +120,7 @@ class QueueGroup:
             pool.start()
         asked = False
 
-        def stop(signum: int, _frame: object) -> None:
+        def stop(signum: int, _frame: FrameType | None) -> None:
             nonlocal asked
             asked = True
             _signal_all(pools, signum)
@@ -111,7 +136,7 @@ class QueueGroup:
         sys.exit(0 if asked else 1)
 
 
-def _signal_all(pools: list, signum: int) -> None:
+def _signal_all(pools: Sequence[BaseProcess], signum: int) -> None:
     for pool in pools:
         if pool.pid is not None and pool.is_alive():
             os.kill(pool.pid, signum)

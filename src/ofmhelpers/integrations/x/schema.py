@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict, Field
 
 SNOWFLAKE_EPOCH_MS = 1288834974657
@@ -96,7 +98,8 @@ class UserResult(_Page):
     avatar: _Avatar = Field(default_factory=_Avatar)
     verification: _Verification = Field(default_factory=_Verification)
     originals: _TimelineHolder | None = Field(
-        default=None, alias="profile_user_originals_timeline"
+        default=None,
+        alias="profile_user_originals_timeline",
     )
 
     def posts(self) -> list[PostResult]:

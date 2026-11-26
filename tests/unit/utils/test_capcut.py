@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import random
 import subprocess
@@ -16,7 +18,12 @@ from ofmhelpers.media.size import Size
 
 PORTRAIT = SourceInfo(duration=9.0, width=720, height=1280, has_audio=True)
 NEUTRAL = Jitter(
-    saturation=1.0, contrast=1.0, brightness=0.0, zoom=1.0, noise=0.0, volume=1.0
+    saturation=1.0,
+    contrast=1.0,
+    brightness=0.0,
+    zoom=1.0,
+    noise=0.0,
+    volume=1.0,
 )
 
 

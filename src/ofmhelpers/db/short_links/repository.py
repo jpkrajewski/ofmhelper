@@ -1,9 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 lazy from sqlalchemy.orm import Session
@@ -21,14 +23,8 @@ from ofmhelpers.db.models import (
 from ofmhelpers.db.owner_scope import mine
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.short_links.catalog import DayStat
-from ofmhelpers.db.short_links.schema import (
-    BridgeTarget,
-    LinkAddress,
-    LinkSync,
-    LinkSyncKey,
-    SelfLink,
-    ShortLink,
-)
+from ofmhelpers.db.short_links.models import LinkSync, SelfLink, ShortLink
+from ofmhelpers.db.short_links.schema import BridgeTarget, LinkAddress, LinkSyncKey
 lazy from ofmhelpers.db.short_links.schema import PlannedLink
 
 LIVE = ("active", "inactive")
@@ -65,7 +61,7 @@ def _link(
             "error": row.error,
             "created_at": row.created_at.timestamp(),
             "days": days or [],
-        }
+        },
     )
 
 
@@ -81,7 +77,7 @@ def _days(s: Session, link_ids: list[int], since: date) -> list[_LinkDay]:
     rows = s.execute(
         select(day.link_id, day.day, day.views, day.clicks)
         .where(day.link_id.in_(link_ids), day.day >= since)
-        .order_by(day.day)
+        .order_by(day.day),
     ).all()
     return [
         _LinkDay(link_id=link_id, stat=DayStat(day=d, views=views, clicks=clicks))
@@ -100,7 +96,7 @@ def _creator_of_account(s: Session, account_id: int | None) -> int | None:
     if account_id is None:
         return None
     return s.execute(
-        select(TrackedAccountRow.creator_id).where(TrackedAccountRow.id == account_id)
+        select(TrackedAccountRow.creator_id).where(TrackedAccountRow.id == account_id),
     ).scalar_one_or_none()
 
 
@@ -111,8 +107,9 @@ class ShortLinkRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 _LINKS.where(*mine(ShortLinkRow.user_id, owner)).order_by(
-                    ShortLinkRow.created_at.desc(), ShortLinkRow.id.desc()
-                )
+                    ShortLinkRow.created_at.desc(),
+                    ShortLinkRow.id.desc(),
+                ),
             ).all()
             days: dict[int, list[DayStat]] = {}
             for entry in _days(s, [r[0].id for r in rows], since):
@@ -126,8 +123,9 @@ class ShortLinkRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 _LINKS.where(
-                    ShortLinkRow.id.in_(ids), *mine(ShortLinkRow.user_id, owner)
-                ).order_by(ShortLinkRow.id)
+                    ShortLinkRow.id.in_(ids),
+                    *mine(ShortLinkRow.user_id, owner),
+                ).order_by(ShortLinkRow.id),
             ).all()
             return [_link(*r) for r in rows]
 
@@ -146,7 +144,7 @@ class ShortLinkRepository(CachedRepository):
                     or_(dom.owner_id.is_(None), dom.owner_id == link.user_id),
                 )
                 .order_by(link.id)
-                .limit(1)
+                .limit(1),
             ).first()
             if row is None:
                 return None
@@ -158,7 +156,10 @@ class ShortLinkRepository(CachedRepository):
             )
 
     def provider_links(
-        self, user_id: int, provider: str, statuses: tuple[str, ...]
+        self,
+        user_id: int,
+        provider: str,
+        statuses: tuple[str, ...],
     ) -> list[SelfLink]:
         link = ShortLinkRow
         with session_scope() as s:
@@ -167,7 +168,7 @@ class ShortLinkRepository(CachedRepository):
                     link.user_id == user_id,
                     link.provider == provider,
                     link.status.in_(statuses),
-                )
+                ),
             ).scalars()
             return [
                 SelfLink(
@@ -188,8 +189,9 @@ class ShortLinkRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 select(ShortLinkRow.domain, ShortLinkRow.slug).where(
-                    ShortLinkRow.user_id == user_id, ShortLinkRow.provider == provider
-                )
+                    ShortLinkRow.user_id == user_id,
+                    ShortLinkRow.provider == provider,
+                ),
             ).all()
             return [LinkAddress(domain=d, slug=slug) for d, slug in rows]
 
@@ -200,12 +202,15 @@ class ShortLinkRepository(CachedRepository):
                     select(ShortLinkRow.slug).where(
                         ShortLinkRow.provider == provider,
                         ShortLinkRow.domain == domain,
-                    )
-                ).scalars()
+                    ),
+                ).scalars(),
             )
 
     def add_creating(
-        self, user_id: int, provider: str, links: list[PlannedLink]
+        self,
+        user_id: int,
+        provider: str,
+        links: list[PlannedLink],
     ) -> list[int]:
         with session_scope() as s:
             ids = []
@@ -216,7 +221,7 @@ class ShortLinkRepository(CachedRepository):
                         select(CreatorRow.id).where(
                             CreatorRow.user_id == user_id,
                             CreatorRow.name == link.creator,
-                        )
+                        ),
                     ).scalar_one_or_none()
                 row = ShortLinkRow(
                     user_id=user_id,
@@ -252,7 +257,7 @@ class ShortLinkRepository(CachedRepository):
                     status="active" if remote["active"] else "inactive",
                     adult=remote["adult"],
                     error=None,
-                )
+                ),
             )
 
     def set_status(self, ids: list[int], status: str, error: str | None = None) -> None:
@@ -260,13 +265,15 @@ class ShortLinkRepository(CachedRepository):
             s.execute(
                 update(ShortLinkRow)
                 .where(ShortLinkRow.id.in_(ids))
-                .values(status=status, error=error)
+                .values(status=status, error=error),
             )
 
     def set_slug(self, link_id: int, slug: str) -> None:
         with session_scope() as s:
             s.execute(
-                update(ShortLinkRow).where(ShortLinkRow.id == link_id).values(slug=slug)
+                update(ShortLinkRow)
+                .where(ShortLinkRow.id == link_id)
+                .values(slug=slug),
             )
 
     def set_adult(self, ids: list[int]) -> None:
@@ -274,29 +281,36 @@ class ShortLinkRepository(CachedRepository):
             s.execute(
                 update(ShortLinkRow)
                 .where(ShortLinkRow.id.in_(ids))
-                .values(adult=True, error=None)
+                .values(adult=True, error=None),
             )
 
     def set_creator(
-        self, ids: list[int], creator: str | None, owner: int | None = None
+        self,
+        ids: list[int],
+        creator: str | None,
+        owner: int | None = None,
     ) -> int:
         link = ShortLinkRow
         with session_scope() as s:
             rows = s.execute(
                 select(link.id, link.user_id).where(
-                    link.id.in_(ids), *mine(link.user_id, owner)
-                )
+                    link.id.in_(ids),
+                    *mine(link.user_id, owner),
+                ),
             ).all()
             for link_id, user_id in rows:
                 creator_id = None
                 if creator:
                     creator_id = s.execute(
                         select(CreatorRow.id).where(
-                            CreatorRow.user_id == user_id, CreatorRow.name == creator
-                        )
+                            CreatorRow.user_id == user_id,
+                            CreatorRow.name == creator,
+                        ),
                     ).scalar_one_or_none()
                 s.execute(
-                    update(link).where(link.id == link_id).values(creator_id=creator_id)
+                    update(link)
+                    .where(link.id == link_id)
+                    .values(creator_id=creator_id),
                 )
             return len(rows)
 
@@ -304,12 +318,12 @@ class ShortLinkRepository(CachedRepository):
         with session_scope() as s:
             s.execute(delete(ShortLinkRow).where(ShortLinkRow.id.in_(ids)))
 
-    def record_sync(
+    def record_sync(  # noqa: C901, PLR0913, PLR0917
         self,
         user_id: int,
         provider: str,
-        remotes: list[dict],
-        days: dict[str, list[dict]],
+        remotes: list[dict[str, Any]],
+        days: dict[str, list[dict[str, Any]]],
         accounts: dict[str, int],
         create_ttl_s: float,
     ) -> None:
@@ -319,16 +333,18 @@ class ShortLinkRepository(CachedRepository):
             rows = list(
                 s.execute(
                     select(link).where(
-                        link.user_id == user_id, link.provider == provider
-                    )
-                ).scalars()
+                        link.user_id == user_id,
+                        link.provider == provider,
+                    ),
+                ).scalars(),
             )
             by_remote = {r.remote_id: r for r in rows if r.remote_id}
             by_address = {(r.domain, r.slug): r for r in rows}
             seen: set[int] = set()
+            kept: list[tuple[ShortLinkRow, list[dict[str, Any]]]] = []
             for remote in remotes:
                 row = by_remote.get(remote["remote_id"]) or by_address.get(
-                    (remote["domain"], remote["slug"])
+                    (remote["domain"], remote["slug"]),
                 )
                 if row is None:
                     account_id = accounts.get(remote["slug"])
@@ -363,9 +379,10 @@ class ShortLinkRepository(CachedRepository):
                     row.adult = remote["adult"]
                 if row.error != "Delete interrupted: delete it again":
                     row.error = None
-                s.flush()
-                seen.add(row.id)
-                self._replace_days(s, row.id, days.get(remote["remote_id"], []))
+                kept.append((row, days.get(remote["remote_id"], [])))
+            s.flush()
+            seen.update(row.id for row, _ in kept)
+            self._replace_days(s, {row.id: link_days for row, link_days in kept})
             for row in rows:
                 if row.id in seen:
                     continue
@@ -378,14 +395,23 @@ class ShortLinkRepository(CachedRepository):
                     )
 
     @staticmethod
-    def _replace_days(s: Session, link_id: int, days: list[dict]) -> None:
-        if not days:
+    def _replace_days(s: Session, days_of: dict[int, list[dict[str, Any]]]) -> None:
+        days_of = {link_id: days for link_id, days in days_of.items() if days}
+        if not days_of:
             return
-        first = min(date.fromisoformat(d["day"]) for d in days)
         s.execute(
             delete(ShortLinkDayRow).where(
-                ShortLinkDayRow.link_id == link_id, ShortLinkDayRow.day >= first
-            )
+                or_(
+                    *(
+                        and_(
+                            ShortLinkDayRow.link_id == link_id,
+                            ShortLinkDayRow.day
+                            >= min(date.fromisoformat(d["day"]) for d in days),
+                        )
+                        for link_id, days in days_of.items()
+                    ),
+                ),
+            ),
         )
         s.execute(
             insert(ShortLinkDayRow),
@@ -396,6 +422,7 @@ class ShortLinkRepository(CachedRepository):
                     "views": d["views"],
                     "clicks": d["clicks"],
                 }
+                for link_id, days in days_of.items()
                 for d in days
             ],
         )
@@ -404,7 +431,7 @@ class ShortLinkRepository(CachedRepository):
     def syncs(self, owner: int | None = None) -> list[LinkSync]:
         with session_scope() as s:
             rows = s.execute(
-                select(LinkSyncRow).where(*mine(LinkSyncRow.user_id, owner))
+                select(LinkSyncRow).where(*mine(LinkSyncRow.user_id, owner)),
             ).scalars()
             return [
                 LinkSync.model_validate(
@@ -415,14 +442,17 @@ class ShortLinkRepository(CachedRepository):
                         "claimed_at": r.claimed_at,
                         "error": r.error,
                         "usage": r.usage or None,
-                    }
+                    },
                 )
                 for r in rows
             ]
 
     @invalidates_cache
     def claim_due(
-        self, pairs: list[LinkSyncKey], interval_s: float, claim_ttl_s: float
+        self,
+        pairs: list[LinkSyncKey],
+        interval_s: float,
+        claim_ttl_s: float,
     ) -> list[LinkSyncKey]:
         if not pairs:
             return []
@@ -432,7 +462,7 @@ class ShortLinkRepository(CachedRepository):
             s.execute(
                 insert(sync)
                 .values([{"user_id": k.user_id, "provider": k.provider} for k in pairs])
-                .on_conflict_do_nothing()
+                .on_conflict_do_nothing(),
             )
             claimed = s.execute(
                 update(sync)
@@ -441,13 +471,13 @@ class ShortLinkRepository(CachedRepository):
                         *(
                             (sync.user_id == k.user_id) & (sync.provider == k.provider)
                             for k in pairs
-                        )
+                        ),
                     ),
                     or_(sync.synced_at.is_(None), sync.synced_at < now - interval_s),
                     or_(sync.claimed_at.is_(None), sync.claimed_at < now - claim_ttl_s),
                 )
                 .values(claimed_at=now)
-                .returning(sync.user_id, sync.provider)
+                .returning(sync.user_id, sync.provider),
             ).all()
             return [
                 LinkSyncKey(user_id=u, provider=p)
@@ -464,7 +494,7 @@ class ShortLinkRepository(CachedRepository):
                     sync.user_id == user_id,
                     *([sync.provider == provider] if provider else []),
                 )
-                .values(synced_at=None, claimed_at=None)
+                .values(synced_at=None, claimed_at=None),
             )
 
     @invalidates_cache
@@ -487,6 +517,7 @@ class ShortLinkRepository(CachedRepository):
                 insert(LinkSyncRow)
                 .values(user_id=user_id, provider=provider, **values)
                 .on_conflict_do_update(
-                    index_elements=["user_id", "provider"], set_=values
-                )
+                    index_elements=["user_id", "provider"],
+                    set_=values,
+                ),
             )

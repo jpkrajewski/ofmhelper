@@ -1,9 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 lazy from pathlib import Path
 
 from pydantic import BaseModel, Field, JsonValue
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations.ai_providers.apiyi.client import (
     ApiyiClient,
     refused_read,
@@ -18,7 +21,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
 )
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.image_fit import ImageLimits
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
@@ -107,7 +109,11 @@ class Veo(Family):
     prefixes = ("veo",)
 
     def submit(
-        self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
+        self,
+        client: ApiyiClient,
+        spec: ModelSpec,
+        payload: Payload,
+        job: str,
     ) -> str:
         body = fields(spec, payload).model_dump(by_alias=True, exclude_none=True)
         frame = payload.get("first_frame_url")
@@ -115,7 +121,7 @@ class Veo(Family):
             image = client.image_file(str(frame), _IMAGE)
             flat = {k: v for k, v in body.items() if k != "metadata"}
             flat.update(
-                {k: str(v) for k, v in body["metadata"].items() if v is not None}
+                {k: str(v) for k, v in body["metadata"].items() if v is not None},
             )
             with image.open("rb") as handle:
                 response = client.submit(

@@ -1,7 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.tracked_accounts.schema import SnapchatNames
+from ofmhelpers.db.tracked_accounts.models import SnapchatNames
 from ofmhelpers.integrations.snapchat import (
     SnapchatClient,
     SnapchatError,

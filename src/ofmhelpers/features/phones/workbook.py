@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from io import BytesIO
 
@@ -8,7 +10,7 @@ lazy from openpyxl.utils import get_column_letter
 lazy from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
 from ofmhelpers.db.devices.catalog import ServiceKind, services
-lazy from ofmhelpers.db.devices.schema import Device, DeviceLogin
+lazy from ofmhelpers.db.devices.models import Device, DeviceLogin
 
 MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -47,7 +49,7 @@ def _name(login: DeviceLogin) -> str:
     return login.username
 
 
-def _row(sheet: WriteOnlyWorksheet, values: list[str], header: bool = False) -> None:
+def _row(sheet: WriteOnlyWorksheet, values: list[str], header: bool = False) -> None:  # noqa: FBT001, FBT002
     cells = []
     for value in values:
         cell = WriteOnlyCell(sheet, value=value)

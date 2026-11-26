@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import re
 import subprocess
@@ -20,7 +22,8 @@ GIT_CALL_TIMEOUT_S = 5
 GIT_BUDGET_S = 8
 GIT_DEADLINE = time.monotonic() + GIT_BUDGET_S
 DEFINITION = re.compile(
-    r"^[ \t]*(?:async\s+def|def|class|(?:export\s+)?(?:default\s+)?(?:async\s+)?function)"
+    r"^[ "
+    r"\t]*(?:async\s+def|def|class|(?:export\s+)?(?:default\s+)?(?:async\s+)?function)"
     r"[\s*]+([A-Za-z_$][\w$]*)",
     re.MULTILINE,
 )
@@ -113,7 +116,7 @@ class HookEvent(BaseModel):
     @property
     def is_owner_prompt(self) -> bool:
         return bool(self.prompt.strip()) and not self.prompt.lstrip().startswith(
-            NOTIFICATION
+            NOTIFICATION,
         )
 
 
@@ -141,7 +144,7 @@ class Markers(BaseModel):
     @classmethod
     def of(cls, event: HookEvent) -> Markers:
         return cls(
-            folder=STATE / "state" / f"{event.session_id}-{event.agent_id or 'main'}"
+            folder=STATE / "state" / f"{event.session_id}-{event.agent_id or 'main'}",
         )
 
     @classmethod

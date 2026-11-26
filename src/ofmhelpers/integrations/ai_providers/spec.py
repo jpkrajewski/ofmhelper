@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import cached_property
 from pathlib import Path
 from types import MappingProxyType
@@ -72,7 +74,7 @@ class FieldSchema(BaseModel):
         if branch is None:
             return self
         return branch.model_copy(
-            update={"title": self.title, "description": self.description}
+            update={"title": self.title, "description": self.description},
         )
 
     @property
@@ -145,7 +147,7 @@ class ModelSpec(BaseModel):
             {
                 name: FieldSchema.model_validate(value).concrete
                 for name, value in schema.items()
-            }
+            },
         )
 
     @cached_property
@@ -170,7 +172,7 @@ class ModelSpec(BaseModel):
                     multiple=field.base_type == "array",
                     required=name in self.required,
                     max_items=field.max_items,
-                )
+                ),
             )
         return fields
 
@@ -193,7 +195,7 @@ class ModelSpec(BaseModel):
                     minimum=field.minimum,
                     maximum=field.maximum,
                     description=field.description,
-                )
+                ),
             )
         return fields
 
@@ -216,7 +218,8 @@ class ModelSpec(BaseModel):
     def check(self, values: Mapping[str, Any]) -> None:
         body = self._body(values, str).values
         error = next(
-            iter(Draft202012Validator(self.input_schema).iter_errors(body)), None
+            iter(Draft202012Validator(self.input_schema).iter_errors(body)),
+            None,
         )
         if error is not None:
             where = ".".join(str(p) for p in error.absolute_path) or "input"
@@ -224,7 +227,9 @@ class ModelSpec(BaseModel):
             raise InvalidInputError(msg)
 
     def request(
-        self, values: Mapping[str, Any], upload: Callable[[Path], str]
+        self,
+        values: Mapping[str, Any],
+        upload: Callable[[Path], str],
     ) -> Fields:
         return Fields(values={**self.fixed, **self._body(values, upload).values})
 

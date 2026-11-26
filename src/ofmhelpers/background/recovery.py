@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from types import MappingProxyType
 lazy from collections.abc import Callable
@@ -27,7 +29,7 @@ RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(
     {
         trials_folder.TASK: trials_folder.restart,
         **{task: restart.again for task, restart in LOCAL_RESTARTS.items()},
-    }
+    },
 )
 
 
@@ -45,7 +47,7 @@ def _cut_off(job: Job, active: set[str] | None) -> bool:
     )
 
 
-def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
+def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:  # noqa: C901, PLR0911
     job_id = parts[0].job_id
     job = get_job(job_id)
     if job is None or job.status == JobStatus.done:
@@ -84,14 +86,16 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
     enqueue_to(
         QUEUES.get(job.task, QueueName.DEFAULT),
         run_job,
-        job.id,
-        run,
-        {
-            **job.params,
-            "job_id": job.id,
-            "api_key": parts[0].api_key,
-            "assets_root": str(assets_root_for_actor(job.actor)),
-        },
+        (
+            job.id,
+            run,
+            {
+                **job.params,
+                "job_id": job.id,
+                "api_key": parts[0].api_key,
+                "assets_root": str(assets_root_for_actor(job.actor)),
+            },
+        ),
         job_timeout=timeout(job.params) if timeout else None,
     )
     logger.info("recovery re-running job %s (%d request(s))", job.id, len(parts))
@@ -110,7 +114,8 @@ def _restarted(job: Job) -> bool:
 
 
 def fail_cut_off(
-    active: set[str] | None, remembered: set[str]
+    active: set[str] | None,
+    remembered: set[str],
 ) -> MappingProxyType[str, str]:
     outcomes: dict[str, str] = {}
     restarting = settings.web.restarting(settings.infra.production)
@@ -123,7 +128,8 @@ def fail_cut_off(
             continue
         if _restarted(job):
             logger.warning(
-                "recovery: job %s was cut off by a restart: started again", job.id
+                "recovery: job %s was cut off by a restart: started again",
+                job.id,
             )
             outcomes[job.id] = "restarted"
             continue

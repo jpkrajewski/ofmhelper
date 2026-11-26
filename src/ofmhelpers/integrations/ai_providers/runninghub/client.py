@@ -1,5 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
 from pathlib import Path
 from typing import Any, NoReturn
+lazy from collections.abc import Mapping
 
 lazy import requests
 
@@ -31,7 +33,12 @@ class RunningHubClient:
         self._base = settings.runninghub.base_url.rstrip("/") + API
         self._http = bearer_session(api_key)
 
-    def _post(self, path: str, **kwargs: Any) -> requests.Response:
+    def _post(
+        self,
+        path: str,
+        json: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | None = None,
+    ) -> requests.Response:
         return call(
             self._http,
             PROVIDER,
@@ -39,7 +46,8 @@ class RunningHubClient:
             "POST",
             f"{self._base}/{path}",
             timeout=settings.runninghub.request_timeout_s,
-            **kwargs,
+            json=json,
+            files=files,
         )
 
     @staticmethod
@@ -63,7 +71,8 @@ class RunningHubClient:
         )
         with sent.open("rb") as fh:
             response = self._post(
-                "media/upload/binary", files={"file": (sent.name, fh)}
+                "media/upload/binary",
+                files={"file": (sent.name, fh)},
             )
         url = parsed(response, RhUpload, PROVIDER, "upload answer").url()
         logger.info("runninghub upload %s -> %s", path.name, url.split("?")[0])

@@ -1,16 +1,5 @@
 {% extends "_gallery_card.html" %}
 {% import "components/ui.html" as ui %}
-{% block notes %}
-{% if job.score %}
-<div class="rp-score">
-    {% if job.score.unique %}{{ ui.badge("Unique", "ok") }}{% endif %}
-    {% if job.attempts > 1 %}{{ ui.badge("Took " ~ job.attempts ~ " tries", "warn") }}{% endif %}
-    {% for m in job.score.methods %}
-    <p class="rp-method"><span>{{ m.method }} · {{ m.medium }}</span><span>{{ m.percent }}%</span></p>
-    {% endfor %}
-</div>
-{% endif %}
-{% endblock %}
 {% block meta %}Spoof · iPhone 16 Pro Max
 {%- if job.mirrored is not none %} · {{ "mirrored" if job.mirrored else "not&nbsp;mirrored"|safe }}{% endif %}
 {%- if job.turn %} · turned&nbsp;{{ "%.1f"|format(job.turn|abs) }}°&nbsp;{{ "right" if job.turn > 0 else "left" }}{% endif %}{% endblock %}

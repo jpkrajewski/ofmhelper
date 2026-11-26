@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,7 +17,7 @@ def _client(base_url: str) -> TestClient:
 
 def test_a_google_connect_started_on_www_moves_to_the_callbacks_host():
     r = _client("https://www.ascendglobal.cash").get(
-        "/auth/google/start?link=1&next=/clone"
+        "/auth/google/start?link=1&next=/clone",
     )
     assert r.status_code == 301
     assert (

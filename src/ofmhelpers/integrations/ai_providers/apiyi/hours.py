@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from datetime import datetime
 
 from ofmhelpers.config import settings

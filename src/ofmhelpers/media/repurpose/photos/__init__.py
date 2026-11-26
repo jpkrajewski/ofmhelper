@@ -1,4 +1,6 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 import io
 import random
 from fractions import Fraction
@@ -39,7 +41,7 @@ def _shots(
     preset: PhotoPreset,
     rng: random.Random,
 ) -> list[Shot]:
-    taken = datetime.datetime.now(tz)
+    taken = dt.datetime.now(tz)
     shots: list[Shot] = []
     for _ in range(count):
         shots.append(
@@ -48,9 +50,9 @@ def _shots(
                 place=place,
                 exposure=Fraction(rng.choice(preset.lens.exposures)),
                 iso=rng.randint(*preset.lens.iso),
-            )
+            ),
         )
-        taken -= datetime.timedelta(seconds=rng.uniform(*preset.stills.gap_s))
+        taken -= dt.timedelta(seconds=rng.uniform(*preset.stills.gap_s))
     return shots[::-1]
 
 
@@ -63,7 +65,9 @@ class _Video(BaseModel, frozen=True):
     def of(cls, path: Path, timeout_s: int) -> _Video:
         tags = colour_tags(path, timeout_s)
         to_sdr = sdr_filters(
-            tags.color_transfer, tags.color_primaries, tags.color_space
+            tags.color_transfer,
+            tags.color_primaries,
+            tags.color_space,
         )
         return cls(path=path, to_sdr=to_sdr.rstrip(","), timeout_s=timeout_s)
 
@@ -101,7 +105,12 @@ class _Video(BaseModel, frozen=True):
 
 
 def write_photos(
-    src: Path, dest: list[Path], *, preset: str, seed: str, timeout_s: int
+    src: Path,
+    dest: list[Path],
+    *,
+    preset: str,
+    seed: str,
+    timeout_s: int,
 ) -> list[Photo]:
     how = load_photo_preset(preset)
     recorder = load_device(how.device).recorder
@@ -113,11 +122,17 @@ def write_photos(
 
     video = _Video.of(src, timeout_s)
     candidates = video.stills(
-        len(dest) * how.stills.candidates, how.stills, _rng(seed, "moments")
+        len(dest) * how.stills.candidates,
+        how.stills,
+        _rng(seed, "moments"),
     )
     chosen = pick(candidates, len(dest))
     shots = _shots(
-        len(chosen), ZoneInfo(recorder.time_zone), place, how, _rng(seed, "shots")
+        len(chosen),
+        ZoneInfo(recorder.time_zone),
+        place,
+        how,
+        _rng(seed, "shots"),
     )
     seen = [s.pdq for s in candidates]
     written: list[Photo] = []

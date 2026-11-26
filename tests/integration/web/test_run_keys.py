@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
@@ -30,7 +32,7 @@ def groups(fake_externals):
             OTHER_WAN_KEY: ["wan3.0-video", "happyhorse-1.1-r2v"],
             DEFAULT_KEY: ["seedream-4-5-251128", "gemini-3-pro-image", "veo-3.1"],
             SEEDANCE_KEY: ["doubao-seedance-2-0-260128"],
-        }
+        },
     )
 
 
@@ -51,7 +53,8 @@ def test_account_lists_one_apiyi_key_per_token_group():
         assert f'name="{field}"' in page
 
     r = client.post(
-        "/account/keys", data={"key_apiyi": DEFAULT_KEY, "key_apiyi-wan": WAN_KEY}
+        "/account/keys",
+        data={"key_apiyi": DEFAULT_KEY, "key_apiyi-wan": WAN_KEY},
     )
 
     assert "APIYI and APIYI Wan &amp; HappyHorse keys saved." in r.text
@@ -136,7 +139,11 @@ def test_the_fake_key_is_a_wan_group_key():
 
 def _task(job_id: str, model: str, api_key: str, provider: str = "apiyi"):
     return tasks.ProviderTask(
-        job_id=job_id, provider=provider, model=model, task_id="t-1", api_key=api_key
+        job_id=job_id,
+        provider=provider,
+        model=model,
+        task_id="t-1",
+        api_key=api_key,
     )
 
 
@@ -199,7 +206,9 @@ def test_the_saved_key_marker_runs_as_an_empty_key():
 
     for model in (WAN, SEEDREAM):
         assert keys.for_run("apiyi", model, SAVED_KEY) == keys.for_run(
-            "apiyi", model, ""
+            "apiyi",
+            model,
+            "",
         )
     assert keys.for_run("apiyi", WAN, SAVED_KEY) == WAN_KEY
     assert Keys.of(_user("none2@example.com")).for_run("apiyi", WAN, SAVED_KEY) == ""

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 
 import pytest
@@ -39,7 +41,9 @@ def test_small_image_fits_untouched(tmp_path):
 
 
 def test_upload_sends_a_fitted_copy_and_keeps_the_original(
-    client, tmp_path, monkeypatch
+    client,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_KIEAI_REF_IMAGE_MAX_SIDE", "500")
     src = noisy_png(tmp_path / "sheet.png", (2000, 400))
@@ -50,7 +54,7 @@ def test_upload_sends_a_fitted_copy_and_keeps_the_original(
             {
                 "success": True,
                 "data": {"downloadUrl": "https://tempfile.example/sheet.jpg"},
-            }
+            },
         )
         client.upload_local_file(str(src))
 

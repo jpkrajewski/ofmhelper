@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -48,7 +50,9 @@ def test_a_session_with_nothing_after_it_and_no_last_action_counts_nothing():
 
 def test_the_night_the_clocks_go_back_counts_real_hours():
     span = SessionSpan(
-        user_id=7, start_at=_ts(25, 0, month=10), end_at=_ts(25, 4, month=10)
+        user_id=7,
+        start_at=_ts(25, 0, month=10),
+        end_at=_ts(25, 4, month=10),
     )
 
     (day,) = day_hours([span], [_va()], WARSAW)

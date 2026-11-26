@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 lazy from pathlib import Path
 
@@ -57,6 +59,7 @@ def cross_pairs(clips: list[Path], out: Path) -> Calibration:
         pairs=[_pair(a, b) for a, b in itertools.permutations(clips, 2)],
     )
     (out / "calibration.json").write_text(
-        made.model_dump_json(indent=2), encoding="utf-8"
+        made.model_dump_json(indent=2),
+        encoding="utf-8",
     )
     return made

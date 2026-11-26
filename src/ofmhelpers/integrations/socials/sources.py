@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from abc import ABC, abstractmethod
 from typing import ClassVar
 lazy from collections.abc import Callable
@@ -45,7 +47,11 @@ class AccountSource(ABC):
 
 class _Saver:
     def __init__(
-        self, source: str, found: Answers, on_read: Landed, saved: set[str]
+        self,
+        source: str,
+        found: Answers,
+        on_read: Landed,
+        saved: set[str],
     ) -> None:
         self._source = source
         self._found = found

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 import inspect
 import pkgutil
@@ -100,7 +102,10 @@ class Provider(ABC):
 
     @abstractmethod
     def submit(
-        self, spec: ModelSpec, payload: Payload, idempotency_key: str
+        self,
+        spec: ModelSpec,
+        payload: Payload,
+        idempotency_key: str,
     ) -> str: ...
 
     @abstractmethod
@@ -109,7 +114,9 @@ class Provider(ABC):
     def download(self, url: str, dest: Path) -> Path:
         try:
             with outbound.get(
-                url, stream=True, timeout=settings.aigen.download_timeout_s
+                url,
+                stream=True,
+                timeout=settings.aigen.download_timeout_s,
             ) as response:
                 response.raise_for_status()
                 with dest.open("wb") as f:
@@ -183,7 +190,9 @@ def upload_lock(cache_key: str) -> Iterator[None]:
     lock = None
     try:
         lock = get_redis().lock(
-            f"lock:{cache_key}", timeout=wait_s, blocking_timeout=wait_s
+            f"lock:{cache_key}",
+            timeout=wait_s,
+            blocking_timeout=wait_s,
         )
         held = bool(lock.acquire())
     except RedisError:
@@ -197,5 +206,7 @@ def upload_lock(cache_key: str) -> Iterator[None]:
                 lock.release()
             except RedisError, LockError:
                 logger.warning(
-                    "upload lock for %s not released", cache_key, exc_info=True
+                    "upload lock for %s not released",
+                    cache_key,
+                    exc_info=True,
                 )

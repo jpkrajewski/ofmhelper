@@ -1,9 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 AUDITED: frozenset[str] = frozenset(
     {
         "users",
         "user_identities",
         "user_api_keys",
         "user_cookies",
+        "storage_accounts",
         "devices",
         "logins",
         "device_logins",
@@ -17,7 +20,7 @@ AUDITED: frozenset[str] = frozenset(
         "user_event_targets",
         "distribution_channels",
         "distribution_presets",
-    }
+    },
 )
 
 AUDITED_COLUMNS: frozendict[str, str] = frozendict({"jobs": "hidden_at"})
@@ -45,12 +48,13 @@ EXCLUDED: frozendict[str, str] = frozendict(
         "drive_va_folders": "made and renamed by the Drive sweep",
         "drive_uploads": "its own record: who, which file, which folder, when",
         "idempotency_keys": "request bookkeeping: the first answer to a key, kept 24 h",
-        "distribution_posts": "its own record: which file went to which channel, when, its pin",
+        "distribution_posts": "its own record: which "
+        "file went to which channel, when, its pin",
         "drive_posted_files": "what the Drive sweep saw in POSTED",
         "short_link_daily_stats": "copied from the link providers",
         "short_link_syncs": "the link sync's own bookkeeping",
         "self_link_clicks": "visitors' clicks",
         "clone_ai_checks": "its job's record (/clone-links, retired)",
         "clone_from_links": "its job's record (/clone-links, retired)",
-    }
+    },
 )

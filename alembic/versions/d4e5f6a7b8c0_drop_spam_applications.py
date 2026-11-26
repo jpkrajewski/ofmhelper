@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -29,7 +31,7 @@ def upgrade() -> None:
     dropped = op.get_bind().execute(
         sa.text(
             f"DELETE FROM applications WHERE {links}"  # noqa: S608
-            r" OR telegram_handle ~ '\s'"
+            r" OR telegram_handle ~ '\s'",
         ),
         {"link": _LINK},
     )

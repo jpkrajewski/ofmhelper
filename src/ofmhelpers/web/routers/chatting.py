@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -23,7 +25,9 @@ from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/chatting", tags=["chatting"], dependencies=[Access(Area.CHATTING)]
+    prefix="/chatting",
+    tags=["chatting"],
+    dependencies=[Access(Area.CHATTING)],
 )
 
 _NOTES = {
@@ -37,8 +41,7 @@ def platforms(request: Request, owner_id: OwnerId) -> Response:
     return render(
         request,
         "chatting.html",
-        platforms=list(ChatPlatform),
-        recent=recent_models(owner_id),
+        {"platforms": list(ChatPlatform), "recent": recent_models(owner_id)},
     )
 
 
@@ -55,36 +58,45 @@ def fanvue_callback(
     state: str | None = None,
 ) -> Response:
     connected = bool(code and state) and finish(
-        user.id, session_id, code or "", state or ""
+        user.id,
+        session_id,
+        code or "",
+        state or "",
     )
     return see_other(f"/chatting/fanvue?note={'connected' if connected else 'failed'}")
 
 
 @router.get("/{platform}")
 def models(
-    request: Request, platform: ChatPlatform, note: str | None = None
+    request: Request,
+    platform: ChatPlatform,
+    note: str | None = None,
 ) -> Response:
     is_fanvue = platform is ChatPlatform.FANVUE
     return render(
         request,
         "chatting_models.html",
-        platform=platform,
-        models=models_of(platform),
-        can_connect=is_fanvue and can_connect(),
-        reconnect=accounts_to_reconnect(platform),
-        note=_NOTES.get(note or ""),
+        {
+            "platform": platform,
+            "models": models_of(platform),
+            "can_connect": is_fanvue and can_connect(),
+            "reconnect": accounts_to_reconnect(platform),
+            "note": _NOTES.get(note or ""),
+        },
     )
 
 
 @router.get("/{platform}/{username}")
 def model(
-    request: Request, platform: ChatPlatform, username: str, zone: Zone
+    request: Request,
+    platform: ChatPlatform,
+    username: str,
+    zone: Zone,
 ) -> Response:
     return render(
         request,
         "chatting_model.html",
-        platform=platform,
-        report=model_report(platform, username, zone.zone),
+        {"platform": platform, "report": model_report(platform, username, zone.zone)},
     )
 
 

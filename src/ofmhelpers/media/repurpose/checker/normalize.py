@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 from pydantic import BaseModel

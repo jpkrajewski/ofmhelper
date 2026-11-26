@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator

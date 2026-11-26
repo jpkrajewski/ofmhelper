@@ -1,9 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
 import re
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote
 
 from pydantic import BaseModel
+lazy import requests
 
 from ofmhelpers.db.short_links.catalog.schema import (
     DayStat,
@@ -75,13 +77,18 @@ class OopsieProvider(LinkProvider):
     def _headers(self) -> OopsieHeaders:
         return OopsieHeaders(api_key=self.api_key)
 
-    def _checked(self, response: Any, what: str) -> None:
+    def _checked(self, response: requests.Response, what: str) -> None:
         if not response.ok:
             raise self._failed(response, what)
         if not response.json().get("success"):
             raise self._failed(response, what)
 
-    def _data[M: BaseModel](self, response: Any, what: str, shape: type[M]) -> M:
+    def _data[M: BaseModel](
+        self,
+        response: requests.Response,
+        what: str,
+        shape: type[M],
+    ) -> M:
         self._checked(response, what)
         return shape.model_validate(response.json()["data"])
 
@@ -110,7 +117,7 @@ class OopsieProvider(LinkProvider):
         if response.status_code != _CREATED:
             raise self._failed(response, f"make {link.slug}")
         made = _remote(
-            self._data(response, f"make {link.slug}", OopsiePageData).model_dump()
+            self._data(response, f"make {link.slug}", OopsiePageData).model_dump(),
         )
         if not made.adult:
             try:
@@ -139,7 +146,9 @@ class OopsieProvider(LinkProvider):
     def enable_adult(self, remote_id: str) -> None:
         theme = {**(self._page(remote_id).theme or {}), "age_gate": True}
         response = self._call(
-            "PATCH", f"/api/pages/{quote(remote_id, safe='')}", json={"theme": theme}
+            "PATCH",
+            f"/api/pages/{quote(remote_id, safe='')}",
+            json={"theme": theme},
         )
         page = self._data(response, f"turn 18+ on for {remote_id}", OopsiePageData)
         if not (page.theme or {}).get("age_gate"):
@@ -184,7 +193,10 @@ class OopsieProvider(LinkProvider):
         ]
 
     def _activity(
-        self, remote_ids: list[str], start: date, end: date
+        self,
+        remote_ids: list[str],
+        start: date,
+        end: date,
     ) -> list[LinkActivity]:
         found: dict[str, list[ActivityPoint]] = {}
         batch = self.info().stats_batch
@@ -216,7 +228,7 @@ class OopsieProvider(LinkProvider):
                 series = [
                     series.model_copy(update={"slug": slugs[0]})
                     if series.slug is None
-                    else series
+                    else series,
                 ]
             for item in series:
                 if item.slug is None:
@@ -225,14 +237,19 @@ class OopsieProvider(LinkProvider):
                 found[item.slug] = [
                     ActivityPoint(label=label, views=views, clicks=clicks)
                     for label, views, clicks in zip(
-                        per.labels, item.views, item.clicks, strict=True
+                        per.labels,
+                        item.views,
+                        item.clicks,
+                        strict=True,
                     )
                 ]
         return [LinkActivity(slug=s, points=p) for s, p in found.items()]
 
     def usage(self) -> Usage:
         data = self._data(
-            self._call("GET", "/api/account/usage"), "read usage", OopsieUsage
+            self._call("GET", "/api/account/usage"),
+            "read usage",
+            OopsieUsage,
         )
         return Usage(
             used=data.pages_used,

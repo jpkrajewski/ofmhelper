@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -65,17 +67,19 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_distribution_channels_user_id", "distribution_channels", ["user_id"]
+        "ix_distribution_channels_user_id",
+        "distribution_channels",
+        ["user_id"],
     )
     quiet = "error,next_at,resume_at,cookies,cookies_expire_at"
     op.execute(
         "CREATE TRIGGER distribution_channels_stamp BEFORE INSERT OR UPDATE "
-        f"ON distribution_channels FOR EACH ROW EXECUTE FUNCTION stamp_row('{quiet}')"
+        f"ON distribution_channels FOR EACH ROW EXECUTE FUNCTION stamp_row('{quiet}')",
     )
     op.execute(
         "CREATE TRIGGER distribution_channels_audit AFTER INSERT OR UPDATE OR DELETE "
         "ON distribution_channels FOR EACH ROW EXECUTE FUNCTION "
-        f"audit_row('{quiet}', 'cookies', 'id', 'user_id')"
+        f"audit_row('{quiet}', 'cookies', 'id', 'user_id')",
     )
     op.create_table(
         "distribution_presets",
@@ -99,12 +103,12 @@ def upgrade() -> None:
     )
     op.execute(
         "CREATE TRIGGER distribution_presets_stamp BEFORE INSERT OR UPDATE "
-        "ON distribution_presets FOR EACH ROW EXECUTE FUNCTION stamp_row('')"
+        "ON distribution_presets FOR EACH ROW EXECUTE FUNCTION stamp_row('')",
     )
     op.execute(
         "CREATE TRIGGER distribution_presets_audit AFTER INSERT OR UPDATE OR DELETE "
         "ON distribution_presets FOR EACH ROW EXECUTE FUNCTION "
-        "audit_row('', '', 'id', 'user_id')"
+        "audit_row('', '', 'id', 'user_id')",
     )
     op.create_table(
         "distribution_posts",
@@ -137,7 +141,9 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint(
-            "channel_id", "file_id", name="uq_distribution_posts_channel_file"
+            "channel_id",
+            "file_id",
+            name="uq_distribution_posts_channel_file",
         ),
     )
     op.create_index(

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import NoReturn
 
 from pydantic import Field
@@ -16,7 +18,7 @@ PROVIDER = "Elyum"
 
 _AUTH = frozenset({"auth", "scope"})
 _NO_MONEY = frozenset(
-    {"insufficient_balance", "key_cap", "member_budget", "client_budget"}
+    {"insufficient_balance", "key_cap", "member_budget", "client_budget"},
 )
 _TRY_AGAIN = frozenset(
     {
@@ -25,7 +27,7 @@ _TRY_AGAIN = frozenset(
         "model_unavailable",
         "option_unavailable",
         "maintenance",
-    }
+    },
 )
 _HTTP_AUTH = frozenset({401, 403})
 _HTTP_PAYMENT_REQUIRED = 402

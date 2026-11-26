@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mmap
 lazy from pathlib import Path
 

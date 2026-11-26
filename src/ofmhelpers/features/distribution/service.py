@@ -1,4 +1,6 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 import time
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -11,6 +13,7 @@ from ofmhelpers.db.short_links.schema import SelfTotals
 from ofmhelpers.features.distribution import sweep
 from ofmhelpers.features.distribution.presets import presets_of
 from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.features.storage.service import StorageService
 from ofmhelpers.integrations.cookie_jar import CookieFileError
 from ofmhelpers.integrations.pinterest import (
     PinterestClient,
@@ -74,7 +77,8 @@ def _health(channels: list[Channel], counts: dict[int, PostCounts]) -> Health:
     now = time.time()
     if not channels:
         return Health(
-            ok=False, headline="No Pinterest accounts yet: upload their cookies"
+            ok=False,
+            headline="No Pinterest accounts yet: upload their cookies",
         )
     stopped = [c for c in channels if c.error]
     waiting = [c for c in channels if c.resume_at is not None and c.resume_at > now]
@@ -85,7 +89,7 @@ def _health(channels: list[Channel], counts: dict[int, PostCounts]) -> Health:
         problems.append(f"Need new cookies (logged out): {_names(stopped)}")
     if waiting:
         problems.append(
-            f"Rate limited by Pinterest, waiting on their own: {_names(waiting)}"
+            f"Rate limited by Pinterest, waiting on their own: {_names(waiting)}",
         )
     if empty:
         problems.append(f"Nothing left to pin (add reels to POSTED): {_names(empty)}")
@@ -97,7 +101,7 @@ def _health(channels: list[Channel], counts: dict[int, PostCounts]) -> Health:
     ]
     if expiring:
         problems.append(
-            f"Cookies expire within 7 days, upload new ones: {_names(expiring)}"
+            f"Cookies expire within 7 days, upload new ones: {_names(expiring)}",
         )
     by_id = {c.id: c for c in running}
     problems.extend(
@@ -123,16 +127,19 @@ def _health(channels: list[Channel], counts: dict[int, PostCounts]) -> Health:
 class Distribution(BaseModel, frozen=True):
     uid: int
     scope: int
+    storage: StorageService
 
     def page(
-        self, added: list[Added] | None = None, error: str | None = None
+        self,
+        added: list[Added] | None = None,
+        error: str | None = None,
     ) -> DistributionPage:
         repo = store.repository()
         channels = repo.channels_of(self.scope)
         counts = {c.id: repo.counts(c.id) for c in channels}
         links = [m.link_id for m in repo.model_links(self.scope)]
-        today = datetime.datetime.now(datetime.UTC).date()
-        week = today - datetime.timedelta(days=_WEEK_DAYS - 1)
+        today = dt.datetime.now(dt.UTC).date()
+        week = today - dt.timedelta(days=_WEEK_DAYS - 1)
         return DistributionPage(
             health=_health(channels, counts),
             pinned_today=sum(c.today for c in counts.values()),
@@ -154,7 +161,7 @@ class Distribution(BaseModel, frozen=True):
             if c.account_name in {a.account for a in added}
         ]
         if new:
-            sweep.fill_many(self.scope, new)
+            sweep.fill_many(self.storage, new)
         queued = {c.account_name: repo.counts(c.id).queued for c in new}
         return [
             a.model_copy(update={"queued": queued.get(a.account, 0)}) for a in added
@@ -165,7 +172,10 @@ class Distribution(BaseModel, frozen=True):
             return self._connect(upload)
         except (RefusedError, PinterestError, CookieFileError) as exc:
             logger.warning(
-                "distribution: %s not added: %s", upload.name, exc, exc_info=True
+                "distribution: %s not added: %s",
+                upload.name,
+                exc,
+                exc_info=True,
             )
             return Added(file=upload.name, error=str(exc))
         except Exception:
@@ -182,7 +192,11 @@ class Distribution(BaseModel, frozen=True):
             raise RefusedError(NOT_LOGGED_IN)
         account = client.me()
         store.repository().connect(
-            self.scope, PLATFORM, account.username, cookies, session_expires_at(cookies)
+            self.scope,
+            PLATFORM,
+            account.username,
+            cookies,
+            session_expires_at(cookies),
         )
         logger.info("distribution: @%s added", account.username)
         return Added(file=upload.name, account=account.username)

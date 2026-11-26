@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import struct
 
 from ofmhelpers.media.mov_atoms import Atom, parse, set_times
@@ -24,7 +26,8 @@ def test_resizing_a_child_resizes_its_parents():
     moov.children[0].children.append(Atom(type=b"tapt", payload=b"1234"))
 
     assert moov.to_bytes() == _atom(
-        b"moov", _atom(b"trak", _atom(b"tkhd", b"ab") + _atom(b"tapt", b"1234"))
+        b"moov",
+        _atom(b"trak", _atom(b"tkhd", b"ab") + _atom(b"tapt", b"1234")),
     )
 
 

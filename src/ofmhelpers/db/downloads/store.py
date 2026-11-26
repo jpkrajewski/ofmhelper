@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 lazy from datetime import datetime
 
@@ -11,7 +13,10 @@ def _repository() -> DownloadRepository:
 
 
 def record(
-    user_id: int, job_id: str, files: list[DownloadedFile], now: datetime
+    user_id: int,
+    job_id: str,
+    files: list[DownloadedFile],
+    now: datetime,
 ) -> None:
     _repository().record(user_id, job_id, files, now)
 

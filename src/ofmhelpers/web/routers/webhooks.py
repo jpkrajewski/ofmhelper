@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
@@ -50,7 +52,11 @@ async def provider_callback(provider: str, job_key: str, request: Request) -> Re
     if raw is None:
         return Response(status_code=status.HTTP_413_CONTENT_TOO_LARGE)
     heard = await run_in_threadpool(
-        callbacks.receive, provider, job_key, raw, request.headers
+        callbacks.receive,
+        provider,
+        job_key,
+        raw,
+        request.headers,
     )
     if not heard.known:
         return Response(status_code=status.HTTP_404_NOT_FOUND)

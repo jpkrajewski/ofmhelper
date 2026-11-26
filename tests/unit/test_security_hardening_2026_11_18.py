@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 from pathlib import Path
 from types import MappingProxyType
@@ -44,7 +46,9 @@ def test_a_nul_in_a_reference_path_is_a_refusal(tmp_path):
 
 def test_a_nul_in_a_disk_path_is_a_refusal(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+        disk,
+        "_roots",
+        lambda: MappingProxyType({"uploads": tmp_path.resolve()}),
     )
     with pytest.raises(RefusedError):
         disk.safe_path("uploads", "a" + NUL + "b")
@@ -56,7 +60,9 @@ def _upload(name: str, body: bytes) -> UploadFile:
 
 def test_a_disk_upload_is_refused_over_a_file_and_keeps_it(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+        disk,
+        "_roots",
+        lambda: MappingProxyType({"uploads": tmp_path.resolve()}),
     )
     (tmp_path / "a.txt").write_bytes(b"first")
 
@@ -68,7 +74,9 @@ def test_a_disk_upload_is_refused_over_a_file_and_keeps_it(tmp_path, monkeypatch
 
 def test_a_disk_upload_is_refused_over_a_dangling_symlink(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+        disk,
+        "_roots",
+        lambda: MappingProxyType({"uploads": tmp_path.resolve()}),
     )
     try:
         (tmp_path / "a.txt").symlink_to(tmp_path / "nowhere.txt")
@@ -83,7 +91,9 @@ def test_a_disk_upload_is_refused_over_a_dangling_symlink(tmp_path, monkeypatch)
 
 def test_a_disk_upload_writes_a_new_file(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        disk, "_roots", lambda: MappingProxyType({"uploads": tmp_path.resolve()})
+        disk,
+        "_roots",
+        lambda: MappingProxyType({"uploads": tmp_path.resolve()}),
     )
     disk.upload("uploads", "", [_upload("a.txt", b"hello")])
     assert (tmp_path / "a.txt").read_bytes() == b"hello"
@@ -149,7 +159,8 @@ def test_ffprobe_reads_an_http_url(probed):
 
 
 @pytest.mark.parametrize(
-    "src", ["/etc/passwd", "file:///etc/passwd", "concat:a|b", "-f", "clip.mp4"]
+    "src",
+    ["/etc/passwd", "file:///etc/passwd", "concat:a|b", "-f", "clip.mp4"],
 )
 def test_ffprobe_refuses_a_str_that_is_not_an_http_url(probed, src):
     with pytest.raises(ValueError, match="http"):
@@ -176,7 +187,7 @@ def test_only_pinterest_keeps_the_domain_and_its_subdomains_only():
             "evilpinterest.com",
             ".notpinterest.com",
             "pinterest.com.evil.test",
-        )
+        ),
     )
 
     names = {line.split("\t")[5] for line in kept.splitlines() if "\t" in line}

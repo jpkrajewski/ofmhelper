@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.db.devices.repository import DuplicateError
@@ -39,7 +41,7 @@ def create(
     return _preset(row, owner)
 
 
-def update(
+def update(  # noqa: PLR0913, PLR0917
     preset_id: int,
     owner: int,
     name: str,

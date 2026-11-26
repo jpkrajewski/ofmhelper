@@ -1,7 +1,42 @@
+# Copyright (C) 2026 jpkrajewski
+
+from typing import Self
 lazy import random
+
+from pydantic import BaseModel, Field
+
+from ofmhelpers.media.repurpose.transformations.constants import KnobConstants
 
 Span = tuple[float, float]
 Value = float | Span
+
+
+def _further(value: float, factor: float, neutral: float) -> float:
+    return neutral + (value - neutral) * factor
+
+
+class Knobs(BaseModel, frozen=True):
+    constants: KnobConstants = Field(default=KnobConstants(), exclude=True)
+
+    def stronger(self, factor: float) -> Self:
+        update: dict[str, Value | Knobs] = {}
+        for name, value in self:
+            if isinstance(value, Knobs):
+                update[name] = value.stronger(factor)
+            elif (
+                value is not None
+                and type(self).model_fields[name].annotation == Value | None
+            ):
+                neutral = self.constants.neutral.get(name, 0.0)
+                update[name] = (
+                    (
+                        _further(value[0], factor, neutral),
+                        _further(value[1], factor, neutral),
+                    )
+                    if isinstance(value, tuple)
+                    else _further(value, factor, neutral)
+                )
+        return self.model_copy(update=update)
 
 
 def draw(value: Value | None, rng: random.Random) -> float | None:

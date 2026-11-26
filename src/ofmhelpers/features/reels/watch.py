@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 import time
 
@@ -116,7 +118,10 @@ def _scan_rotating(username: str, pool: ProxyPool, tries: int) -> None:
             if isinstance(exc, _DEAD_PROXY):
                 pool.drop(proxy)
             logger.info(
-                "@%s: try %d failed (%s)", username, attempt + 1, type(exc).__name__
+                "@%s: try %d failed (%s)",
+                username,
+                attempt + 1,
+                type(exc).__name__,
             )
         else:
             return
@@ -168,7 +173,7 @@ def _unlocked(client: InstagramClient, reel: Reel) -> Reel:
             "video_url": media.video_url,
             "duration_s": media.duration_s,
             "taken_at": media.taken_at,
-        }
+        },
     )
 
 
@@ -194,5 +199,5 @@ def queue_due_scans() -> list[str]:
     due = claim_due(interval, s.rescan_claim_ttl_s)
     if due:
         logger.info("rescanning %d watched profile(s)", len(due))
-        enqueue(scan_all, due)
+        enqueue(scan_all, (due,))
     return due

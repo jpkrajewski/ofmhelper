@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -21,4 +23,4 @@ def page(
         everyone=viewer.user.is_admin,
         zone=zone,
     )
-    return render(request, "vas.html", **dict(view))
+    return render(request, "vas.html", dict(view))

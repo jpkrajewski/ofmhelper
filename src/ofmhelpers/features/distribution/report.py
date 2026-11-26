@@ -1,4 +1,6 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 
 from pydantic import BaseModel, computed_field
 
@@ -7,7 +9,7 @@ from ofmhelpers.db.self_links import store as self_links
 
 
 class ModelDay(BaseModel):
-    day: datetime.date
+    day: dt.date
     model: str
     pins: int = 0
     ig_pins: int = 0
@@ -49,16 +51,17 @@ class Report(BaseModel):
 def report(days: int, owner: int | None = None) -> Report:
     repo = store.repository()
     channels = repo.all_channels() if owner is None else repo.channels_of(owner)
-    end = datetime.datetime.now(datetime.UTC).date()
-    start = end - datetime.timedelta(days=days - 1)
-    by_day: dict[tuple[datetime.date, str], ModelDay] = {}
+    end = dt.datetime.now(dt.UTC).date()
+    start = end - dt.timedelta(days=days - 1)
+    by_day: dict[tuple[dt.date, str], ModelDay] = {}
     per_account = {
         c.id: AccountTotal(account=c.account_name, days=days, stopped=c.error)
         for c in channels
     }
     for pins in repo.pins_by_day(list(per_account), start):
         row = by_day.setdefault(
-            (pins.day, pins.preset), ModelDay(day=pins.day, model=pins.preset)
+            (pins.day, pins.preset),
+            ModelDay(day=pins.day, model=pins.preset),
         )
         row.pins += pins.published
         row.ig_pins += pins.ig
@@ -72,7 +75,8 @@ def report(days: int, owner: int | None = None) -> Report:
         model = links[link.link_id]
         for hit in link.days:
             row = by_day.setdefault(
-                (hit.day, model), ModelDay(day=hit.day, model=model)
+                (hit.day, model),
+                ModelDay(day=hit.day, model=model),
             )
             row.link_views += hit.views
             row.link_clicks += hit.clicks

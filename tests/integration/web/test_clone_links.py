@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import pickle
 import re
@@ -18,6 +20,7 @@ from redis.exceptions import RedisError
 from ofmhelpers.background.registry import RESUMABLE
 from ofmhelpers.cache import QueueName
 from ofmhelpers.config import settings
+from ofmhelpers.db.clone_ai_checks.schema import ReviewReason
 from ofmhelpers.db.clone_from_links import store as clone_from_links
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.db.jobs.store import (
@@ -31,11 +34,16 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.clone_links import job as clone_links_job
 from ofmhelpers.features.clone_links import page as clone_links_page
 from ofmhelpers.features.clone_links import service as clone_links_service
-from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.models import LinkPreview
-from ofmhelpers.features.clone_links.review import NOT_CONNECTED
 from ofmhelpers.features.clone_links.stop import stopped
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.features.storage.constants import StorageConstants
+from ofmhelpers.features.storage.space import StorageServiceSpace
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.web.routers.generation import clone_links
@@ -57,7 +65,7 @@ def _actor(email: str = ANN) -> str:
 
 
 def _runs(email: str = ANN) -> list[Job]:
-    return list_jobs_page({clone_links.TASK}, 0, 500, _actor(email)).jobs
+    return list_jobs_page({CloneLinksTask.RUN}, 0, 500, _actor(email)).jobs
 
 
 def _card(job_id: str) -> str:
@@ -70,14 +78,16 @@ def queued(monkeypatch) -> list[tuple]:
     monkeypatch.setattr(
         clone_links_service,
         "enqueue_to",
-        lambda queue, fn, *args, **_kw: calls.append((queue, fn, args)),
+        lambda queue, fn, args, **_kw: calls.append((queue, fn, args)),
     )
     return calls
 
 
 def _failed(link: str, batch: str, error: str = NO_CREDITS) -> str:
     job_id = create_job(
-        clone_links.TASK, {"link": link, "batch": batch}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": link, "batch": batch},
+        actor=_actor(),
     )
     fail_job(job_id, error)
     return job_id
@@ -85,7 +95,9 @@ def _failed(link: str, batch: str, error: str = NO_CREDITS) -> str:
 
 def _done(link: str, batch: str) -> str:
     job_id = create_job(
-        clone_links.TASK, {"link": link, "batch": batch}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": link, "batch": batch},
+        actor=_actor(),
     )
     run_job(job_id, list, {})
     return job_id
@@ -94,8 +106,12 @@ def _done(link: str, batch: str) -> str:
 def _remember(job_id: str) -> None:
     tasks.remember(
         tasks.ProviderTask(
-            job_id=job_id, provider="kie", model="wan", task_id="t", api_key=KIE_KEY
-        )
+            job_id=job_id,
+            provider="kie",
+            model="wan",
+            task_id="t",
+            api_key=KIE_KEY,
+        ),
     )
 
 
@@ -143,7 +159,7 @@ def test_junk_and_a_site_with_no_videos_refuse_the_paste():
     assert r.json()["detail"]["lines"] == [
         {"number": 1, "text": "2. dsadasdasd", "reason": "not a link"},
         {"number": 2, "text": "asdasdasdasdas", "reason": "not a link"},
-        {"number": 3, "text": docs, "reason": NOT_A_VIDEO_SITE},
+        {"number": 3, "text": docs, "reason": clone_links_constants().not_a_video_site},
     ]
 
 
@@ -167,7 +183,7 @@ def test_previews_without_google_drive_read_nothing(monkeypatch):
     r = client(google=False).post("/clone-links/previews", json={"urls": [REEL]})
 
     assert r.status_code == 400
-    assert r.json()["detail"] == NOT_CONNECTED
+    assert r.json()["detail"] == ReviewReason.NOT_CONNECTED
     assert read == []
 
 
@@ -175,7 +191,7 @@ def test_generate_without_google_drive_is_refused_and_queues_nothing(queued):
     r = post_run(client(google=False), [REEL])
 
     assert r.status_code == 400
-    assert r.json()["detail"] == NOT_CONNECTED
+    assert r.json()["detail"] == ReviewReason.NOT_CONNECTED
     assert queued == []
     assert _runs() == []
 
@@ -190,7 +206,8 @@ def test_previews_stream_a_line_per_link_unbuffered(monkeypatch):
     )
 
     r = client().post(
-        "/clone-links/previews", json={"urls": [REEL, OTHER], "provider": "kie"}
+        "/clone-links/previews",
+        json={"urls": [REEL, OTHER], "provider": "kie"},
     )
 
     assert r.status_code == 200, r.text
@@ -202,7 +219,7 @@ def test_generate_queues_one_run_per_link_on_the_clone_links_queue(queued):
     answer = run(client(), [REEL, OTHER])
 
     ids = answer["job_ids"]
-    assert re.fullmatch(clone_links.BATCH, answer["batch"])
+    assert re.fullmatch(clone_links_constants().batch_pattern, answer["batch"])
     assert [(q, fn, args[0], args[1]) for q, fn, args in queued] == [
         (QueueName.CLONE_LINKS, run_job, ids[0], clone_links.run_clone_link),
         (QueueName.CLONE_LINKS, run_job, ids[1], clone_links.run_clone_link),
@@ -236,7 +253,9 @@ def test_the_same_generate_sent_twice_queues_its_runs_once(queued, monkeypatch):
 
 def test_a_send_racing_the_first_of_its_generate_queues_nothing(queued, monkeypatch):
     monkeypatch.setattr(
-        clone_links_service, "_first_send", lambda _actor, _batch: False
+        clone_links_service,
+        "_first_send",
+        lambda _actor, _batch: False,
     )
 
     answer = run(client(), [REEL], batch="abcdef0123456789")
@@ -280,7 +299,7 @@ def test_a_run_the_queue_refuses_is_failed_at_once(monkeypatch):
     [job] = _runs()
     assert job.params["link"] == REEL
     assert job.status == "failed"
-    assert job.error == clone_links.NOT_QUEUED
+    assert job.error == clone_links_constants().not_queued
 
 
 def test_stop_stops_the_cards_whole_generate_and_fails_or_forgets_nothing(queued):
@@ -321,7 +340,9 @@ def test_a_failed_cards_recreate_brings_back_its_generates_links_left_to_redo():
     last = _failed(_reel(7), batch)
     _done(_reel(5), "bbbb2222")
     create_job(
-        clone_links.TASK, {"link": _reel(6), "batch": "cccc3333"}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": _reel(6), "batch": "cccc3333"},
+        actor=_actor(),
     )
 
     assert _recreate(ann, last) == [_reel(1), _reel(7)]
@@ -336,7 +357,9 @@ def test_a_done_cards_recreate_brings_back_its_link_until_it_is_made_again():
 
     assert _recreate(ann, done) == [_reel(1)]
     create_job(
-        clone_links.TASK, {"link": _reel(1), "batch": "eeee5555"}, actor=_actor()
+        CloneLinksTask.RUN,
+        {"link": _reel(1), "batch": "eeee5555"},
+        actor=_actor(),
     )
     assert _recreate(ann, done) == []
 
@@ -365,7 +388,9 @@ def test_the_page_never_waits_on_google_for_the_drive_space(monkeypatch):
         return real_render(request, name, **context)
 
     monkeypatch.setattr(
-        clone_links_page, "drive_space", lambda _user, **kw: asked.append(kw) or None
+        clone_links_page,
+        "drive_space",
+        lambda _user, **kw: asked.append(kw) or None,
     )
     monkeypatch.setattr(clone_links, "render", spy)
 
@@ -398,8 +423,8 @@ def test_a_failed_card_says_why_on_the_card_itself():
 
 
 def test_a_run_is_resumable_and_listed_like_every_tool():
-    assert RESUMABLE[clone_links.TASK] is clone_links.run_clone_link
-    assert TOOLS[clone_links.TASK].label == clone_links.LABEL
+    assert RESUMABLE[CloneLinksTask.RUN] is clone_links.run_clone_link
+    assert TOOLS[CloneLinksTask.RUN].label == clone_links_constants().label
 
 
 def test_a_queued_run_loads_in_a_fresh_worker_process(queued):
@@ -410,7 +435,10 @@ def test_a_queued_run_loads_in_a_fresh_worker_process(queued):
         [
             sys.executable,
             "-c",
-            "import pickle, sys; print(pickle.loads(sys.stdin.buffer.read()).__module__)",
+            (
+                "import pickle, sys; "
+                "print(pickle.loads(sys.stdin.buffer.read()).__module__)"
+            ),
         ],
         input=pickle.dumps(fn),
         capture_output=True,
@@ -463,3 +491,22 @@ def test_a_card_never_shows_another_persons_review(queued):
 
     assert "ann-file" in states[mine]
     assert "bob-file" not in states[reused]
+
+
+def test_clone_links_do_not_offer_the_nonbillable_fake_provider():
+    space = StorageServiceSpace(
+        client=None,
+        user_id=1,
+        read_live=False,
+        constants=StorageConstants(),
+    )
+
+    view = clone_links_page.form_view("1", 1, space)
+
+    for provider in view.providers:
+        assert provider.name != "fake"
+
+
+def test_clone_links_reject_the_nonbillable_fake_provider():
+    with pytest.raises(RefusedError, match="That provider cannot clone"):
+        clone_links_service._target("fake")

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import sys
 from fnmatch import fnmatch
@@ -5,6 +7,8 @@ from pathlib import Path
 
 from import_graph import Edge, graph, module_name, targets
 from pydantic import BaseModel
+
+from ofmhelpers.config.retired import retired
 
 ROOT = Path(__file__).resolve().parents[1]
 MAP = ROOT / "tests" / "affected_map.json"
@@ -28,8 +32,8 @@ def tests_importing(modules: set[str]) -> dict[str, set[str]]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         names: set[str] = set()
         for node in ast.walk(tree):
-            if isinstance(node, ast.Import | ast.ImportFrom) and not getattr(
-                node, "level", 0
+            if isinstance(node, ast.Import) or (
+                isinstance(node, ast.ImportFrom) and not node.level
             ):
                 names |= set(targets(node, "", path, modules))
         for name in names:
@@ -84,7 +88,11 @@ def affected(changed_files: list[str]) -> list[str]:
         if changed.startswith(SRC_PREFIX) and changed.endswith(".py"):
             for module in dependents(module_name(ROOT / changed), import_graph.edges):
                 picked |= importers.get(module, set())
-    return sorted(p for p in picked if (ROOT / p).is_file())
+    return sorted(p for p in picked if (ROOT / p).is_file() and not parked(p))
+
+
+def parked(path: str) -> bool:
+    return any(fnmatch(path, f"tests/{pattern}") for pattern in retired().tests)
 
 
 def main(arguments: list[str]) -> int:

@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import re
+import threading
 from pathlib import Path
 
 import pytest
@@ -12,7 +15,7 @@ from signin import sign_in_agency
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.repository import JobRepository
 from ofmhelpers.db.jobs.schema import JobPreview
-from ofmhelpers.db.jobs.store import create_job, get_job, set_job_preview
+from ofmhelpers.db.jobs.store import create_job, get_job, list_jobs, set_job_preview
 from ofmhelpers.features.account.keys import SAVED_KEY
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.downloads import videos as download_videos_router
@@ -22,7 +25,9 @@ from ofmhelpers.integrations.ai_providers.catalog import catalog
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
+from ofmhelpers.media.video_probe import duration_s, video_size
 from ofmhelpers.web.main import app
+from ofmhelpers.web.routers.generation import ai as ai_router
 from ofmhelpers.web.routers.task_helpers import job_status_payload
 
 NEW = json.dumps([{"kind": "new"}])
@@ -58,6 +63,7 @@ def _fake(client, files=None, **fields):
         "model": FAKE_IMAGE,
         "prompt": "a cat",
         "delay": "0",
+        "api_key": "fake-key",
         **fields,
     }
     return client.post("/ai/run", data=data, files=files, headers=keyed())
@@ -73,7 +79,7 @@ def test_page_offers_every_provider_and_every_model(client):
             r'id="model-catalog" type="application/json">(.*?)</script>',
             html,
             re.DOTALL,
-        ).group(1)
+        ).group(1),
     )
     assert {m["key"] for m in models} == set(catalog())
     assert 'action="/ai/run"' in html
@@ -86,7 +92,7 @@ def test_page_prefills_each_providers_key_for_the_role(client, monkeypatch):
     html = client.get("/generate").text
 
     keys = json.loads(
-        re.search(r'data-keys="([^"]*)"', html).group(1).replace("&#34;", '"')
+        re.search(r'data-keys="([^"]*)"', html).group(1).replace("&#34;", '"'),
     )
     assert keys["kie"] == SAVED_KEY
     assert keys["higgsfield"] == SAVED_KEY
@@ -112,7 +118,9 @@ def test_fields_render_the_schema_as_inputs(client):
     html = client.get("/ai/fields", params={"model": "kie:wan/3-0-video"}).text
 
     assert re.search(
-        r'<select name="resolution".*?<option value="1080P" selected', html, re.DOTALL
+        r'<select name="resolution".*?<option value="1080P" selected',
+        html,
+        re.DOTALL,
     )
     assert re.search(
         r'<input type="number" name="duration".*?min="2.0".*?max="30.0"',
@@ -132,11 +140,13 @@ def test_fields_render_the_schema_as_inputs(client):
 
 def test_a_single_file_field_is_a_one_item_picker(client):
     html = client.get(
-        "/ai/fields", params={"model": "kie:minimax-h3/image-to-video"}
+        "/ai/fields",
+        params={"model": "kie:minimax-h3/image-to-video"},
     ).text
 
     assert re.search(
-        r'data-field="first_frame_url" data-kind="image" data-max="1"', html
+        r'data-field="first_frame_url" data-kind="image" data-max="1"',
+        html,
     )
 
 
@@ -213,6 +223,17 @@ def test_batch_is_capped_at_the_max(client):
 def test_batch_is_ignored_for_a_video_model(client):
     ids = _fake(client, model="fake:video", batch="5").json()["job_ids"]
     assert len(ids) == 1
+
+
+def test_fake_video_is_one_second_and_480p(client):
+    response = _fake(client, model="fake:video")
+    job = get_job(response.json()["job_id"])
+
+    assert job.status == "done"
+    video = Path(job.local_paths()[0])
+    assert duration_s(video, 10) == pytest.approx(1)
+    size = video_size(video, 10)
+    assert (size.width, size.height) == (640, 480)
 
 
 def test_the_error_outcome_fails_with_the_message_typed_in(client):
@@ -361,6 +382,72 @@ def test_a_kie_run_sends_the_catalog_body_and_keeps_the_hosted_copy(client, kie)
     assert job.result_files()[0].remote_url == "https://cdn.kie/out.mp4"
 
 
+def test_image_validation_runs_off_the_dependency_event_loop(client, monkeypatch):
+    dependency_threads = []
+    validation_threads = []
+    model_spec = ai_router.service.model_spec
+    validate_image = ai_router.validate_image_upload
+
+    def observed_model_spec(key):
+        dependency_threads.append(threading.get_ident())
+        return model_spec(key)
+
+    def observed_validation(upload):
+        validation_threads.append(threading.get_ident())
+        return validate_image(upload)
+
+    monkeypatch.setattr(ai_router.service, "model_spec", observed_model_spec)
+    monkeypatch.setattr(ai_router, "validate_image_upload", observed_validation)
+    files = {"reference_image_urls": ("ref.png", io.BytesIO(_png()), "image/png")}
+
+    response = _fake(client, files=files, reference_image_urls_manifest=NEW)
+
+    assert response.status_code == 202
+    assert len(validation_threads) == 1
+    assert validation_threads[0] != dependency_threads[0]
+
+
+def test_invalid_reference_image_is_rejected_before_a_job_is_created(client, kie):
+    before = len(list_jobs())
+
+    r = client.post(
+        "/ai/run",
+        headers=keyed(),
+        data={
+            "provider": "kie",
+            "model": "kie:wan/3-0-video",
+            "api_key": "k",
+            "prompt": "dance",
+            "reference_image_urls_manifest": NEW,
+        },
+        files={"reference_image_urls": ("face.png", b"not an image", "image/png")},
+    )
+
+    assert r.status_code == 400
+    assert len(list_jobs()) == before
+
+
+def test_corrupt_heic_reference_is_refused_before_a_job_is_created(client, kie):
+    before = len(list_jobs())
+
+    r = client.post(
+        "/ai/run",
+        headers=keyed(),
+        data={
+            "provider": "kie",
+            "model": "kie:wan/3-0-video",
+            "api_key": "k",
+            "prompt": "dance",
+            "reference_image_urls_manifest": NEW,
+        },
+        files={"reference_image_urls": ("broken.heic", b"not a heic", "image/heic")},
+    )
+
+    assert r.status_code == 400
+    assert r.json()["detail"] == "Unreadable HEIC image"
+    assert len(list_jobs()) == before
+
+
 def test_a_failed_download_keeps_the_job_on_the_hosted_copy(client, kie, monkeypatch):
     def broken(_self, url, dest):
         msg = "download failed"
@@ -470,7 +557,8 @@ def test_job_page_shows_the_model_settings_and_reference_preview(client):
 def test_a_plain_download_job_page_has_no_inputs_section(client, monkeypatch):
     monkeypatch.setattr(download_videos_router, "run_downloads", lambda urls: [])
     job_id = client.post(
-        "/download-videos/run", data={"urls": "https://a.example/1"}
+        "/download-videos/run",
+        data={"urls": "https://a.example/1"},
     ).json()["job_id"]
 
     assert "job-inputs" not in client.get(f"/download-videos/jobs/{job_id}").text
@@ -493,7 +581,9 @@ def test_a_running_card_resumes_polling_under_ai(client):
     job_id = create_job("ai", {"provider": "fake", "model": FAKE_IMAGE, "prompt": "p"})
 
     card = re.search(
-        rf'data-job-id="{job_id}"(.*?)>', client.get("/generate").text, re.DOTALL
+        rf'data-job-id="{job_id}"(.*?)>',
+        client.get("/generate").text,
+        re.DOTALL,
     )
 
     assert "data-pending" in card.group(1)
@@ -505,7 +595,9 @@ def test_a_job_from_before_ai_still_shows_and_opens(client, tmp_path):
     out.write_bytes(_png())
     job_id = create_job("seedance", {"prompt": "old run", "reference_images": []})
     JobRepository().update_status(
-        job_id, "done", result=[{"name": "old.png", "path": str(out)}]
+        job_id,
+        "done",
+        result=[{"name": "old.png", "path": str(out)}],
     )
 
     assert f'data-job-id="{job_id}"' in client.get("/generate").text
@@ -521,7 +613,9 @@ def test_status_json_surfaces_the_preview_only_while_running(tmp_path):
 
     (tmp_path / "x.png").write_bytes(b"x")
     JobRepository().update_status(
-        job_id, "done", result=[{"name": "x.png", "path": str(tmp_path / "x.png")}]
+        job_id,
+        "done",
+        result=[{"name": "x.png", "path": str(tmp_path / "x.png")}],
     )
     assert job_status_payload(get_job(job_id), "/ai/files").preview is None
 
@@ -545,9 +639,9 @@ def plugin(tmp_path, monkeypatch):
                             "steps": {"type": "integer", "default": 4},
                         },
                     },
-                }
-            ]
-        )
+                },
+            ],
+        ),
     )
     sent = []
 

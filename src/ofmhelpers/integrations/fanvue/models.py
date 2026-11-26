@@ -1,4 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,7 +35,7 @@ class FanvueChat(_Api):
 
 
 class ChatsPage(_Api):
-    data: list[dict]
+    data: list[dict[str, Any]]
     next_cursor: str | None = Field(default=None, alias="nextCursor")
 
 
@@ -94,7 +97,7 @@ class EventParty(_Api):
 class WebhookEnvelope(_Api):
     id: str
     type: str
-    data: dict = Field(default_factory=dict)
+    data: dict[str, Any] = Field(default_factory=dict)
 
 
 class MessageEvent(_Api):

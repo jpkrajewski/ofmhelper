@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.instagram.client import (
     InstagramClient,
     InstagramError,

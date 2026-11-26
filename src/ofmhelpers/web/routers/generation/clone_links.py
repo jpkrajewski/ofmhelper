@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -6,6 +8,10 @@ from pydantic import BaseModel, Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links import service
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.job import run_clone_link
 from ofmhelpers.features.clone_links.models import (
     CheckedLinks,
@@ -13,18 +19,7 @@ from ofmhelpers.features.clone_links.models import (
     RecreateLinks,
 )
 from ofmhelpers.features.clone_links.page import form_view
-from ofmhelpers.features.clone_links.service import (
-    BATCH,
-    FILES_PREFIX,
-    LABEL,
-    NOT_QUEUED,
-    PREFIX,
-    TASK,
-    THUMBS_PREFIX,
-    BatchStopped,
-    Generate,
-    Sent,
-)
+from ofmhelpers.features.clone_links.service import BatchStopped, Generate, Sent
 from ofmhelpers.features.clone_pricing.targets import DEFAULT_RESOLUTION
 from ofmhelpers.features.jobs.schema import CloneQueued
 from ofmhelpers.web.access import Area
@@ -36,33 +31,27 @@ from ofmhelpers.web.dependencies import (
     CurrentUser,
     OwnerId,
     Scope,
+    Storage,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, PaidForm
+from ofmhelpers.web.forms import ImageFiles, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import default_prompt
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
-__all__ = [
-    "BATCH",
-    "FILES_PREFIX",
-    "LABEL",
-    "NOT_QUEUED",
-    "TASK",
-    "THUMBS_PREFIX",
-    "router",
-    "run_clone_link",
-]
+__all__ = ["router", "run_clone_link"]
 
 router = APIRouter(
-    prefix=PREFIX, tags=["clone-links"], dependencies=[Access(Area.CLONE_LINKS)]
+    prefix=clone_links_constants().prefix,
+    tags=["clone-links"],
+    dependencies=[Access(Area.CLONE_LINKS)],
 )
 
 _UNBUFFERED = {"X-Accel-Buffering": "no"}
 
-gallery = Gallery({TASK})
+gallery = Gallery({CloneLinksTask.RUN})
 
 
 class CloneLinksForm(PaidForm):
@@ -71,10 +60,10 @@ class CloneLinksForm(PaidForm):
     audio: bool = False
     export: str = Field(default_factory=lambda: settings.exports.default)
     mirror: bool = False
-    image: Files
+    image: ImageFiles
     image_manifest: str = "[]"
     links: list[str] = Field(default_factory=list)
-    batch: str | None = Field(None, pattern=BATCH)
+    batch: str | None = Field(None, pattern=clone_links_constants().batch_pattern)
 
 
 class ReviewState(BaseModel):
@@ -90,10 +79,16 @@ def check(links: Annotated[str, Form()] = "") -> CheckedLinks:
 
 @router.post("/previews")
 def previews(
-    body: PreviewsRequest, user: CurrentUser, owner_id: OwnerId
+    body: PreviewsRequest,
+    user: CurrentUser,
+    owner_id: OwnerId,
 ) -> StreamingResponse:
     found = service.previews(
-        body.urls, body.provider, body.resolution, user.id, owner_id
+        body.urls,
+        body.provider,
+        body.resolution,
+        user.id,
+        owner_id,
     )
     return StreamingResponse(
         (p.model_dump_json() + "\n" for p in found),
@@ -105,13 +100,15 @@ def previews(
 @router.get("/thumb/{key}")
 def thumb(key: str, owner_id: OwnerId) -> FileResponse:
     return FileResponse(
-        service.cover(key, owner_id), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
+        service.cover(key, owner_id),
+        media_type="image/webp",
+        headers=PRIVATE_FOR_A_DAY,
     )
 
 
 def _queued(sent: Sent, user_id: int) -> CloneQueued:
     html = "".join(
-        render_partial("_clone_links_card.html", job=card)
+        render_partial("_clone_links_card.html", {"job": card})
         for card in service.cards(list(reversed(sent.jobs)), user_id)
     )
     return CloneQueued(job_ids=[j.id for j in sent.jobs], html=html, batch=sent.batch)
@@ -136,36 +133,44 @@ def run(
 
 
 @router.get("")
-def form(
+def form(  # noqa: PLR0913, PLR0917
     request: Request,
     user: CurrentUser,
     actor: Actor,
     viewer: Viewing,
     scope: Scope,
     api_keys: ApiKeys,
+    storage: Storage,
 ) -> Response:
     first = gallery.page(viewer)
     return render(
         request,
         "clone_links.html",
-        gallery=service.cards(first.jobs, scope),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        api_keys=api_keys,
-        **dict(form_view(actor, user.id)),
+        {
+            "gallery": service.cards(first.jobs, scope),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            "api_keys": api_keys,
+            **dict(form_view(actor, user.id, storage.space)),
+        },
     )
 
 
 @router.get("/gallery")
 def gallery_page(
-    request: Request, scope: Scope, viewer: Viewing, query: GalleryParams
+    request: Request,
+    scope: Scope,
+    viewer: Viewing,
+    query: GalleryParams,
 ) -> Response:
     found = gallery.page(viewer, query)
     return render(
         request,
         "clone_links_gallery_fragment.html",
-        gallery=service.cards(found.jobs, scope),
-        next_offset=found.next_offset,
+        {
+            "gallery": service.cards(found.jobs, scope),
+            "next_offset": found.next_offset,
+        },
     )
 
 
@@ -174,8 +179,10 @@ def gallery_latest(request: Request, viewer: Viewing, scope: Scope) -> Response:
     return render_polled(
         request,
         "clone_links_gallery_fragment.html",
-        gallery=service.cards(gallery.page(viewer).jobs, scope),
-        next_offset=None,
+        {
+            "gallery": service.cards(gallery.page(viewer).jobs, scope),
+            "next_offset": None,
+        },
     )
 
 
@@ -191,13 +198,15 @@ def stop(job_id: str, actor: Actor) -> BatchStopped:
 
 @router.get("/reviews")
 def reviews(
-    job: Annotated[list[str], Query(max_length=200)], actor: Actor, scope: Scope
+    job: Annotated[list[str], Query(max_length=200)],
+    actor: Actor,
+    scope: Scope,
 ) -> list[ReviewState]:
     return [
         ReviewState(
             job_id=card.job_id,
             settled=card.review_settled,
-            html=render_partial("_clone_from_link.html", job=card),
+            html=render_partial("_clone_from_link.html", {"job": card}),
         )
         for card in service.cards_of(job, actor, scope)
     ]
@@ -205,7 +214,7 @@ def reviews(
 
 add_job_routes(
     router,
-    LABEL,
+    clone_links_constants().label,
     lambda _job: "Generating video… this can take a few minutes.",
     back_url="/clone-links",
     back_label="clone more",

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 import pytest
@@ -36,6 +38,7 @@ CDN = "https://scontent-waw2-2.cdninstagram.com/v/x.mp4"
         "https://www.instagram.com/sheep_love33/",
         "instagram.com/Sheep_Love33/reels/",
         "  https://www.instagram.com/sheep_love33?hl=en ",
+        "https://www.instagram.com./sheep_love33/",
     ],
 )
 def test_profile_handle_is_the_bare_username(raw):
@@ -46,6 +49,11 @@ def test_profile_handle_is_the_bare_username(raw):
 def test_profile_handle_rejects_non_usernames(raw):
     with pytest.raises(ValidationError):
         ProfileHandle(username=raw)
+
+
+def test_profile_handle_rejects_a_lookalike_instagram_host():
+    with pytest.raises(ValueError, match="Not an Instagram username"):
+        ProfileHandle(username="https://instagram.com.evil.example/sheep_love33")
 
 
 def test_cdn_urls_only():
@@ -76,20 +84,20 @@ def test_clips_page_reads_codes_counts_and_cursor():
                                         "code": "A",
                                         "play_count": 10,
                                         "image_versions2": {
-                                            "candidates": [{"url": "t"}]
+                                            "candidates": [{"url": "t"}],
                                         },
-                                    }
-                                }
-                            }
+                                    },
+                                },
+                            },
                         ],
                         "page_info": {"end_cursor": "c", "has_next_page": True},
-                    }
-                }
-            }
-        }
+                    },
+                },
+            },
+        },
     )
     assert [(r.code, r.play_count, r.image_versions2.first) for r in page.reels] == [
-        ("A", 10, "t")
+        ("A", 10, "t"),
     ]
     assert page.next_cursor == "c"
     assert ClipsPage.model_validate({"data": {}}).reels == []
@@ -106,15 +114,18 @@ def test_media_length_comes_from_the_dash_manifest(duration, seconds):
                 "xig_polaris_media": {
                     "if_not_gated_logged_out": {
                         "video_versions": [{"url": CDN}],
-                        "video_dash_manifest": f'<MPD mediaPresentationDuration="{duration}">',
+                        "video_dash_manifest": f"<MPD "
+                        f'mediaPresentationDuration="{duration}">',
                         "taken_at": 5,
-                    }
-                }
-            }
-        }
+                    },
+                },
+            },
+        },
     )
     assert ReelMedia.from_page(page) == ReelMedia(
-        video_url=CDN, duration_s=seconds, taken_at=5
+        video_url=CDN,
+        duration_s=seconds,
+        taken_at=5,
     )
 
 
@@ -131,14 +142,14 @@ def test_null_pinned_field_reads_as_unpinned():
                                         "pk": "1",
                                         "code": "A",
                                         "clips_tab_pinned_user_ids": None,
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                }
-            }
-        }
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        },
     )
     assert page.reels[0].pinned is False
 
@@ -151,7 +162,9 @@ class _Page:
 def test_empty_profile_page_is_missing_only_when_the_crawler_agrees(monkeypatch):
     client = InstagramClient()
     monkeypatch.setattr(
-        client._session, "get", lambda *_a, **_k: _Page("<html>Instagram</html>")
+        client._session,
+        "get",
+        lambda *_a, **_k: _Page("<html>Instagram</html>"),
     )
     assert isinstance(client._missing("gone"), ProfileNotFoundError)
     monkeypatch.setattr(
@@ -171,12 +184,18 @@ def test_logged_in_media_info():
     info = MediaInfo.model_validate(
         {
             "items": [
-                {"video_versions": [{"url": CDN}], "video_duration": 9.5, "taken_at": 7}
-            ]
-        }
+                {
+                    "video_versions": [{"url": CDN}],
+                    "video_duration": 9.5,
+                    "taken_at": 7,
+                },
+            ],
+        },
     )
     assert ReelMedia.from_info(info) == ReelMedia(
-        video_url=CDN, duration_s=9.5, taken_at=7
+        video_url=CDN,
+        duration_s=9.5,
+        taken_at=7,
     )
     assert ReelMedia.from_info(MediaInfo.model_validate({"items": []})) is None
 
@@ -184,7 +203,9 @@ def test_logged_in_media_info():
 def test_media_falls_back_to_the_login_for_gated_reels(monkeypatch):
     client = InstagramClient()
     monkeypatch.setattr(
-        client, "_query", lambda *_a, **_k: MediaPage.model_validate({"data": {}})
+        client,
+        "_query",
+        lambda *_a, **_k: MediaPage.model_validate({"data": {}}),
     )
     resolved = ReelMedia(video_url=CDN, duration_s=1, taken_at=0)
     monkeypatch.setattr(client, "media_logged_in", lambda pk: resolved)
@@ -227,7 +248,9 @@ def test_unreachable_login_leaves_the_reel_login_only(monkeypatch):
 def test_login_tells_a_real_profile_from_a_deleted_one(monkeypatch, page, exists):
     client = InstagramClient(cookies="# Netscape HTTP Cookie File\n")
     monkeypatch.setattr(
-        type(client), "_logged_in", property(lambda _self: _FakeSession(page))
+        type(client),
+        "_logged_in",
+        property(lambda _self: _FakeSession(page)),
     )
     assert client.exists_logged_in("someone") is exists
 
@@ -319,7 +342,10 @@ class FakeClient:
 
     def open_profile(self, username):
         return Profile(
-            user_id="9", username=username, followers=100, is_private=self._private
+            user_id="9",
+            username=username,
+            followers=100,
+            is_private=self._private,
         )
 
     def reels(self, _user_id):
@@ -388,10 +414,15 @@ def test_scan_keeps_recent_viral_reels_best_first():
             ("best", 2000, 16, 13, False),
             ("old", 9000, 3, 15, False),
             ("older", 9000, 3, 20, False),
-        ]
+        ],
     )
     found = scan_profile(
-        client, "u", min_views=500, max_duration_s=30, max_age_s=14 * DAY, limit=100
+        client,
+        "u",
+        min_views=500,
+        max_duration_s=30,
+        max_age_s=14 * DAY,
+        limit=100,
     )
     assert [r.code for r in found.reels] == ["best", "ok"]
     assert found.reels[0].ratio == 20
@@ -473,21 +504,22 @@ def _clips(codes: list[str], cursor: str | None) -> dict:
                         for n, c in enumerate(codes, 1)
                     ],
                     "page_info": {"end_cursor": cursor, "has_next_page": bool(cursor)},
-                }
-            }
-        }
+                },
+            },
+        },
     }
 
 
 def _with_login(session) -> InstagramClient:
     client = InstagramClient()
-    client.__dict__["_logged_in"] = session
+    client._logged_in = session
     return client
 
 
 def test_reels_logged_in_pages_the_reels_tab_as_the_login():
     session = _LoggedInSession(
-        _LOGGED_IN_PAGE, [_clips(["a", "b"], "next"), _clips(["c", "d"], "more")]
+        _LOGGED_IN_PAGE,
+        [_clips(["a", "b"], "next"), _clips(["c", "d"], "more")],
     )
     reels = _with_login(session).reels_logged_in("dany", "42", limit=3)
     assert [r.code for r in reels] == ["a", "b", "c"]
@@ -501,7 +533,7 @@ def test_reels_logged_in_pages_the_reels_tab_as_the_login():
 def test_reels_logged_in_stops_at_the_last_page():
     session = _LoggedInSession(_LOGGED_IN_PAGE, [_clips(["a"], None)])
     assert [r.code for r in _with_login(session).reels_logged_in("d", "42", 10)] == [
-        "a"
+        "a",
     ]
 
 
@@ -527,7 +559,7 @@ def test_a_graphql_rate_limit_is_a_rate_limit_not_an_empty_timeline(monkeypatch)
     client = InstagramClient()
     limited = {
         "errors": [
-            {"message": "Rate limit exceeded", "severity": "CRITICAL", "code": 1675004}
+            {"message": "Rate limit exceeded", "severity": "CRITICAL", "code": 1675004},
         ],
         "extensions": {"is_final": True},
     }
@@ -553,7 +585,8 @@ class _PostsRefused(FakeClient):
 
 def test_refused_posts_are_read_reel_by_reel():
     client = _PostsRefused(
-        [("a", 900, 5, 1, False), ("b", 800, 6, 2, False)], on_timeline={"a", "b"}
+        [("a", 900, 5, 1, False), ("b", 800, 6, 2, False)],
+        on_timeline={"a", "b"},
     )
 
     found = scan_profile(client, "u", 500, 30, 14 * DAY, 100)
@@ -571,5 +604,10 @@ def test_a_refused_single_post_fails_the_scan():
 
     with pytest.raises(InstagramRateLimitedError):
         scan_profile(
-            _AllRefused([("a", 900, 5, 1, False)]), "u", 500, 30, 14 * DAY, 100
+            _AllRefused([("a", 900, 5, 1, False)]),
+            "u",
+            500,
+            30,
+            14 * DAY,
+            100,
         )

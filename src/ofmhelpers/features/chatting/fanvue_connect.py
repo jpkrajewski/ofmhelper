@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 
 from redis.exceptions import RedisError
@@ -64,7 +66,8 @@ def finish(user_id: int, session_id: str, code: str, state: str) -> bool:
     starter, _, rest = stored.partition(":")
     started_in, _, verifier = rest.partition(":")
     if starter != str(user_id) or not secrets.compare_digest(
-        started_in.encode(), session_id.encode()
+        started_in.encode(),
+        session_id.encode(),
     ):
         logger.warning(
             "fanvue connect: state started by user %s used by %s or in another session",

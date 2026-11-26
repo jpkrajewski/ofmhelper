@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 from typing import Annotated
 
@@ -29,7 +31,7 @@ JobQuery = Annotated[str | None, Query(max_length=32)]
 @router.get("")
 def page(request: Request, actor: Actor, job: JobQuery = None) -> Response:
     view = viral_page.page_view(actor, job, _FILES)
-    return render(request, "viral.html", **dict(view))
+    return render(request, "viral.html", dict(view))
 
 
 @router.post("/run", status_code=202)

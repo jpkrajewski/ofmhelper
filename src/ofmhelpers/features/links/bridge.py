@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.self_links import store as self_links
 lazy from ofmhelpers.db.short_links.schema import BridgeTarget, SelfClick
 

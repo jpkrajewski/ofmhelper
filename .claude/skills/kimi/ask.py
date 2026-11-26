@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Hands one task to Kimi Code CLI (the owner's second agent) and prints only
 its final answer.
 

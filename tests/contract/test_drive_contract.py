@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 import uuid
 lazy from collections.abc import Iterator
@@ -5,13 +7,13 @@ lazy from collections.abc import Iterator
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.gdrive import (
-    DriveApi,
+from ofmhelpers.integrations.storage import (
     DriveError,
     FolderGoneError,
-    connect,
+    StorageClient,
 )
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive import connect
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 
 FAKE_ROOT = "contract-root"
 
@@ -21,7 +23,7 @@ def _missing_id() -> str:
 
 
 @pytest.fixture
-def drive(backend, monkeypatch) -> DriveApi:
+def drive(backend, monkeypatch) -> StorageClient:
     if backend == "fake":
         fake = FakeDrive()
         fake.seed_folder("ALL ACCOUNTS", item_id=FAKE_ROOT, shared=True)
@@ -140,7 +142,9 @@ def _trash(drive, backend, folder_id: str) -> None:
         drive.trash(folder_id)
     else:
         drive._files.update(
-            fileId=folder_id, body={"trashed": True}, supportsAllDrives=True
+            fileId=folder_id,
+            body={"trashed": True},
+            supportsAllDrives=True,
         ).execute()
 
 

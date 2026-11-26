@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 import pytest
@@ -28,7 +30,9 @@ def models(monkeypatch):
     answers: dict = {}
     monkeypatch.setattr(captions.settings.llm, "default_chat", "groq", raising=False)
     monkeypatch.setattr(
-        type(captions.settings.llm), "video_chain", property(lambda _s: ["g1", "g2"])
+        type(captions.settings.llm),
+        "video_chain",
+        property(lambda _s: ["g1", "g2"]),
     )
 
     def get_llm(use, provider):
@@ -90,7 +94,7 @@ def test_the_choices_come_back_clean_fitting_and_none_twice():
             "three",
             "four",
             "five",
-        ]
+        ],
     ).captions
 
     assert len(found) == CHOICES
@@ -108,7 +112,7 @@ def test_a_caption_with_a_crude_word_is_dropped():
             "sorry for the visual assault",
             "back to class like nothing happened",
             "keep FUCKING with the hairy guy",
-        ]
+        ],
     ).captions
 
     assert found == [

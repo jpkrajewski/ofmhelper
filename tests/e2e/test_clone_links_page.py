@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import time
 from email.parser import BytesParser
@@ -9,11 +11,10 @@ from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import Locator, Request, Response, expect
 from sqlalchemy import create_engine, text
 
-from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
-from ofmhelpers.features.clone_links.preview import CANNOT_OPEN
-from ofmhelpers.features.clone_links.review import NOT_CONNECTED
+from ofmhelpers.db.clone_ai_checks.schema import ReviewReason
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_FAKE_KEY
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 
 pytestmark = pytest.mark.e2e
 
@@ -29,7 +30,7 @@ def _open(va: Session, subject: Path, api_key: str) -> None:
     va.page.select_option("#provider-select", "kie")
     va.page.fill("#api-key", api_key)
     va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
-        str(subject)
+        str(subject),
     )
 
 
@@ -41,7 +42,7 @@ def _generate(va: Session) -> Locator:
 
 def _tile(va: Session, url: str) -> Locator:
     return va.page.locator("#clone-links-confirm-lines .pick-tile").filter(
-        has=va.page.locator(f'.pick-cover[href="{url}"]')
+        has=va.page.locator(f'.pick-cover[href="{url}"]'),
     )
 
 
@@ -59,7 +60,7 @@ def _confirm(va: Session) -> tuple[Request, Response]:
 def _form_fields(request: Request) -> dict[str, list[str]]:
     head = f"Content-Type: {request.header_value('content-type')}\r\n\r\n"
     message = BytesParser(policy=HTTP).parsebytes(
-        head.encode() + (request.post_data_buffer or b"")
+        head.encode() + (request.post_data_buffer or b""),
     )
     fields: dict[str, list[str]] = {}
     for part in message.iter_parts():
@@ -77,7 +78,8 @@ def _ready_tiles(tiles: Locator, count: int) -> None:
     expect(tiles).to_have_count(count)
     for i in range(count):
         expect(tiles.nth(i).locator(".pick-price")).to_have_text(
-            PRICE, timeout=RESULT_TIMEOUT_MS
+            PRICE,
+            timeout=RESULT_TIMEOUT_MS,
         )
 
 
@@ -87,13 +89,16 @@ def _run_good_reel(va: Session, link: str) -> str:
     _request, run = _confirm(va)
     [job_id] = run.json()["job_ids"]
     expect(_card(va, job_id).locator(".ai-check")).to_contain_text(
-        "In Drive: GOOD REELS", timeout=2 * RESULT_TIMEOUT_MS
+        "In Drive: GOOD REELS",
+        timeout=2 * RESULT_TIMEOUT_MS,
     )
     return job_id
 
 
 def test_clone_links_checks_prices_runs_and_files_a_good_reel(
-    va: Session, fake_drive: FakeDrive, subject_images: list[Path]
+    va: Session,
+    fake_drive: FakeDrive,
+    subject_images: list[Path],
 ):
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], KIE_FAKE_KEY)
@@ -108,10 +113,10 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
     expect(refused).to_be_visible()
     expect(refused.locator("h2")).to_have_text("Please put one link per line")
     expect(refused.locator("strong.cost-line-name")).to_have_text(
-        [f"{dead}{reel}", junk]
+        [f"{dead}{reel}", junk],
     )
     expect(refused.locator(".cost-line-detail")).to_have_text(
-        ["2 links on one line", NOT_A_VIDEO_SITE]
+        ["2 links on one line", clone_links_constants().not_a_video_site],
     )
     expect(va.page.locator("#clone-links-refused-note")).to_be_visible()
     refused.get_by_role("button", name="OK").click()
@@ -133,21 +138,24 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
     ready, left_out = tiles.nth(0), tiles.nth(1)
     expect(ready.locator(".pick-cover")).to_have_attribute("href", reel)
     expect(ready.locator(".pick-len")).to_have_text(
-        re.compile(r"^\d+\.\d s$"), timeout=RESULT_TIMEOUT_MS
+        re.compile(r"^\d+\.\d s$"),
+        timeout=RESULT_TIMEOUT_MS,
     )
     expect(ready.locator(".pick-price")).to_have_text(PRICE)
     expect(ready.locator(".pick-cover .spinner")).to_have_count(0)
     expect(left_out.locator(".pick-cover")).to_have_attribute("href", dead)
     expect(left_out).to_have_attribute("data-problem", "", timeout=RESULT_TIMEOUT_MS)
-    expect(left_out.locator(".pick-why")).to_have_text(CANNOT_OPEN)
+    expect(left_out.locator(".pick-why")).to_have_text(
+        clone_links_constants().cannot_open,
+    )
     expect(left_out.locator(".pick-price")).to_have_text("")
     expect(va.page.locator("#clone-links-confirm-title")).to_have_text(
-        "Generate 1 clone?"
+        "Generate 1 clone?",
     )
     price = ready.locator(".pick-price").inner_text()
     expect(va.page.locator("#clone-links-confirm-usd")).to_have_text(price)
     expect(va.page.locator("#clone-links-confirm-go")).to_have_text(
-        f"Generate 1 · {price}"
+        f"Generate 1 · {price}",
     )
 
     request, run = _confirm(va)
@@ -159,7 +167,8 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
     [job_id] = run.json()["job_ids"]
     review = _card(va, job_id).locator(".ai-check")
     expect(review).to_contain_text(
-        "In Drive: GOOD REELS", timeout=2 * RESULT_TIMEOUT_MS
+        "In Drive: GOOD REELS",
+        timeout=2 * RESULT_TIMEOUT_MS,
     )
     expect(review.locator(".why-toggle")).to_have_text("AI decision: good")
     (good,) = fake_drive.named("GOOD REELS", my_root(fake_drive, GOOGLE))
@@ -168,13 +177,14 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
         (
             "Failed to load resource: the server responded with a status of 400"
             " (Bad Request)"
-        )
+        ),
     ]
 
 
 @pytest.mark.usefixtures("fake_drive")
 def test_a_removed_tile_is_left_out_of_what_generate_sends(
-    va: Session, subject_images: list[Path]
+    va: Session,
+    subject_images: list[Path],
 ):
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], "e2e-wrong-key")
@@ -205,13 +215,15 @@ def test_a_removed_tile_is_left_out_of_what_generate_sends(
     assert _form_fields(request)["links"] == [kept]
     [job_id] = run.json()["job_ids"]
     expect(_card(va, job_id).locator(".result-failed")).to_have_text(
-        re.compile("Wrong API key"), timeout=RESULT_TIMEOUT_MS
+        re.compile("Wrong API key"),
+        timeout=RESULT_TIMEOUT_MS,
     )
     assert va.js_errors == []
 
 
 def test_generate_without_google_drive_asks_the_server_nothing(
-    va: Session, subject_images: list[Path]
+    va: Session,
+    subject_images: list[Path],
 ):
     _open(va, subject_images[0], KIE_FAKE_KEY)
     expect(va.page.locator(".drive-connect")).to_be_visible()
@@ -222,7 +234,7 @@ def test_generate_without_google_drive_asks_the_server_nothing(
     va.page.click('#clone-links-form button[type="submit"]')
 
     expect(va.page.locator("#clone-links-form .generation-error")).to_have_text(
-        NOT_CONNECTED
+        ReviewReason.NOT_CONNECTED,
     )
     expect(va.page.locator("#clone-links-confirm")).to_be_hidden()
     assert asked == []
@@ -231,7 +243,8 @@ def test_generate_without_google_drive_asks_the_server_nothing(
 
 @pytest.mark.usefixtures("fake_drive")
 def test_stop_after_queueing_stops_that_generate(
-    va: Session, subject_images: list[Path]
+    va: Session,
+    subject_images: list[Path],
 ):
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], "e2e-wrong-key")
@@ -258,14 +271,17 @@ def test_stop_after_queueing_stops_that_generate(
     expect(stop).to_be_hidden()
     for job_id in queued["job_ids"]:
         expect(_card(va, job_id).locator(".result-failed")).to_have_count(
-            1, timeout=RESULT_TIMEOUT_MS
+            1,
+            timeout=RESULT_TIMEOUT_MS,
         )
     assert va.js_errors == []
 
 
 @pytest.mark.usefixtures("fake_drive")
 def test_an_open_ai_decision_stays_open_while_its_card_is_polled(
-    va: Session, subject_images: list[Path], e2e_backend
+    va: Session,
+    subject_images: list[Path],
+    e2e_backend,
 ):
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], KIE_FAKE_KEY)
@@ -276,7 +292,7 @@ def test_an_open_ai_decision_stays_open_while_its_card_is_polled(
             text(
                 "UPDATE clone_from_links SET status = 'uploading', drive_url = NULL,"
                 " drive_file_id = NULL, finished_at = NULL, created_at = :now,"
-                " started_at = :now WHERE job_id = :job"
+                " started_at = :now WHERE job_id = :job",
             ),
             {"now": now, "job": job_id},
         )
@@ -290,7 +306,8 @@ def test_an_open_ai_decision_stays_open_while_its_card_is_polled(
     expect(panel).to_have_js_property("hidden", value=False)
     for _ in range(2):
         with va.page.expect_response(
-            lambda r: "/clone-links/reviews?" in r.url, timeout=REVIEW_POLL_TIMEOUT_MS
+            lambda r: "/clone-links/reviews?" in r.url,
+            timeout=REVIEW_POLL_TIMEOUT_MS,
         ) as polled:
             pass
         assert polled.value.ok

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import shutil
 import subprocess
@@ -10,9 +12,9 @@ from playwright.sync_api import expect
 from sqlalchemy import create_engine, text
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.features.trials.state import FolderState, ReelState
-from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive
 
 pytestmark = pytest.mark.e2e
 
@@ -38,12 +40,16 @@ def _folder_with_copies(va: Session, app_dir: Path, jobs_idle, count: int) -> in
     jobs_idle()
     phone = devices.add_device(
         DeviceFields(
-            label="Vee 01", model_id="iphone-13", color_id="blue", owner="Vee"
+            label="Vee 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Vee",
         ),
         user_id=VA_ID,
     )
     added = devices.add_login(
-        phone, LoginFields(service="instagram", username="vee.ig")
+        phone,
+        LoginFields(service="instagram", username="vee.ig"),
     )
     assert added is not None
     login = added.id
@@ -66,16 +72,20 @@ def _folder_with_copies(va: Session, app_dir: Path, jobs_idle, count: int) -> in
                 status="generated",
                 caption=f"caption {i}",
                 made=1,
-            )
+            ),
         )
     (work / "state.json").write_text(
-        FolderState(login_id=login, reels=reels).model_dump_json(), encoding="utf-8"
+        FolderState(login_id=login, reels=reels).model_dump_json(),
+        encoding="utf-8",
     )
     return login
 
 
 def test_selected_copies_upload_without_a_reload(
-    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    app_dir: Path,
+    jobs_idle,
 ):
     login = _folder_with_copies(va, app_dir, jobs_idle, 3)
     va.goto(f"/trials/{login}")
@@ -94,7 +104,8 @@ def test_selected_copies_upload_without_a_reload(
 
     for key in ("key0", "key1"):
         expect(page.locator(f'.tr-reel[data-key="{key}"]')).to_contain_text(
-            "In Drive · VID_", timeout=30_000
+            "In Drive · VID_",
+            timeout=30_000,
         )
     expect(page.locator('.tr-reel[data-key="key2"] .tr-pick')).to_contain_text("Select")
     assert page.evaluate("window.notReloaded") is True
@@ -110,7 +121,10 @@ def test_selected_copies_upload_without_a_reload(
 
 
 def test_upload_cancelled_uploads_nothing_and_a_new_batch_replaces_the_old(
-    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    app_dir: Path,
+    jobs_idle,
 ):
     login = _folder_with_copies(va, app_dir, jobs_idle, 2)
     va.goto(f"/trials/{login}")
@@ -153,7 +167,10 @@ def test_upload_cancelled_uploads_nothing_and_a_new_batch_replaces_the_old(
 
 
 def test_generate_reads_posted_and_a_new_copy_lands_first_without_a_reload(
-    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    app_dir: Path,
+    jobs_idle,
 ):
     login = _folder_with_copies(va, app_dir, jobs_idle, 1)
     (account,) = fake_drive.named("vee.ig - Vee", my_root(fake_drive, GOOGLE))
@@ -196,7 +213,10 @@ def test_generate_reads_posted_and_a_new_copy_lands_first_without_a_reload(
 
 
 def test_choosing_a_caption_shows_on_its_card_at_once(
-    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    app_dir: Path,
+    jobs_idle,
 ):
     login = _folder_with_copies(va, app_dir, jobs_idle, 1)
     work = app_dir / "uploads" / "trials" / str(VA_ID) / str(login)
@@ -219,7 +239,11 @@ def test_choosing_a_caption_shows_on_its_card_at_once(
 
 
 def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
-    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle, e2e_backend
+    va: Session,
+    fake_drive: FakeDrive,
+    app_dir: Path,
+    jobs_idle,
+    e2e_backend,
 ):
     login = _folder_with_copies(va, app_dir, jobs_idle, 1)
     va.goto(f"/trials/{login}")
@@ -227,8 +251,9 @@ def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
     button = card.locator("form[action$='/regenerate'] button")
 
     va.page.evaluate(
-        "() => { const b = document.querySelector(\"form[action$='/regenerate'] button\");"
-        " for (let i = 0; i < 10; i++) b.click(); }"
+        "() => { const b = "
+        "document.querySelector(\"form[action$='/regenerate'] button\");"
+        " for (let i = 0; i < 10; i++) b.click(); }",
     )
 
     expect(card.locator(".tr-pending")).to_be_visible()
@@ -236,7 +261,7 @@ def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
     jobs_idle()
     with create_engine(e2e_backend.database_url).begin() as conn:
         started = conn.execute(
-            text("SELECT count(*) FROM jobs WHERE task = 'trials'")
+            text("SELECT count(*) FROM jobs WHERE task = 'trials'"),
         ).scalar_one()
     assert started == 1
     expect(card.locator(".tr-video")).to_be_visible(timeout=15_000)
@@ -244,7 +269,10 @@ def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
 
 
 def test_a_copy_made_while_the_page_is_open_moves_to_the_top(
-    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    app_dir: Path,
+    jobs_idle,
 ):
     login = _folder_with_copies(va, app_dir, jobs_idle, 3)
     va.goto(f"/trials/{login}")

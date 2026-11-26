@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from http import HTTPStatus
 from typing import Any
@@ -48,7 +50,10 @@ class FanvueClient:
         while True:
             page = _parsed(
                 CreatorsPage,
-                self._get("creators", size=settings.fanvue.page_size, cursor=cursor),
+                self._get(
+                    "creators",
+                    {"size": settings.fanvue.page_size, "cursor": cursor},
+                ),
             )
             yield from page.data
             if not page.next_cursor:
@@ -61,7 +66,7 @@ class FanvueClient:
         while True:
             page = _parsed(
                 ChatsPage,
-                self._get(path, size=settings.fanvue.page_size, cursor=cursor),
+                self._get(path, {"size": settings.fanvue.page_size, "cursor": cursor}),
             )
             for raw in page.data:
                 chat = _chat(raw)
@@ -82,10 +87,12 @@ class FanvueClient:
             MessagesPage,
             self._get(
                 f"{prefix}/{fan_uuid}/messages",
-                limit=settings.fanvue.page_size,
-                markAsRead="false",
-                sentBefore=before.sent_before if before else None,
-                receivedBefore=before.received_before if before else None,
+                {
+                    "limit": settings.fanvue.page_size,
+                    "markAsRead": "false",
+                    "sentBefore": before.sent_before if before else None,
+                    "receivedBefore": before.received_before if before else None,
+                },
             ),
         )
 
@@ -96,21 +103,28 @@ class FanvueClient:
         return _parsed(
             CreatedSubscriptionReply,
             self._change(
-                "POST", "webhooks/subscriptions", json={"url": url, "events": events}
+                "POST",
+                "webhooks/subscriptions",
+                json={"url": url, "events": events},
             ),
         )
 
     def unsubscribe(self, subscription_id: str) -> None:
         self._change("DELETE", f"webhooks/subscriptions/{subscription_id}")
 
-    def _change(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+    def _change(
+        self,
+        method: str,
+        path: str,
+        json: dict[str, Any] | None = None,
+    ) -> requests.Response:
         try:
             r = self._session.request(
                 method,
                 f"{settings.fanvue.api_url}/{path}",
                 headers=self._auth().model_dump(by_alias=True),
                 timeout=settings.fanvue.timeout_s,
-                **kwargs,
+                json=json,
             )
         except requests.RequestException as exc:
             msg = "Fanvue is not answering"
@@ -120,20 +134,31 @@ class FanvueClient:
     def _auth(self) -> BearerHeader:
         return BearerHeader(authorization=f"Bearer {self._token()}")
 
-    def _get(self, path: str, **params: Any) -> requests.Response:
+    def _get(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        params = params or {}
         for attempt in range(1, settings.fanvue.tries):
             try:
                 r = self._request(path, params)
             except requests.RequestException:
                 logger.warning(
-                    "fanvue GET %s try %d failed", path, attempt, exc_info=True
+                    "fanvue GET %s try %d failed",
+                    path,
+                    attempt,
+                    exc_info=True,
                 )
                 time.sleep(settings.fanvue.retry_wait_s)
                 continue
             if not _retried(r):
                 return _ok(r)
             logger.warning(
-                "fanvue GET %s try %d answered %s", path, attempt, r.status_code
+                "fanvue GET %s try %d answered %s",
+                path,
+                attempt,
+                r.status_code,
             )
             time.sleep(_retry_wait(r))
         try:
@@ -161,7 +186,10 @@ def _parsed[T: BaseModel](model: type[T], reply: requests.Response) -> T:
     try:
         return model.model_validate(body)
     except ValidationError as exc:
-        msg = f"Fanvue answered an unexpected {model.__name__}: {exc.error_count()} fields"
+        msg = (
+            f"Fanvue answered an unexpected "
+            f"{model.__name__}: {exc.error_count()} fields"
+        )
         raise FanvueError(msg) from None
 
 

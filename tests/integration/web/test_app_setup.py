@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from html.parser import HTMLParser
 
@@ -7,6 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from signin import sign_in_agency
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.routing import Mount, Route, WebSocketRoute
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.exceptions import MESSAGE
@@ -24,7 +27,11 @@ DOCS = {"/docs", "/redoc", "/openapi.json"}
 
 
 def _paths() -> set[str]:
-    return {getattr(route, "path", "") for route in create_app().routes}
+    return {
+        route.path
+        for route in create_app().routes
+        if isinstance(route, Route | WebSocketRoute | Mount)
+    }
 
 
 def test_development_serves_the_docs():
@@ -170,7 +177,7 @@ def test_the_script_check_reads_tags_and_attributes_in_any_spelling():
         '<script src = "/x.js"></script>'
         "<script type='application/json'>{}</script>"
         '<img src="x" onerror = "d()">'
-        '<script nonce="first" nonce="second">e()</script>'
+        '<script nonce="first" nonce="second">e()</script>',
     )
 
     assert found.inline_nonces == [None, "n", None, "first"]

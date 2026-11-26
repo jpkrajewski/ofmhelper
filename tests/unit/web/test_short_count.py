@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.web.templates_config import get_templates
@@ -23,6 +25,6 @@ from ofmhelpers.web.templates_config import get_templates
 )
 def test_a_count_is_shortened_without_a_wrong_unit(n, shown):
     template = get_templates().env.from_string(
-        '{% import "_reel_counts.html" as rc %}{{ rc.short_count(n) }}'
+        '{% import "_reel_counts.html" as rc %}{{ rc.short_count(n) }}',
     )
     assert template.render(n=n).strip() == shown

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import socket
 import ssl
 from urllib.parse import urlsplit

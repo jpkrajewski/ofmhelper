@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import time
 from typing import Literal
@@ -181,7 +183,11 @@ class BridgeMiddleware:
 
     async def _not_found(self, request: Request) -> Response:
         response = await run_in_threadpool(
-            render, request, "bridge.html", status_code=404, destination=None
+            render,
+            request,
+            "bridge.html",
+            {"destination": None},
+            404,
         )
         response.headers.update(_HEADERS)
         return response
@@ -197,9 +203,11 @@ class BridgeMiddleware:
             render,
             request,
             "bridge.html",
-            destination=link.destination,
-            slug=slug,
-            blocked=bool(_FB_APP.search(ua)),
+            {
+                "destination": link.destination,
+                "slug": slug,
+                "blocked": bool(_FB_APP.search(ua)),
+            },
         )
         response.headers.update(_HEADERS)
         return response

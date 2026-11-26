@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -18,7 +20,7 @@ PICKED = json.dumps(
     [
         {"code": "A1", "video_url": CDN.format("a")},
         {"code": "B2", "video_url": CDN.format("b")},
-    ]
+    ],
 )
 
 
@@ -45,7 +47,9 @@ def uploads(tmp_path, monkeypatch) -> Path:
     )
     profiles = [WatchedProfile(user_id=1, username="u", added_at=0, result=found)]
     monkeypatch.setattr(
-        reels, "list_watched", lambda _group=None, _owner=None: profiles
+        reels,
+        "list_watched",
+        lambda _group=None, _owner=None: profiles,
     )
     return root
 
@@ -101,7 +105,7 @@ def test_a_failed_download_leaves_no_folder(client, uploads, monkeypatch, url):
 
     assert r.status_code == 502
     assert r.json() == {
-        "detail": "Could not download a reel — rescan the profile and retry"
+        "detail": "Could not download a reel — rescan the profile and retry",
     }
     assert _job_folders(uploads) == []
 

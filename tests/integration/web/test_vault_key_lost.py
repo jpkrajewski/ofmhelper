@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
@@ -5,7 +7,7 @@ from signin import sign_in_admin
 
 from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.devices import store
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.web.main import app
@@ -38,7 +40,10 @@ PAGES = [
     "/action-log",
 ]
 
-COOKIES = b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc\n"
+COOKIES = (
+    b"# Netscape HTTP Cookie "
+    b"File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc\n"
+)
 
 
 @pytest.fixture

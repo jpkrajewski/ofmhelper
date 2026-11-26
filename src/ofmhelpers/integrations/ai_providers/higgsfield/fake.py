@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import threading
 from functools import lru_cache
+from typing import Any
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
@@ -20,7 +23,7 @@ _DENIED = {"detail": "Invalid credentials"}
 class FakeHiggsfield:
     def __init__(self, polls_until_done: int = 2) -> None:
         self.polls_until_done = polls_until_done
-        self.requests: dict[str, dict] = {}
+        self.requests: dict[str, dict[str, Any]] = {}
         self.submitted: list[str] = []
         self.keys: dict[str, str] = {}
         self.lose_next = False
@@ -81,7 +84,8 @@ class FakeHiggsfield:
             done = found["polls"] > self.polls_until_done
         if not done:
             return httpx.Response(
-                200, json={"status": "queued", "request_id": request_id}
+                200,
+                json={"status": "queued", "request_id": request_id},
             )
         video = "video" in found["model"]
         output = (
@@ -90,7 +94,8 @@ class FakeHiggsfield:
             else {"images": [{"url": f"https://{FILES_HOST}/results/{request_id}.png"}]}
         )
         return httpx.Response(
-            200, json={"status": "completed", "request_id": request_id, **output}
+            200,
+            json={"status": "completed", "request_id": request_id, **output},
         )
 
     def transport(self) -> httpx.MockTransport:
@@ -104,7 +109,7 @@ def fake_higgsfield() -> FakeHiggsfield:
 
 def install(client: SyncClient) -> None:
     transport = fake_higgsfield().transport()
-    client.__dict__["_client"] = httpx.Client(
+    client._client = httpx.Client(  # noqa: SLF001
         transport=transport,
         base_url=client.base_url,
         timeout=client.timeout,
@@ -113,8 +118,9 @@ def install(client: SyncClient) -> None:
             "Content-Type": "application/json",
         },
     )
-    client.__dict__["_upload_client"] = httpx.Client(
-        transport=transport, timeout=client.timeout
+    client._upload_client = httpx.Client(  # noqa: SLF001
+        transport=transport,
+        timeout=client.timeout,
     )
 
 
@@ -123,7 +129,8 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
     if path.endswith(".mp4"):
         return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
     return FakeReply(
-        body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+        body=fake_media.image(fmt="PNG"),
+        headers={"Content-Type": "image/png"},
     )
 
 

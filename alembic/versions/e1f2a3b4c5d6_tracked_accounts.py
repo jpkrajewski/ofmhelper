@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -37,11 +39,15 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["creator_id"], ["creators.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "platform", "handle", name="uq_tracked_accounts_platform_handle"
+            "platform",
+            "handle",
+            name="uq_tracked_accounts_platform_handle",
         ),
     )
     op.create_index(
-        "ix_tracked_accounts_creator_id", "tracked_accounts", ["creator_id"]
+        "ix_tracked_accounts_creator_id",
+        "tracked_accounts",
+        ["creator_id"],
     )
     op.create_table(
         "account_snapshots",
@@ -51,7 +57,9 @@ def upgrade() -> None:
         sa.Column("followers", sa.BigInteger(), nullable=False),
         sa.Column("metrics", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["tracked_accounts.id"], ondelete="CASCADE"
+            ["account_id"],
+            ["tracked_accounts.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -64,7 +72,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(
-        "ix_account_snapshots_account_id_taken_at", table_name="account_snapshots"
+        "ix_account_snapshots_account_id_taken_at",
+        table_name="account_snapshots",
     )
     op.drop_table("account_snapshots")
     op.drop_index("ix_tracked_accounts_creator_id", table_name="tracked_accounts")

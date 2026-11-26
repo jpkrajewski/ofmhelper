@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import partial
 from typing import NamedTuple, Protocol
 lazy from collections.abc import Iterator, Mapping
@@ -61,7 +63,7 @@ class FanvueSource:
                 unread = True
                 continue
             client = FanvueClient(
-                partial(self._tokens.access_token, account.account_id)
+                partial(self._tokens.access_token, account.account_id),
             )
             if not account.is_agency:
                 found[account.account_id] = ChatModel(
@@ -85,11 +87,15 @@ class FanvueSource:
             except FanvueRefusedError:
                 unread = True
                 logger.warning(
-                    "fanvue agency %s refused", account.username, exc_info=True
+                    "fanvue agency %s refused",
+                    account.username,
+                    exc_info=True,
                 )
             except FanvueError:
                 logger.warning(
-                    "fanvue agency %s not read", account.username, exc_info=True
+                    "fanvue agency %s not read",
+                    account.username,
+                    exc_info=True,
                 )
                 failed = True
         return ChatModels(found=list(found.values()), failed=failed, unread=unread)
@@ -124,7 +130,10 @@ class FanvueSource:
 
 
 def _new_messages(
-    model: ChatModel, fan_uuid: str, seen: str | None, oldest: datetime
+    model: ChatModel,
+    fan_uuid: str,
+    seen: str | None,
+    oldest: datetime,
 ) -> list[FanvueMessage]:
     handle: _Handle = model.client
     found: list[FanvueMessage] = []
@@ -189,7 +198,10 @@ def _new_reads(model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
         if last.type not in _MASS_TYPES or channel in scope.open_channels:
             try:
                 messages = _new_messages(
-                    model, chat.user.uuid, scope.seen.get(channel), scope.oldest
+                    model,
+                    chat.user.uuid,
+                    scope.seen.get(channel),
+                    scope.oldest,
                 )
             except FanvueRefusedError:
                 logger.warning("fanvue chat %s cannot be read", channel, exc_info=True)

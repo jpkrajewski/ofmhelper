@@ -45,6 +45,45 @@
             });
     }
 
+    const SYNC_POLL_MS = 3000;
+    const SYNC_POLL_MAX_MS = 30000;
+    const SYNC_FOLLOW_LIMIT_MS = 600000;
+    const syncFollowStart = Date.now();
+
+    function followSync(wait) {
+        const notice = board?.querySelector("[data-sync-poll]");
+        if (!notice) return;
+        if (document.hidden) {
+            document.addEventListener("visibilitychange", () => followSync(wait), { once: true });
+            return;
+        }
+        if (Date.now() - syncFollowStart > SYNC_FOLLOW_LIMIT_MS) {
+            notice.textContent = "Setting up your folders is taking long. Reload the page to check again.";
+            return;
+        }
+        const again = () => setTimeout(() => followSync(Math.min(wait * 1.5, SYNC_POLL_MAX_MS)), wait);
+        fetch(notice.dataset.syncPoll)
+            .then((response) => (response.ok ? response.json().catch(() => null) : null))
+            .then((job) => {
+                if (!job) {
+                    again();
+                    return;
+                }
+                if (job.status === "done") {
+                    window.location.reload();
+                    return;
+                }
+                if (job.status === "failed") {
+                    notice.textContent = job.error || "Setting up your folders failed";
+                    return;
+                }
+                again();
+            })
+            .catch(again);
+    }
+
+    followSync(SYNC_POLL_MS);
+
     function summary(report) {
         if (report.busy) return "A sync is already running";
         const parts = [];
@@ -70,6 +109,7 @@
                 if (!response.ok) {
                     throw new Error(data?.detail || `Sync failed (${response.status})`);
                 }
+                if (!data || !Array.isArray(data.failed)) throw new Error("Something went wrong. Try again.");
                 if (data.failed.length) {
                     setStatus(`${summary(data)}. Failed: ${data.failed.join("; ")}`, true);
                     syncBtn.disabled = false;

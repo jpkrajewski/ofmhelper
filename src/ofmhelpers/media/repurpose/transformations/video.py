@@ -1,28 +1,39 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 from typing import Annotated, Self
 lazy import random
 lazy from pathlib import Path
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from ofmhelpers.media.repurpose.extras.snapchat import render as render_snapchat
 from ofmhelpers.media.repurpose.transformations.adjust import (
     AdjustDraws,
     AdjustSettings,
 )
-from ofmhelpers.media.repurpose.transformations.handheld import _WARP_EPS, Handheld
+from ofmhelpers.media.repurpose.transformations.constants import (
+    AdjustConstants,
+    VideoConstants,
+)
+from ofmhelpers.media.repurpose.transformations.handheld import Handheld
 from ofmhelpers.media.repurpose.transformations.patterns import Pattern
 from ofmhelpers.media.repurpose.transformations.patterns import write as write_pattern
-from ofmhelpers.media.repurpose.values import Value, chance, draw, draw_int, even, pick
+from ofmhelpers.media.repurpose.values import (
+    Knobs,
+    Value,
+    chance,
+    draw,
+    draw_int,
+    even,
+    pick,
+)
 from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.repurpose.probe import Source
 
-_MIN_KEPT_SHARE = 0.5
-_RIGHT_ANGLE = 1.5708
-_NOISE_MIN = 0.05
 
-
-class VideoSettings(BaseModel, frozen=True):
+class VideoSettings(Knobs, frozen=True):
+    constants: VideoConstants = Field(default=VideoConstants(), exclude=True)
     trim_head_s: Value | None = None
     trim_tail_s: Value | None = None
     cut_head: Value | None = None
@@ -134,7 +145,7 @@ def _cuts(s: VideoSettings, src: Source, rng: random.Random) -> _Cuts:
     tail = (draw(s.trim_tail_s, rng) or 0.0) + (
         draw(s.cut_tail, rng) or 0.0
     ) * src.duration
-    limit = src.duration * (1 - _MIN_KEPT_SHARE)
+    limit = src.duration * (1 - s.constants.min_kept_share)
     if head + tail > limit:
         scale = limit / (head + tail)
         head, tail = head * scale, tail * scale
@@ -152,7 +163,10 @@ def _timeline(s: VideoSettings, src: Source, rng: random.Random) -> Timeline:
 
 
 def _handheld(
-    s: VideoSettings, src: Source, seconds: float, rng: random.Random
+    s: VideoSettings,
+    src: Source,
+    seconds: float,
+    rng: random.Random,
 ) -> Handheld:
     if not any((s.tilt, s.perspective, s.shake, s.drift)):
         return Handheld()
@@ -165,6 +179,7 @@ def _handheld(
         drift=s.drift,
         seconds=seconds,
         aspect=src.aspect,
+        constants=s.constants.handheld,
     )
 
 
@@ -200,22 +215,25 @@ def _rotate(s: VideoSettings, rng: random.Random) -> float | None:
     return angle * _sign(rng)
 
 
-def _rotate_cover(rotate: float | None, aspect: float) -> float | None:
-    if rotate is None or abs(rotate) < _WARP_EPS:
+def _rotate_cover(rotate: float | None, aspect: float, eps: float) -> float | None:
+    if rotate is None or abs(rotate) < eps:
         return None
     a = math.radians(abs(rotate))
     return math.cos(a) + aspect * math.sin(a) + 0.01
 
 
 def _draw(
-    s: VideoSettings, src: Source, size: tuple[int, int], rng: random.Random
+    s: VideoSettings,
+    src: Source,
+    size: tuple[int, int],
+    rng: random.Random,
 ) -> VideoDraws:
     timeline = _timeline(s, src, rng)
     tone_mid, tone_shoulder = draw_int(s.tone_mid, rng), draw_int(s.tone_shoulder, rng)
     rotate = _rotate(s, rng)
     output_size = _sized(size, draw(s.size, rng))
     mirror = chance(s.mirror, rng)
-    rotate_cover = _rotate_cover(rotate, src.aspect)
+    rotate_cover = _rotate_cover(rotate, src.aspect, s.constants.handheld.warp_eps)
     zoom = draw(s.zoom, rng)
     shift_y = draw(s.shift_y, rng)
     corner = (rng.randrange(2), rng.randrange(2)) if s.corner_zoom is not None else None
@@ -302,6 +320,11 @@ class VideoTransformer:
         return self.draws.timeline
 
     @property
+    def _adjusting(self) -> AdjustConstants:
+        adjust = self.settings.adjust
+        return adjust.constants if adjust else AdjustConstants()
+
+    @property
     def output_size(self) -> Size:
         width, height = self.draws.output_size
         return Size(width=width, height=height)
@@ -316,7 +339,10 @@ class VideoTransformer:
         )
 
     def filters(
-        self, work_dir: Path, scaler: str = "bicubic", caption_input: int | None = None
+        self,
+        work_dir: Path,
+        scaler: str = "bicubic",
+        caption_input: int | None = None,
     ) -> str:
         d = self.draws
         w, h = d.output_size
@@ -324,7 +350,7 @@ class VideoTransformer:
             "setpts=PTS-STARTPTS",
             *self._framing(),
             *self._rotation(),
-            *d.handheld.filters(),
+            *d.handheld.filters(self.settings.constants.handheld),
             *self._colour(),
             *self._late(),
             *self._texture(),
@@ -349,7 +375,7 @@ class VideoTransformer:
             down = d.shift_y or 0.0
             chain.append(
                 f"crop=trunc(iw/{d.zoom:.4f}/2)*2:trunc(ih/{d.zoom:.4f}/2)*2"
-                f":(iw-ow)/2:max(0\\,min(ih-oh\\,(ih-oh)/2-ih*{down:.4f}))"
+                f":(iw-ow)/2:max(0\\,min(ih-oh\\,(ih-oh)/2-ih*{down:.4f}))",
             )
         if d.corner and d.corner_zoom and d.corner_zoom > 1:
             x = "iw-ow" if d.corner[0] else "0"
@@ -395,7 +421,7 @@ class VideoTransformer:
         if d.tint:
             chain.append(f"colorbalance=rs={d.tint:.4f}:bs={-d.tint:.4f}")
         if d.adjust:
-            chain += d.adjust.colour()
+            chain += d.adjust.colour(self._adjusting)
         if d.sharpen:
             chain.append(f"unsharp=5:5:{d.sharpen:.3f}:5:5:0.0")
         if d.black_and_white:
@@ -406,9 +432,10 @@ class VideoTransformer:
         d = self.draws
         chain = []
         if d.vignette:
-            chain.append(f"vignette=a={d.vignette * _RIGHT_ANGLE:.4f}")
+            angle = d.vignette * self.settings.constants.right_angle
+            chain.append(f"vignette=a={angle:.4f}")
         if d.adjust:
-            chain += d.adjust.vignette_filters()
+            chain += d.adjust.vignette_filters(self._adjusting)
         if d.chroma:
             cb, cv = d.chroma
             chain.append(f"chromashift=cbh={cb}:crh={-cb}:cbv={cv}")
@@ -419,15 +446,15 @@ class VideoTransformer:
     def _texture(self) -> list[str]:
         d = self.draws
         chain = []
-        if d.noise and d.noise >= _NOISE_MIN:
+        if d.noise and d.noise >= self.settings.constants.noise_min:
             chain.append(
                 f"noise=alls={d.noise:.2f}:allf={self.settings.noise_flags}"
-                f":all_seed={d.noise_seed}"
+                f":all_seed={d.noise_seed}",
             )
         if d.exposure:
             chain.append(f"exposure=exposure={d.exposure:.4f}")
         if d.adjust:
-            chain += d.adjust.exposure_filters()
+            chain += d.adjust.exposure_filters(self._adjusting)
         return chain
 
     def _output_stage(self) -> list[str]:
@@ -436,11 +463,12 @@ class VideoTransformer:
         if d.sharpen_late:
             chain.append(f"unsharp=5:5:{d.sharpen_late:.4f}")
         if d.adjust:
-            chain += d.adjust.output_filters(seed=(d.noise_seed + 1) % (1 << 31))
-        if d.particles and d.particles >= _NOISE_MIN:
+            seed = (d.noise_seed + 1) % (1 << 31)
+            chain += d.adjust.output_filters(seed, self._adjusting)
+        if d.particles and d.particles >= self.settings.constants.noise_min:
             seed = (d.noise_seed + 2) % (1 << 31)
             chain.append(
-                f"format=yuv420p,noise=alls={d.particles:.2f}:allf=t:all_seed={seed}"
+                f"format=yuv420p,noise=alls={d.particles:.2f}:allf=t:all_seed={seed}",
             )
         return chain
 
@@ -449,7 +477,11 @@ class VideoTransformer:
         if not d.pattern or not d.pattern_opacity or d.look not in ("pattern", "any"):
             return None
         image = write_pattern(
-            Pattern(d.pattern), d.output_size, d.pattern_seed, work_dir / "pattern.png"
+            Pattern(d.pattern),
+            d.output_size,
+            d.pattern_seed,
+            work_dir / "pattern.png",
+            self.settings.constants.patterns,
         )
         return (
             f"[ov0];movie={_graph_path(image)},format=rgba,"

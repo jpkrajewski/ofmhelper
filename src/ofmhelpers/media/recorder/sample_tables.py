@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import struct
 
 from pydantic import BaseModel
@@ -56,7 +58,12 @@ def cslg(tables: SampleTables) -> Atom:
         decode += duration
     least, greatest = min(tables.offsets), max(tables.offsets)
     payload = bytes(4) + struct.pack(
-        ">iiiii", max(0, -least), least, greatest, min(starts), max(ends)
+        ">iiiii",
+        max(0, -least),
+        least,
+        greatest,
+        min(starts),
+        max(ends),
     )
     return Atom(type=b"cslg", payload=payload)
 
@@ -79,7 +86,8 @@ def sync_sample_to_group(tables: SampleTables) -> Atom:
             runs.append([1, group])
     body = b"".join(struct.pack(">II", count, group) for count, group in runs)
     return Atom(
-        type=b"sbgp", payload=bytes(4) + _SYNC + struct.pack(">I", len(runs)) + body
+        type=b"sbgp",
+        payload=bytes(4) + _SYNC + struct.pack(">I", len(runs)) + body,
     )
 
 

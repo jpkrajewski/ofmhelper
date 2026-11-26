@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.clone_long.models import (
     LongCloneParams,
     Piece,

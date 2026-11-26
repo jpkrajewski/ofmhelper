@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import UTC, datetime
 
@@ -40,7 +42,9 @@ def slow_hours(monkeypatch):
 
 @pytest.mark.parametrize("page", ["/clone", "/clone-long", "/generate"])
 def test_in_its_slow_hours_apiyi_carries_a_warning_on_the_select(
-    client, slow_hours, page
+    client,
+    slow_hours,
+    page,
 ):
     html = client.get(page).text
 
@@ -53,7 +57,7 @@ def test_in_its_slow_hours_apiyi_carries_a_warning_on_the_select(
 
 
 PICTURES_PARKED = pytest.mark.skip(
-    reason="/pictures is retired: auth/access.py RETIRED"
+    reason="/pictures is retired: auth/access.py RETIRED",
 )
 
 

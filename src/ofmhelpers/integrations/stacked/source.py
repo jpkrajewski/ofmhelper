@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Protocol
 lazy from collections.abc import Iterator, Mapping
 

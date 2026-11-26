@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -47,7 +49,10 @@ def tracked_handle(service: str, username: str) -> TrackedHandle | None:
         )
     except KeyError, ValueError:
         logger.warning(
-            "%s login %r is not a trackable handle", service, username, exc_info=True
+            "%s login %r is not a trackable handle",
+            service,
+            username,
+            exc_info=True,
         )
         return None
 
@@ -56,7 +61,10 @@ def track_login(service: str, username: str, *, user_id: int, revive: bool) -> b
     try:
         key = tracked_handle(service, username)
         if key is None or not track(
-            key.platform, key.handle, user_id=user_id, revive=revive
+            key.platform,
+            key.handle,
+            user_id=user_id,
+            revive=revive,
         ):
             return False
         queue_due_scans()
@@ -77,13 +85,15 @@ def _targets(accounts: list[TrackedAccount]) -> list[ScanTarget]:
                 key=str(account.id),
                 handle=account.handle,
                 cookies=owners[account.user_id],
-            )
+            ),
         )
     return targets
 
 
 def _save(
-    account_id: int, stats: AccountStats | None, error: str | None = None
+    account_id: int,
+    stats: AccountStats | None,
+    error: str | None = None,
 ) -> None:
     try:
         record_scan(account_id, stats, error)
@@ -144,7 +154,7 @@ def queue_due_scans() -> list[int]:
     if due:
         logger.info("rescanning %d tracked account(s)", len(due))
         for start, batch in enumerate(_batches(due)):
-            enqueue(scan_accounts, batch.platform, batch.ids, start)
+            enqueue(scan_accounts, (batch.platform, batch.ids, start))
     return due
 
 

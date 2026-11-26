@@ -1,9 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import BaseModel
-lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.account.keys import Keys
@@ -20,12 +21,13 @@ from ofmhelpers.features.clone_long.service import (
 from ofmhelpers.features.clone_long.video import VideoTools
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
+from ofmhelpers.features.jobs.models import TaskCard
 from ofmhelpers.features.jobs.runner import start_job
-from ofmhelpers.features.jobs.schema import TaskCard
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import ImageUpload, VideoUpload
 
 TASK = "clone_long"
 LABEL = "Clone long"
@@ -70,9 +72,7 @@ def card(job: Job) -> TaskCard:
         job,
         found.assets,
         found.failed_sources,
-        task_label=label,
-        poll_prefix=PREFIX,
-        result_kind="video",
+        {"task_label": label, "poll_prefix": PREFIX, "result_kind": "video"},
     )
 
 
@@ -85,9 +85,9 @@ class Submitted(Protocol):
     api_key: str
     prompt: str
     resolution: str
-    image: list[UploadFile]
+    image: list[ImageUpload]
     image_manifest: str
-    video: list[UploadFile]
+    video: list[VideoUpload]
     video_manifest: str
 
 
@@ -96,8 +96,8 @@ class Measured(BaseModel):
     shape: Shape
 
 
-def _one(paths: list[str], kind: str, label: str) -> str:
-    if len(paths) != 1 or classify_kind(paths[0]) != kind:
+def _one(paths: list[str], kind: FileKind, label: str) -> str:
+    if len(paths) != 1 or FileKind.from_ext(paths[0]) != kind:
         msg = f"Pick one {label}"
         raise RefusedError(msg)
     return paths[0]
@@ -107,7 +107,8 @@ def _measure(path: str) -> Measured:
     tools = VideoTools(settings.web.ffmpeg_timeout_s)
     try:
         found = Measured(
-            seconds=tools.length(Path(path)), shape=tools.shape(Path(path))
+            seconds=tools.length(Path(path)),
+            shape=tools.shape(Path(path)),
         )
     except (
         OSError,
@@ -130,7 +131,9 @@ def _require_choices(form: Submitted, owner_id: int) -> str:
         msg = "That provider cannot clone"
         raise RefusedError(msg)
     api_key = Keys.of(owner_id).for_run(
-        form.provider, TARGETS[form.provider].model, form.api_key
+        form.provider,
+        TARGETS[form.provider].model,
+        form.api_key,
     )
     if not api_key:
         msg = "API key is required"
@@ -145,16 +148,22 @@ def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
     api_key = _require_choices(form, owner_id)
     image = _one(
         build_ordered_paths(
-            form.image_manifest, form.image, assets_root, user_id=owner_id
+            form.image_manifest,
+            form.image,
+            assets_root,
+            user_id=owner_id,
         ),
-        "image",
+        FileKind.IMAGE,
         "subject image",
     )
     video = _one(
         build_ordered_paths(
-            form.video_manifest, form.video, assets_root, user_id=owner_id
+            form.video_manifest,
+            form.video,
+            assets_root,
+            user_id=owner_id,
         ),
-        "video",
+        FileKind.VIDEO,
         "video",
     )
     measured = _measure(video)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 lazy from pathlib import Path
 
@@ -66,7 +68,11 @@ def poster(copy: Path, *, again: bool = False) -> Path:
     if again or not _fresh(dest, copy):
         middle = duration_s(copy, settings.web.ffmpeg_timeout_s) / 2
         write_video_thumb(
-            copy, dest, settings.web.poster_size, pre_filter=_to_sdr(), at_s=middle
+            copy,
+            dest,
+            settings.web.poster_size,
+            pre_filter=_to_sdr(),
+            at_s=middle,
         )
     return dest
 

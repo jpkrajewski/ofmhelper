@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 from pathlib import Path
 lazy from collections.abc import Callable
@@ -9,8 +11,9 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.base import upload_lock
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.image_fit import FITTABLE_SUFFIXES, ImageLimits, fitted
+from ofmhelpers.media.image_fit import FITTABLE_SUFFIXES, fitted
 from ofmhelpers.media.video_mp4 import CONVERTIBLE_SUFFIXES, as_mp4
+lazy from ofmhelpers.config.types import ImageLimits
 
 logger = get_logger(__name__)
 
@@ -19,7 +22,10 @@ COPYABLE_SUFFIXES = CONVERTIBLE_SUFFIXES | FITTABLE_SUFFIXES
 
 
 def upload_cache_key(
-    prefix: str, api_key: str, path: Path | str, max_bytes: int | None = None
+    prefix: str,
+    api_key: str,
+    path: Path | str,
+    max_bytes: int | None = None,
 ) -> str:
     account = hashlib.sha256(api_key.encode()).hexdigest()[:16]
     key = f"{prefix}:upload:{account}:{path}"

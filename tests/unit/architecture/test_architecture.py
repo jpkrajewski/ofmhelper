@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import re
 import sys
@@ -29,7 +31,7 @@ MAX_ROUTE_LINES = 25
 QUEUE_MACHINERY = ("features/jobs/", "features/events/")
 LOOSE = re.compile(r"\b(dict|tuple|Dict|Tuple|Mapping|MutableMapping|NamedTuple)\b")
 DICTS = re.compile(r"\b(dict|Dict|Mapping|MutableMapping)\b")
-SHAPES = re.compile(r"ofmhelpers\.db\.(\w+\.)+schema$")
+SHAPES = re.compile(r"ofmhelpers\.db\.(\w+\.)+(schema|models)$")
 SERVES_A_MAPPING = {
     "__getitem__",
     "__contains__",
@@ -79,6 +81,11 @@ class Baseline(BaseModel):
     loose_returns: set[str]
     repeated_parameters: set[str]
     silent_excepts: set[str]
+    root_imports: set[str]
+
+
+ROOT_MODULES = {"schema.py", "constants.py"}
+ROOT_IMPORTS = "constants and schemas must import nothing from the project"
 
 
 @cache
@@ -145,7 +152,7 @@ def imported_from(name: str, node: ast.ImportFrom) -> str:
 
 
 @cache
-def scope(name: str) -> Scope:
+def scope(name: str) -> Scope:  # noqa: C901, PLR0912
     found = Scope()
     for node in trees()[name].body:
         match node:
@@ -191,7 +198,9 @@ def loose_name(alias: str, name: str, seen: frozenset[tuple[str, str]]) -> bool:
 
 
 def loose(
-    annotation: ast.expr, name: str, seen: frozenset[tuple[str, str]] = frozenset()
+    annotation: ast.expr,
+    name: str,
+    seen: frozenset[tuple[str, str]] = frozenset(),
 ) -> bool:
     if LOOSE.search(ast.unparse(annotation)):
         return True
@@ -220,7 +229,8 @@ def queued_function(call: ast.Call) -> ast.expr | None:
         case ast.Name(id="enqueue_to") if len(call.args) > 1:
             return call.args[1]
         case ast.Attribute(
-            attr="put", value=ast.Call(func=ast.Name(id="JobQueue"))
+            attr="put",
+            value=ast.Call(func=ast.Name(id="JobQueue")),
         ) if call.args:
             return call.args[0]
     return None
@@ -331,14 +341,14 @@ def test_the_web_rule_lets_shapes_through_and_nothing_else():
             from ofmhelpers.db.devices.catalog.schema import Catalog
             from ofmhelpers.db.users import store
             from ofmhelpers.db.session import session_scope
-            from ofmhelpers.integrations.gdrive import connect_as
-        """)
+            from ofmhelpers.integrations.storage.gdrive import connect_as
+        """),
     )
 
     assert reaches_past_features(tree) == {
         "ofmhelpers.db.users",
         "ofmhelpers.db.session",
-        "ofmhelpers.integrations.gdrive",
+        "ofmhelpers.integrations.storage.gdrive",
     }
 
 
@@ -458,7 +468,7 @@ def test_the_return_rule_reads_every_function(monkeypatch):
                 def __iter__(self) -> object: ...
                 @field_validator("x", mode="before")
                 def _raw(cls, value: object) -> object: ...
-        """)
+        """),
     )
     monkeypatch.setattr(sys.modules[__name__], "trees", lambda: {"m.py": tree})
     scope.cache_clear()
@@ -552,7 +562,7 @@ def test_the_disguise_rule_reads_each_class():
             class View(BaseModel):
                 rows: list[int]
                 def all(self) -> list[int]: ...
-        """)
+        """),
     )
 
     assert disguised(tree) == {"Registry"}
@@ -615,3 +625,47 @@ def test_functions_sharing_their_parameters_are_one_class():
             if count >= SHARED_PARAMETERS
         }
     check(found, baseline().repeated_parameters)
+
+
+def is_project(name: str) -> bool:
+    return name == "ofmhelpers" or name.startswith("ofmhelpers.")
+
+
+def imports_the_project(node: ast.AST) -> bool:
+    if isinstance(node, ast.ImportFrom):
+        return node.level > 0 or is_project(node.module or "")
+    if isinstance(node, ast.Import):
+        return any(is_project(alias.name) for alias in node.names)
+    return False
+
+
+def test_constants_and_schemas_import_nothing_from_the_project():
+    found = {
+        name
+        for name, tree in trees().items()
+        if Path(name).name in ROOT_MODULES
+        and any(imports_the_project(node) for node in ast.walk(tree))
+    }
+    known = baseline().root_imports
+
+    assert sorted(found - known) == [], ROOT_IMPORTS
+    assert sorted(known - found) == [], "fixed: delete these lines from baseline.json"
+
+
+def test_the_root_check_sees_a_project_import():
+    lines = (
+        "from ofmhelpers.config import settings",
+        "lazy from ofmhelpers.db.jobs.schema import Job",
+        "import ofmhelpers.log",
+        "from . import models",
+    )
+    clean = (
+        "from pydantic import BaseModel",
+        "import ofmhelpers_tools",
+    )
+
+    def found(line: str) -> bool:
+        return any(imports_the_project(node) for node in ast.walk(ast.parse(line)))
+
+    assert [line for line in lines if not found(line)] == []
+    assert [line for line in clean if found(line)] == []

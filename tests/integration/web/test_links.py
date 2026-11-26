@@ -1,9 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, text
+from statements import counting
 
 from ofmhelpers.db.jobs.store import history
 from ofmhelpers.db.models import ShortLinkRow
@@ -172,7 +175,10 @@ def test_a_second_batch_numbers_past_its_own_links(client, admin):
     ids = _accounts(admin.id, "Dane", "dane.walker")
     _generate(client, ids)
     _generate(
-        client, ids, target="stacked", destination="https://www.stacked.com/@dane"
+        client,
+        ids,
+        target="stacked",
+        destination="https://www.stacked.com/@dane",
     )
     assert set(_links(admin.id)) == {"dane-walker", "dane-walker-2"}
 
@@ -318,7 +324,7 @@ def test_a_link_its_job_lost_is_found_by_address_or_failed(client, admin, monkey
     with session_scope() as s:
         s.execute(text("SET LOCAL session_replication_role = replica"))
         s.query(ShortLinkRow).update(
-            {ShortLinkRow.created_at: func.now() - text("interval '1 hour'")}
+            {ShortLinkRow.created_at: func.now() - text("interval '1 hour'")},
         )
     fake_bouncy().add_link("dane-walker", FANVUE)
     link_sync.sync_now(admin.id)
@@ -417,7 +423,8 @@ def test_assign_an_existing_model_only(client, admin):
     assert response.json() == {"count": 1}
     assert short_links.list_links(admin.id)[0].creator == "Dane"
     unknown = client.post(
-        "/links/creator", json={"ids": [link.id], "creator": "Nobody"}
+        "/links/creator",
+        json={"ids": [link.id], "creator": "Nobody"},
     )
     assert unknown.status_code == 404
 
@@ -430,7 +437,7 @@ def test_nobody_acts_on_another_users_links(client, admin):
     sign_in(stranger, "stranger@example.com")
     assert "dane-walker" not in stranger.get("/links").text
     assert stranger.post("/links/delete", json={"ids": [link.id]}).json() == {
-        "count": 0
+        "count": 0,
     }
     assert stranger.post("/links/adult", json={"ids": [link.id]}).json() == {"count": 0}
     assert fake_bouncy().links
@@ -474,7 +481,9 @@ def test_only_the_agency_admin_runs_on_the_env_keys(client, admin):
 
 
 def test_a_link_left_ungated_is_recorded_flagged_and_gated_at_the_next_sync(
-    client, admin, monkeypatch
+    client,
+    admin,
+    monkeypatch,
 ):
     original = FakeBouncy._link
 
@@ -506,7 +515,9 @@ def test_a_numbered_slug_never_lands_on_the_owners_own(client, admin):
 
 
 def test_an_unexpected_error_fails_one_link_and_the_rest_go_on(
-    client, admin, monkeypatch
+    client,
+    admin,
+    monkeypatch,
 ):
     calls = {"n": 0}
     real = BouncyProvider.create
@@ -544,7 +555,9 @@ def test_a_sync_on_an_odd_answer_is_recorded_not_lost(client, admin, monkeypatch
 
 
 def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
-    client, admin, monkeypatch
+    client,
+    admin,
+    monkeypatch,
 ):
     ids = _accounts(admin.id, "Dane", "a.one", "b.two")
     _generate(client, ids)
@@ -553,7 +566,7 @@ def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
     with session_scope() as s:
         s.execute(text("SET LOCAL session_replication_role = replica"))
         s.query(ShortLinkRow).update(
-            {ShortLinkRow.updated_at: func.now() - text("interval '1 hour'")}
+            {ShortLinkRow.updated_at: func.now() - text("interval '1 hour'")},
         )
     fake_bouncy().remove("b-two")
 
@@ -583,3 +596,21 @@ def test_accounts_link_column_says_today_for_one_day(client, admin):
     page = client.get("/accounts?period=1").text
     assert "Links · today" in page
     assert "Links · 24h" not in page
+
+
+def test_a_sync_writes_every_links_days_in_one_delete_and_one_insert(admin):
+    today = utc_today()
+    for handle in ("one", "two", "three"):
+        fake_oopsie().add_page(handle, "https://onlyfans.com/x")
+        fake_oopsie().set_traffic(handle, today, 10, 8)
+
+    with counting() as seen:
+        link_sync.sync_now(admin.id)
+
+    assert len(seen.writing("short_link_daily_stats")) == 2
+    links = _links(admin.id)
+    assert {slug: link.clicks(7) for slug, link in links.items()} == {
+        "one": 8,
+        "two": 8,
+        "three": 8,
+    }

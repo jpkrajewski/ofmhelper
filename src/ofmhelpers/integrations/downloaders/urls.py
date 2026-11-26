@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 import unicodedata
 from urllib.parse import urlsplit

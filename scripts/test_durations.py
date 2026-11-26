@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Writes .test_durations (pytest-split's file: test id -> seconds) from the
 last full run's reports/latest/report.json, so CI's three test groups take
 about the same time.
@@ -54,7 +56,8 @@ def main() -> int:
         return 1
     durations = {
         t.nodeid: round(
-            t.setup.duration + t.call.duration + t.teardown.duration + CI_OVERHEAD_S, 3
+            t.setup.duration + t.call.duration + t.teardown.duration + CI_OVERHEAD_S,
+            3,
         )
         for t in report.tests
     }

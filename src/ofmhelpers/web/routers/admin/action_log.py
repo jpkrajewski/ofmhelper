@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
@@ -23,4 +25,4 @@ def _status_url(job: Job) -> str | None:
 @router.get("", response_class=HTMLResponse)
 def dashboard(request: Request, actor: Actor) -> Response:
     view = audit.view(actor, _status_url)
-    return render(request, "action_log.html", **dict(view))
+    return render(request, "action_log.html", dict(view))

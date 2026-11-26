@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 import pytest
@@ -8,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.drive_folders import store as drive_folders
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.phone_revisions import store
@@ -45,7 +47,10 @@ def _phone(owner: int, label: str = "Phone 01") -> int:
 
 def _login(device_id: int, owner: int, username: str = "danewalker") -> int:
     fields = LoginFields(
-        service="instagram", username=username, password=PASSWORD, backup_codes=CODES
+        service="instagram",
+        username=username,
+        password=PASSWORD,
+        backup_codes=CODES,
     )
     added = devices.add_login(device_id, fields, owner)
     assert added is not None
@@ -73,7 +78,9 @@ def test_every_kind_of_change_leaves_exactly_one_revision(owner):
     devices.update_device(phone, DeviceFields(label="Phone 02"), owner)
     steps.append(len(_revisions(owner)))
     devices.update_login(
-        login, LoginFields(service="instagram", username="renamed"), owner
+        login,
+        LoginFields(service="instagram", username="renamed"),
+        owner,
     )
     steps.append(len(_revisions(owner)))
     devices.retire_device(phone, owner)

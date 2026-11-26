@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fractions import Fraction
 from pathlib import Path
 from urllib.parse import urlsplit

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 from types import MappingProxyType
 lazy from pathlib import Path
@@ -7,13 +9,14 @@ from pydantic import BaseModel
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.cache.lock import locked
 from ofmhelpers.config import settings
-from ofmhelpers.db.drive_folders.schema import DriveBoard, DriveCard, DriveFile
+from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard
+from ofmhelpers.db.drive_folders.schema import DriveFile
 from ofmhelpers.db.jobs.schema import Job, JobStatus
 from ofmhelpers.db.jobs.store import list_batch
 from ofmhelpers.db.users.store import refresh_token
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
+from ofmhelpers.features.storage.service import StorageServiceFolders
 from ofmhelpers.features.threads.tasks import (
     TASK,
     Pictures,
@@ -70,10 +73,6 @@ class ThreadsFolder(BaseModel):
         return any(r.making for r in self.reels)
 
 
-def board(uid: int, scope: int | None) -> DriveBoard:
-    return drive_folders.board(owner=scope, viewer=uid, live=False)
-
-
 class ThreadsProgress(BaseModel):
     making: int
     made: int
@@ -86,12 +85,12 @@ class PhoneCards(BaseModel):
 
 class Threads(BaseModel, frozen=True):
     uid: int
-    scope: int | None
+    folders: StorageServiceFolders
     login_id: int
 
     @classmethod
-    def phone_cards(cls, uid: int, scope: int | None) -> PhoneCards:
-        cards = board(uid, scope)
+    def phone_cards(cls, uid: int, folders: StorageServiceFolders) -> PhoneCards:
+        cards = folders.saved_board(viewer=uid)
         progress = {}
         for card in cards.cards:
             jobs = list_batch(TASK, str(card.target.login_id), str(uid))
@@ -105,7 +104,7 @@ class Threads(BaseModel, frozen=True):
         found = next(
             (
                 c
-                for c in board(self.uid, self.scope).cards
+                for c in self.folders.saved_board(viewer=self.uid).cards
                 if c.target.login_id == self.login_id
             ),
             None,
@@ -142,7 +141,8 @@ class Threads(BaseModel, frozen=True):
     def start(self, key: str) -> None:
         card = self._card()
         reel = next(
-            (f for f in card.scan.posted if f.id == key and f.kind == "video"), None
+            (f for f in card.scan.posted if f.id == key and f.kind == "video"),
+            None,
         )
         if reel is None:
             raise NotFoundError(NO_REEL)

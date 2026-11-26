@@ -1,8 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from download_files import fake_downloads, fake_posters
@@ -25,8 +27,8 @@ from ofmhelpers.db.jobs.store import list_jobs_page
 from ofmhelpers.db.models import IdempotencyKeyRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.features.assets import store as asset_store
-from ofmhelpers.features.downloads import media as download_media
-from ofmhelpers.features.downloads import service as download_service
+from ofmhelpers.features.downloads import links as download_links
+from ofmhelpers.features.downloads.links import LinkDownloads
 from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.refusals import UnavailableError
 from ofmhelpers.web.idempotency import (
@@ -91,7 +93,7 @@ def _backdate(asked: Asked, by: timedelta) -> None:
         s.execute(
             update(row)
             .where(row.user_id == asked.user_id, row.key == asked.key)
-            .values(created_at=row.created_at - by)
+            .values(created_at=row.created_at - by),
         )
 
 
@@ -126,7 +128,7 @@ def test_a_run_without_a_key_is_refused(client, downloads):
 
     assert refused.status_code == 400
     assert refused.json() == {
-        "detail": "Send an Idempotency-Key header, one per action"
+        "detail": "Send an Idempotency-Key header, one per action",
     }
     assert downloads.fetched == []
 
@@ -139,7 +141,7 @@ def test_a_key_sent_again_with_other_links_is_refused(client, downloads):
 
     assert mismatch.status_code == 400
     assert mismatch.json() == {
-        "detail": "This Idempotency-Key was used for a different request"
+        "detail": "This Idempotency-Key was used for a different request",
     }
     assert downloads.fetched == [A]
 
@@ -174,13 +176,14 @@ def test_a_key_left_by_a_request_that_died_is_never_run_again(client, downloads)
     assert abandoned.status_code == 409
     assert "Retry-After" not in abandoned.headers
     assert abandoned.json() == {
-        "detail": "This request did not finish. Reload the page and try again."
+        "detail": "This request did not finish. Reload the page and try again.",
     }
     assert downloads.fetched == []
 
 
 def test_a_left_key_sent_with_a_different_request_is_refused_as_different(
-    client, downloads
+    client,
+    downloads,
 ):
     key = keyed()
     asked = _asked(client, key, A)
@@ -195,14 +198,14 @@ def test_a_left_key_sent_with_a_different_request_is_refused_as_different(
 
 
 def test_a_crash_after_the_work_started_never_runs_it_again(downloads, monkeypatch):
-    started = download_media.start
+    started = LinkDownloads.start
 
     def start_then_crash(*args, **kwargs):
         started(*args, **kwargs)
         msg = "the cards did not render"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(download_media, "start", start_then_crash)
+    monkeypatch.setattr(LinkDownloads, "start", start_then_crash)
     crashing = TestClient(app, raise_server_exceptions=False)
     crashing.user = sign_in(crashing)  # type: ignore[attr-defined]
     key = keyed()
@@ -216,19 +219,21 @@ def test_a_crash_after_the_work_started_never_runs_it_again(downloads, monkeypat
 
 
 def test_an_outside_service_down_frees_the_key_to_try_again(
-    client, downloads, monkeypatch
+    client,
+    downloads,
+    monkeypatch,
 ):
-    started = download_media.start
+    started = LinkDownloads.start
 
     def down(*_args, **_kwargs):
         msg = "The download service did not answer"
         raise UnavailableError(msg)
 
-    monkeypatch.setattr(download_media, "start", down)
+    monkeypatch.setattr(LinkDownloads, "start", down)
     key = keyed()
     assert _run(client, A, key).status_code == 502
 
-    monkeypatch.setattr(download_media, "start", started)
+    monkeypatch.setattr(LinkDownloads, "start", started)
     assert _run(client, A, key).status_code == 202
     assert downloads.fetched == [A]
 
@@ -358,9 +363,11 @@ def test_keys_older_than_their_keep_time_are_removed(client):
 
 
 def test_a_link_still_downloading_is_not_downloaded_twice(
-    client, downloads, monkeypatch
+    client,
+    downloads,
+    monkeypatch,
 ):
-    monkeypatch.setattr(download_service, "enqueue", lambda *_a, **_k: None)
+    monkeypatch.setattr(download_links, "enqueue", lambda *_a, **_k: None)
     first = _run(client, A, keyed()).json()["job_id"]
     _run(client, B, keyed())
 

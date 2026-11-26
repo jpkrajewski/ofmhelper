@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 lazy from collections.abc import Generator
 
@@ -10,7 +12,11 @@ class SocialError(Exception): ...
 
 class RetryableError(SocialError):
     def __init__(
-        self, message: str, *, reached: bool = True, dead_proxy: bool = False
+        self,
+        message: str,
+        *,
+        reached: bool = True,
+        dead_proxy: bool = False,
     ) -> None:
         super().__init__(message)
         self.reached = reached
@@ -45,7 +51,9 @@ class ClientErrors(BaseModel):
         except requests.RequestException as exc:
             msg = f"connection failed ({type(exc).__name__})"
             raise RetryableError(
-                msg, reached=False, dead_proxy=isinstance(exc, _DEAD_PROXY)
+                msg,
+                reached=False,
+                dead_proxy=isinstance(exc, _DEAD_PROXY),
             ) from exc
         except self.lasting as exc:
             raise SocialError(str(exc)) from exc

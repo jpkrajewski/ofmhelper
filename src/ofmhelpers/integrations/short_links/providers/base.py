@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 from abc import ABC, abstractmethod
@@ -39,7 +41,9 @@ class RequestHeaders(BaseModel):
 
 
 def listed[T](
-    provider: str, rows: Iterable[T], make: Callable[[T], RemoteLink]
+    provider: str,
+    rows: Iterable[T],
+    make: Callable[[T], RemoteLink],
 ) -> list[RemoteLink]:
     found: list[RemoteLink] = []
     for row in rows:
@@ -47,7 +51,10 @@ def listed[T](
             found.append(make(row))
         except ValidationError:
             logger.warning(
-                "%s: a listed link was dropped: %s", provider, row, exc_info=True
+                "%s: a listed link was dropped: %s",
+                provider,
+                row,
+                exc_info=True,
             )
     return found
 
@@ -123,7 +130,7 @@ class LinkProvider(ABC):
                     f"links:turn:{self.key}:{digest}",
                     time.time(),
                     gap_s,
-                )
+                ),
             )
         except RedisError:
             logger.warning("link throttle: Redis unreachable", exc_info=True)
@@ -132,7 +139,13 @@ class LinkProvider(ABC):
             time.sleep(wait)
         self._last_call = time.monotonic()
 
-    def _call(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+    def _call(
+        self,
+        method: str,
+        path: str,
+        json: dict[str, Any] | None = None,
+        params: dict[str, str | int] | None = None,
+    ) -> requests.Response:
         info = self.info()
         self._wait_turn(info.min_interval_s)
         try:
@@ -141,7 +154,8 @@ class LinkProvider(ABC):
                 info.base_url + path,
                 headers=self._headers().model_dump(by_alias=True),
                 timeout=settings.links.request_timeout_s,
-                **kwargs,
+                json=json,
+                params=params,
             )
         except requests.RequestException as exc:
             logger.warning("%s %s %s failed", self.key, method, path, exc_info=True)
@@ -176,7 +190,10 @@ class LinkProvider(ABC):
 
     @abstractmethod
     def daily(
-        self, remote_ids: list[str], start: date, end: date
+        self,
+        remote_ids: list[str],
+        start: date,
+        end: date,
     ) -> list[LinkDays]: ...
 
     @abstractmethod

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from guards.event import Guard, HookEvent, Markers, Verdict

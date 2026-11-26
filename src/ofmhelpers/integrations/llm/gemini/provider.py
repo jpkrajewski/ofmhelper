@@ -1,7 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
 import re
 import time
 from http import HTTPStatus
 from typing import Any
+lazy from collections.abc import Mapping
 
 import httpx
 lazy from google import genai
@@ -97,7 +99,7 @@ class GeminiLLM(LLMProvider):
                     response_mime_type="application/json",
                     response_json_schema=answer.model_json_schema(),
                     http_options=types.HttpOptions(
-                        timeout=_ms(ends - time.monotonic())
+                        timeout=_ms(ends - time.monotonic()),
                     ),
                 ),
             )
@@ -123,23 +125,30 @@ class GeminiLLM(LLMProvider):
             size = part.path.stat().st_size
             if size <= settings.llm.inline_max_bytes:
                 return types.Part.from_bytes(
-                    data=part.path.read_bytes(), mime_type=part.mime_type
+                    data=part.path.read_bytes(),
+                    mime_type=part.mime_type,
                 )
         except OSError as exc:
             msg = f"Could not read {part.path.name}"
             raise LLMInputError(msg, detail=str(exc)) from exc
         file = client.files.upload(
-            file=part.path, config=types.UploadFileConfig(mime_type=part.mime_type)
+            file=part.path,
+            config=types.UploadFileConfig(mime_type=part.mime_type),
         )
         if file.name:
             uploaded.append(file.name)
         file = self._ready(client, file, part.path.name, ends)
         return types.Part.from_uri(
-            file_uri=file.uri or "", mime_type=file.mime_type or part.mime_type
+            file_uri=file.uri or "",
+            mime_type=file.mime_type or part.mime_type,
         )
 
     def _ready(
-        self, client: genai.Client, file: types.File, label: str, ends: float
+        self,
+        client: genai.Client,
+        file: types.File,
+        label: str,
+        ends: float,
     ) -> types.File:
         deadline = min(time.monotonic() + settings.llm.file_ready_timeout_s, ends)
         while file.state != types.FileState.ACTIVE:
@@ -213,7 +222,7 @@ def _usage(response: types.GenerateContentResponse) -> Usage:
     )
 
 
-def _retry_delay(body: Any) -> float | None:
+def _retry_delay(body: Mapping[str, Any]) -> float | None:
     error = body.get("error", {}) if isinstance(body, dict) else {}
     for item in error.get("details", []) or []:
         found = _DURATION.match(str(item.get("retryDelay", "")))

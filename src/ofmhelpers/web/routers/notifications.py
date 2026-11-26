@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, WebSocket
 
 from ofmhelpers.features.notifications.service import updates

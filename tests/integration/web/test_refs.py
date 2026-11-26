@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import os
 import subprocess
@@ -159,7 +161,9 @@ def _write_refs(assets_dir: Path, count: int, ext: str = ".png") -> list[str]:
 
 
 def test_list_refs_opens_on_last_used_then_last_uploaded(
-    client, assets_dir, monkeypatch
+    client,
+    assets_dir,
+    monkeypatch,
 ):
     names = _write_refs(assets_dir, 12)
     used = [str(assets_dir / names[0]), str(assets_dir / names[3])]
@@ -211,7 +215,9 @@ def test_list_refs_opens_on_the_signed_in_users_own_picks(assets_dir):
 
 
 def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
-    client, assets_dir, monkeypatch
+    client,
+    assets_dir,
+    monkeypatch,
 ):
     _write_refs(assets_dir, 3)
     (assets_dir / "hashaud__voice.mp3").write_bytes(b"id3")
@@ -251,7 +257,9 @@ def test_list_refs_rejects_an_out_of_range_limit(client, assets_dir, limit):
 
 
 def test_a_burst_for_one_new_thumb_decodes_the_original_once(
-    client, assets_dir, monkeypatch
+    client,
+    assets_dir,
+    monkeypatch,
 ):
     original = assets_dir / "abc123__photo.png"
     original.write_bytes(_png_bytes())
@@ -280,7 +288,9 @@ def test_a_burst_for_one_new_thumb_decodes_the_original_once(
 
 
 def test_missing_names_exactly_the_files_a_restore_can_no_longer_use(
-    client, assets_dir, tmp_path
+    client,
+    assets_dir,
+    tmp_path,
 ):
     kept = assets_dir / "a1__face.png"
     kept.write_bytes(_png_bytes())

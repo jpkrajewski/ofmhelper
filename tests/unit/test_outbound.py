@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 import requests
 
@@ -28,7 +30,9 @@ def test_a_mounted_session_answers_from_the_fake(fakes_on):
 
 def test_streamed_bodies_arrive_whole(fakes_on):
     with outbound.get(
-        f"https://{GLOBAL_CDN_HOST}/fake/x.mp4", stream=True, timeout=5
+        f"https://{GLOBAL_CDN_HOST}/fake/x.mp4",
+        stream=True,
+        timeout=5,
     ) as r:
         body = b"".join(r.iter_content(1024))
     assert body[4:8] == b"ftyp"

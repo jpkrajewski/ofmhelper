@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+lazy from pydantic import JsonValue
 
 
 class _Api(BaseModel):
@@ -33,13 +36,15 @@ class _ChargeEvent(_Api):
 
 class _PricingPerEvent(_Api):
     actor_charge_events: dict[str, _ChargeEvent] = Field(
-        default_factory=dict, alias="actorChargeEvents"
+        default_factory=dict,
+        alias="actorChargeEvents",
     )
 
 
 class _PricingInfo(_Api):
     pricing_per_event: _PricingPerEvent | None = Field(
-        default=None, alias="pricingPerEvent"
+        default=None,
+        alias="pricingPerEvent",
     )
 
 
@@ -49,7 +54,8 @@ class ActorRun(_Api):
     default_dataset_id: str = Field(alias="defaultDatasetId")
     usage_total_usd: float = Field(default=0.0, alias="usageTotalUsd")
     charged_event_counts: dict[str, int] = Field(
-        default_factory=dict, alias="chargedEventCounts"
+        default_factory=dict,
+        alias="chargedEventCounts",
     )
     pricing_info: _PricingInfo | None = Field(default=None, alias="pricingInfo")
     status_message: str | None = Field(default=None, alias="statusMessage")
@@ -80,7 +86,7 @@ class DatasetItem(BaseModel):
 
     @field_validator("error", "url", mode="before")
     @classmethod
-    def _as_text(cls, value: object) -> object:
+    def _as_text(cls, value: JsonValue) -> str | None:
         return value if value is None else str(value)
 
     @property

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 
@@ -54,24 +56,17 @@ def test_json_format_emits_one_parseable_object_per_record(monkeypatch, capsys):
     assert "ts" in payload
 
 
-def test_json_format_promotes_extra_fields_to_top_level(monkeypatch, capsys):
-    monkeypatch.setenv("OFM_LOG_FORMAT", "json")
-    configure_logging(force=True)
-
-    get_logger("ofmhelpers.test").info("job finished", extra={"job_id": "abc123"})
-
-    payload = json.loads(capsys.readouterr().out.strip())
-    assert payload["job_id"] == "abc123"
-
-
-def test_json_format_survives_a_non_serializable_extra_value(monkeypatch, capsys):
+def test_json_format_keeps_only_its_own_fields_not_a_records_extras(
+    monkeypatch,
+    capsys,
+):
     monkeypatch.setenv("OFM_LOG_FORMAT", "json")
     configure_logging(force=True)
 
     get_logger("ofmhelpers.test").info("saved", extra={"path": object()})
 
     payload = json.loads(capsys.readouterr().out.strip())
-    assert isinstance(payload["path"], str)
+    assert set(payload) == {"ts", "level", "logger", "msg"}
 
 
 def test_exc_info_attaches_the_traceback(monkeypatch, capsys):
@@ -138,14 +133,15 @@ def test_noisy_third_party_loggers_are_raised_to_warning(monkeypatch, capsys):
 
 
 def test_app_loggers_still_emit_at_info_when_third_parties_are_muted(
-    monkeypatch, capsys
+    monkeypatch,
+    capsys,
 ):
     monkeypatch.setenv("OFM_LOG_LEVEL", "INFO")
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
 
     get_logger("ofmhelpers.integrations.ai_providers.kie.client").info(
-        "upload starting"
+        "upload starting",
     )
 
     assert "upload starting" in capsys.readouterr().out

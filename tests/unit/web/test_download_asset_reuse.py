@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 
 import pytest
@@ -38,7 +40,7 @@ def test_downloaded_videos_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
         download_reels,
         "download_all",
         lambda urls, **_login: [
-            DownloadResult(url=urls[0], success=True, output_paths=[downloaded])
+            DownloadResult(url=urls[0], success=True, output_paths=[downloaded]),
         ],
     )
 
@@ -55,7 +57,7 @@ def test_downloaded_images_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
         download_images,
         "download_all",
         lambda urls, **_login: [
-            DownloadResult(url=urls[0], success=True, output_paths=[downloaded])
+            DownloadResult(url=urls[0], success=True, output_paths=[downloaded]),
         ],
     )
 
@@ -114,7 +116,10 @@ def _crash_on_save(monkeypatch, nth: int, *, after_saving: bool) -> None:
 
 @pytest.mark.parametrize("after_saving", [True, False])
 def test_a_rerun_after_a_crash_returns_each_file_once_with_metadata_stripped(
-    tmp_path, assets_dir, monkeypatch, after_saving
+    tmp_path,
+    assets_dir,
+    monkeypatch,
+    after_saving,
 ):
     job_dir = tmp_path / "job"
     job_dir.mkdir()

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import shutil
 import time
@@ -131,7 +133,7 @@ def folders(root: Path) -> list[Folder]:
                 folder = _size(Path(entry.path))
                 if folder.bytes:
                     found.append(
-                        Folder(name=entry.name, bytes=folder.bytes, files=folder.files)
+                        Folder(name=entry.name, bytes=folder.bytes, files=folder.files),
                     )
             elif entry.is_file(follow_symlinks=False):
                 loose_bytes += entry.stat(follow_symlinks=False).st_size

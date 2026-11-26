@@ -1,15 +1,13 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
-from ofmhelpers.db.devices.schema import (
-    AssignAccount,
-    DeviceFields,
-    LoginFields,
-    PhoneQuery,
-)
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields, PhoneQuery
+from ofmhelpers.db.devices.schema import AssignAccount
 from ofmhelpers.db.phone_revisions.schema import Restored
 from ofmhelpers.features.phones import service
 from ofmhelpers.features.phones import workbook as phones_workbook
@@ -22,6 +20,7 @@ from ofmhelpers.web.dependencies import (
     CurrentUser,
     OwnerId,
     Scope,
+    Storage,
     Viewing,
 )
 from ofmhelpers.web.responses import NO_STORE
@@ -43,19 +42,22 @@ VAULT_REASON = [Depends(_vault_reason)]
 def _own_eyes(viewer: Viewing) -> None:
     if viewer.by is not None:
         raise HTTPException(
-            status_code=403, detail="Passwords are shown only to their owner"
+            status_code=403,
+            detail="Passwords are shown only to their owner",
         )
 
 
 SECRET = [Depends(_own_eyes), *VAULT_REASON]
 
 router = APIRouter(
-    prefix="/phones", tags=["phones"], dependencies=[Access(Area.PHONES)]
+    prefix="/phones",
+    tags=["phones"],
+    dependencies=[Access(Area.PHONES)],
 )
 
 
-def _phone(device_id: int, scope: Scope) -> service.Phone:
-    return service.Phone(scope=scope, device_id=device_id)
+def _phone(device_id: int, scope: Scope, storage: Storage) -> service.Phone:
+    return service.Phone(scope=scope, device_id=device_id, folders=storage.folders)
 
 
 def _login(login_id: int, scope: Scope) -> service.SavedLogin:
@@ -76,10 +78,12 @@ class _Done(BaseModel):
 
 @router.get("")
 def index(
-    request: Request, query: Annotated[PhoneQuery, Query()], scope: Scope
+    request: Request,
+    query: Annotated[PhoneQuery, Query()],
+    scope: Scope,
 ) -> Response:
     view = service.page_view(query, scope)
-    return render(request, "phones.html", query=query, **dict(view))
+    return render(request, "phones.html", {"query": query, **dict(view)})
 
 
 @router.get("/drawing.svg")
@@ -94,7 +98,9 @@ def drawing(model: str = "", color: str = "") -> Response:
 @router.get("/revisions", summary="History: the phones after each change")
 def revisions(request: Request, scope: Scope) -> Response:
     return render(
-        request, "_phone_revisions.html", revisions=Revisions(scope=scope).listed()
+        request,
+        "_phone_revisions.html",
+        {"revisions": Revisions(scope=scope).listed()},
     )
 
 

@@ -1,13 +1,16 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import mimetypes
 from pathlib import Path
 from typing import Any, NoReturn
-lazy from collections.abc import Callable
+lazy from collections.abc import Callable, Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import ImageLimits
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers import hosting
 from ofmhelpers.integrations.ai_providers.apiyi.models import (
@@ -32,7 +35,7 @@ from ofmhelpers.integrations.ai_providers.uploads import (
     upload_cache_key,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.image_fit import ImageLimits, fitted
+from ofmhelpers.media.image_fit import fitted
 
 logger = get_logger(__name__)
 
@@ -109,13 +112,16 @@ class ApiyiClient:
         self._base = settings.apiyi.base_url.rstrip("/")
         self._http = bearer_session(api_key)
 
-    def call(
+    def call(  # noqa: PLR0913, PLR0917
         self,
         method: str,
         path: str,
         refuse: Callable[[requests.Response], NoReturn] = refused,
         timeout: float | None = None,
-        **kwargs: Any,
+        headers: Mapping[str, str] | None = None,
+        json: Mapping[str, Any] | None = None,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
     ) -> requests.Response:
         return call(
             self._http,
@@ -124,12 +130,33 @@ class ApiyiClient:
             method,
             f"{self._base}{path}",
             timeout=timeout or settings.apiyi.request_timeout_s,
-            **kwargs,
+            headers=headers,
+            json=json,
+            data=data,
+            files=files,
         )
 
-    def submit(self, path: str, **kwargs: Any) -> requests.Response:
+    def submit(  # noqa: PLR0913, PLR0917
+        self,
+        path: str,
+        refuse: Callable[[requests.Response], NoReturn] = refused,
+        timeout: float | None = None,
+        headers: Mapping[str, str] | None = None,
+        json: Mapping[str, Any] | None = None,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
+    ) -> requests.Response:
         try:
-            return self.call("POST", path, **kwargs)
+            return self.call(
+                "POST",
+                path,
+                refuse=refuse,
+                timeout=timeout,
+                headers=headers,
+                json=json,
+                data=data,
+                files=files,
+            )
         except ProviderUnavailableError as exc:
             raise maybe_paid(exc) from exc
 
@@ -150,7 +177,10 @@ class ApiyiClient:
 
     def _model_ids(self) -> str:
         answer = parsed(
-            self.call("GET", MODELS_PATH), ModelList, PROVIDER, "model list"
+            self.call("GET", MODELS_PATH),
+            ModelList,
+            PROVIDER,
+            "model list",
         )
         return " ".join(model.id for model in answer.data if model.id)
 
@@ -188,7 +218,8 @@ class ApiyiClient:
         s = settings.apiyi
         if self.lighter:
             limits = ImageLimits(
-                max_bytes=s.link_image_max_bytes, max_side=s.ref_image_max_side
+                max_bytes=s.link_image_max_bytes,
+                max_side=s.ref_image_max_side,
             )
             out = Path(settings.aigen.out_dir) / "apiyi" / "fitted"
             try:
@@ -225,6 +256,9 @@ class ApiyiClient:
             response = outbound.get(url, timeout=settings.aigen.download_timeout_s)
             response.raise_for_status()
         except requests.RequestException as exc:
-            msg = f"{PROVIDER}: could not fetch the result {url.split('?', maxsplit=1)[0]}"
+            msg = (
+                f"{PROVIDER}: could not fetch the "
+                f"result {url.split('?', maxsplit=1)[0]}"
+            )
             raise ProviderUnavailableError(msg) from exc
         return response.content

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient

@@ -1,24 +1,21 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import math
-import re
 import time
-from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import StrEnum
-from functools import lru_cache
-from types import MappingProxyType
-from typing import Annotated, Any, ClassVar, Self
-from urllib.parse import urlencode, urlsplit
+from typing import Annotated, Any, Self
+from urllib.parse import urlencode
 
 from pydantic import (
     AfterValidator,
     BaseModel,
     Field,
+    JsonValue,
     computed_field,
     model_validator,
 )
-
-from ofmhelpers.db.watched_profiles.schema import ProfileHandle
 
 
 class AccountProfile(BaseModel):
@@ -113,92 +110,6 @@ class AccountStats(BaseModel):
         )
 
 
-class PlatformNames(ABC):
-    key: ClassVar[str]
-    label: ClassVar[str]
-
-    @abstractmethod
-    def handle(self, text: str) -> str: ...
-
-    @abstractmethod
-    def profile_url(self, handle: str) -> str: ...
-
-
-class InstagramNames(PlatformNames):
-    key = "instagram"
-    label = "Instagram"
-
-    def handle(self, text: str) -> str:
-        return ProfileHandle(username=text).username
-
-    def profile_url(self, handle: str) -> str:
-        return f"https://www.instagram.com/{handle}/"
-
-
-class _HandleRule(BaseModel, frozen=True):
-    label: str
-    hosts: tuple[str, ...]
-    pattern: re.Pattern[str]
-
-    def bare(self, text: str) -> str:
-        value = text.strip()
-        if any(host in value.lower() for host in self.hosts):
-            path = urlsplit(value if "//" in value else f"https://{value}").path
-            parts = [p for p in path.split("/") if p and p.lower() != "add"]
-            value = parts[0] if parts else ""
-        value = value.lstrip("@").strip("/")
-        if not self.pattern.fullmatch(value):
-            msg = f"Not a valid {self.label} username: {text!r}"
-            raise ValueError(msg)
-        return value.lower()
-
-
-_SNAPCHAT = _HandleRule(
-    label="Snapchat",
-    hosts=("snapchat.com",),
-    pattern=re.compile(r"[A-Za-z][A-Za-z0-9._-]{2,14}"),
-)
-_X = _HandleRule(
-    label="X",
-    hosts=("x.com", "twitter.com"),
-    pattern=re.compile(r"[A-Za-z0-9_]{1,15}"),
-)
-
-
-class SnapchatNames(PlatformNames):
-    key = "snapchat"
-    label = "Snapchat"
-
-    def handle(self, text: str) -> str:
-        return _SNAPCHAT.bare(text)
-
-    def profile_url(self, handle: str) -> str:
-        return f"https://www.snapchat.com/@{handle}"
-
-
-class XNames(PlatformNames):
-    key = "x"
-    label = "X"
-
-    def handle(self, text: str) -> str:
-        return _X.bare(text)
-
-    def profile_url(self, handle: str) -> str:
-        return f"https://x.com/{handle}"
-
-
-_NAMES: tuple[type[PlatformNames], ...] = (InstagramNames, SnapchatNames, XNames)
-
-
-@lru_cache(maxsize=1)
-def platform_names() -> MappingProxyType[str, PlatformNames]:
-    return MappingProxyType({cls.key: cls() for cls in _NAMES})
-
-
-def names_of(key: str) -> PlatformNames:
-    return platform_names()[key]
-
-
 NO_CREATOR = "(none)"
 
 
@@ -280,6 +191,8 @@ class TrackedAccount(BaseModel):
     user_id: int
     platform: str
     handle: str
+    profile_url: str
+    platform_label: str
     creator: str | None = None
     notes: str = ""
     added_at: float
@@ -309,16 +222,8 @@ class TrackedAccount(BaseModel):
         return AccountStatus.ACTIVE
 
     @property
-    def profile_url(self) -> str:
-        return names_of(self.platform).profile_url(self.handle)
-
-    @property
     def name(self) -> str:
         return (self.profile.display_name if self.profile else "") or self.handle
-
-    @property
-    def platform_label(self) -> str:
-        return names_of(self.platform).label
 
     @property
     def followers_hidden(self) -> bool:
@@ -358,7 +263,10 @@ class TrackedAccount(BaseModel):
         if self.metrics is None or self.last_scan_at is None:
             return None
         found = ViewWindow.of(
-            self.post_views, days, self.last_scan_at, self.covered_since
+            self.post_views,
+            days,
+            self.last_scan_at,
+            self.covered_since,
         )
         return found if found.covered else None
 
@@ -367,7 +275,8 @@ class TrackedAccount(BaseModel):
             return None
         both = self.window(2 * days)
         return ViewsChange(
-            views=last.views, previous=both.views - last.views if both else None
+            views=last.views,
+            previous=both.views - last.views if both else None,
         )
 
     def posts_in(self, days: int) -> int | None:
@@ -398,7 +307,7 @@ class AccountSort(StrEnum):
 
 class AccountQuery(BaseModel):
     q: str = Field(default="", max_length=64)
-    platform: str = Field(default=InstagramNames.key, max_length=32)
+    platform: str = Field(default="instagram", max_length=32)
     creator: str = Field(default="", max_length=64)
     status: AccountStatus | None = None
     sort: AccountSort = AccountSort.FOLLOWERS
@@ -409,7 +318,7 @@ class AccountQuery(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_unset(cls, data: Any) -> Any:
+    def _blank_is_unset(cls, data: JsonValue) -> JsonValue:
         if isinstance(data, Mapping):
             return {k: v for k, v in data.items() if v != ""}
         return data
@@ -436,12 +345,14 @@ class AccountQuery(BaseModel):
 
     def sort_link(self, sort: AccountSort) -> str:
         if sort != self.sort:
-            return self.link(sort=sort, order=None)
+            return self.link(changes={"sort": sort, "order": None})
         flipped = SortOrder.ASC if self.direction == SortOrder.DESC else SortOrder.DESC
-        return self.link(order=flipped)
+        return self.link(changes={"order": flipped})
 
     def ordered(
-        self, accounts: list[TrackedAccount], days: int
+        self,
+        accounts: list[TrackedAccount],
+        days: int,
     ) -> list[TrackedAccount]:
 
         def views(a: TrackedAccount) -> int | None:
@@ -466,8 +377,12 @@ class AccountQuery(BaseModel):
         unknown = [a for a in accounts if key(a) is None]
         return sorted(known, key=key, reverse=reverse) + unknown
 
-    def link(self, path: str = "/accounts", **changes: object) -> str:
-        update = {"page": 1, **changes}
+    def link(
+        self,
+        path: str = "/accounts",
+        changes: dict[str, object] | None = None,
+    ) -> str:
+        update = {"page": 1, **(changes or {})}
         data = self.model_copy(update=update).model_dump(mode="json")
         defaults = AccountQuery().model_dump(mode="json")
         params = {
@@ -617,7 +532,7 @@ class FollowerChart(BaseModel):
         return pct_change(self.end.followers, self.start.followers)
 
     @classmethod
-    def of(cls, snaps: list[Snapshot], daily: bool, gap_s: float) -> Self:
+    def of(cls, snaps: list[Snapshot], daily: bool, gap_s: float) -> Self:  # noqa: FBT001
         if len(snaps) < 2:  # noqa: PLR2004
             return cls(
                 daily=daily,
@@ -680,7 +595,11 @@ class FollowerChart(BaseModel):
 
 def _point(snap: Snapshot, change: int | None, x: float, y: float) -> ChartPoint:
     return ChartPoint(
-        taken_at=snap.taken_at, followers=snap.followers, change=change, x=x, y=y
+        taken_at=snap.taken_at,
+        followers=snap.followers,
+        change=change,
+        x=x,
+        y=y,
     )
 
 
@@ -745,7 +664,10 @@ class AccountHistory(BaseModel):
         return rows
 
     def follower_chart(
-        self, days: int, rescan_s: float, now: float | None = None
+        self,
+        days: int,
+        rescan_s: float,
+        now: float | None = None,
     ) -> FollowerChart:
         since = (now or time.time()) - days * _DAY_S
         base = [s for s in self.snapshots if s.taken_at <= since][-1:]
@@ -756,32 +678,6 @@ class AccountHistory(BaseModel):
             base, inside = [], list(by_day.values())
         gap_s = max(2 * rescan_s, 1.5 * _DAY_S if daily else 0)
         return FollowerChart.of(base + inside, daily=daily, gap_s=gap_s)
-
-
-class AddAccounts(BaseModel):
-    platform: str
-    handles: str
-    creator: CreatorName = ""
-
-    def parsed(self) -> list[str]:
-        if self.platform not in platform_names():
-            msg = f"Unknown platform: {self.platform}"
-            raise ValueError(msg)
-        platform = names_of(self.platform)
-        handles: list[str] = []
-        bad: list[str] = []
-        for line in self.handles.splitlines():
-            words = line.split()
-            if not words:
-                continue
-            try:
-                handles.append(platform.handle(words[0]))
-            except ValueError:  # silent: a bad line is listed back
-                bad.append(line.strip())
-        if bad:
-            msg = f"Not a valid {platform.label} account: " + ", ".join(bad[:5])
-            raise ValueError(msg)
-        return list(dict.fromkeys(handles))
 
 
 class AddResult(BaseModel):

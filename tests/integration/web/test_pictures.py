@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import os
@@ -46,7 +48,10 @@ def _png(name: str, size: tuple[int, int] = (64, 64), color: str = "teal"):
 
 
 def _preset(
-    client: TestClient, name: str = "danewalker", count: int = 2, aspect: str = ""
+    client: TestClient,
+    name: str = "danewalker",
+    count: int = 2,
+    aspect: str = "",
 ) -> dict:
     files = [
         ("images", _png(f"ref{i}.png", color=f"#{i:02x}8080")) for i in range(count)
@@ -130,7 +135,9 @@ def test_a_preset_name_is_unique_per_owner(agency, va):
     _preset(agency)
     files = [("images", _png("a.png"))]
     again = agency.post(
-        "/pictures/presets", data={"name": "danewalker", "prompt": "p"}, files=files
+        "/pictures/presets",
+        data={"name": "danewalker", "prompt": "p"},
+        files=files,
     )
     assert again.status_code == 409
     assert _preset(va, "danewalker")["name"] == "danewalker"
@@ -288,7 +295,8 @@ def test_editing_sets_and_clears_the_shape(agency):
     form = {"name": "danewalker", "prompt": PROMPT, "keep": ["0", "1"]}
 
     fixed = agency.post(
-        f"/pictures/presets/{preset['id']}", data={**form, "aspect_ratio": "9:16"}
+        f"/pictures/presets/{preset['id']}",
+        data={**form, "aspect_ratio": "9:16"},
     )
     cleared = agency.post(f"/pictures/presets/{preset['id']}", data=form)
 

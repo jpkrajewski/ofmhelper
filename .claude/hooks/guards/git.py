@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, deny, owner_said_ship
@@ -7,20 +9,27 @@ NAME = "git"
 OWNER_ONLY = {"commit", "push"}
 VALUE_FLAGS = {"-C", "-c", "--git-dir", "--work-tree"}
 NOT_YOURS = (
-    "CLAUDE.md Git: never commit, push or open/merge a PR on your own. Only the owner's word "
-    "(ship, commit, push, deploy) does that, through the ship skill. Report what changed instead."
+    "CLAUDE.md Git: never commit, push or open/merge "
+    "a PR on your own. Only the owner's word "
+    "(ship, commit, push, deploy) does that, through "
+    "the ship skill. Report what changed instead."
 )
 STASH = (
-    "Never git stash here: a failed stash and a chained pop applied another branch's stash onto dev "
+    "Never git stash here: a failed stash and a chained "
+    "pop applied another branch's stash onto dev "
     "(2026-11-01). To prove old behaviour, revert the one line by hand, run, restore."
 )
 FOREGROUND_PUSH = (
-    "git push runs the 3+ minute pre-push suite and times out in the foreground: run it with "
-    "run_in_background, then compare git ls-remote origin dev with HEAD. Never push twice."
+    "git push runs the 3+ minute pre-push suite and "
+    "times out in the foreground: run it with "
+    "run_in_background, then compare git ls-remote "
+    "origin dev with HEAD. Never push twice."
 )
 PIPED_PUSH = (
-    "Never pipe git push through tail, head or grep: the pipe hides the pre-push verdict and "
-    "its exit code. Write the push log to a file (git push origin dev > reports/loops/push.log "
+    "Never pipe git push through tail, head or grep: "
+    "the pipe hides the pre-push verdict and "
+    "its exit code. Write the push log to a file (git "
+    "push origin dev > reports/loops/push.log "
     "2>&1, run_in_background) and read that file."
 )
 READ_ONLY_STASH = ("list", "show")
@@ -48,7 +57,7 @@ def outside_this_repo(statement: Statement, event: HookEvent) -> bool:
     return not target.resolve().is_relative_to(ROOT.resolve())
 
 
-def judge(statement: Statement, event: HookEvent) -> Verdict | None:
+def judge(statement: Statement, event: HookEvent) -> Verdict | None:  # noqa: PLR0911
     if outside_this_repo(statement, event):
         return None
     if statement.program == "gh" and statement.words[1:3] in (

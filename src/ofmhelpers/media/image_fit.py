@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import tempfile
 from pathlib import Path
@@ -50,7 +52,11 @@ def fit_image(src: Path, dest: Path, max_bytes: int, max_side: int) -> Path:
 
 
 def fitted(
-    src: Path, dest_dir: Path, limits: ImageLimits, *, jpeg: bool = False
+    src: Path,
+    dest_dir: Path,
+    limits: ImageLimits,
+    *,
+    jpeg: bool = False,
 ) -> Path:
     if src.suffix.lower() not in FITTABLE_SUFFIXES:
         return src

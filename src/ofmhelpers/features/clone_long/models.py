@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 
 from pydantic import BaseModel, ConfigDict
@@ -21,7 +23,8 @@ class Plan(BaseModel):
             return cls(pieces=(Piece(start=0, length=seconds),))
         count = math.ceil(seconds / max_s)
         front = min(
-            float(max_s), max(float(max_s - 1), (seconds - max_s) / (count - 1))
+            float(max_s),
+            max(float(max_s - 1), (seconds - max_s) / (count - 1)),
         )
         tail = seconds - front * (count - 1)
         if tail < max_s / 3:
@@ -43,7 +46,8 @@ class Plan(BaseModel):
             start += length
         last = pieces[-1]
         pieces[-1] = Piece(
-            start=last.start, length=min(float(max_s), seconds - last.start)
+            start=last.start,
+            length=min(float(max_s), seconds - last.start),
         )
         return cls(pieces=tuple(pieces))
 

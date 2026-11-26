@@ -1,11 +1,15 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from ofmhelpers.features.assets.models import FileUpload, MediaUpload
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
+from ofmhelpers.features.clone_links.constants import CloneLinksTask
 from ofmhelpers.features.files import disk, library
 from ofmhelpers.features.files.disk import DEFAULT_ROOT
 from ofmhelpers.features.files.library import UPLOADS, Library, Section
@@ -26,7 +30,8 @@ router = APIRouter(
 _NAMED = {
     "aigen": Section(label="AI GEN", tasks=frozenset(GENERATE_TOOLS)),
     "clone": Section(
-        label="CLONE", tasks=frozenset({"clone", "clone_long", "clone_links"})
+        label="CLONE",
+        tasks=frozenset({"clone", "clone_long", CloneLinksTask.RUN}),
     ),
     "downloads": Section(label="DOWNLOADS", tasks=frozenset(DOWNLOAD_TOOLS)),
 }
@@ -46,7 +51,7 @@ FormText = Annotated[str, Form()]
 
 
 class DiskUploadForm(FormModel):
-    files: list[UploadFile]
+    files: list[FileUpload]
     path: str = ""
     root: str = DEFAULT_ROOT
 
@@ -65,7 +70,9 @@ DiskFile = Annotated[Path, Depends(_disk_file)]
 
 def _thumb(file_path: Path) -> FileResponse:
     return FileResponse(
-        library.thumb(file_path), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
+        library.thumb(file_path),
+        media_type="image/webp",
+        headers=PRIVATE_FOR_A_DAY,
     )
 
 
@@ -80,14 +87,17 @@ def _back(user_id: int, section: str) -> RedirectResponse:
 
 @router.get("")
 def files_page(
-    request: Request, user: int | None = None, section: str = "aigen", page: int = 0
+    request: Request,
+    user: int | None = None,
+    section: str = "aigen",
+    page: int = 0,
 ) -> Response:
     view = LIBRARY.view(user, section, page)
-    return render(request, "file_manager.html", **dict(view))
+    return render(request, "file_manager.html", dict(view))
 
 
 @router.get("/assets/{user_id}")
-def asset_file(found: Asset, download: bool = False) -> Response:
+def asset_file(found: Asset, download: bool = False) -> Response:  # noqa: FBT001, FBT002
     name = strip_asset_hash_prefix(found.name)
     return _attachment(found, name) if download else media_response(found, name)
 
@@ -104,13 +114,16 @@ def asset_delete(user_id: int, found: Asset) -> Response:
 
 
 @router.post("/assets/{user_id}/upload")
-def asset_upload(user_id: int, files: Annotated[list[UploadFile], File()]) -> Response:
+def asset_upload(
+    user_id: int,
+    files: Annotated[list[MediaUpload], File(min_length=1)],
+) -> Response:
     library.add_assets(user_id, files)
     return _back(user_id, UPLOADS)
 
 
 @router.get("/runs/{job_id}/{index}")
-def run_file(job_id: str, index: int, download: bool = False) -> Response:
+def run_file(job_id: str, index: int, download: bool = False) -> Response:  # noqa: FBT001, FBT002
     found = library.run_file(job_id, index)
     return _attachment(found, found.name) if download else media_response(found)
 
@@ -137,7 +150,7 @@ def disk_upload(form: Annotated[DiskUploadForm, Form()]) -> Response:
 
 @router.get("/disk")
 def browse(request: Request, root: str = DEFAULT_ROOT, path: str = "") -> Response:
-    return render(request, "file_manager_disk.html", **dict(disk.folder(root, path)))
+    return render(request, "file_manager_disk.html", dict(disk.folder(root, path)))
 
 
 @router.get("/view")

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import re
 import shlex
@@ -11,7 +13,8 @@ PUNCTUATION = ";&|()"
 PIPES = {"|", "|&"}
 REDIRECT_TO_STREAM = re.compile(r"\d*>&\d+|&>")
 HEREDOC = re.compile(
-    r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n((?:.*?\n)?)[ \t]*\3[ \t]*(?=\n|$)", re.DOTALL
+    r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n((?:.*?\n)?)[ \t]*\3[ \t]*(?=\n|$)",
+    re.DOTALL,
 )
 QUOTE_PAIR = re.compile(r"([\"'])(.*?)\1")
 ANSI_QUOTED = re.compile(r"(?<![\w'\"\\])\$'((?:[^'\\]|\\.)*)'")
@@ -29,7 +32,8 @@ SHELL_PROGRAMS = {"bash", "sh", "zsh", "dash", "ksh", "powershell", "pwsh", "cmd
 JOINING_SHELLS = {"powershell", "pwsh", "cmd"}
 EVAL_PROGRAMS = {"eval", "iex", "invoke-expression"}
 INLINE_FLAG = re.compile(
-    r"^-(?:[a-z]*c|com(?:m(?:a(?:n(?:d)?)?)?)?)$|^/[ck]$", re.IGNORECASE
+    r"^-(?:[a-z]*c|com(?:m(?:a(?:n(?:d)?)?)?)?)$|^/[ck]$",
+    re.IGNORECASE,
 )
 LAUNCHER_VALUE_FLAGS = frozenset(
     {
@@ -44,11 +48,11 @@ LAUNCHER_VALUE_FLAGS = frozenset(
         "--python",
         "--directory",
         "--project",
-    }
+    },
 )
 TIMEOUT_VALUE_FLAGS = frozenset({"-k", "--kill-after", "-s", "--signal"})
 UV_VALUE_FLAGS = frozenset(
-    {"--project", "--with", "--python", "--directory", "--package"}
+    {"--project", "--with", "--python", "--directory", "--package"},
 )
 FLAG_WRAPPERS = frozendict(
     {
@@ -67,13 +71,13 @@ FLAG_WRAPPERS = frozendict(
                 "-s",
                 "--arg-file",
                 "--delimiter",
-            }
+            },
         ),
         "nice": frozenset({"-n", "--adjustment"}),
         "setsid": frozenset(),
         "stdbuf": frozenset({"-i", "-o", "-e", "--input", "--output", "--error"}),
         "ionice": frozenset({"-c", "-n", "-p", "-P", "-u", "--class", "--classdata"}),
-    }
+    },
 )
 
 
@@ -110,7 +114,7 @@ def without_inner_quotes(token: str) -> str:
     return paired if paired != plain else plain.strip("\"'")
 
 
-def tokens(command: str, posix: bool) -> list[str]:
+def tokens(command: str, posix: bool) -> list[str]:  # noqa: FBT001
     joined = LINE_CONTINUATION.sub(" ", without_heredoc_bodies(command))
     if not posix:
         joined = POWERSHELL_CONTINUATION.sub(" ", joined)
@@ -119,7 +123,7 @@ def tokens(command: str, posix: bool) -> list[str]:
     return lexed(plain, posix)
 
 
-def lexed(text: str, posix: bool) -> list[str]:
+def lexed(text: str, posix: bool) -> list[str]:  # noqa: FBT001
     lexer = shlex.shlex(text, posix=posix, punctuation_chars=PUNCTUATION)
     lexer.whitespace_split = True
     lexer.commenters = ""
@@ -194,7 +198,7 @@ def shell_statements(event: HookEvent) -> list[Statement]:
     return statements(event.command, posix=event.tool_name != "PowerShell")
 
 
-def heredoc_scripts(command: str, posix: bool) -> list[str]:
+def heredoc_scripts(command: str, posix: bool) -> list[str]:  # noqa: FBT001
     scripts = []
     for found in HEREDOC.finditer(command):
         line_start = command.rfind("\n", 0, found.start()) + 1
@@ -210,7 +214,7 @@ def heredoc_scripts(command: str, posix: bool) -> list[str]:
     return scripts
 
 
-def statements(command: str, posix: bool = True, depth: int = 0) -> list[Statement]:
+def statements(command: str, posix: bool = True, depth: int = 0) -> list[Statement]:  # noqa: FBT001, FBT002
     flat = _flat_statements(command, posix)
     nested = [
         found.group(1) or found.group(2)
@@ -230,7 +234,7 @@ def statements(command: str, posix: bool = True, depth: int = 0) -> list[Stateme
     ]
 
 
-def _flat_statements(command: str, posix: bool) -> list[Statement]:
+def _flat_statements(command: str, posix: bool) -> list[Statement]:  # noqa: FBT001
     found: list[Statement] = []
     segments: list[list[str]] = [[]]
     for token in [*tokens(command, posix), ";"]:
@@ -241,7 +245,7 @@ def _flat_statements(command: str, posix: bool) -> list[Statement]:
             words = [unwrapped(segment) for segment in segments]
             if words[0]:
                 found.append(
-                    Statement(words=words[0], piped_to=[w for w in words[1:] if w])
+                    Statement(words=words[0], piped_to=[w for w in words[1:] if w]),
                 )
             segments = [[]]
         else:

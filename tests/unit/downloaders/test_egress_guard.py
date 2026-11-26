@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ipaddress
 
 import pytest
@@ -79,7 +81,9 @@ def test_a_public_host_passes(real_network):
 
 @pytest.mark.parametrize("url", PRIVATE_URLS[:5])
 def test_download_media_runs_no_tool_for_an_internal_link(
-    real_network, url, monkeypatch
+    real_network,
+    url,
+    monkeypatch,
 ):
     def never(*_a, **_k):
         msg = "a downloader ran"
@@ -100,7 +104,8 @@ def test_the_preview_read_refuses_an_internal_link(real_network, url):
 
 
 def test_the_preview_never_probes_an_internal_stream_named_by_the_page(
-    real_network, monkeypatch
+    real_network,
+    monkeypatch,
 ):
     page_info = YtDlpInfo(url="http://169.254.169.254/latest/meta-data/", vcodec="h264")
     monkeypatch.setattr(generic._Reading, "try_peek", lambda *_a: page_info)
@@ -130,7 +135,8 @@ class _Reply:
 
 
 def test_a_redirect_to_an_internal_host_is_not_followed_and_is_closed(
-    real_network, monkeypatch
+    real_network,
+    monkeypatch,
 ):
     reply = _Reply("http://redis:6379/")
     asked = []
@@ -164,10 +170,14 @@ def test_the_fourth_redirect_is_refused(real_network, monkeypatch):
 
 
 def test_the_kvs_reader_reports_a_redirect_to_an_internal_host(
-    real_network, monkeypatch, tmp_path
+    real_network,
+    monkeypatch,
+    tmp_path,
 ):
     monkeypatch.setattr(
-        egress.outbound, "get", lambda _u, **_k: _Reply("http://redis:6379/")
+        egress.outbound,
+        "get",
+        lambda _u, **_k: _Reply("http://redis:6379/"),
     )
 
     result = kvs.download("https://example.com/v", tmp_path)

@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -12,7 +14,8 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column(
-        "tracked_accounts", sa.Column("untracked_at", sa.Float(), nullable=True)
+        "tracked_accounts",
+        sa.Column("untracked_at", sa.Float(), nullable=True),
     )
 
 

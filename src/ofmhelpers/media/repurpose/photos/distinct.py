@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy import random
 
 from PIL import Image, ImageEnhance
@@ -6,7 +8,8 @@ lazy import numpy as np
 lazy import pdqhash
 
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.media.repurpose.checker.visual import SAME_PICTURE, HashKind
+lazy from ofmhelpers.media.repurpose.checker.schema import HashKind
+lazy from ofmhelpers.media.repurpose.checker.visual import SAME_PICTURE
 lazy from ofmhelpers.media.repurpose.photos.models import Retouch
 
 logger = get_logger(__name__)
@@ -60,7 +63,10 @@ def pick(stills: list[Still], count: int) -> list[Still]:
 
 
 def _retouched(
-    picture: Image.Image, crop: float, how: Retouch, rng: random.Random
+    picture: Image.Image,
+    crop: float,
+    how: Retouch,
+    rng: random.Random,
 ) -> Image.Image:
     width, height = picture.size
     left, top, right, bottom = (crop * rng.uniform(*how.side) for _ in range(4))
@@ -74,7 +80,8 @@ def _retouched(
     for enhance in (ImageEnhance.Brightness, ImageEnhance.Contrast, ImageEnhance.Color):
         out = enhance(out).enhance(1 + rng.uniform(*how.tone))
     noise = np.random.default_rng(rng.getrandbits(32)).standard_normal(
-        (height, width, 3), dtype=np.float32
+        (height, width, 3),
+        dtype=np.float32,
     )
     noise *= how.grain
     pixels = np.asarray(out, dtype=np.float32) + noise

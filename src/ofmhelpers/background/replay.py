@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 from typing import Any
 lazy from collections.abc import Callable
@@ -8,6 +10,7 @@ from ofmhelpers.background.registry import RESTARTS, RESUMABLE
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import get_job, reopen_settled
 from ofmhelpers.features.assets.store import assets_root_for_actor
+from ofmhelpers.features.clone_links.constants import CloneLinksTask
 from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.features.generate.legacy import legacy_tools
 from ofmhelpers.features.jobs.runner import run_job
@@ -29,7 +32,7 @@ FAKE_KEYS: frozendict[str, str] = frozendict(
         "kie": kie_fake.FAKE_KEY,
         "runninghub": runninghub_fake.FAKE_KEY,
         "fake": "",
-    }
+    },
 )
 NOT_REPLAYABLE: frozendict[str, str] = frozendict(
     {
@@ -37,13 +40,13 @@ NOT_REPLAYABLE: frozendict[str, str] = frozendict(
         "clean_images": "rewrites its uploads in place",
         "report_ask": "keeps no chat to answer, on purpose",
         "drive_upload": "its rows are the uploads: Upload again on the page",
-        "clone_links_review": "/clone-links is retired",
+        CloneLinksTask.REVIEW: "/clone-links is retired",
         "login": "a sign-in, not work",
         "logout": "a sign-out, not work",
         "idle_logout": "an idle sign-out, not work",
         "viewing": "the start of View as, not work",
         "viewing_end": "the end of View as, not work",
-    }
+    },
 )
 
 

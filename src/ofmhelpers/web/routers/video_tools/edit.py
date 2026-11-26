@@ -1,11 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated, Self
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Query, Request, UploadFile
+from fastapi import APIRouter, File, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import Field, model_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import VideoUpload
 from ofmhelpers.features.clone_pricing.targets import clone_targets
 from ofmhelpers.features.edit import service
 from ofmhelpers.features.edit.clips import Clip
@@ -62,39 +65,49 @@ def page(
     return render(
         request,
         "edit.html",
-        page=service.Asked(
-            video=video or "", assets_root=assets_root, actor=actor
-        ).page(run_prepare),
-        limit_s=_limit_s(),
-        min_s=settings.web.edit_min_s,
-        max_part_s=settings.web.edit_max_part_s,
-        max_clips=settings.web.edit_max_clips,
-        aspects=list(Aspect),
-        speeds=SPEEDS,
-        sizes=list(Size),
-        default_size=Framing().size,
+        {
+            "page": service.Asked(
+                video=video or "",
+                assets_root=assets_root,
+                actor=actor,
+            ).page(run_prepare),
+            "limit_s": _limit_s(),
+            "min_s": settings.web.edit_min_s,
+            "max_part_s": settings.web.edit_max_part_s,
+            "max_clips": settings.web.edit_max_clips,
+            "aspects": list(Aspect),
+            "speeds": SPEEDS,
+            "sizes": list(Size),
+            "default_size": Framing().size,
+        },
     )
 
 
 @router.post("/upload", status_code=201)
 def upload(
-    assets_root: AssetsRoot, actor: Actor, file: Annotated[UploadFile, File()]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    file: Annotated[VideoUpload, File(media_type="video/*")],
 ) -> EditVideo:
     return service.upload(file, assets_root, actor, run_prepare)
 
 
 @router.get("/video")
 def video_to_add(
-    assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    video: Annotated[str, Query()],
 ) -> EditVideo:
     return service.Asked(video=video, assets_root=assets_root, actor=actor).add(
-        run_prepare
+        run_prepare,
     )
 
 
 @router.get("/prepared")
 def prepared(
-    assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    video: Annotated[str, Query()],
 ) -> Prepared:
     return service.Asked(video=video, assets_root=assets_root, actor=actor).prepared()
 
@@ -140,8 +153,13 @@ def frame(assets_root: AssetsRoot, query: Annotated[FrameQuery, Query()]) -> Res
 def cut(assets_root: AssetsRoot, actor: Actor, body: CutRequest) -> JobQueued:
     return JobQueued(
         job_id=service.queue_cut(
-            body.clips, body, body.speed, assets_root, actor, run_cut
-        )
+            body.clips,
+            body,
+            body.speed,
+            assets_root,
+            actor,
+            run_cut,
+        ),
     )
 
 

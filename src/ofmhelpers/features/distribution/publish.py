@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 import time
 from pathlib import Path
@@ -9,11 +11,10 @@ from pydantic import BaseModel
 from ofmhelpers.config import settings
 from ofmhelpers.db.distribution import store
 from ofmhelpers.db.distribution.schema import Channel, Post, PostKind, PostStatus
-from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.assets.store import uploads_root
 from ofmhelpers.features.distribution.presets import preset_of
-from ofmhelpers.features.drive.folders import review_target
 from ofmhelpers.features.refusals import NotFoundError
+from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.integrations.pinterest import (
     Media,
     PinDraft,
@@ -25,6 +26,7 @@ from ofmhelpers.integrations.pinterest import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim, video_probe
+lazy from ofmhelpers.features.storage.service import StorageServiceReview
 
 logger = get_logger(__name__)
 
@@ -51,7 +53,9 @@ def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: AR
         raise NotFoundError(NO_POST)
     if post.status is PostStatus.published and post.remote_id:
         return PublishedPin(
-            post_id=post.id, pin_id=post.remote_id, url=pin_url(post.remote_id)
+            post_id=post.id,
+            pin_id=post.remote_id,
+            url=pin_url(post.remote_id),
         )
     if post.status is not PostStatus.publishing:
         raise NotFoundError(NOT_CLAIMED)
@@ -69,12 +73,17 @@ def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: AR
         source=post.source,
         attempt=post.attempts,
     ) as span:
-        pin = _publish(channel, post)
+        review = storage_of(channel.user_id, interactive=False).review
+        pin = _publish(channel, post, review)
         span.set_attribute("pin_id", pin.pin_id)
     return pin
 
 
-def _publish(channel: Channel, post: Post) -> PublishedPin:
+def _publish(
+    channel: Channel,
+    post: Post,
+    review: StorageServiceReview,
+) -> PublishedPin:
     repo = store.repository()
     model = preset_of(channel.user_id, post.preset)
     if model is None:
@@ -83,7 +92,7 @@ def _publish(channel: Channel, post: Post) -> PublishedPin:
     here = uploads_root() / "distribution" / str(post.id)
     start = time.monotonic()
     try:
-        path = _download(channel.user_id, post, here)
+        path = _download(review, post, here)
         client = PinterestClient(repo.cookies(channel.id))
         renewed = client
         media = _media(client, path, post.kind, here)
@@ -95,7 +104,7 @@ def _publish(channel: Channel, post: Post) -> PublishedPin:
                 title=post.title if post.title is not None else model.title,
                 description=post.description or "",
                 link=post.link or "",
-            )
+            ),
         )
     except PinterestRateLimitedError as exc:
         wait_s = exc.retry_after or settings.distribution.rate_limit_pause_s
@@ -170,13 +179,13 @@ def _keep_session(channel: Channel, client: PinterestClient) -> None:
         store.repository().set_cookies(channel.id, cookies, session_expires_at(cookies))
     except Exception:
         logger.exception(
-            "pinterest @%s: could not save the renewed session", channel.account_name
+            "pinterest @%s: could not save the renewed session",
+            channel.account_name,
         )
 
 
-def _download(user_id: int, post: Post, here: Path) -> Path:
-    place = review_target(refresh_token(user_id), user_id)
-    got = place.drive.download(post.file_id)
+def _download(review: StorageServiceReview, post: Post, here: Path) -> Path:
+    got = review.target().drive.download(post.file_id)
     here.mkdir(parents=True, exist_ok=True)
     path = here / f"media{Path(got.name).suffix.lower() or '.bin'}"
     path.write_bytes(got.content)
@@ -200,7 +209,7 @@ def _media(client: PinterestClient, path: Path, kind: PostKind, here: Path) -> M
             short_side=min(size.width, size.height),
             threads=1,
             timeout_s=timeout_s,
-        )
+        ),
     )
     video_id = client.upload(path, video_ms=duration_ms)
     cover_id = client.upload(cover)

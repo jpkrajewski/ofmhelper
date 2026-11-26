@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Literal
 
@@ -27,7 +29,8 @@ from ofmhelpers.media import fake_media
 
 def test_a_prompt_keeps_text_and_media_in_order():
     prompt = Prompt.of(
-        "Subject:", Path("a/face.jpg"), "Video:", Path("b/clip.mp4"), system="role"
+        ["Subject:", Path("a/face.jpg"), "Video:", Path("b/clip.mp4")],
+        system="role",
     )
 
     assert [type(p) for p in prompt.parts] == [TextPart, MediaPart, TextPart, MediaPart]
@@ -41,7 +44,8 @@ def test_a_prompt_keeps_text_and_media_in_order():
 
 def test_a_file_that_is_no_media_is_refused():
     with pytest.raises(
-        LLMInputError, match="notes.txt is not an image, video or audio"
+        LLMInputError,
+        match="notes.txt is not an image, video or audio",
     ):
         MediaPart.of(Path("notes.txt"))
 
@@ -72,7 +76,7 @@ def test_usage_adds_up_what_was_reported():
             Usage(input_tokens=10, output_tokens=2),
             Usage(input_tokens=5, thinking_tokens=7, output_tokens=1),
             Usage(),
-        ]
+        ],
     )
     assert found == Usage(input_tokens=15, thinking_tokens=7, output_tokens=3)
     assert Usage.summed([]) == Usage()

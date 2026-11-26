@@ -1,9 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from urllib.parse import urlencode
 lazy from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict
-lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.db.jobs.store import get_job, job_counts, list_jobs_page
 from ofmhelpers.db.users.store import list_users
@@ -16,11 +17,12 @@ from ofmhelpers.features.assets.store import (
 )
 from ofmhelpers.features.files.disk import within_roots
 from ofmhelpers.features.files.schema import FileTile, UserFiles
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import MediaUpload
 
 logger = get_logger(__name__)
 
@@ -61,7 +63,9 @@ def _tile(name: str, label: str, mtime: float, url: str, query: str = "") -> Fil
         open_url=f"{url}{query}",
         delete_url=f"{url}/delete{query}",
         thumb_url=(
-            f"{url}/thumb{query}" if classify_kind(name) in ("image", "video") else None
+            f"{url}/thumb{query}"
+            if FileKind.from_ext(name) in (FileKind.IMAGE, FileKind.VIDEO)
+            else None
         ),
     )
 
@@ -105,7 +109,11 @@ class Library(BaseModel):
                     per_section[self.section_of(count.task)] += count.count
             per_section[UPLOADS] = len(_uploads(user.id))
             found.append(
-                UserFiles(id=user.id, label=user.name or user.email, counts=per_section)
+                UserFiles(
+                    id=user.id,
+                    label=user.name or user.email,
+                    counts=per_section,
+                ),
             )
         return found
 
@@ -179,7 +187,7 @@ def delete_asset(found: Path, user_id: int) -> None:
     logger.info("file manager: deleted upload %s of user %s", found.name, user_id)
 
 
-def add_assets(user_id: int, files: Sequence[UploadFile]) -> None:
+def add_assets(user_id: int, files: Sequence[MediaUpload]) -> None:
     root = assets_root_for_user(user_id)
     for upload in files:
         save_asset(upload, root)
@@ -197,7 +205,7 @@ def run_file(job_id: str, index: int) -> Path:
 
 
 def thumb(file_path: Path) -> Path:
-    if classify_kind(file_path.name) not in ("image", "video"):
+    if FileKind.from_ext(file_path.name) not in (FileKind.IMAGE, FileKind.VIDEO):
         msg = "No thumbnail"
         raise NotFoundError(msg)
     try:

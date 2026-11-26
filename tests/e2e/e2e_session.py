@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -30,7 +32,11 @@ def my_root(drive, email: str) -> str:
 
 
 def log_in(
-    browser: Browser, base_url: str, email: str, password: str, state: Path
+    browser: Browser,
+    base_url: str,
+    email: str,
+    password: str,
+    state: Path,
 ) -> None:
     context = browser.new_context(base_url=base_url, timezone_id=TIME_ZONE)
     page = context.new_page()
@@ -46,7 +52,7 @@ def log_in(
 
 _CDN = re.compile(rf"^https://{re.escape(GLOBAL_CDN_HOST)}/")
 _FAKE_IMAGES = re.compile(
-    rf"^(?:{re.escape(SNAPCHAT_CDN)}|{re.escape(X_CDN)})/.+\.jpg$"
+    rf"^(?:{re.escape(SNAPCHAT_CDN)}|{re.escape(X_CDN)})/.+\.jpg$",
 )
 _KIE_RESULTS = re.compile(rf"^https://{re.escape(RESULT_HOST)}/")
 
@@ -93,7 +99,7 @@ class Session:
         self.page.on(
             "requestfailed",
             lambda r: self.failed_requests.append(
-                f"{r.method} {r.url}: {r.failure or 'failed'}"
+                f"{r.method} {r.url}: {r.failure or 'failed'}",
             ),
         )
         self.page.on("response", self._on_response)
@@ -101,7 +107,7 @@ class Session:
     def _on_response(self, response: Response) -> None:
         if response.status >= 400:
             self.failed_requests.append(
-                f"{response.request.method} {response.url}: {response.status}"
+                f"{response.request.method} {response.url}: {response.status}",
             )
 
     def goto(self, path: str) -> int:

@@ -1,4 +1,6 @@
-from typing import Any
+# Copyright (C) 2026 jpkrajewski
+
+from typing import Any, cast
 
 lazy from pydantic import JsonValue
 
@@ -13,9 +15,9 @@ def example(schema: dict[str, Any], defs: dict[str, Any] | None = None) -> JsonV
     if "$ref" in schema:
         return example(defs[str(schema["$ref"]).rsplit("/", 1)[-1]], defs)
     if "enum" in schema:
-        return schema["enum"][0]
+        return cast("JsonValue", schema["enum"][0])
     if "const" in schema:
-        return schema["const"]
+        return cast("JsonValue", schema["const"])
     for key in ("anyOf", "oneOf", "allOf"):
         options = [o for o in schema.get(key, []) if o.get("type") != "null"]
         if options:

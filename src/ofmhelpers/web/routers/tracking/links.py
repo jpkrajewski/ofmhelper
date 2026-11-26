@@ -1,16 +1,17 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ofmhelpers.db.short_links.schema import (
+from ofmhelpers.db.short_links.models import (
     AssignLinkCreator,
     GenerateLinks,
     LinkQuery,
-    LinksQueued,
-    SelectedLinks,
 )
+from ofmhelpers.db.short_links.schema import LinksQueued, SelectedLinks
 from ofmhelpers.features.links import page
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, OwnerId, Scope
@@ -25,10 +26,12 @@ class _Count(BaseModel):
 
 @router.get("")
 def index(
-    request: Request, query: Annotated[LinkQuery, Query()], scope: Scope
+    request: Request,
+    query: Annotated[LinkQuery, Query()],
+    scope: Scope,
 ) -> Response:
     view = page.list_view(query, scope)
-    return render(request, "links.html", query=query, **dict(view))
+    return render(request, "links.html", {"query": query, **dict(view)})
 
 
 @router.post("/generate", status_code=202)

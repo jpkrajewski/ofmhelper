@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from contextlib import contextmanager
 from types import MappingProxyType
@@ -59,12 +61,16 @@ def profile_input(handles: list[str]) -> ProfileScraperInput:
 
 def reel_input(handles: list[str], limit: int, days: int) -> ReelScraperInput:
     return ReelScraperInput(
-        username=handles, results_limit=limit, only_posts_newer_than=f"{days} days"
+        username=handles,
+        results_limit=limit,
+        only_posts_newer_than=f"{days} days",
     )
 
 
 def parsed_items[T: BaseModel](
-    items: list[DatasetItem], model: type[T], what: str
+    items: list[DatasetItem],
+    model: type[T],
+    what: str,
 ) -> list[T]:
     found: list[T] = []
     for item in items:
@@ -109,7 +115,7 @@ def _stats(profile: ApifyProfile, reels: list[ApifyReel], now: float) -> Account
             is_private=profile.is_private,
             is_verified=profile.is_verified,
             avatar_url=_MEDIA_URL.validate_python(
-                profile.avatar_url or profile.small_avatar_url
+                profile.avatar_url or profile.small_avatar_url,
             ),
         ),
         posts=[
@@ -142,7 +148,8 @@ def one_apify_batch(runs: int, wait_s: float | None = None) -> Generator[bool]:
         return
     if not held:
         logger.warning(
-            "apify: another batch held the lock %s s; this one goes on", wait
+            "apify: another batch held the lock %s s; this one goes on",
+            wait,
         )
         yield False
         return
@@ -176,7 +183,9 @@ class ApifyInstagramSource(AccountSource):
         return answers
 
     def _through_keys(
-        self, keys: list[str], handles: list[str]
+        self,
+        keys: list[str],
+        handles: list[str],
     ) -> MappingProxyType[str, AccountStats]:
         s = settings.accounts
         each = s.apify_usd_per_item * (1 + s.apify_est_reels)
@@ -189,7 +198,9 @@ class ApifyInstagramSource(AccountSource):
             room = int((credit - 2 * s.apify_usd_per_run) // each)
             if room < 1:
                 logger.info(
-                    "apify key %s: $%.2f left, too little", client.key_hint, credit
+                    "apify key %s: $%.2f left, too little",
+                    client.key_hint,
+                    credit,
                 )
                 continue
             group, left = left[:room], left[room:]
@@ -215,7 +226,9 @@ class ApifyInstagramSource(AccountSource):
         now = time.time()
         asked = set(handles)
         run = client.run(
-            s.apify_profile_actor, profile_input(handles), s.apify_run_timeout_s
+            s.apify_profile_actor,
+            profile_input(handles),
+            s.apify_run_timeout_s,
         )
         profiles: dict[str, ApifyProfile] = {}
         for profile in parsed_items(client.items(run), ApifyProfile, "profile"):

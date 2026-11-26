@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import os
 import tempfile
@@ -109,7 +111,7 @@ def _mp4_args(probe: _Probe, src: Path, dest: Path) -> list[str]:
 def _dest(src: Path, dest_dir: Path) -> Path:
     stat = src.stat()
     digest = hashlib.sha256(
-        f"{src.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode()
+        f"{src.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode(),
     ).hexdigest()[:12]
     return dest_dir / f"{src.stem}-{digest}{MP4_SUFFIX}"
 
@@ -123,7 +125,9 @@ def as_mp4(src: Path, dest_dir: Path, timeout_s: int) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     probe = _probe(src, timeout_s)
     fd, name = tempfile.mkstemp(
-        dir=dest_dir, prefix=f".{dest.stem}.", suffix=MP4_SUFFIX
+        dir=dest_dir,
+        prefix=f".{dest.stem}.",
+        suffix=MP4_SUFFIX,
     )
     os.close(fd)
     tmp = Path(name)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from collections.abc import Iterator
 
 import pytest
@@ -25,8 +27,6 @@ from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
 from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
 from ofmhelpers.integrations.apify.fake import fake_apify
 from ofmhelpers.integrations.fanvue.fake import fake_fanvue
-from ofmhelpers.integrations.gdrive import client as drive_client
-from ofmhelpers.integrations.gdrive.fake import _fake_drive
 from ofmhelpers.integrations.instagram.fake import fake_instagram
 from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
 from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
@@ -36,6 +36,8 @@ from ofmhelpers.integrations.senders.telegram.client import _client as _telegram
 from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.integrations.stacked.fake import fake_stacked
+from ofmhelpers.integrations.storage.gdrive import client as drive_client
+from ofmhelpers.integrations.storage.gdrive.fake import _fake_drive
 from ofmhelpers.media import fake_media
 
 FAKE = "fake"
@@ -111,7 +113,7 @@ def backend(request, monkeypatch, tmp_path) -> Iterator[str]:
 
 
 @pytest.fixture(
-    params=[FAKE, pytest.param(REAL, marks=[pytest.mark.live, pytest.mark.paid])]
+    params=[FAKE, pytest.param(REAL, marks=[pytest.mark.live, pytest.mark.paid])],
 )
 def paid_backend(request, monkeypatch, tmp_path) -> Iterator[str]:
     yield from _switched(request.param, monkeypatch, tmp_path)

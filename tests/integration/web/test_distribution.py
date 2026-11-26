@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import time
 
@@ -6,8 +8,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in_agency
 
+from ofmhelpers.config import settings
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.distribution import store
 from ofmhelpers.db.distribution.schema import ModelPreset, PostStatus
 from ofmhelpers.db.self_links import store as self_links
@@ -17,11 +20,12 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.distribution import publish, sweep
 from ofmhelpers.features.distribution.report import report
 from ofmhelpers.features.distribution.service import Distribution, Upload
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.pinterest.fake import FakePinterest, fake_pinterest
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -71,7 +75,7 @@ def pinterest(fake_externals, monkeypatch) -> FakePinterest:
 def _instagram(fake: FakeDrive, phone: int, handle: str, creator: str) -> str:
     assert devices.add_login(phone, LoginFields(service="instagram", username=handle))
     tracked_accounts.track("instagram", handle, creator)
-    drive_folders.sync()
+    storage_jobs.sync()
     (account,) = fake.named(f"{handle} - Anna", ROOT)
     return account
 
@@ -86,8 +90,11 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
     users.set_drive_root(users.agency_id(), ROOT)
     phone = devices.add_device(
         DeviceFields(
-            label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
-        )
+            label="Phone 01",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="Anna",
+        ),
     )
     ann = _instagram(fake, phone, "ann.ig", "dane")
     (posted,) = fake.named("POSTED", ann)
@@ -100,7 +107,7 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
     bob = _instagram(fake, phone, "bob.ig", "clark")
     (bob_posted,) = fake.named("POSTED", bob)
     fake.add_file(bob_posted, "CLARK_1.jpg", "image/jpeg")
-    drive_folders.sync()
+    storage_jobs.sync()
     self_links.add_domain(DOMAIN, None)
     store.repository().save_preset(users.agency_id(), DANE)
     store.repository().save_preset(users.agency_id(), CLARK)
@@ -120,12 +127,14 @@ def pictures(monkeypatch):
 
 
 def _dist() -> Distribution:
-    return Distribution(uid=users.agency_id(), scope=users.agency_id())
+    uid = users.agency_id()
+    storage = storage_of(uid, interactive=True)
+    return Distribution(uid=uid, scope=uid, storage=storage)
 
 
 def _add(*sessions: str) -> list:
     return _dist().add(
-        [Upload(name=f"{s}.txt", file=io.BytesIO(cookies_txt(s))) for s in sessions]
+        [Upload(name=f"{s}.txt", file=io.BytesIO(cookies_txt(s))) for s in sessions],
     )
 
 
@@ -148,21 +157,44 @@ def test_bulk_upload_adds_each_account_with_every_models_content(pinterest, driv
         ],
     )
 
-    assert page.status_code == 200
+    assert page.status_code == 200, page.text
     assert sorted(c.account_name for c in _channels()) == ["pin_one", "pin_two"]
     assert [store.repository().counts(c.id).queued for c in _channels()] == [5, 5]
     assert "Added @pin_one" in page.text
     assert "5 files to pin" in page.text
 
 
+def test_an_empty_upload_is_refused():
+    page = _signed_in().post(
+        "/distribution/accounts",
+        files=[("files", ("empty.txt", b"", "text/plain"))],
+    )
+
+    assert page.status_code == 422
+    assert _channels() == []
+
+
+def test_the_global_upload_limit_is_enforced(monkeypatch):
+    monkeypatch.setattr(settings.web, "max_upload_mb", 1)
+
+    page = _signed_in().post(
+        "/distribution/accounts",
+        files=[("files", ("big.txt", b"x" * (1024 * 1024 + 1), "text/plain"))],
+    )
+
+    assert page.status_code == 422
+    assert _channels() == []
+
+
 def test_a_file_without_a_pinterest_login_is_reported_and_the_rest_go_on(
-    pinterest, drive
+    pinterest,
+    drive,
 ):
     added = _dist().add(
         [
             Upload(name="bad.txt", file=io.BytesIO(b"# Netscape HTTP Cookie File\n")),
             Upload(name="good.txt", file=io.BytesIO(cookies_txt("good"))),
-        ]
+        ],
     )
 
     assert [(a.file, a.account, bool(a.error)) for a in added] == [
@@ -172,7 +204,9 @@ def test_a_file_without_a_pinterest_login_is_reported_and_the_rest_go_on(
 
 
 def test_each_pin_carries_its_own_models_board_title_caption_and_link(
-    pinterest, drive, pictures
+    pinterest,
+    drive,
+    pictures,
 ):
     _add("one")
     (channel,) = _channels()
@@ -221,7 +255,9 @@ def test_the_accounts_do_not_pin_the_same_file_first(pinterest, drive, pictures)
 
 
 def test_rate_limited_the_pin_goes_back_in_line_and_the_account_waits(
-    pinterest, drive, pictures
+    pinterest,
+    drive,
+    pictures,
 ):
     _add("one")
     (channel,) = _channels()
@@ -255,7 +291,10 @@ def test_logged_out_the_account_stops_until_new_cookies(pinterest, drive, pictur
 
 
 def test_the_sweep_pins_only_when_due_at_jittered_times(
-    pinterest, drive, pictures, monkeypatch
+    pinterest,
+    drive,
+    pictures,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_DISTRIBUTION_SCHEDULED", "true")
     _add("one")
@@ -280,7 +319,10 @@ def test_the_sweep_pins_only_when_due_at_jittered_times(
 
 
 def test_off_schedule_the_sweep_only_fills_queues(
-    pinterest, drive, pictures, monkeypatch
+    pinterest,
+    drive,
+    pictures,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_DISTRIBUTION_SCHEDULED", "false")
     _add("one")
@@ -293,7 +335,10 @@ def test_off_schedule_the_sweep_only_fills_queues(
 
 
 def test_an_ig_pin_names_the_handle_with_no_caption_and_no_link(
-    pinterest, drive, pictures, monkeypatch
+    pinterest,
+    drive,
+    pictures,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_DISTRIBUTION_HANDLE_SHARE", "1")
     _add("one")
@@ -323,7 +368,10 @@ def test_about_half_the_pins_are_ig_pins(monkeypatch):
 
 
 def test_the_page_says_it_works_and_shows_pins_and_clicks(
-    pinterest, drive, pictures, monkeypatch
+    pinterest,
+    drive,
+    pictures,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_DISTRIBUTION_SCHEDULED", "true")
     _add("one")
@@ -350,7 +398,9 @@ def test_the_page_names_an_account_that_needs_new_cookies(pinterest, drive, pict
 
 
 def test_the_report_has_each_models_pins_and_link_clicks_per_day(
-    pinterest, drive, pictures
+    pinterest,
+    drive,
+    pictures,
 ):
     _add("one")
     (channel,) = _channels()
@@ -363,7 +413,7 @@ def test_the_report_has_each_models_pins_and_link_clicks_per_day(
     )
     for kind in ("view", "view", "click"):
         self_links.record_click(
-            SelfClick(link_id=dane_link.link_id, kind=kind, referrer="pinterest.com")
+            SelfClick(link_id=dane_link.link_id, kind=kind, referrer="pinterest.com"),
         )
 
     found = report(7)
@@ -384,7 +434,7 @@ def test_the_page_names_an_account_whose_pins_all_fail(pinterest, drive, picture
         "resource_response": {
             "status": "failure",
             "error": {"message": "Board is archived", "code": 0, "http_status": 400},
-        }
+        },
     }
     pinterest.fail_next = [FakeReply.json_body(refusal, status=400)] * 20
 
@@ -398,7 +448,8 @@ def test_the_page_names_an_account_whose_pins_all_fail(pinterest, drive, picture
 def test_the_page_warns_a_week_before_an_accounts_cookies_expire(pinterest, drive):
     soon = int(time.time()) + 3 * 86400
     expiring = cookies_txt("one").replace(
-        b"1999999999\t_pinterest_sess", f"{soon}\t_pinterest_sess".encode()
+        b"1999999999\t_pinterest_sess",
+        f"{soon}\t_pinterest_sess".encode(),
     )
     _dist().add([Upload(name="one.txt", file=io.BytesIO(expiring))])
 
@@ -452,7 +503,7 @@ def test_an_account_whose_pins_keep_failing_waits(pinterest, drive, pictures):
         "resource_response": {
             "status": "failure",
             "error": {"message": "Account on hold", "code": 0, "http_status": 400},
-        }
+        },
     }
     pinterest.fail_next = [FakeReply.json_body(refusal, status=400)] * 50
 

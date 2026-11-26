@@ -1,14 +1,19 @@
-from typing import Annotated, Any
+# Copyright (C) 2026 jpkrajewski
+
+from typing import Annotated
 
 from fastapi import UploadFile
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, JsonValue, StringConstraints, model_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import ImageUpload, VideoUpload
 from ofmhelpers.monitoring.telemetry import LoggedFields
 
 Stripped = Annotated[str, StringConstraints(strip_whitespace=True)]
 Upper = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True)]
 Files = Annotated[list[UploadFile], Field(default_factory=list)]
+ImageFiles = Annotated[list[ImageUpload], Field(default_factory=list)]
+VideoFiles = Annotated[list[VideoUpload], Field(default_factory=list)]
 
 
 def at_most[N: (int, float)](value: N, limit: N) -> N:
@@ -21,7 +26,7 @@ def at_most[N: (int, float)](value: N, limit: N) -> N:
 class FormModel(LoggedFields):
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_not_sent(cls, data: Any) -> Any:
+    def _blank_is_not_sent(cls, data: JsonValue) -> JsonValue:
         if not isinstance(data, dict):
             return data
         return {name: value for name, value in data.items() if value != ""}

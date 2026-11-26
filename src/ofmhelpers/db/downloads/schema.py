@@ -1,17 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, datetime
-from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
-
-
-class DownloadResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    url: str
-    success: bool
-    output_paths: list[Path] = []
-    error: str | None = None
-    again_error: str | None = None
 
 
 class Download(BaseModel):

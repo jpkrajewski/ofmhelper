@@ -1,4 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
 import html as html_lib
+import io
 import json
 import re
 import subprocess
@@ -9,6 +12,7 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 from idempotent import keyed
+from PIL import Image
 from signin import sign_in, sign_in_agency
 
 import ofmhelpers.media.exports as exports_module
@@ -54,10 +58,16 @@ def fake_runs(monkeypatch):
     monkeypatch.setattr(clone_run, "run_ai", lambda *_a, **_k: [])
 
 
-def _post(client, videos, data=None):
-    files = [("image", ("face.png", b"img", "image/png"))] + [
-        ("videos", (name, f"video-{name}".encode(), "video/mp4")) for name in videos
-    ]
+def _png(value: int = 0) -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (8, 8), (value, value, value)).save(out, "PNG")
+    return out.getvalue()
+
+
+def _post(client, videos, data=None, image: bytes | None = None):
+    files = [
+        ("image", ("face.png", _png() if image is None else image, "image/png")),
+    ] + [("videos", (name, f"video-{name}".encode(), "video/mp4")) for name in videos]
     form = {
         "api_key": "k",
         "image_manifest": NEW,
@@ -67,8 +77,18 @@ def _post(client, videos, data=None):
     return client.post("/clone/run", data=form, files=files, headers=keyed())
 
 
+def test_run_rejects_invalid_image_content(client):
+    before = len(list_jobs())
+
+    r = _post(client, ["a.mp4"], image=b"not an image")
+
+    assert r.status_code == 422
+    assert len(list_jobs()) == before
+
+
 @pytest.mark.parametrize(
-    ("seconds", "expected"), [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)]
+    ("seconds", "expected"),
+    [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)],
 )
 def test_duration_is_the_video_length_clamped_to_wan3(seconds, expected):
     for target in list(clone.CLONE_TARGETS.values()):
@@ -81,6 +101,21 @@ def test_page_defaults(client):
     assert '<option value="720P" selected>' in html
     assert 'data-field="image" data-kind="image" data-max="10"' in html
     assert 'class="file-add-input" multiple' in html
+
+
+def test_fake_ai_is_available_for_clone(client):
+    html = client.get("/clone").text
+
+    assert 'value="fake"' in html
+    assert "Fake AI (testing)" in html
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_fake_clone_requires_an_api_key(client):
+    r = _post(client, ["a.mp4"], {"provider": "fake", "api_key": ""})
+
+    assert r.status_code == 400
+    assert r.json()["detail"] == "API key is required"
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -174,8 +209,8 @@ def test_run_rejects_a_bad_submit(client, videos, data, detail):
 @pytest.mark.usefixtures("fake_runs")
 def test_every_run_gets_all_the_subject_images(client):
     files = [
-        ("image", (name, name.encode(), "image/png"))
-        for name in ("front.png", "side.png")
+        ("image", (name, _png(index), "image/png"))
+        for index, name in enumerate(("front.png", "side.png"))
     ] + [("videos", (n, n.encode(), "video/mp4")) for n in ("a.mp4", "b.mp4")]
     r = client.post(
         "/clone/run",
@@ -195,7 +230,10 @@ def test_every_run_gets_all_the_subject_images(client):
 @pytest.mark.usefixtures("fake_runs")
 def test_run_caps_subject_images(client, monkeypatch):
     monkeypatch.setenv("OFM_CLONE_MAX_IMAGES", "1")
-    files = [("image", (n, n.encode(), "image/png")) for n in ("x.png", "y.png")]
+    files = [
+        ("image", (name, _png(index), "image/png"))
+        for index, name in enumerate(("x.png", "y.png"))
+    ]
     files.append(("videos", ("a.mp4", b"a", "video/mp4")))
     r = client.post(
         "/clone/run",
@@ -274,7 +312,7 @@ def test_a_generated_clone_still_being_exported_says_what_for():
 
 
 def test_a_running_card_is_the_shared_card_with_no_timer():
-    html = render_partial("_clone_card.html", job=clone._card(_job("r1"), []))
+    html = render_partial("_clone_card.html", {"job": clone._card(_job("r1"), [])})
     assert "generating…" in html
     assert 'data-poll-prefix="/clone" data-poll-kind="video"' in html
     assert '<p class="source">CapCut export</p>' in html
@@ -298,12 +336,15 @@ def _with_video(job: Job, tmp_path: Path) -> Path:
     ],
 )
 def test_a_running_and_a_failed_card_show_the_video_being_cloned(
-    status, error, line, tmp_path
+    status,
+    error,
+    line,
+    tmp_path,
 ):
     job = _job("s1", status=status, error=error)
     video = _with_video(job, tmp_path)
 
-    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
 
     asked = requests.utils.quote(str(video), safe="")
     picture = (
@@ -325,7 +366,7 @@ def test_a_finished_card_shows_its_result_not_the_video_it_cloned(tmp_path):
     )
     _with_video(job, tmp_path)
 
-    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
 
     assert "data-clone-source" not in html
     assert "<video" in html
@@ -341,13 +382,13 @@ def test_a_video_gone_from_the_store_asks_for_no_picture(tmp_path):
     none.params["reference_videos"] = []
 
     for job in (swept, outside, none):
-        html = render_partial("_clone_card.html", job=clone._card(job, []))
+        html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
         assert "data-clone-source" not in html
 
 
 def test_a_failed_card_offers_recreate_and_only_hide_in_its_menu():
     job = _job("f1", status="failed", error="Generation failed")
-    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    html = render_partial("_clone_card.html", {"job": clone._card(job, [])})
     actions = html.split('class="result-actions"')[1]
     assert "recreate-btn" in actions
     assert "download-btn" not in actions
@@ -387,7 +428,9 @@ def _stub(provider_cls, monkeypatch, sent):
         raise ProviderUnavailableError(msg)
 
     monkeypatch.setattr(
-        provider_cls, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+        provider_cls,
+        "upload",
+        lambda _self, p, max_bytes=None: f"https://up/{p.name}",
     )
     monkeypatch.setattr(provider_cls, "submit", submit)
     monkeypatch.setattr(
@@ -409,7 +452,7 @@ def _post_clips(client, clips, data=None, key=None):
             **(data or {}),
         },
         files=[
-            ("image", ("face.png", b"img", "image/png")),
+            ("image", ("face.png", _png(), "image/png")),
             *[("videos", (c.name, c.read_bytes(), "video/mp4")) for c in clips],
         ],
     )
@@ -464,7 +507,9 @@ def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
         raise ProviderUnavailableError(msg)
 
     monkeypatch.setattr(
-        ApiyiProvider, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+        ApiyiProvider,
+        "upload",
+        lambda _self, p, max_bytes=None: f"https://up/{p.name}",
     )
     monkeypatch.setattr(ApiyiClient, "submit", submit)
     monkeypatch.setattr(
@@ -475,7 +520,9 @@ def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
     monkeypatch.setattr(ApiyiProvider, "download", download)
 
     r = _post_clips(
-        client, [_clip(tmp_path / "a.mp4", 3)], {"provider": "apiyi", "audio": "true"}
+        client,
+        [_clip(tmp_path / "a.mp4", 3)],
+        {"provider": "apiyi", "audio": "true"},
     )
 
     assert r.status_code == 202, r.text
@@ -520,7 +567,7 @@ def test_run_on_higgsfield_sends_its_own_field_names(client, tmp_path, monkeypat
 
 @pytest.mark.usefixtures("fake_runs")
 def test_run_rejects_a_provider_that_cannot_clone(client):
-    assert _post(client, ["a.mp4"], {"provider": "fake"}).status_code == 400
+    assert _post(client, ["a.mp4"], {"provider": "not-a-provider"}).status_code == 400
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -533,7 +580,7 @@ def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
     )
     targets = MappingProxyType({**clone.CLONE_TARGETS, "higgsfield": swapped})
     monkeypatch.setattr(clone_service, "clone_targets", lambda: targets)
-    files = [("image", (f"{i}.png", bytes([i]), "image/png")) for i in range(10)]
+    files = [("image", (f"{i}.png", _png(i), "image/png")) for i in range(10)]
     files.append(("videos", ("a.mp4", b"a", "video/mp4")))
     before = len(list_jobs())
 
@@ -559,7 +606,7 @@ def test_page_offers_the_providers_that_can_clone(client):
 
     assert '<option value="kie"' in html
     assert '<option value="higgsfield"' in html
-    assert '<option value="fake"' not in html
+    assert '<option value="fake"' in html
 
 
 def _run_clone(assets_root, **choice):
@@ -597,7 +644,7 @@ def test_export_choice_is_stored_and_recreated(client):
     picked = get_job(
         _post(client, ["a.mp4"], {"export": "iphone17", "mirror": "true"}).json()[
             "job_ids"
-        ][0]
+        ][0],
     )
     default = get_job(_post(client, ["a.mp4"]).json()["job_ids"][0])
 
@@ -635,7 +682,8 @@ def test_export_keeps_a_remote_only_result(monkeypatch):
 def test_capcut_export_serves_the_capcut_copy(tmp_path, monkeypatch):
     src = _clip(tmp_path / "gen.mp4", 2)
     _generated(
-        monkeypatch, [ResultFile(name=src.name, path=str(src), remote_url="https://r")]
+        monkeypatch,
+        [ResultFile(name=src.name, path=str(src), remote_url="https://r")],
     )
     assets = tmp_path / "assets"
 
@@ -652,10 +700,13 @@ def test_device_export_serves_the_device_copy(tmp_path, monkeypatch):
     src = tmp_path / "gen.mp4"
     src.write_bytes(b"video")
     _generated(
-        monkeypatch, [ResultFile(name=src.name, path=str(src), remote_url="https://r")]
+        monkeypatch,
+        [ResultFile(name=src.name, path=str(src), remote_url="https://r")],
     )
     monkeypatch.setattr(
-        exports_module, "record", lambda s, d, *_a: d.write_bytes(s.read_bytes())
+        exports_module,
+        "record",
+        lambda s, d, *_a: d.write_bytes(s.read_bytes()),
     )
 
     [result] = _run_clone(str(tmp_path / "assets"), export="iphone17")
@@ -731,6 +782,12 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     pricing = _pricing(client)
 
     assert set(pricing) == set(clone.CLONE_TARGETS), "every clone provider is priced"
+    assert pricing["fake"]["credits_per_video_s"] == {
+        "480P": 0.005,
+        "720P": 0.01,
+        "1080P": 0.02,
+    }
+    assert pricing["fake"]["unit"] == "USD"
     assert pricing["kie"]["credits_per_video_s"] == {"720P": 40.0}
     assert pricing["kie"]["usd_per_credit"] == 0.004
     assert pricing["kie"]["max_reference_s"] == 15
@@ -757,7 +814,9 @@ def test_higgsfield_default_rate_matches_the_measured_runs(client):
     [("kie", 0.08), ("runninghub", 0.07), ("elyum", 0.0792), ("apiyi", 0.0588)],
 )
 def test_billed_by_video_plus_result_costs_twice_the_rate_per_source_second(
-    client, provider, usd_per_billed_s
+    client,
+    provider,
+    usd_per_billed_s,
 ):
     price = _pricing(client)[provider]
 

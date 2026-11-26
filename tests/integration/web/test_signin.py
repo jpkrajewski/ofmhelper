@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import re
 import time
@@ -15,11 +17,11 @@ from signin import make_user, make_user_with_password, sign_in, sign_in_admin
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.account.keys import SAVED_KEY, Keys
-from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import Identity
 from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
@@ -77,6 +79,16 @@ def test_the_admin_password_signs_in_as_the_password_account(client):
     assert client.get("/users").status_code == 200
 
 
+def test_a_missing_email_field_with_the_admin_password_signs_the_admin_in(client):
+    r = client.post(
+        "/login",
+        data={"password": "test-admin", "next": "/"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert client.get("/users").status_code == 200
+
+
 def test_the_admin_password_opens_an_admin_email_as_that_admin(client, monkeypatch):
     monkeypatch.setenv("OFM_ADMIN_EMAILS", "Owner@Example.com")
     r = _password_login(client, " owner@example.com ", "test-admin")
@@ -99,7 +111,9 @@ def test_the_admin_password_opens_no_other_email(client):
 
 def _owner(client: TestClient, password: str, next_url: str = "/"):
     started = client.get(
-        "/auth/owner/start", params={"next": next_url}, follow_redirects=False
+        "/auth/owner/start",
+        params={"next": next_url},
+        follow_redirects=False,
     )
     assert started.status_code == 303
     page = urlsplit(started.headers["location"])
@@ -174,7 +188,8 @@ def test_a_deactivated_user_cannot_sign_in(client):
 
 
 @pytest.mark.parametrize(
-    "target", ["//evil.example/x", "https://evil.example/", "evil"]
+    "target",
+    ["//evil.example/x", "https://evil.example/", "evil"],
 )
 def test_after_sign_in_only_a_path_on_this_site(client, target):
     make_user_with_password(password=PASSWORD)
@@ -254,7 +269,9 @@ def test_an_admin_adds_a_user_who_sets_a_password_from_the_link(client):
     differ = newcomer.post(link, data={"password": PASSWORD, "confirm": PASSWORD + "x"})
     assert "differ" in differ.text
     done = newcomer.post(
-        link, data={"password": PASSWORD, "confirm": PASSWORD}, follow_redirects=False
+        link,
+        data={"password": PASSWORD, "confirm": PASSWORD},
+        follow_redirects=False,
     )
     assert done.status_code == 303
     assert newcomer.get("/generate").status_code == 200
@@ -336,7 +353,9 @@ def providers_on(fake_externals, monkeypatch):
 
 def _consent(client: TestClient, provider: str, email: str, **start):
     started = client.get(
-        f"/auth/{provider}/start", params=start, follow_redirects=False
+        f"/auth/{provider}/start",
+        params=start,
+        follow_redirects=False,
     )
     assert started.status_code == 303
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
@@ -448,7 +467,11 @@ def test_googles_consent_url_asks_drive_only_when_connecting(monkeypatch):
 
     def query(*, connect: bool) -> dict[str, str]:
         url = Google().consent_url(
-            "https://x/cb", "s", "n", connect=connect, challenge="c"
+            "https://x/cb",
+            "s",
+            "n",
+            connect=connect,
+            challenge="c",
         )
         return {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
 
@@ -568,7 +591,9 @@ def test_a_link_begun_before_a_deactivation_links_nothing(client):
 def test_a_failed_connect_goes_back_to_account_still_signed_in(client):
     me = sign_in(client)
     started = client.get(
-        "/auth/google/start", params={"link": "1"}, follow_redirects=False
+        "/auth/google/start",
+        params={"link": "1"},
+        follow_redirects=False,
     )
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
     client.cookies.delete("ofm_signin")
@@ -626,7 +651,8 @@ def test_login_page_shows_only_configured_providers(client, monkeypatch):
 
 
 def test_google_sign_in_url_has_the_callback_and_a_nonce_but_no_drive(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "id")
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
@@ -691,7 +717,8 @@ def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
     }
 
     r = client.post(
-        "/account/keys", data={"key_kie": "kie-key-3333", "key_higgsfield": ""}
+        "/account/keys",
+        data={"key_kie": "kie-key-3333", "key_higgsfield": ""},
     )
     assert _saved_keys(user.id) == {
         "kie": "kie-key-3333",
@@ -832,7 +859,7 @@ def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
     assert all(u is not None for u in signed)
     assert {u.id for u in signed} == {users.agency_id()}
     assert [a.subject for a in users.linked_accounts(users.agency_id())] == [
-        "sub-racer"
+        "sub-racer",
     ]
 
 
@@ -891,10 +918,15 @@ def test_an_email_with_a_quote_never_reaches_inline_script(client):
 
 @pytest.mark.usefixtures("providers_on")
 def test_connecting_google_drive_syncs_that_persons_folders_right_away(
-    client, monkeypatch
+    client,
+    monkeypatch,
 ):
     synced: list[int | None] = []
-    monkeypatch.setattr(drive_folders, "sync", synced.append)
+
+    def sync(owner: int | None) -> None:
+        synced.append(owner)
+
+    monkeypatch.setattr(storage_jobs, "sync", sync)
     user = make_user("friend@example.com")
     apple = make_user("apple@example.com")
 

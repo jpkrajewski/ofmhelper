@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -25,7 +27,8 @@ _BACKFILL = """
 
 def upgrade() -> None:
     op.add_column(
-        "self_link_clicks", sa.Column("browser", sa.String(length=16), nullable=True)
+        "self_link_clicks",
+        sa.Column("browser", sa.String(length=16), nullable=True),
     )
     op.execute(_BACKFILL)
     op.create_index(

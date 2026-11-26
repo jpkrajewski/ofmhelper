@@ -1,15 +1,21 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Cookie, Depends, Request, WebSocket, params
 from pydantic import BaseModel
 
 from ofmhelpers.db.users.schema import SessionUser, Viewer
 from ofmhelpers.features.assets.store import assets_root_for_user
+from ofmhelpers.features.downloads.service import DownloadService
 from ofmhelpers.features.notifications.schema import Reader
+from ofmhelpers.features.storage.client import access, storage_owner
+from ofmhelpers.features.storage.models import StorageAccess
+from ofmhelpers.features.storage.service import StorageService
 from ofmhelpers.web.access import Action, Area, opens
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
@@ -52,11 +58,11 @@ class Allowed(BaseModel, frozen=True):
 
 
 def Access(area: Area) -> params.Depends:  # noqa: N802
-    return Depends(Allowed(what=area))
+    return cast("params.Depends", Depends(Allowed(what=area)))
 
 
 def Can(action: Action) -> params.Depends:  # noqa: N802
-    return Depends(Allowed(what=action))
+    return cast("params.Depends", Depends(Allowed(what=action)))
 
 
 def _assets_root(request: Request) -> Path:
@@ -87,6 +93,37 @@ Actors = Annotated[frozenset[str], Depends(_actors)]
 OwnerId = Annotated[int, Depends(_owner_id)]
 Scope = Annotated[int, Depends(_scope)]
 AssetsRoot = Annotated[Path, Depends(_assets_root)]
+
+
+def _storage_access(scope: Scope) -> StorageAccess:
+    return access(scope, interactive=True)
+
+
+StorageProvider = Annotated[StorageAccess, Depends(_storage_access)]
+
+
+def _storage(provider: StorageProvider) -> StorageService:
+    return StorageService.compose(provider)
+
+
+def _employer_storage(owner_id: OwnerId) -> StorageService:
+    return StorageService.compose(access(storage_owner(owner_id), interactive=True))
+
+
+Storage = Annotated[StorageService, Depends(_storage)]
+EmployerStorage = Annotated[StorageService, Depends(_employer_storage)]
+
+
+def _downloads(
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
+    storage: EmployerStorage,
+) -> DownloadService:
+    return DownloadService.compose(actor, owner_id, assets_root, storage)
+
+
+Downloads = Annotated[DownloadService, Depends(_downloads)]
 
 
 def _chosen_zone(ofm_timezone: Annotated[str | None, Cookie()] = None) -> TimeZone:

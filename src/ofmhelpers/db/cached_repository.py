@@ -1,6 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from functools import cache, wraps
-from typing import Protocol, TypeVar, get_type_hints
+from typing import Protocol, TypeVar, cast, get_type_hints
 lazy from collections.abc import Callable, Sequence
 
 from pydantic import TypeAdapter, ValidationError
@@ -18,7 +20,10 @@ logger = get_logger(__name__)
 
 class RepositoryCacheLike(Protocol):
     def get_or_set(
-        self, method: str, args: Sequence[object], loader: Callable[[], T]
+        self,
+        method: str,
+        args: Sequence[object],
+        loader: Callable[[], T],
     ) -> T: ...
 
     def bump(self) -> None: ...
@@ -57,7 +62,10 @@ class RepositoryCache:
         return f"cache:v2:{self._namespace}:{self._version()}:{method}:{parts}"
 
     def get_or_set(
-        self, method: str, args: Sequence[object], loader: Callable[[], T]
+        self,
+        method: str,
+        args: Sequence[object],
+        loader: Callable[[], T],
     ) -> T:
         try:
             key = self._key(method, args)
@@ -71,7 +79,7 @@ class RepositoryCache:
             )
             return loader()
         if cached is not None:
-            return json.loads(cached)
+            return cast("T", json.loads(cached))
         value = loader()
         try:
             self._redis.set(key, json.dumps(value), ex=self._ttl_s)
@@ -115,7 +123,7 @@ def cached[T](method: Callable[..., T]) -> Callable[..., T]:
             lambda: returned.dump_python(method(self, *args, **kwargs), mode="json"),
         )
         try:
-            return returned.validate_python(stored)
+            return cast("T", returned.validate_python(stored))
         except ValidationError:
             logger.warning(
                 "cache %s: stored %s does not fit its model, read from the database",
@@ -148,5 +156,7 @@ class CachedRepository:
             msg = f"{type(self).__name__} must define cache_namespace"
             raise ValueError(msg)
         self._cache: RepositoryCacheLike = cache or RepositoryCache(
-            None, self.cache_namespace, depends_on=self.cache_depends_on
+            None,
+            self.cache_namespace,
+            depends_on=self.cache_depends_on,
         )

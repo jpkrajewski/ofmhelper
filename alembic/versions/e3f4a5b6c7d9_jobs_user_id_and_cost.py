@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -12,10 +14,15 @@ def upgrade() -> None:
     op.add_column("jobs", sa.Column("user_id", sa.Integer(), nullable=True))
     op.execute(
         "UPDATE jobs SET user_id = users.id FROM users"
-        " WHERE jobs.actor ~ '^[0-9]+$' AND users.id::text = jobs.actor"
+        " WHERE jobs.actor ~ '^[0-9]+$' AND users.id::text = jobs.actor",
     )
     op.create_foreign_key(
-        "jobs_user_id_fkey", "jobs", "users", ["user_id"], ["id"], ondelete="RESTRICT"
+        "jobs_user_id_fkey",
+        "jobs",
+        "users",
+        ["user_id"],
+        ["id"],
+        ondelete="RESTRICT",
     )
     op.create_index("ix_jobs_user_id_created_at", "jobs", ["user_id", "created_at"])
     op.drop_column("jobs", "actor")
@@ -32,7 +39,7 @@ def upgrade() -> None:
     )
     op.execute(
         "UPDATE jobs SET cost_usd = (meta ->> 'cost_usd')::numeric"
-        " WHERE meta ->> 'cost_usd' IS NOT NULL"
+        " WHERE meta ->> 'cost_usd' IS NOT NULL",
     )
     op.execute("UPDATE jobs SET meta = meta - 'cost_usd' WHERE meta ? 'cost_usd'")
 
@@ -41,7 +48,7 @@ def downgrade() -> None:
     op.execute(
         "UPDATE jobs SET meta = meta || jsonb_build_object('cost_usd',"
         " CASE WHEN cost_estimated THEN NULL ELSE cost_usd::double precision END)"
-        " WHERE meta <> '{}'::jsonb"
+        " WHERE meta <> '{}'::jsonb",
     )
     op.drop_column("jobs", "cost_estimated")
     op.drop_column("jobs", "cost_usd")

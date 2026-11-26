@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -25,7 +27,9 @@ def upgrade() -> None:
         "(login_id IS NULL) <> (va_id IS NULL)",
     )
     op.create_unique_constraint(
-        "uq_drive_uploads_file_va", "drive_uploads", ["job_id", "file_index", "va_id"]
+        "uq_drive_uploads_file_va",
+        "drive_uploads",
+        ["job_id", "file_index", "va_id"],
     )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
@@ -39,9 +41,9 @@ class PicturePresetRepository:
                     or_(
                         PicturePresetRow.user_id == viewer,
                         PicturePresetRow.user_id == shared_by,
-                    )
+                    ),
                 )
-                .order_by(PicturePresetRow.name, PicturePresetRow.id)
+                .order_by(PicturePresetRow.name, PicturePresetRow.id),
             ).scalars()
             return [_preset(r) for r in rows]
 
@@ -70,7 +72,7 @@ class PicturePresetRepository:
             s.flush()
             return _preset(row)
 
-    def update(
+    def update(  # noqa: PLR0913, PLR0917
         self,
         preset_id: int,
         owner: int,
@@ -92,7 +94,7 @@ class PicturePresetRepository:
                     images=images,
                     aspect_ratio=aspect_ratio,
                 )
-                .returning(PicturePresetRow)
+                .returning(PicturePresetRow),
             ).scalar_one_or_none()
             return _preset(row) if row is not None else None
 
@@ -104,6 +106,6 @@ class PicturePresetRepository:
                     PicturePresetRow.id == preset_id,
                     PicturePresetRow.user_id == owner,
                 )
-                .returning(PicturePresetRow.id)
+                .returning(PicturePresetRow.id),
             )
             return bool(gone.all())

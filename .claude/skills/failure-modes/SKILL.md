@@ -1,6 +1,6 @@
 ---
 name: failure-modes
-description: The 7 ways code in this app breaks under abuse, each with its rule, the repo pattern to copy and its test. Load BEFORE writing or changing a route, a page's submit or poll JS, a background job, or an outside call (web/routers, web/static/js, features, integrations), and as the reviewer's checklist in ship step 2.
+description: The 7 ways code in this app breaks under abuse, plus the 8th, bloat that duplicates a lower layer, each with its rule, the repo pattern to copy and its test. Load BEFORE writing or changing a route, a page's submit or poll JS, a background job, or an outside call (web/routers, web/static/js, features, integrations), and as the reviewer's checklist in ship step 2.
 ---
 
 # Failure modes
@@ -43,3 +43,8 @@ Bugs reviewers found in one session (2026-11-20, idempotency, 8 review rounds): 
 - Rule: null-safe DOM access; one failing card never stops the others (`Promise.allSettled`, a 4xx drops only that card from the poll); every e2e asserts `js_errors == []`.
 - Copy: `web/static/js/repurpose.js` `followUploads` (`gone` set, `allSettled`); `tests/e2e/e2e_session.py` (`pageerror` collected into `js_errors`).
 - Test: one card answering 404 or 500 while the others still update; `assert page.js_errors == []`.
+
+## 8. Duplicates a lower layer (bloat)
+- Rule: a feature never re-maps, renames or re-decides what a lower module's model already says. It calls the core, uses its answer (a yes/no is the core's property) and stores the core's own model. No name tables, no copy models, no second verdict, nothing on the page the owner did not ask for. This holds for code that was already there: extending it is copying it.
+- Example (owner 2026-11-22): `features/repurpose` turned the checker's `CheckReport` into its own `CopyScore` / `MethodScore` / `Medium` with a `_HASH_NAMES` table, a second `.unique` and per-method scores on the card; the next change added a third copy (`_verdict`). Fix: `check(...).unique` decides, `RepurposeResult.report` keeps the `CheckReport` (`media/repurpose/checker/schema.py`), the card shows the copy or the failure.
+- Review: for every new or touched model and helper in `features/`, name the lower model it mirrors and the line that already answers it. Ask the reviewer this in the brief; never hand it the design as given.

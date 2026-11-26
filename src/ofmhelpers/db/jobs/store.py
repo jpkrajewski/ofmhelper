@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from collections.abc import Callable, Collection
 from functools import lru_cache
@@ -18,6 +20,7 @@ from ofmhelpers.db.jobs.schema import (
     JobPage,
     JobParams,
     JobPreview,
+    JobStatus,
     Named,
     RecordedJob,
     ResultFile,
@@ -52,7 +55,11 @@ def _user_ids(actors: Readers) -> list[int] | None:
     return sorted({int(a) for a in named if a.isdecimal()})
 
 
-def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
+def create_job(
+    task_name: str,
+    params: dict[str, Any],
+    actor: str | None = None,
+) -> str:
     user_id = agency_id() if actor is None else _user_id(actor)
     job_id = _repository().create(task_name, params, user_id=user_id, status="running")
     logger.info("job %s created: %s", job_id, task_name)
@@ -62,7 +69,7 @@ def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
 def log_event(
     task_name: str,
     actor: str | None,
-    params: dict | None = None,
+    params: dict[str, Any] | None = None,
     at: float | None = None,
 ) -> str:
     return _repository().create(
@@ -86,7 +93,7 @@ def register_runner(runner: Runner) -> None:
     _runners()[:] = [runner]
 
 
-def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     runners = _runners()
     if not runners:
         msg = "no job runner registered: import ofmhelpers.features.jobs.runner"
@@ -99,7 +106,10 @@ def task_of(job_id: str) -> JobHeader | None:
     return JobHeader(task=job.task, actor=job.actor) if job else None
 
 
-def finish_job(job_id: str, result: Any) -> None:
+def finish_job(
+    job_id: str,
+    result: JsonValue | BaseModel | list[BaseModel],
+) -> None:
     _repository().update_status(job_id, "done", result=_stored(result))
 
 
@@ -109,7 +119,10 @@ def record_failure(job_id: str, error: str) -> None:
 
 def keep_cost(job_id: str, meta: JobMeta, cost: JobCost) -> None:
     _repository().set_cost(
-        job_id, meta.model_dump(mode="json"), cost.usd, cost.estimated
+        job_id,
+        meta.model_dump(mode="json"),
+        cost.usd,
+        cost.estimated,
     )
 
 
@@ -129,12 +142,18 @@ def days(
     reel_tasks: Collection[str],
 ) -> list[UserDay]:
     return _repository().days(
-        tuple(sorted(user_ids)), from_ts, to_ts, zone, tuple(sorted(reel_tasks))
+        tuple(sorted(user_ids)),
+        from_ts,
+        to_ts,
+        zone,
+        tuple(sorted(reel_tasks)),
     )
 
 
 def sessions(
-    user_ids: Collection[int], from_ts: float, to_ts: float
+    user_ids: Collection[int],
+    from_ts: float,
+    to_ts: float,
 ) -> list[SessionSpan]:
     return _repository().sessions(tuple(sorted(user_ids)), from_ts, to_ts)
 
@@ -143,7 +162,7 @@ def spend(user_ids: Collection[int], periods: list[SpendPeriod]) -> list[Spend]:
     return _repository().spend(tuple(sorted(user_ids)), tuple(periods))
 
 
-def _stored(result: Any) -> JsonValue:
+def _stored(result: JsonValue | BaseModel | list[BaseModel]) -> JsonValue:
     if isinstance(result, BaseModel):
         return result.model_dump(mode="json")
     if not isinstance(result, list):
@@ -151,7 +170,7 @@ def _stored(result: Any) -> JsonValue:
     return [_stored_entry(item) for item in result]
 
 
-def _stored_entry(item: Any) -> JsonValue:
+def _stored_entry(item: JsonValue | BaseModel) -> JsonValue:
     if isinstance(item, ResultFile):
         return item.model_dump(mode="json", exclude_unset=True)
     if isinstance(item, BaseModel):
@@ -217,16 +236,16 @@ def list_finished_jobs() -> list[Job]:
     return [job for job in history() if job.status == "done"]
 
 
-def list_jobs_page(
+def list_jobs_page(  # noqa: PLR0913, PLR0917
     tasks: set[str],
     offset: int,
     limit: int,
     actor: Readers = None,
     status: str | None = None,
-    hidden: bool | None = None,
-    by_use: bool = False,
+    hidden: bool | None = None,  # noqa: FBT001
+    by_use: bool = False,  # noqa: FBT001, FBT002
     created: Created | None = None,
-    not_uploaded: bool = False,
+    not_uploaded: bool = False,  # noqa: FBT001, FBT002
 ) -> JobPage:
     span = created or Created()
     if not_uploaded:
@@ -263,16 +282,16 @@ def list_jobs_page(
     return JobPage(jobs=_visible(page.jobs), total=page.total)
 
 
-def gallery_page(
+def gallery_page(  # noqa: PLR0913, PLR0917
     tasks: set[str],
     offset: int,
     limit: int,
     actor: Readers,
-    hidden: bool | None,
+    hidden: bool | None,  # noqa: FBT001
     reader: int | None = None,
-    by_use: bool = False,
+    by_use: bool = False,  # noqa: FBT001, FBT002
     created: Created | None = None,
-    not_uploaded: bool = False,
+    not_uploaded: bool = False,  # noqa: FBT001, FBT002
 ) -> GalleryJobs:
     page = list_jobs_page(
         tasks,
@@ -303,8 +322,15 @@ def list_batch(task: str, batch: str, actor: str) -> list[Job]:
     return [] if user_id is None else _repository().list_batch(task, user_id, batch)
 
 
+def latest_job(task: str, actor: str, status: JobStatus | None = None) -> Job | None:
+    user_id = _user_id(actor)
+    return None if user_id is None else _repository().latest(task, user_id, status)
+
+
 def running_with_links(
-    tasks: Collection[str], actor: str, links: list[str]
+    tasks: Collection[str],
+    actor: str,
+    links: list[str],
 ) -> list[Job]:
     user_id = _user_id(actor)
     if user_id is None:
@@ -340,21 +366,30 @@ class ParamHistory(BaseModel, frozen=True):
         if not self._user_ids:
             return None
         return _repository().last_param(
-            self._tasks, self._user_ids, self.field, tuple(sorted(among))
+            self._tasks,
+            self._user_ids,
+            self.field,
+            tuple(sorted(among)),
         )
 
     def last_used_firsts(self, limit: int) -> list[str]:
         if not self._user_ids:
             return []
         return _repository().last_used_firsts(
-            self._tasks, self._user_ids, self.field, limit
+            self._tasks,
+            self._user_ids,
+            self.field,
+            limit,
         )
 
     def most_used_firsts(self, limit: int) -> list[str]:
         if not self._user_ids:
             return []
         return _repository().most_used_firsts(
-            self._tasks, self._user_ids, self.field, limit
+            self._tasks,
+            self._user_ids,
+            self.field,
+            limit,
         )
 
 
@@ -362,7 +397,7 @@ def count_hidden_jobs(tasks: set[str], actor: str | Collection[str]) -> int:
     return _repository().count_hidden(tuple(sorted(tasks)), _user_ids(actor) or [])
 
 
-def hide_job(job_id: str, actor: Readers, hidden: bool) -> Job | None:
+def hide_job(job_id: str, actor: Readers, hidden: bool) -> Job | None:  # noqa: FBT001
     job = get_job(job_id, actor)
     if job is None or hidden == (job.hidden_at is not None):
         return job

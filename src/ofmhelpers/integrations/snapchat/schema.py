@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -49,7 +51,8 @@ class ProfileProps(_Page):
     user: UserProfile = Field(default_factory=UserProfile, alias="userProfile")
     highlights: list[Highlight] = Field(default=[], alias="spotlightHighlights")
     spotlights: list[SpotlightMetadata] = Field(
-        default=[], alias="spotlightStoryMetadata"
+        default=[],
+        alias="spotlightStoryMetadata",
     )
     cursor: str = Field(default="", alias="spotlightHighlightsCursor")
 

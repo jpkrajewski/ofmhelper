@@ -1,18 +1,23 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from types import MappingProxyType
 lazy from datetime import date
 
+lazy from sqlalchemy.orm import InstrumentedAttribute
+
+from ofmhelpers.db.models import SelfLinkClickRow
 from ofmhelpers.db.self_links.repository import SelfLinkRepository
 from ofmhelpers.db.short_links.catalog import LinkDays, LinkHours
 from ofmhelpers.db.short_links.repository import ShortLinkRepository
 from ofmhelpers.db.short_links.schema import SelfChart, SelfLinkStat, SelfStats
 lazy from ofmhelpers.db.short_links.catalog import RemoteLink
+lazy from ofmhelpers.db.short_links.models import SelfLinkDays
 lazy from ofmhelpers.db.short_links.schema import (
     BridgeTarget,
     SelfBreakdownRow,
     SelfClick,
     SelfDomain,
-    SelfLinkDays,
     SelfRange,
     SelfTotals,
 )
@@ -44,12 +49,15 @@ def _remote_to_id(user_id: int) -> MappingProxyType[str, int]:
             row.remote_id: row.id
             for row in _links().provider_links(user_id, PROVIDER, _LIVE)
             if row.remote_id
-        }
+        },
     )
 
 
 def daily(
-    user_id: int, remote_ids: list[str], start: date, end: date
+    user_id: int,
+    remote_ids: list[str],
+    start: date,
+    end: date,
 ) -> list[LinkDays]:
     ids = _remote_to_id(user_id)
     wanted = {ids[r]: r for r in remote_ids if r in ids}
@@ -124,7 +132,7 @@ def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
     per = {c.link_id: c for c in _self().per_link(ids, start, end)}
     series = _self().series(ids, start, end, by_hour=by_hour)
 
-    def rows_of(column: str) -> list[SelfBreakdownRow]:
+    def rows_of(column: InstrumentedAttribute[str | None]) -> list[SelfBreakdownRow]:
         return _self().breakdown(ids, start, end, column)
 
     links = sorted(
@@ -152,10 +160,10 @@ def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
         visitors=totals.visitors,
         series=series,
         chart=SelfChart.build(series, by_hour=by_hour),
-        countries=rows_of("country"),
-        devices=rows_of("device"),
-        platforms=rows_of("platform"),
-        referrers=rows_of("referrer"),
-        browsers=rows_of("browser"),
+        countries=rows_of(SelfLinkClickRow.country),
+        devices=rows_of(SelfLinkClickRow.device),
+        platforms=rows_of(SelfLinkClickRow.platform),
+        referrers=rows_of(SelfLinkClickRow.referrer),
+        browsers=rows_of(SelfLinkClickRow.browser),
         links=links,
     )

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -50,7 +52,10 @@ def _real(task: str, user: User, folder: Path, params: dict, usd: str | None = N
     run_job(job_id, lambda: [{"name": file.name, "path": str(file)}], {})
     if usd is not None:
         generation = GenerationRecord(
-            provider="kie", model="m", task_id="t", cost_usd=float(usd)
+            provider="kie",
+            model="m",
+            task_id="t",
+            cost_usd=float(usd),
         )
         keep_cost(job_id, JobMeta(generations=[generation]), JobCost(usd=Decimal(usd)))
     return job_id
@@ -116,12 +121,16 @@ def test_a_made_up_month_is_the_vas_rows_priced_by_the_apps_own_prices(uploads):
     assert all(row.created_at <= NOW.timestamp() for row in rows)
     prices = clone_pricing()
     clones = [r for r in rows if r.task == "clone" and r.status == "done"]
-    assert {r.params["provider"] for r in clones} == set(prices)
+    billable = set()
+    for name, price in prices.items():
+        if price.billable:
+            billable.add(name)
+    assert {r.params["provider"] for r in clones} == billable
     for row in clones:
         price = prices[row.params["provider"]]
         per_second = price.per_second("720P") * price.usd_per_credit
         expected = Decimal(str(per_second * row.params["duration"])).quantize(
-            Decimal("0.0001")
+            Decimal("0.0001"),
         )
         assert row.cost_usd == expected, row.params["provider"]
         assert row.cost_estimated is (row.params["provider"] != "kie")

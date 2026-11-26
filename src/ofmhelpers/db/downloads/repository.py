@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from datetime import datetime
 
 from sqlalchemy import and_, delete, exists, func, select, update
@@ -18,7 +20,11 @@ class DownloadRepository(CachedRepository):
     cache_namespace = "download"
 
     def record(
-        self, user_id: int, job_id: str, files: list[DownloadedFile], now: datetime
+        self,
+        user_id: int,
+        job_id: str,
+        files: list[DownloadedFile],
+        now: datetime,
     ) -> None:
         row = DownloadRow
         with session_scope() as s:
@@ -41,16 +47,18 @@ class DownloadRepository(CachedRepository):
                         **fresh,
                     )
                     .on_conflict_do_update(
-                        constraint="uq_downloads_job_position", set_=fresh
-                    )
+                        constraint="uq_downloads_job_position",
+                        set_=fresh,
+                    ),
                 )
 
     def drop_from(self, job_id: str, position: int) -> None:
         with session_scope() as s:
             s.execute(
                 delete(DownloadRow).where(
-                    DownloadRow.job_id == job_id, DownloadRow.position >= position
-                )
+                    DownloadRow.job_id == job_id,
+                    DownloadRow.position >= position,
+                ),
             )
 
     def of_job(self, job_id: str) -> list[Download]:
@@ -58,7 +66,7 @@ class DownloadRepository(CachedRepository):
             rows = s.execute(
                 select(DownloadRow)
                 .where(DownloadRow.job_id == job_id)
-                .order_by(DownloadRow.position)
+                .order_by(DownloadRow.position),
             ).scalars()
             return [_download(r) for r in rows]
 
@@ -66,8 +74,9 @@ class DownloadRepository(CachedRepository):
         with session_scope() as s:
             row = s.execute(
                 select(DownloadRow).where(
-                    DownloadRow.job_id == job_id, DownloadRow.position == position
-                )
+                    DownloadRow.job_id == job_id,
+                    DownloadRow.position == position,
+                ),
             ).scalar_one_or_none()
             return _download(row) if row else None
 
@@ -86,7 +95,7 @@ class DownloadRepository(CachedRepository):
             rows = s.execute(
                 select(row)
                 .where(row.user_id == user_id, row.url.in_(urls), ~newer)
-                .order_by(row.url, row.position)
+                .order_by(row.url, row.position),
             ).scalars()
             return [_download(r) for r in rows]
 
@@ -95,7 +104,9 @@ class DownloadRepository(CachedRepository):
             return []
         row, later, gone = DownloadRow, aliased(DownloadRow), aliased(DownloadRow)
         whole = ~exists().where(
-            gone.job_id == row.job_id, gone.url == row.url, ~gone.stored
+            gone.job_id == row.job_id,
+            gone.url == row.url,
+            ~gone.stored,
         )
         later_gone = aliased(DownloadRow)
         newer = exists().where(
@@ -115,7 +126,7 @@ class DownloadRepository(CachedRepository):
             rows = s.execute(
                 select(row)
                 .where(row.url.in_(urls), row.user_id.in_(user_ids), whole, ~newer)
-                .order_by(row.url, row.position)
+                .order_by(row.url, row.position),
             ).scalars()
             return [_download(r) for r in rows]
 
@@ -127,8 +138,8 @@ class DownloadRepository(CachedRepository):
                         DownloadRow.id != download_id,
                         DownloadRow.stored,
                         DownloadRow.file_path == file_path,
-                    )
-                )
+                    ),
+                ),
             ).scalar_one()
 
     def touch(self, job_id: str, url: str, now: datetime) -> None:
@@ -136,7 +147,7 @@ class DownloadRepository(CachedRepository):
             s.execute(
                 update(DownloadRow)
                 .where(DownloadRow.job_id == job_id, DownloadRow.url == url)
-                .values(last_used_at=now)
+                .values(last_used_at=now),
             )
 
     def removed_in(self, job_ids: list[str]) -> list[RemovedFile]:
@@ -145,8 +156,9 @@ class DownloadRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 select(DownloadRow.job_id, DownloadRow.position).where(
-                    DownloadRow.job_id.in_(job_ids), DownloadRow.stored.is_(False)
-                )
+                    DownloadRow.job_id.in_(job_ids),
+                    DownloadRow.stored.is_(False),
+                ),
             )
             return [RemovedFile(job_id=j, position=p) for j, p in rows]
 
@@ -159,13 +171,14 @@ class DownloadRepository(CachedRepository):
                     DownloadRow.stored.is_(False),
                     DownloadRow.asset_path.contains(fragment, autoescape=True),
                 )
-                .order_by(DownloadRow.created_at.desc(), DownloadRow.id.desc())
+                .order_by(DownloadRow.created_at.desc(), DownloadRow.id.desc()),
             ).scalars()
             return [_download(r) for r in rows]
 
     def idle(self, before: datetime, after_id: int, limit: int) -> list[Download]:
         running = exists().where(
-            JobRow.id == DownloadRow.job_id, JobRow.status == "running"
+            JobRow.id == DownloadRow.job_id,
+            JobRow.status == "running",
         )
         with session_scope() as s:
             rows = s.execute(
@@ -177,7 +190,7 @@ class DownloadRepository(CachedRepository):
                     ~running,
                 )
                 .order_by(DownloadRow.id)
-                .limit(limit)
+                .limit(limit),
             ).scalars()
             return [_download(r) for r in rows]
 
@@ -186,7 +199,7 @@ class DownloadRepository(CachedRepository):
             s.execute(
                 update(DownloadRow)
                 .where(DownloadRow.id == download_id)
-                .values(asset_path=asset_path)
+                .values(asset_path=asset_path),
             )
 
     def note_use(self, download_id: int, used_at: datetime) -> None:
@@ -194,11 +207,14 @@ class DownloadRepository(CachedRepository):
             s.execute(
                 update(DownloadRow)
                 .where(DownloadRow.id == download_id)
-                .values(last_used_at=func.greatest(DownloadRow.last_used_at, used_at))
+                .values(last_used_at=func.greatest(DownloadRow.last_used_at, used_at)),
             )
 
     def mark_removed(
-        self, download_id: int, idle_since: datetime, now: datetime
+        self,
+        download_id: int,
+        idle_since: datetime,
+        now: datetime,
     ) -> bool:
         with session_scope() as s:
             found = s.execute(
@@ -209,7 +225,7 @@ class DownloadRepository(CachedRepository):
                     DownloadRow.last_used_at <= idle_since,
                 )
                 .values(stored=False, removed_at=now)
-                .returning(DownloadRow.id)
+                .returning(DownloadRow.id),
             )
             return found.scalar_one_or_none() is not None
 
@@ -218,7 +234,7 @@ class DownloadRepository(CachedRepository):
             s.execute(
                 update(DownloadRow)
                 .where(DownloadRow.id == download_id)
-                .values(stored=True, removed_at=None)
+                .values(stored=True, removed_at=None),
             )
 
     def asset_shared(self, download_id: int, asset_path: str) -> bool:
@@ -229,6 +245,6 @@ class DownloadRepository(CachedRepository):
                         DownloadRow.id != download_id,
                         DownloadRow.stored,
                         DownloadRow.asset_path == asset_path,
-                    )
-                )
+                    ),
+                ),
             ).scalar_one()

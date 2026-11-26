@@ -1,17 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 lazy import random
 
 from pydantic import BaseModel
 
+lazy from ofmhelpers.media.repurpose.transformations.constants import HandheldConstants
 lazy from ofmhelpers.media.repurpose.values import Value
 
 Range = tuple[float, float]
-
-_SHAKE_BANDS = ((0.15, 0.45, 0.55), (1.2, 2.6, 0.3), (3.5, 6.5, 0.15))
-_DRIFT_CYCLES: Range = (0.15, 0.3)
-_MIN_SECONDS = 0.5
-_OVERSCAN_SPARE = 0.01
-_WARP_EPS = 1e-4
 
 
 class Wave(BaseModel, frozen=True):
@@ -36,13 +33,17 @@ def _uniform(rng: random.Random, bounds: Value | None) -> float:
 
 
 def _motion(
-    rng: random.Random, shake: float, drift: float, seconds: float
+    rng: random.Random,
+    shake: float,
+    drift: float,
+    seconds: float,
+    c: HandheldConstants,
 ) -> list[Wave]:
     waves = [
         _wave(rng, shake * share * rng.uniform(0.8, 1.2), (lo, hi))
-        for lo, hi, share in _SHAKE_BANDS
+        for lo, hi, share in c.shake_bands
     ]
-    cycles = (_DRIFT_CYCLES[0] / seconds, _DRIFT_CYCLES[1] / seconds)
+    cycles = (c.drift_cycles[0] / seconds, c.drift_cycles[1] / seconds)
     waves.append(_wave(rng, drift, cycles))
     return [w for w in waves if w.amp > 0]
 
@@ -55,7 +56,7 @@ class Handheld(BaseModel, frozen=True):
     aspect: float = 1.0
 
     @classmethod
-    def sample(
+    def sample(  # noqa: PLR0913
         cls,
         rng: random.Random,
         *,
@@ -65,52 +66,53 @@ class Handheld(BaseModel, frozen=True):
         drift: Value | None,
         seconds: float,
         aspect: float,
+        constants: HandheldConstants,
     ) -> Handheld:
         skew = _uniform(rng, perspective)
         top, bottom, left, right = (rng.uniform(-skew, skew) for _ in range(4))
         shake_amp = _uniform(rng, shake)
         drift_amp = _uniform(rng, drift)
-        seconds = max(seconds, _MIN_SECONDS)
+        seconds = max(seconds, constants.min_seconds)
         return cls(
             tilt_deg=round(_uniform(rng, tilt), 3),
             corners=(top, bottom, left, right),
-            x=tuple(_motion(rng, shake_amp, drift_amp, seconds)),
+            x=tuple(_motion(rng, shake_amp, drift_amp, seconds, constants)),
             y=tuple(
                 _motion(
                     rng,
                     shake_amp * rng.uniform(0.6, 0.9),
                     drift_amp * rng.uniform(0.5, 1.0),
                     seconds,
-                )
+                    constants,
+                ),
             ),
             aspect=aspect,
         )
 
-    @property
-    def warped(self) -> bool:
-        return max(abs(self.tilt_deg), *map(abs, self.corners)) > _WARP_EPS
+    def warped(self, c: HandheldConstants) -> bool:
+        return max(abs(self.tilt_deg), *map(abs, self.corners)) > c.warp_eps
 
     @property
     def reach(self) -> float:
         return max(sum(w.amp for w in self.x), sum(w.amp for w in self.y))
 
-    @property
-    def overscan(self) -> float:
+    def overscan(self, c: HandheldConstants) -> float:
         a = math.radians(abs(self.tilt_deg))
         cover = math.cos(a) + self.aspect * math.sin(a)
         skew = 1 + 2 * max(map(abs, self.corners))
-        return cover * skew + 2 * self.reach + _OVERSCAN_SPARE
+        return cover * skew + 2 * self.reach + c.overscan_spare
 
-    def filters(self) -> list[str]:
-        if not self.warped and not self.reach:
+    def filters(self, c: HandheldConstants) -> list[str]:
+        warped = self.warped(c)
+        if not warped and not self.reach:
             return []
-        o = self.overscan
+        o = self.overscan(c)
         chain = [f"scale=w=trunc(iw*{o:.5f}/2)*2:h=trunc(ih*{o:.5f}/2)*2"]
-        if self.warped:
+        if warped:
             chain.append(self._perspective())
         chain.append(
             f"crop=w=trunc(iw/{o:.5f}/2)*2:h=trunc(ih/{o:.5f}/2)*2"
-            f":x={_window(self.x, 'iw', 'ow')}:y={_window(self.y, 'ih', 'oh')}"
+            f":x={_window(self.x, 'iw', 'ow')}:y={_window(self.y, 'ih', 'oh')}",
         )
         return chain
 

@@ -1,11 +1,13 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
 from e2e_session import DEV_ROOT, Session, connect_google
 from playwright.sync_api import expect
 
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive
-from ofmhelpers.integrations.gdrive.models import SheetTab
+from ofmhelpers.integrations.storage import SheetTab
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, FakePersonDrive
 lazy from ofmhelpers.features.downloads import sheet
 
 pytestmark = pytest.mark.e2e
@@ -34,7 +36,9 @@ def _rested() -> None:
 
 
 def test_the_button_downloads_todays_links_then_rests(
-    va: Session, fake_drive: FakeDrive, jobs_idle
+    va: Session,
+    fake_drive: FakeDrive,
+    jobs_idle,
 ):
     connect_google(va, EMAIL)
     jobs_idle()
@@ -53,7 +57,8 @@ def test_the_button_downloads_todays_links_then_rests(
     with page.expect_navigation():
         button.click()
     expect(cards.locator("video.result-video")).to_have_count(
-        2, timeout=RESULT_TIMEOUT_MS
+        2,
+        timeout=RESULT_TIMEOUT_MS,
     )
     resting = re.compile(rf"^\s*{LABEL} \(\d+ s\)\s*$")
     expect(button).to_be_disabled()
@@ -87,7 +92,7 @@ def test_without_a_sheet_the_button_says_what_is_missing(va: Session):
     button.click()
 
     expect(page.locator("#results-panel .generation-status")).to_have_text(
-        "Connect Google Drive on your Account page"
+        "Connect Google Drive on your Account page",
     )
     expect(button).to_be_enabled()
     expect(button).to_have_text(LABEL)

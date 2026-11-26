@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter
 
 from ofmhelpers.db.jobs.schema import Job, JobParams
@@ -12,13 +14,15 @@ def as_ai_params(job: Job) -> JobParams:
     if tool is None or tool.as_ai is None:
         return JobParams(params=job.params)
     return JobParams(
-        params={"provider": "kie", **tool.as_ai.translate(job.params).model_dump()}
+        params={"provider": "kie", **tool.as_ai.translate(job.params).model_dump()},
     )
 
 
 def _router(prefix: str, label: str) -> APIRouter:
     router = APIRouter(
-        prefix=prefix, tags=["legacy"], dependencies=[Access(Area.LEGACY)]
+        prefix=prefix,
+        tags=["legacy"],
+        dependencies=[Access(Area.LEGACY)],
     )
     add_job_routes(
         router,

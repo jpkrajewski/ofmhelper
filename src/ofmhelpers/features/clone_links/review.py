@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import mimetypes
 import time
 from pathlib import Path
@@ -17,34 +19,28 @@ from ofmhelpers.db.clone_ai_checks.schema import (
 )
 from ofmhelpers.db.clone_from_links import store
 from ofmhelpers.db.jobs.store import create_job, fail_job, get_job
-from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links.ai_check import check_clone, unanswered
+from ofmhelpers.features.clone_links.constants import (
+    CloneLinksTask,
+    clone_links_constants,
+)
 from ofmhelpers.features.clone_links.folders import folder_for
-from ofmhelpers.features.drive.folders import review_folder
-from ofmhelpers.features.drive.space import DRIVE_FULL, drive_space, upload_error
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
+from ofmhelpers.features.storage.client import saved_storage, storage_of
 from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.storage import (
+    RECONNECT,
+    DriveError,
+)
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
+lazy from ofmhelpers.db.drive_folders.schema import DriveFile
 lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
-lazy from ofmhelpers.integrations.gdrive import DriveApi, DriveFile
+lazy from ofmhelpers.features.storage.service import StorageService
+lazy from ofmhelpers.integrations.storage import StorageClient
 
 logger = get_logger(__name__)
-
-NOT_CONNECTED: str = ReviewReason.NOT_CONNECTED.value
-RUN_TASK = "clone_links"
-TASK = "clone_links_review"
-_FINAL = frozenset(
-    {
-        ReviewReason.NOT_CONNECTED,
-        ReviewReason.NOT_SAVED,
-        ReviewReason.VIDEO_GONE,
-        ReviewReason.CUT_OFF,
-    }
-)
-_WAIT_FOR_DRIVE = frozenset({DRIVE_FULL, RECONNECT})
 
 
 def start_reviews(job_id: str, user_id: int, paths: list[str | None]) -> list[int]:
@@ -78,22 +74,20 @@ def _queue(review_id: int) -> None:
         job_id = _job(review_id)
         enqueue(
             run_job,
-            job_id,
-            review_file,
-            {"review_id": review_id},
+            (job_id, review_file, {"review_id": review_id}),
             job_timeout=settings.clone_links.review_timeout_s,
         )
     except Exception:
         logger.warning("AI check %s not queued", review_id, exc_info=True)
         store.finish(review_id, claimed=None, error=ReviewReason.QUEUE_FAILED)
         if job_id is not None:
-            fail_job(job_id, "Could not queue the AI check")
+            fail_job(job_id, clone_links_constants().queue_failed_job)
 
 
 def _job(review_id: int) -> str:
     review = store.get(review_id)
     return create_job(
-        TASK,
+        CloneLinksTask.REVIEW,
         {
             "review_id": review_id,
             "clone_job": review.job_id if review else None,
@@ -116,7 +110,8 @@ def review_file(review_id: int, path: str | None = None) -> None:
         attempt=review.attempts,
     ) as span:
         try:
-            _review(review, review.path or path, span)
+            storage = storage_of(review.user_id, interactive=False)
+            _review(review, review.path or path, span, storage)
         except JobTimeoutException as exc:
             logger.exception("AI check %s ran out of time", review_id)
             _failed(review, ReviewReason.TIMED_OUT, exc, span)
@@ -125,7 +120,12 @@ def review_file(review_id: int, path: str | None = None) -> None:
             _failed(review, ReviewReason.UNEXPECTED, exc, span)
 
 
-def _review(review: CloneFromLink, path: str | None, span: logfire.LogfireSpan) -> None:
+def _review(
+    review: CloneFromLink,
+    path: str | None,
+    span: logfire.LogfireSpan,
+    storage: StorageService,
+) -> None:
     video = Path(path) if path else None
     if video is None or not video.is_file():
         _gone(review, span)
@@ -136,7 +136,7 @@ def _review(review: CloneFromLink, path: str | None, span: logfire.LogfireSpan) 
         return
     if resumed:
         span.set_attributes({"folder": folder, "resumed": True})
-    _upload(review, video, folder, span)
+    _upload(review, video, folder, span, storage)
 
 
 def _gone(review: CloneFromLink, span: logfire.LogfireSpan) -> None:
@@ -146,7 +146,10 @@ def _gone(review: CloneFromLink, span: logfire.LogfireSpan) -> None:
 
 
 def _failed(
-    review: CloneFromLink, reason: str, exc: Exception, span: logfire.LogfireSpan
+    review: CloneFromLink,
+    reason: str,
+    exc: Exception,
+    span: logfire.LogfireSpan,
 ) -> None:
     span.record_exception(exc)
     span.set_level("error")
@@ -162,7 +165,9 @@ def _mirrored(job_id: str) -> bool:
 
 
 def _checked(
-    review: CloneFromLink, video: Path, span: logfire.LogfireSpan
+    review: CloneFromLink,
+    video: Path,
+    span: logfire.LogfireSpan,
 ) -> CloneAiCheck:
     try:
         return check_clone(video, mirrored=_mirrored(review.job_id))
@@ -211,7 +216,7 @@ def _check(review: CloneFromLink, video: Path, span: logfire.LogfireSpan) -> str
             "input_tokens": check.input_tokens or 0,
             "thinking_tokens": check.thinking_tokens or 0,
             "output_tokens": check.output_tokens or 0,
-        }
+        },
     )
     if check.error:
         off = check.error_kind in ("quota", "setup") or check.error == CHECK_FAILED
@@ -231,19 +236,22 @@ def _check(review: CloneFromLink, video: Path, span: logfire.LogfireSpan) -> str
 
 
 def _upload(
-    review: CloneFromLink, video: Path, folder: str, span: logfire.LogfireSpan
+    review: CloneFromLink,
+    video: Path,
+    folder: str,
+    span: logfire.LogfireSpan,
+    storage: StorageService,
 ) -> None:
     if not video.is_file():
         _gone(review, span)
         return
-    token = refresh_token(review.user_id)
-    if not token:
-        _finish(review, error=NOT_CONNECTED)
+    if storage.review.client is None:
+        _finish(review, error=ReviewReason.NOT_CONNECTED)
         return
     name = download_name(video.name)
     mime = mimetypes.guess_type(video.name)[0] or "application/octet-stream"
     try:
-        place = review_folder(token, review.user_id, folder)
+        place = storage.review.folder(folder)
         drive, target = place.drive, place.folder_id
         made = (
             _already_there(drive, target, name, video.stat().st_size)
@@ -258,14 +266,17 @@ def _upload(
         logger.warning("AI check %s: upload failed: %s", review.id, exc, exc_info=True)
         span.set_attribute("upload_error", str(exc))
         span.set_level("error")
-        _finish(review, error=upload_error(review.user_id, exc))
+        _finish(review, error=storage.space.upload_error(exc))
         return
     _finish(review, drive_file_id=made.id, drive_url=made.url)
     span.set_attribute("drive_file_id", made.id)
 
 
 def _already_there(
-    drive: DriveApi, folder_id: str, name: str, size: int
+    drive: StorageClient,
+    folder_id: str,
+    name: str,
+    size: int,
 ) -> DriveFile | None:
     return next(
         (
@@ -306,7 +317,7 @@ def resume_reviews() -> MappingProxyType[str, str]:
     for review in store.failed_since(since):
         if _retryable(review):
             outcomes[f"review {review.id}"] = _guarded(_resume_failed, review)
-    for job in store.unreviewed_jobs(RUN_TASK, since):
+    for job in store.unreviewed_jobs(CloneLinksTask.RUN, since):
         owner = int(job.actor) if job.actor and job.actor.isdigit() else None
         if owner is None:
             continue
@@ -347,7 +358,8 @@ def _resume_lost(review: CloneFromLink) -> str:
         logger.warning("recovery: review %s never started: failed", review.id)
         return "gave up"
     ttl = settings.clone_links.review_lost_s
-    if not get_redis().set(f"clone-links:requeued:{review.id}", "1", nx=True, ex=ttl):
+    requeued_key = clone_links_constants().requeued_key.format(review_id=review.id)
+    if not get_redis().set(requeued_key, "1", nx=True, ex=ttl):
         return "waiting"
     _queue(review.id)
     logger.warning("recovery: review %s never started: queued again", review.id)
@@ -359,12 +371,13 @@ def _retryable(review: CloneFromLink) -> bool:
         return False
     if review.error == ReviewReason.QUEUE_FAILED:
         return True
-    return review.folder_name is not None and review.error not in _FINAL
+    return review.folder_name is not None and review.error not in ReviewReason.final()
 
 
 def _resume_failed(review: CloneFromLink) -> str:
-    if review.error in _WAIT_FOR_DRIVE:
-        space = drive_space(review.user_id, ask=False)
+    drive_full = saved_storage(review.user_id).constants.drive_full
+    if review.error in {drive_full, RECONNECT}:
+        space = storage_of(review.user_id, interactive=False).space.cached()
         if space is None or space.low or space.reconnect:
             return "waiting for Drive"
     if not store.reopen(review):

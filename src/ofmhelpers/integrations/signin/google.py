@@ -1,15 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.users.schema import Identity
-from ofmhelpers.integrations.gdrive.client import (
-    GOOGLE_TOKEN_URL,
-)
-from ofmhelpers.integrations.gdrive.client import (
-    SCOPES as DRIVE_SCOPES,
-)
 from ofmhelpers.integrations.signin.base import (
     SignInError,
     TokenReply,
@@ -17,6 +13,10 @@ from ofmhelpers.integrations.signin.base import (
     claims,
     token_request,
 )
+from ofmhelpers.integrations.storage.gdrive.client import GOOGLE_TOKEN_URL
+from ofmhelpers.integrations.storage.gdrive.client import SCOPES as DRIVE_SCOPES
+
+__all__ = ["DRIVE_SCOPES"]
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = GOOGLE_TOKEN_URL

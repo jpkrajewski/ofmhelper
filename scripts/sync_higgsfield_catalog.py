@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Rebuild `integrations/ai_providers/higgsfield/catalog.json` from Higgsfield's docs.
 
 Higgsfield documents every model as one Markdown page per workflow
@@ -28,7 +30,8 @@ OUT = (
 TIMEOUT_S = 30
 
 _FAMILY_CARD = re.compile(
-    r'href="/docs/models/([a-z0-9-]+)">.*?featured-model-title">([^<]+)<', re.DOTALL
+    r'href="/docs/models/([a-z0-9-]+)">.*?featured-model-title">([^<]+)<',
+    re.DOTALL,
 )
 _ENDPOINT_ID = re.compile(r"\*\*Endpoint ID:\*\* `([^`]+)`")
 _TITLE = re.compile(r"^# (.+?)(?: API)?$", re.MULTILINE)
@@ -71,9 +74,10 @@ def _workflows(slug: str, family: str, kind: str) -> list[dict]:
     names = sorted(
         set(
             re.findall(
-                rf"/docs/models/{slug}/([a-z0-9-]+)", _get(f"/docs/models/{slug}")
-            )
-        )
+                rf"/docs/models/{slug}/([a-z0-9-]+)",
+                _get(f"/docs/models/{slug}"),
+            ),
+        ),
     )
     found = [_workflow(slug, family, kind, name) for name in names]
     return [entry for entry in found if entry]
@@ -89,10 +93,12 @@ def main() -> int:
         if old.get("max_upload_bytes") and old["model_id"] in entries:
             entries[old["model_id"]]["max_upload_bytes"] = old["max_upload_bytes"]
     catalog = sorted(
-        entries.values(), key=lambda e: (e["kind"], e["family"], e["label"])
+        entries.values(),
+        key=lambda e: (e["kind"], e["family"], e["label"]),
     )
     OUT.write_text(
-        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     print(f"{len(catalog)} models from {len(families)} families -> {OUT}")
     return 0

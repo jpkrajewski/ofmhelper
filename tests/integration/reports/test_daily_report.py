@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -44,7 +46,8 @@ def _services(fake_externals, monkeypatch):
     monkeypatch.setenv("FANVUE_EVENT_SECRET", "fanvue-secret")
     monkeypatch.setenv("OFM_REPORTS_TIMEZONE", "UTC")
     monkeypatch.setenv(
-        "OFM_REPORTS_DAILY_AT", datetime.fromtimestamp(NOW, UTC).strftime("%H:%M")
+        "OFM_REPORTS_DAILY_AT",
+        datetime.fromtimestamp(NOW, UTC).strftime("%H:%M"),
     )
     monkeypatch.setattr(dispatch_module, "_sleep", lambda _s: None)
 
@@ -54,7 +57,11 @@ def _written() -> None:
 
 
 def _link(
-    owner: int, destination: str, target: str, creator: str | None, slug: str
+    owner: int,
+    destination: str,
+    target: str,
+    creator: str | None,
+    slug: str,
 ) -> int:
     with session_scope() as s:
         creator_id = None
@@ -100,14 +107,23 @@ def _scanned(handle: str, views: int, model: str | None, now: float = NOW) -> No
         account.id,
         AccountStats(
             profile=AccountProfile(
-                handle=handle, display_name=handle, followers=1, following=1
+                handle=handle,
+                display_name=handle,
+                followers=1,
+                following=1,
             ),
             posts=[
                 PostStat(
-                    id=f"{handle}-new", url="u", views=views, posted_at=NOW - 3600
+                    id=f"{handle}-new",
+                    url="u",
+                    views=views,
+                    posted_at=NOW - 3600,
                 ),
                 PostStat(
-                    id=f"{handle}-old", url="u", views=9, posted_at=NOW - 3 * _DAY
+                    id=f"{handle}-old",
+                    url="u",
+                    views=9,
+                    posted_at=NOW - 3 * _DAY,
                 ),
             ],
             scanned_at=NOW,
@@ -138,10 +154,18 @@ def agency() -> int:
 
 def _the_day_before(agency: int) -> tuple[int, int]:
     dane = _link(
-        agency, "https://www.stacked.com/@fake_creator", "stacked", "Dane", "dane1"
+        agency,
+        "https://www.stacked.com/@fake_creator",
+        "stacked",
+        "Dane",
+        "dane1",
     )
     rachel = _link(
-        agency, "https://onlyfans.com/rachel.rosee/c1", "onlyfans", None, "rachel1"
+        agency,
+        "https://onlyfans.com/rachel.rosee/c1",
+        "onlyfans",
+        None,
+        "rachel1",
     )
     _days(dane, (YESTERDAY, 100, 80))
     with session_scope() as s:
@@ -151,7 +175,7 @@ def _the_day_before(agency: int) -> tuple[int, int]:
                 channel_id="c1",
                 model_username="walker_dane",
                 last_message_id="m1",
-            )
+            ),
         )
     return dane, rachel
 
@@ -172,7 +196,10 @@ def _what_came_in(dane: int, rachel: int) -> None:
     chats.save_notification(
         ChatPlatform.STACKED,
         ChatDelivery(
-            kind=DeliveryKind.MASS, model_id="x", event_id="bulk:1", at=NOW - 7200
+            kind=DeliveryKind.MASS,
+            model_id="x",
+            event_id="bulk:1",
+            at=NOW - 7200,
         ),
         _STACKED_MODEL,
     )

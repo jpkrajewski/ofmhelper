@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 lazy from pathlib import Path
 
@@ -33,7 +35,7 @@ def team() -> Team:
 
 def _va(email: str, name: str, owner: User) -> User:
     va = users.add_user(
-        UserForm(email=email, role=Role.VA, name=name, owner_id=owner.id)
+        UserForm(email=email, role=Role.VA, name=name, owner_id=owner.id),
     )
     assert va is not None
     return va
@@ -54,7 +56,8 @@ def _done(task: str, user: User, out: Path) -> str:
 
 def _card(html: str, job_id: str) -> str:
     found = re.search(
-        rf'<div class="result-item" data-job-id="{job_id}".*?(?=<div class="result-item"|\Z)',
+        rf'<div class="result-item" data-job-id="{job_id}".*?(?=<div '
+        rf'class="result-item"|\Z)',
         html,
         re.DOTALL,
     )
@@ -73,8 +76,13 @@ PAGES = [
 
 
 @pytest.mark.parametrize(("page", "fragment", "latest", "task"), PAGES)
-def test_an_owner_sees_their_vas_card_with_the_vas_name(
-    team, tmp_path, page, fragment, latest, task
+def test_an_owner_sees_their_vas_card_with_the_vas_name(  # noqa: PLR0913, PLR0917
+    team,
+    tmp_path,
+    page,
+    fragment,
+    latest,
+    task,
 ):
     theirs = _done(task, team.va, tmp_path / "va.png")
     mine = _done(task, team.owner, tmp_path / "owner.png")
@@ -84,7 +92,8 @@ def test_an_owner_sees_their_vas_card_with_the_vas_name(
         html = owner.get(url).text
         assert set(_ids(html)) == {theirs, mine}, url
         assert f'<p class="source" data-made-by>Done by VA: {VA_NAME}</p>' in _card(
-            html, theirs
+            html,
+            theirs,
         ), url
         assert VA_NAME not in _card(html, mine), url
 

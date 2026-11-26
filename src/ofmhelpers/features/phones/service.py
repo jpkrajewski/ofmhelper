@@ -1,11 +1,12 @@
-import datetime
+# Copyright (C) 2026 jpkrajewski
+
+import datetime as dt
 from contextlib import contextmanager
 from types import MappingProxyType
 lazy from collections.abc import Iterator
 
 from pydantic import BaseModel, ConfigDict
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.db.devices import store
 from ofmhelpers.db.devices.catalog import (
     catalog,
@@ -14,23 +15,18 @@ from ofmhelpers.db.devices.catalog import (
     tracked_services,
 )
 from ofmhelpers.db.devices.catalog.schema import Catalog, LoginService
+from ofmhelpers.db.devices.models import Device, LoginFields, PhoneQuery
 from ofmhelpers.db.devices.schema import (
     ArchivedLogin,
     AssignAccount,
-    Device,
-    LoginFields,
     LoginSecrets,
-    PhoneQuery,
     PhoneSort,
 )
 from ofmhelpers.db.encrypted import VaultError
-from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.db.tracked_accounts.store import get_account
 from ofmhelpers.features.accounts.removal import logins_leaving
 from ofmhelpers.features.accounts.tracker import track_login
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.phones import workbook
 from ofmhelpers.features.phones.catalog.render import render as draw
 from ofmhelpers.features.refusals import (
@@ -38,12 +34,9 @@ from ofmhelpers.features.refusals import (
     NotFoundError,
     duplicate_refused,
 )
-from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.devices.schema import DeviceFields
-
-logger = get_logger(__name__)
-
-DRIVE_SYNC_TASK = drive_folders.SYNC_TASK
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.service import StorageServiceFolders
+lazy from ofmhelpers.db.devices.models import DeviceFields
 
 
 class SecretsUnreadableError(RuntimeError): ...
@@ -126,7 +119,7 @@ def drawing(model: str, color: str) -> str:
 @_vault()
 def export(scope: int) -> Workbook:
     active = [d for d in store.export_devices(scope) if not d.retired]
-    today = datetime.datetime.now(tz=datetime.UTC).date()
+    today = dt.datetime.now(tz=dt.UTC).date()
     return Workbook(
         content=workbook.build(active),
         name=f"phones-{today.isoformat()}.xlsx",
@@ -141,7 +134,7 @@ def add(body: DeviceFields, owner_id: int) -> int:
         return store.add_device(body, owner_id)
 
 
-def _require(found: bool, what: str) -> None:
+def _require(found: bool, what: str) -> None:  # noqa: FBT001
     if not found:
         msg = f"{what} not found"
         raise NotFoundError(msg)
@@ -153,24 +146,18 @@ def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
         track_login(body.service, body.username, user_id=owner, revive=revive)
 
 
-def _make_drive_folder(login_id: int, service: str) -> None:
-    found = services().get(service)
-    if found is None or not found.tracked_platform or not drive_folders.enabled():
-        return
-    owner = store.owner_of_login(login_id)
-    if owner is None:
-        return
-    job_id = create_job(DRIVE_SYNC_TASK, {"owner": owner}, actor=str(owner))
-    try:
-        enqueue(run_job, job_id, drive_folders.sync, {"owner": owner})
-    except Exception:
-        logger.exception("queueing the Drive sync for login %s failed", login_id)
-        fail_job(job_id, "Could not queue the Drive sync")
-
-
 class Phone(BaseModel, frozen=True):
     scope: int
     device_id: int
+    folders: StorageServiceFolders
+
+    def _make_drive_folder(self, login_id: int, service: str) -> None:
+        found = services().get(service)
+        if found is None or not found.tracked_platform or not storage_jobs.enabled():
+            return
+        if store.owner_of_login(login_id) != self.folders.owner_id:
+            return
+        self.folders.queue_sync()
 
     @_vault()
     def edit(self, body: DeviceFields) -> None:
@@ -185,12 +172,12 @@ class Phone(BaseModel, frozen=True):
         _require(store.restore_device(self.device_id, self.scope), "Phone")
 
     def delete(self) -> None:
-        logins_leaving(self.scope, self.device_id)
+        logins_leaving(self.scope, self.folders, self.device_id)
         _require(store.delete_device(self.device_id, self.scope), "Phone")
 
     def add_login(self, body: LoginFields) -> LoginAdded:
         added = self._saved(body)
-        _make_drive_folder(added.id, body.service)
+        self._make_drive_folder(added.id, body.service)
         return added
 
     @_vault()
@@ -223,11 +210,11 @@ class Phone(BaseModel, frozen=True):
         added = LoginAdded(id=already.id, linked=True) if already else self._saved(new)
         for name in others:
             self.remove_login(on_phone[name].id)
-        _make_drive_folder(added.id, found.service)
+        self._make_drive_folder(added.id, found.service)
         return added
 
     def remove_login(self, login_id: int) -> None:
-        logins_leaving(self.scope, self.device_id, login_id)
+        logins_leaving(self.scope, self.folders, self.device_id, login_id)
         _require(store.remove_login(self.device_id, login_id, self.scope), "Login")
 
 

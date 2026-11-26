@@ -3,7 +3,7 @@
 Where events go out (Telegram, later Discord, email, ...). Any part of the app emits an `Event`; this package only delivers it.
 
 ```
-emit(Event) | @emits(build)          features/events/bus.py     returns at once, never raises
+emit(Event)                         features/events/bus.py     returns at once, never raises
   -> `events` queue                   compose worker (its own pool), 1 process, HIGHEST priority
   -> dispatch                         features/events/dispatch.py: the aggregator
        each sender in senders(), not in OFM_EVENTS_SENDERS_OFF, each of its targets()
@@ -20,7 +20,7 @@ emit(Event) | @emits(build)          features/events/bus.py     returns at once,
 - `emit` never raises (not an Event, queue down, build failing: logged). Making an `Event` with a wrong field raises where it is made (`extra="forbid"`, url only `/path` or http(s)); long title/text are cut (256 / 3000), never refused.
 
 ## Emitting
-- `name`: dotted, the producer's own. `title` first line, `text` rest (plain text), `url` a site path (made absolute from `APP_BASE_URL`; left out of the message without it) or an http(s) link, `key` = once per sender and target, counted only once sent. `@emits(build)` returns an `Event` or None (= nothing).
+- `name`: dotted, the producer's own. `title` first line, `text` rest (plain text), `url` a site path (made absolute from `APP_BASE_URL`; left out of the message without it) or an http(s) link, `key` = once per sender and target, counted only once sent.
 - Emit after the DB write it reports: an event is queued when `emit` runs, not on commit.
 - Wired (2026-11-06): `chatting.unanswered` (`features/chatting/wait_events.py`, every 10 min while fans wait over 5 min, and 5 min after each fan message if that fan still waits untold (`features/chatting/rechecks.py`); after a fresh read; Fanvue off for now) and `reports.daily.models|views|chatting` (`features/reports/daily.py`, 14:00 Warsaw), and `chatting.mass` (`features/reports/mass.py`, 2026-11-07: the moment a mass message is stored, every model that sent one since the last report, one line each, no count; it and the report's Chatting part share `replaces="chatting.mass"`, so the chat shows only the newest; the same list in one window goes out once).
 

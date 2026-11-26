@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 import json
 from pathlib import Path
@@ -29,13 +31,13 @@ def _page_text(input_schema, model="acme/v1", path="/api/v1/jobs/createTask"):
                                     "properties": {
                                         "model": {"type": "string", "enum": [model]},
                                         "input": input_schema,
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         },
     }
     result = '{"resultUrls":["https://x/1.png"]}'
@@ -45,7 +47,10 @@ def _page_text(input_schema, model="acme/v1", path="/api/v1/jobs/createTask"):
 def _entry(sync, monkeypatch, text, current=None):
     monkeypatch.setattr(sync, "_get", lambda url: text)
     page = sync.Page(
-        kind="video", family="Acme", title="Acme - Image to Video", url="u"
+        kind="video",
+        family="Acme",
+        title="Acme - Image to Video",
+        url="u",
     )
     return sync._entry(page, current or {})
 
@@ -70,7 +75,7 @@ def test_a_page_becomes_a_catalog_entry(sync, monkeypatch):
                     "model": {"type": "string", "enum": ["fast", "pro"]},
                     "nsfw_checker": {"type": "boolean"},
                 },
-            }
+            },
         ),
     )
 
@@ -142,8 +147,8 @@ def test_input_variants_merge_into_one_form(sync, monkeypatch):
                             "mode": {"type": "string", "enum": ["a"]},
                         },
                     },
-                ]
-            }
+                ],
+            },
         ),
     )
 
@@ -164,7 +169,7 @@ def test_an_existing_entry_keeps_its_hand_settings(sync, monkeypatch):
             "kind": "video",
             "fixed": {"sound": True},
             "default_prompt": "hello",
-        }
+        },
     }
     entry = _entry(
         sync,
@@ -173,7 +178,7 @@ def test_an_existing_entry_keeps_its_hand_settings(sync, monkeypatch):
             {
                 "type": "object",
                 "properties": {"prompt": PROMPT, "sound": {"type": "boolean"}},
-            }
+            },
         ),
         current,
     )
@@ -197,9 +202,9 @@ def test_an_existing_entry_keeps_its_hand_settings(sync, monkeypatch):
                     "type": "object",
                     "required": ["speakers"],
                     "properties": {
-                        "speakers": {"type": "array", "items": {"type": "object"}}
+                        "speakers": {"type": "array", "items": {"type": "object"}},
                     },
-                }
+                },
             ),
             "cannot fill: speakers",
         ),
@@ -210,7 +215,10 @@ def test_an_existing_entry_keeps_its_hand_settings(sync, monkeypatch):
     ],
 )
 def test_what_the_app_cannot_run_is_skipped_with_a_reason(
-    sync, monkeypatch, text, reason
+    sync,
+    monkeypatch,
+    text,
+    reason,
 ):
     with pytest.raises(sync.Skip, match=reason):
         _entry(sync, monkeypatch, text)

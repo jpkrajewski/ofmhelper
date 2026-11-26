@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -18,11 +20,17 @@ def upgrade() -> None:
         sa.Column("model_id", sa.String(length=48), nullable=True),
         sa.Column("color_id", sa.String(length=32), nullable=True),
         sa.Column(
-            "custom_model", sa.String(length=64), nullable=False, server_default=""
+            "custom_model",
+            sa.String(length=64),
+            nullable=False,
+            server_default="",
         ),
         sa.Column("owner", sa.String(length=64), nullable=False, server_default=""),
         sa.Column(
-            "phone_number", sa.String(length=32), nullable=False, server_default=""
+            "phone_number",
+            sa.String(length=32),
+            nullable=False,
+            server_default="",
         ),
         sa.Column("notes", sa.Text(), nullable=False, server_default=""),
         sa.Column("added_at", sa.Float(), nullable=False),
@@ -44,7 +52,10 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.Float(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "service", "provider", "username", name="uq_logins_identity"
+            "service",
+            "provider",
+            "username",
+            name="uq_logins_identity",
         ),
     )
     op.create_table(

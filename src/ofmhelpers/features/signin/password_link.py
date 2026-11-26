@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.db.users.schema import PasswordForm, User
@@ -32,7 +34,9 @@ def set_password(token: str, password: str, confirm: str) -> Outcome | LinkPage:
             else "Fill in both fields"
         )
         return LinkPage(
-            owner=credentials.link_owner(token), error=message, status_code=400
+            owner=credentials.link_owner(token),
+            error=message,
+            status_code=400,
         )
     if user is None:
         return LinkPage(owner=None, error=_DEAD_LINK, status_code=404)

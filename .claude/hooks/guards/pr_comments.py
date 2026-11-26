@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import re
 import shlex
@@ -25,16 +27,20 @@ query($owner: String!, $repo: String!, $number: Int!) {
 COUNT = (
     ".data.repository.pullRequest as $pr | {open: "
     "(([$pr.reviewThreads.nodes[] | select(.isResolved | not)] | length)"
-    ' + ([$pr.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED")] | length)),'
+    " + ([$pr.latestReviews.nodes[] | select(.state "
+    '== "CHANGES_REQUESTED")] | length)),'
     " more: ($pr.reviewThreads.pageInfo.hasNextPage"
     " or $pr.latestReviews.pageInfo.hasNextPage)}"
 )
 CANONICAL = re.compile(r"(?:rtk\s+)?gh\s+pr\s+merge\s+(\d+)\s+--merge")
 HAS_COMMENTS = (
     "PR #{number} has {count} open review comment(s): an unresolved review thread or a "
-    'change request (CodeQL alerts count). Owner 2026-11-20: "YOU CANT MERGE IF THERE ARE '
-    'COMMENTS". Close each one first (ship skill, step 6): verify it against the code, then '
-    "fix it on dev with its scoped tests (pre-push and CI rerun the suite), or reply with the "
+    "change request (CodeQL alerts count). Owner "
+    '2026-11-20: "YOU CANT MERGE IF THERE ARE '
+    'COMMENTS". Close each one first (ship skill, '
+    "step 6): verify it against the code, then "
+    "fix it on dev with its scoped tests (pre-push "
+    "and CI rerun the suite), or reply with the "
     "reason and the evidence, resolve "
     "the thread and dismiss the CodeQL alert. Merge once none is open."
 )
@@ -43,13 +49,17 @@ TOO_MANY = (
     "covers, so it is not merged. Look by hand: gh pr view {number} --comments."
 )
 NOT_CANONICAL = (
-    "Use the canonical form: gh pr merge <n> --merge, alone in the command and run from the repo "
-    "root ({root}). Every other spelling (gh.exe or a path, -R, a URL, GH_REPO, a pipe, cd, "
-    "another command, extra flags, gh api) is refused: the review-comment check reads only "
+    "Use the canonical form: gh pr merge <n> --merge, "
+    "alone in the command and run from the repo "
+    "root ({root}). Every other spelling (gh.exe "
+    "or a path, -R, a URL, GH_REPO, a pipe, cd, "
+    "another command, extra flags, gh api) is "
+    "refused: the review-comment check reads only "
     "that form."
 )
 UNREADABLE = (
-    "Could not read the review comments of PR #{number} ({error}), so it is not merged. "
+    "Could not read the review comments of PR "
+    "#{number} ({error}), so it is not merged. "
     "Look by hand: gh pr view {number} --comments, and the PR's Files tab."
 )
 

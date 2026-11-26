@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 import re
 import time
@@ -73,7 +75,10 @@ def _submit(provider: Provider, spec: ModelSpec, payload: Payload, key: str) -> 
 
 
 def _await_callback(
-    job_id: str, part: int, kind: OutputKind, since: float
+    job_id: str,
+    part: int,
+    kind: OutputKind,
+    since: float,
 ) -> str | None:
     s = settings.aigen
     timeout_s = s.video_poll_timeout_s if kind == "video" else s.poll_timeout_s
@@ -99,13 +104,20 @@ def _lost_task(provider: Provider, noted: tasks.ProviderTask, kind: OutputKind) 
     if found is None:
         raise _not_answered(provider)
     logger.info(
-        "job %s: %s named the lost task %s", noted.job_id, provider.label, found
+        "job %s: %s named the lost task %s",
+        noted.job_id,
+        provider.label,
+        found,
     )
     return found
 
 
 def _submit_noted(
-    provider: Provider, spec: ModelSpec, body: Payload, job_id: str, part: int
+    provider: Provider,
+    spec: ModelSpec,
+    body: Payload,
+    job_id: str,
+    part: int,
 ) -> str:
     key = job_key(job_id, part)
     if not provider.callback_url(key):
@@ -214,7 +226,7 @@ def _ours(cls: type[Provider], api_key: str, task_id: str, key: str) -> bool:
     return True
 
 
-def heard(provider: str, key: str, raw: bytes, headers: Mapping[str, str]) -> Heard:
+def heard(provider: str, key: str, raw: bytes, headers: Mapping[str, str]) -> Heard:  # noqa: PLR0911
     cls = provider_classes().get(provider)
     if cls is None:
         return Heard.UNKNOWN

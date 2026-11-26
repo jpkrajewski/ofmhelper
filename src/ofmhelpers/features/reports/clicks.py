@@ -1,7 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, date, datetime, timedelta
 
 from ofmhelpers.db.report_runs.schema import DayCount, ReportMarks
-lazy from ofmhelpers.db.short_links.schema import ShortLink
+lazy from ofmhelpers.db.short_links.models import ShortLink
 
 
 def marks(links: list[ShortLink], now: float) -> ReportMarks:
@@ -14,7 +16,7 @@ def marks(links: list[ShortLink], now: float) -> ReportMarks:
                 if d.day >= since
             }
             for link in links
-        }
+        },
     )
 
 

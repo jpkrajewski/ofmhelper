@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from pathlib import Path
 
@@ -65,7 +67,9 @@ def test_a_removed_post_fails_with_both_reasons(tmp_path):
 def test_a_non_instagram_link_is_refused_without_any_request(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(
-        savers.outbound, "get", lambda *a, **k: calls.append(a) or pytest.fail("GET")
+        savers.outbound,
+        "get",
+        lambda *a, **k: calls.append(a) or pytest.fail("GET"),
     )
 
     result = savers.download("https://www.tiktok.com/@a/video/1", tmp_path)

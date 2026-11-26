@@ -1,9 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Any, Protocol
 lazy from collections.abc import Callable
 
 from pydantic import BaseModel
-lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.picture_presets import store as picture_presets
@@ -16,7 +17,7 @@ from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.features.generate.service import run_ai
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import JobsQueued
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.pictures.targets import (
     PICTURE_TARGETS,
     PRESET_ASPECTS,
@@ -36,6 +37,7 @@ from ofmhelpers.features.refusals import (
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import ResultFile
+lazy from ofmhelpers.features.assets.models import ImageUpload
 
 logger = get_logger(__name__)
 
@@ -64,7 +66,9 @@ def form_view(owner_id: int, actor: str, preset: int | None) -> FormView:
         selected=preset if preset in ids else (ids[0] if ids else None),
         providers=provider_choices(list(PICTURE_TARGETS), notices=False),
         selected_provider=start_provider(
-            actor, frozenset({TASK}), list(PICTURE_TARGETS)
+            actor,
+            frozenset({TASK}),
+            list(PICTURE_TARGETS),
         ),
         max_images={name: t.max_images for name, t in PICTURE_TARGETS.items()},
         preset_max_images=settings.pictures.preset_max_images,
@@ -79,7 +83,7 @@ class PresetFields(Protocol):
     name: str
     prompt: str
     aspect_ratio: str
-    images: list[UploadFile]
+    images: list[ImageUpload]
 
 
 def visible(preset_id: int, owner_id: int) -> PicturePreset:
@@ -99,7 +103,9 @@ def image_thumb(preset_id: int, index: int, owner_id: int) -> Path:
         return file_thumb(Path(preset.images[index]))
     except PREVIEW_ERRORS:
         logger.warning(
-            "pictures: no thumbnail of %s", preset.images[index], exc_info=True
+            "pictures: no thumbnail of %s",
+            preset.images[index],
+            exc_info=True,
         )
         msg = "No thumbnail"
         raise NotFoundError(msg) from None
@@ -114,17 +120,8 @@ def _preset_aspect(value: str) -> str | None:
     return value
 
 
-def _saved_images(uploads: list[UploadFile], root: Path) -> list[str]:
-    paths = []
-    for upload in uploads:
-        if not upload.filename:
-            continue
-        saved = save_asset(upload, root)
-        if classify_kind(saved) != "image":
-            msg = "A preset takes images only"
-            raise RefusedError(msg)
-        paths.append(saved)
-    return paths
+def _saved_images(uploads: list[ImageUpload], root: Path) -> list[str]:
+    return [save_asset(upload, root) for upload in uploads]
 
 
 def _checked(images: list[str]) -> list[str]:
@@ -136,7 +133,9 @@ def _checked(images: list[str]) -> list[str]:
 
 
 def create_preset(
-    form: PresetFields, owner_id: int, assets_root: Path
+    form: PresetFields,
+    owner_id: int,
+    assets_root: Path,
 ) -> PicturePreset:
     aspect = _preset_aspect(form.aspect_ratio)
     paths = _checked(_saved_images(form.images, assets_root))
@@ -183,7 +182,7 @@ class Submitted(Protocol):
     provider: str
     api_key: str
     preset: int
-    pictures: list[UploadFile]
+    pictures: list[ImageUpload]
     pictures_manifest: str
 
 
@@ -205,14 +204,17 @@ def _key(form: Submitted, target: PictureTarget, owner_id: int) -> str:
 
 def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
     paths = build_ordered_paths(
-        form.pictures_manifest, form.pictures, assets_root, user_id=owner_id
+        form.pictures_manifest,
+        form.pictures,
+        assets_root,
+        user_id=owner_id,
     )
+    if any(FileKind.from_ext(path) != FileKind.IMAGE for path in paths):
+        msg = "Pictures only"
+        raise RefusedError(msg)
     most = settings.pictures.max_pictures
     if not 1 <= len(paths) <= most:
         msg = f"Add 1 to {most} pictures to recreate"
-        raise RefusedError(msg)
-    if any(classify_kind(p) != "image" for p in paths):
-        msg = "Pictures only"
         raise RefusedError(msg)
     return paths
 
@@ -228,7 +230,9 @@ class PictureRun(BaseModel):
 
 
 def _runs(
-    chosen: PicturePreset, target: PictureTarget, paths: list[str]
+    chosen: PicturePreset,
+    target: PictureTarget,
+    paths: list[str],
 ) -> list[PictureRun]:
     if len(chosen.images) + 1 > target.max_images:
         msg = (
@@ -292,15 +296,32 @@ def describe_preset(params: dict[str, Any]) -> str:
     return f"{LABEL} · {name}" if name else LABEL
 
 
-def run_picture(
+def run_picture(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
     provider: str,
     model: str,
-    **params: Any,
+    prompt: str,
+    reference_images: list[str],
+    aspect_ratio: str,
+    resolution: str,
+    preset: int | None = None,  # noqa: ARG001
+    preset_name: str | None = None,  # noqa: ARG001
+    pictures: list[str] | None = None,  # noqa: ARG001
 ) -> list[ResultFile]:
-    fields = values(PICTURE_TARGETS[provider], params).model_dump()
+    chosen = {
+        "prompt": prompt,
+        "reference_images": reference_images,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+    }
+    fields = values(PICTURE_TARGETS[provider], chosen).model_dump()
     return run_ai(
-        job_id, api_key, assets_root, provider=provider, model=model, **fields
+        job_id,
+        api_key,
+        assets_root,
+        provider=provider,
+        model=model,
+        **fields,
     )

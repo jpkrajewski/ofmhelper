@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.viral.models import ApifyReel, SavedReel, ViralFind
 from ofmhelpers.features.viral.service import ViralError, find_viral, most_played, parse
 

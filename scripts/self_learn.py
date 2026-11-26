@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import re
 import sys
@@ -15,7 +17,7 @@ MARKER = OUT / "last.txt"
 AUDIT = ROOT / "reports" / "hooks" / "audit.jsonl"
 DEFAULT_DAYS = 7
 METADATA_LINE = '{"type":"'
-KEPT_TYPES = ('{"type":"user"', '{"type":"assistant"')
+KEPT_TYPES = ('{"type":"user"', '{"type":"assistant"', '{"type":"attachment"')
 INTERRUPTED = "[Request interrupted by user"
 REJECTED = "The user doesn't want to proceed with this tool use"
 CONTINUED = "This session is being continued from a previous conversation"
@@ -25,7 +27,7 @@ BIGGEST = 3
 TEXT_MAX = 400
 WHAT_MAX = 140
 TEST_SH = re.compile(
-    r"(?:^|[;&|(\n])\s*(?:\w+=\S+\s+)*(?:(?:bash|sh)\s+)?(?:\S*/)?scripts/test\.sh(?:\s+([^\s|;&>]+))?"
+    r"(?:^|[;&|(\n])\s*(?:\w+=\S+\s+)*(?:(?:bash|sh)\s+)?(?:\S*/)?scripts/test\.sh(?:\s+([^\s|;&>]+))?",
 )
 BACKGROUND_ID = re.compile(r"running in background with ID: (\w+)")
 TASK_ID = re.compile(r"<task-id>(\w+)</task-id>")
@@ -37,7 +39,7 @@ GIT_PUSH = re.compile(r"\bgit\s+push\b")
 KIMI_RUN = re.compile(
     r"kimi[/\\]ask\.py"
     r"|(?:^|[;&|(\n])\s*(?:\w+=\S+\s+)*(?:(?:timeout|nohup|time|env)\s+(?:-\S+\s+|\d+[smhd]?\s+)*)?"
-    r"(?:\S*[/\\])?kimi(?:\.exe)?(?=\s|$)"
+    r"(?:\S*[/\\])?kimi(?:\.exe)?(?=\s|$)",
 )
 SUMMARY_FILE = "reports/latest/summary.txt"
 QUIET_RUN = re.compile(r">\s*(?!&)\S")
@@ -53,7 +55,7 @@ PRESETS = frozenset(
         "snapshot",
         "durations",
         "affected",
-    }
+    },
 )
 SUBAGENT_TOOLS = frozenset({"Agent", "Task"})
 REFUSED_PUSH = "failed to push"
@@ -265,7 +267,10 @@ class TestRuns:
             self._finish(oldest, verdict, stamp)
 
     def _finish(
-        self, tool_id: str, verdict: tuple[int, int | None] | None, stamp: str
+        self,
+        tool_id: str,
+        verdict: tuple[int, int | None] | None,
+        stamp: str,
     ) -> None:
         if verdict is None:
             return
@@ -280,7 +285,7 @@ class TestRuns:
                 if seconds is not None
                 else max(0, int((end - launched).total_seconds())),
                 result="green" if code == 0 else f"exit {code}",
-            )
+            ),
         )
 
     def all(self) -> list[TestShRun]:
@@ -305,7 +310,21 @@ def _is_owner_prompt(entry: dict[str, Any], text: str) -> bool:
     )
 
 
-def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | None:
+def _is_queued_owner_prompt(attached: Any) -> bool:
+    if not isinstance(attached, dict):
+        return False
+    origin = attached.get("origin")
+    prompt = attached.get("prompt")
+    return (
+        attached.get("type") == "queued_command"
+        and isinstance(origin, dict)
+        and origin.get("kind") == "human"
+        and isinstance(prompt, str)
+        and bool(prompt.strip())
+    )
+
+
+def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | None:  # noqa: C901, PLR0912, PLR0915
     tools: dict[str, tuple[str, str]] = {}
     seen: set[str] = set()
     usage = Counter[str]()
@@ -330,7 +349,8 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
                 u = message.get("usage") or {}
                 usage["output"] += u.get("output_tokens", 0)
                 usage["fresh"] += u.get("input_tokens", 0) + u.get(
-                    "cache_creation_input_tokens", 0
+                    "cache_creation_input_tokens",
+                    0,
                 )
                 usage["cached"] += u.get("cache_read_input_tokens", 0)
                 peak = max(
@@ -359,10 +379,17 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
                         reviews[label] += 1
             continue
         if entry.get("type") == "attachment":
-            runs.notified(
-                str((entry.get("attachment") or {}).get("prompt", "")),
-                entry["timestamp"],
-            )
+            attached = entry.get("attachment")
+            if isinstance(attached, dict) and isinstance(attached.get("prompt"), str):
+                runs.notified(attached["prompt"], entry["timestamp"])
+            if owner and _is_queued_owner_prompt(attached):
+                prompts.append(
+                    Correction(
+                        at=entry["timestamp"][:16],
+                        session=path.stem[:8],
+                        text=str(attached["prompt"])[:TEXT_MAX],
+                    ),
+                )
             continue
         if entry.get("type") != "user":
             continue
@@ -382,7 +409,7 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
                     at=entry["timestamp"][:16],
                     session=path.stem[:8],
                     text=text[:TEXT_MAX],
-                )
+                ),
             )
         for part in results:
             result = _text(part.get("content"))
@@ -437,7 +464,7 @@ def _with_subagents(main: SessionLog, runs: list[SessionLog]) -> SessionLog:
             "cache_read_tokens": main.cost.cache_read_tokens
             + sum(r.cost.cache_read_tokens for r in runs),
             "rereads": main.cost.rereads + [x for r in runs for x in r.cost.rereads],
-        }
+        },
     )
     return main.model_copy(
         update={
@@ -448,7 +475,7 @@ def _with_subagents(main: SessionLog, runs: list[SessionLog]) -> SessionLog:
             "reviews": _merged([*main.reviews, *(x for r in runs for x in r.reviews)]),
             "task_stops": main.task_stops + sum(r.task_stops for r in runs),
             "refused_pushes": main.refused_pushes + sum(r.refused_pushes for r in runs),
-        }
+        },
     )
 
 
@@ -489,7 +516,7 @@ def guard_blocks(audit: Path, since: datetime) -> list[Repeat]:
             print(f"self_learn: skipped a broken line in {audit}", file=sys.stderr)
             continue
         if _when(entry["at"]).replace(tzinfo=None) < since.astimezone().replace(
-            tzinfo=None
+            tzinfo=None,
         ):
             continue
         for verdict in entry.get("verdicts", []):
@@ -522,7 +549,8 @@ def render(d: Digest) -> str:
         f"# Self-learn digest {d.since} -> {d.until}",
         "",
         (
-            f"Sessions: {len(d.costs)}, subagent runs: {sum(c.subagents for c in d.costs)}, "
+            f"Sessions: {len(d.costs)}, subagent runs: "
+            f"{sum(c.subagents for c in d.costs)}, "
             f"interrupted by the owner: {d.interrupted}, "
             f"tool calls the owner rejected: {d.rejected}"
         ),
@@ -547,10 +575,14 @@ def render(d: Digest) -> str:
         f"- refused pushes (failed to push): {d.refused_pushes}",
         "",
         "## Token cost per session",
-        "| session | started | min | subagents | output | fresh input | cache read | peak context | read 3x+ | biggest outputs (chars) |",
+        (
+            "| session | started | min | subagents | output | fresh input | "
+            "cache read | peak context | read 3x+ | biggest outputs (chars) |"
+        ),
         "|---|---|---|---|---|---|---|---|---|---|",
         *(
-            f"| {c.session} | {c.started} | {c.minutes} | {c.subagents} | {c.output_tokens:,} "
+            f"| {c.session} | {c.started} | {c.minutes} "
+            f"| {c.subagents} | {c.output_tokens:,} "
             f"| {c.fresh_input_tokens:,} | {c.cache_read_tokens:,} "
             f"| {c.peak_context_tokens:,} "
             f"| {'; '.join(f'{r.count}x {r.what}' for r in c.rereads) or '-'} "
@@ -571,7 +603,8 @@ def main(argv: list[str]) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     if argv[:1] == ["--done"]:
         MARKER.write_text(
-            datetime.now(UTC).isoformat(timespec="seconds"), encoding="utf-8"
+            datetime.now(UTC).isoformat(timespec="seconds"),
+            encoding="utf-8",
         )
         print(f"self_learn: marked done at {MARKER.read_text(encoding='utf-8')}")
         return 0
@@ -584,9 +617,11 @@ def main(argv: list[str]) -> int:
     report = OUT / f"{datetime.now(UTC):%Y-%m-%d-%H%M%S}.md"
     report.write_text(render(d), encoding="utf-8", newline="\n")
     print(
-        f"self_learn: {report} ({len(d.costs)} sessions, {len(d.prompts)} owner prompts, "
+        f"self_learn: {report} ({len(d.costs)} "
+        f"sessions, {len(d.prompts)} owner prompts, "
         f"{d.interrupted} interrupts, {d.rejected} rejected calls, "
-        f"{sum(r.count for r in d.failures)} failed calls, {sum(r.count for r in d.blocks)} guard blocks)"
+        f"{sum(r.count for r in d.failures)} failed calls, "
+        f"{sum(r.count for r in d.blocks)} guard blocks)",
     )
     return 0
 

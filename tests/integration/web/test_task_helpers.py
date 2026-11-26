@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 import os
@@ -109,7 +111,10 @@ def test_build_ordered_paths_mixed_manifest_preserves_order(tmp_path):
 
     manifest = json.dumps([{"kind": "existing", "path": existing}, {"kind": "new"}])
     paths = build_ordered_paths(
-        manifest, [make_upload("second.png", b"second")], assets_root, user_id=USER
+        manifest,
+        [make_upload("second.png", b"second")],
+        assets_root,
+        user_id=USER,
     )
 
     assert paths[0] == existing
@@ -122,7 +127,10 @@ def test_build_ordered_paths_refuses_a_malformed_manifest(tmp_path):
 
     with pytest.raises(HTTPException) as exc_info:
         build_ordered_paths(
-            "not json", [make_upload("a.png")], assets_root, user_id=USER
+            "not json",
+            [make_upload("a.png")],
+            assets_root,
+            user_id=USER,
         )
 
     assert exc_info.value.status_code == 400
@@ -169,7 +177,9 @@ def test_reusing_a_ref_records_it_as_used(tmp_path, monkeypatch):
     existing.write_bytes(b"x")
     recorded = []
     monkeypatch.setattr(
-        ref_usage, "record_use", lambda user, path: recorded.append((user, path))
+        ref_usage,
+        "record_use",
+        lambda user, path: recorded.append((user, path)),
     )
 
     build_ordered_paths(
@@ -192,7 +202,9 @@ def test_a_new_upload_is_recorded_as_used_too(tmp_path, monkeypatch):
     )
     recorded = []
     monkeypatch.setattr(
-        ref_usage, "record_use", lambda user, path: recorded.append((user, path))
+        ref_usage,
+        "record_use",
+        lambda user, path: recorded.append((user, path)),
     )
 
     again = build_ordered_paths(
@@ -244,7 +256,10 @@ def test_register_generated_asset_is_best_effort_on_a_missing_source(tmp_path):
 
 def test_asset_card_with_remote_url_points_view_and_download_at_it():
     card = asset_card(
-        "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
+        "clip.mp4",
+        0,
+        "/kling3/files/abc123",
+        remote_url="https://cdn.kie.ai/x.mp4",
     )
 
     assert card.view_url == "https://cdn.kie.ai/x.mp4"
@@ -253,7 +268,10 @@ def test_asset_card_with_remote_url_points_view_and_download_at_it():
 
 def test_asset_card_prefers_remote_url_even_when_a_local_path_also_exists():
     card = asset_card(
-        "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
+        "clip.mp4",
+        0,
+        "/kling3/files/abc123",
+        remote_url="https://cdn.kie.ai/x.mp4",
     )
 
     assert card.view_url == "https://cdn.kie.ai/x.mp4"

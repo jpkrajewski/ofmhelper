@@ -1,9 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from typing import Any
 lazy from collections.abc import Callable
 
-from pydantic import BaseModel, ValidationError
-from starlette.datastructures import FormData, UploadFile
+from pydantic import BaseModel, JsonValue, SkipValidation, ValidationError
+from starlette.datastructures import FormData
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -24,6 +26,7 @@ from ofmhelpers.integrations.ai_providers.base import (
 from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.features.assets.models import MediaUpload
 lazy from ofmhelpers.integrations.ai_providers.spec import Fields, ModelSpec
 
 logger = get_logger(__name__)
@@ -46,6 +49,11 @@ class AiRunForm(BaseModel):
     batch: int = 1
 
 
+class AiInput(BaseModel, arbitrary_types_allowed=True):
+    data: SkipValidation[FormData]
+    uploads: dict[str, SkipValidation[list[MediaUpload]]]
+
+
 class PreparedRun(BaseModel):
     params: dict[str, Any]
     api_key: str
@@ -55,7 +63,7 @@ class PreparedRun(BaseModel):
 def _head(form: FormData) -> AiRunForm:
     try:
         return AiRunForm.model_validate(
-            {k: form.get(k) for k in AiRunForm.model_fields if form.get(k) is not None}
+            {k: form.get(k) for k in AiRunForm.model_fields if form.get(k) is not None},
         )
     except ValidationError:
         msg = "Some settings have a value they cannot take"
@@ -84,11 +92,11 @@ class _Media(BaseModel, frozen=True):
     by_field: dict[str, list[str]]
 
 
-def _media(form: FormData, spec: ModelSpec, assets_root: Path, user_id: int) -> _Media:
+def _media(form: AiInput, spec: ModelSpec, assets_root: Path, user_id: int) -> _Media:
     media = {}
     for field in spec.media_fields:
-        files = [v for v in form.getlist(field.name) if isinstance(v, UploadFile)]
-        manifest = str(form.get(f"{field.name}_manifest") or "[]")
+        files = form.uploads.get(field.name, [])
+        manifest = str(form.data.get(f"{field.name}_manifest") or "[]")
         paths = build_ordered_paths(manifest, files, assets_root, user_id=user_id)
         if paths:
             media[field.name] = paths
@@ -103,8 +111,8 @@ def model_spec(model: str) -> ModelSpec:
         raise NotFoundError(msg) from None
 
 
-def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
-    head = _head(form)
+def prepare_run(form: AiInput, assets_root: Path, user_id: int) -> PreparedRun:
+    head = _head(form.data)
     spec = _spec_for(head)
     api_key = Keys.of(user_id).for_run(spec.provider, spec.key, head.api_key)
     if provider_class(spec.provider).needs_key and not api_key:
@@ -112,7 +120,7 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
         raise GenerateRefusedError(msg)
     try:
         values = {
-            **_settings(form, spec).model_dump(),
+            **_settings(form.data, spec).model_dump(),
             **_media(form, spec, assets_root, user_id).by_field,
         }
         spec.check(values)
@@ -127,7 +135,7 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
 
 
 def start_runs(
-    form: FormData,
+    form: AiInput,
     assets_root: Path,
     user_id: int,
     actor: str,
@@ -139,14 +147,16 @@ def start_runs(
         job_id = create_job(TASK, run.params, actor=actor)
         enqueue(
             run_job,
-            job_id,
-            worker,
-            {
-                "job_id": job_id,
-                "api_key": run.api_key,
-                "assets_root": str(assets_root),
-                **run.params,
-            },
+            (
+                job_id,
+                worker,
+                {
+                    "job_id": job_id,
+                    "api_key": run.api_key,
+                    "assets_root": str(assets_root),
+                    **run.params,
+                },
+            ),
         )
         job_ids.append(job_id)
     return JobsQueued(job_ids=job_ids)
@@ -168,7 +178,9 @@ def _hosted_results(remote: list[str], spec: ModelSpec) -> list[ResultFile]:
 
 
 def _saved_results(
-    paths: list[Path], remote: list[str], assets_root: Path
+    paths: list[Path],
+    remote: list[str],
+    assets_root: Path,
 ) -> list[ResultFile]:
     for path in paths:
         register_generated_asset(path, assets_root)
@@ -182,14 +194,14 @@ def _saved_results(
     ]
 
 
-def run_ai(
+def run_ai(  # noqa: PLR0913, PLR0917
     job_id: str,
     api_key: str,
     assets_root: str,
     provider: str,
     model: str,
     part: int = 0,
-    **values: Any,
+    **values: JsonValue,
 ) -> list[ResultFile]:
     spec = get_spec(model)
     client = get_provider(provider, api_key)

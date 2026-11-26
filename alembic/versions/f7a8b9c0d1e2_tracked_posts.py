@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -24,11 +26,15 @@ def upgrade() -> None:
         sa.Column("first_seen_at", sa.Float(), nullable=False),
         sa.Column("last_seen_at", sa.Float(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["tracked_accounts.id"], ondelete="CASCADE"
+            ["account_id"],
+            ["tracked_accounts.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "account_id", "post_id", name="uq_tracked_posts_account_post"
+            "account_id",
+            "post_id",
+            name="uq_tracked_posts_account_post",
         ),
     )
     op.create_index(
@@ -37,7 +43,8 @@ def upgrade() -> None:
         ["account_id", "posted_at"],
     )
     op.add_column(
-        "tracked_accounts", sa.Column("covered_since", sa.Float(), nullable=True)
+        "tracked_accounts",
+        sa.Column("covered_since", sa.Float(), nullable=True),
     )
     op.execute(
         """
@@ -49,7 +56,7 @@ def upgrade() -> None:
         FROM tracked_accounts AS a, jsonb_array_elements(a.posts) AS p
         WHERE a.posts IS NOT NULL AND a.scanned_at IS NOT NULL
         ON CONFLICT ON CONSTRAINT uq_tracked_posts_account_post DO NOTHING
-        """
+        """,
     )
     op.execute(
         """
@@ -64,7 +71,7 @@ def upgrade() -> None:
         END,
         metrics = a.metrics - 'windows'
         WHERE a.metrics IS NOT NULL
-        """
+        """,
     )
     op.drop_column("tracked_accounts", "posts")
 
@@ -89,7 +96,7 @@ def downgrade() -> None:
             WHERE p.account_id = a.id
         )
         WHERE a.metrics IS NOT NULL
-        """
+        """,
     )
     op.drop_column("tracked_accounts", "covered_since")
     op.drop_index("ix_tracked_posts_account_id_posted_at", table_name="tracked_posts")

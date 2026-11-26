@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -76,9 +79,11 @@ class Filters(BaseModel):
             and (not self.ratio or item.reel.ratio >= self.ratio)
         )
 
-    def url(self, path: str, **changes: str | int | None) -> str:
+    def url(self, path: str, changes: dict[str, str | int | None] | None = None) -> str:
         query = {
-            k: v for k, v in self.model_copy(update=changes).model_dump().items() if v
+            k: v
+            for k, v in self.model_copy(update=changes or {}).model_dump().items()
+            if v
         }
         return path + (f"?{urlencode(query)}" if query else "")
 
@@ -133,12 +138,14 @@ def _group_links(filters: Filters, owner: int | None) -> list[FilterLink]:
     return [
         FilterLink(
             label="All",
-            href=filters.url("/reels", group=None),
+            href=filters.url("/reels", {"group": None}),
             current=not filters.group,
-        )
+        ),
     ] + [
         FilterLink(
-            label=g, href=filters.url("/reels", group=g), current=g == filters.group
+            label=g,
+            href=filters.url("/reels", {"group": g}),
+            current=g == filters.group,
         )
         for g in list_groups(owner)
     ]
@@ -152,15 +159,17 @@ def _rank_links(filters: Filters) -> list[FilterLink]:
     ceilings = [None] + [floor for floor, _ in VIEW_TIERS[:-1]]
     return [
         FilterLink(
-            label="All", href=filters.url("/reels", rank=None), current=not filters.rank
-        )
+            label="All",
+            href=filters.url("/reels", {"rank": None}),
+            current=not filters.rank,
+        ),
     ] + [
         FilterLink(
             label=f"{name} {_short(floor)}+"
             if ceiling is None
             else f"{name} {_short(ceiling)}\N{EN DASH}{_short(floor)}",
             tier=name,
-            href=filters.url("/reels", rank=name),
+            href=filters.url("/reels", {"rank": name}),
             current=name == filters.rank,
         )
         for (floor, name), ceiling in zip(VIEW_TIERS, ceilings, strict=True)
@@ -171,13 +180,13 @@ def _ratio_links(filters: Filters) -> list[FilterLink]:
     return [
         FilterLink(
             label="Any",
-            href=filters.url("/reels", ratio=None),
+            href=filters.url("/reels", {"ratio": None}),
             current=not filters.ratio,
-        )
+        ),
     ] + [
         FilterLink(
             label=f"\N{MULTIPLICATION SIGN}{n}+",
-            href=filters.url("/reels", ratio=n),
+            href=filters.url("/reels", {"ratio": n}),
             current=n == filters.ratio,
         )
         for n in _RATIO_STEPS
@@ -185,7 +194,10 @@ def _ratio_links(filters: Filters) -> list[FilterLink]:
 
 
 def page_view(
-    scope: int, group: str | None, rank: str | None, ratio: int | None
+    scope: int,
+    group: str | None,
+    rank: str | None,
+    ratio: int | None,
 ) -> PageView:
     filters = _filters(group, rank, ratio)
     first = _feed_page(filters, 0, scope)
@@ -206,7 +218,11 @@ def page_view(
 
 
 def feed_page(
-    scope: int, group: str | None, rank: str | None, ratio: int | None, offset: int
+    scope: int,
+    group: str | None,
+    rank: str | None,
+    ratio: int | None,
+    offset: int,
 ) -> FeedPage:
     return _feed_page(_filters(group, rank, ratio), offset, scope)
 
@@ -316,7 +332,7 @@ def _download_picked(reels: str, scope: int) -> list[Path]:
     job_dir = make_job_dir(uploads_root() / "reels")
     try:
         with ThreadPoolExecutor(settings.instagram.download_workers) as pool:
-            download = in_this_trace(lambda r: _download(client, r, job_dir))
+            download = in_this_trace(partial(_download, client, job_dir=job_dir))
             return list(pool.map(download, picked))
     except (OSError, requests.RequestException) as exc:
         shutil.rmtree(job_dir, ignore_errors=True)

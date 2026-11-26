@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from typing import ClassVar
@@ -28,7 +30,11 @@ class Family(ABC):
 
     @abstractmethod
     def submit(
-        self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
+        self,
+        client: ApiyiClient,
+        spec: ModelSpec,
+        payload: Payload,
+        job: str,
     ) -> str: ...
 
     @abstractmethod

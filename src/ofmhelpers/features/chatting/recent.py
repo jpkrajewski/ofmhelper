@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from typing import Any
 
@@ -30,7 +32,9 @@ def remember(user_id: int, platform: ChatPlatform, username: str) -> None:
 def recent_models(user_id: int) -> list[RecentModel]:
     try:
         members: Any = get_redis().zrevrange(
-            _key(user_id), 0, settings.chatting.recent_models_shown - 1
+            _key(user_id),
+            0,
+            settings.chatting.recent_models_shown - 1,
         )
     except RedisError:
         logger.warning("could not read recent models", exc_info=True)

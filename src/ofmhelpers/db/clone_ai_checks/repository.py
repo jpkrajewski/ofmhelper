@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from typing import Any
 
@@ -8,13 +10,9 @@ from ofmhelpers.db.clone_ai_checks.schema import StoredCloneAiCheck
 from ofmhelpers.db.models import CloneAiCheckRow
 from ofmhelpers.db.session import session_scope
 
-_COLUMNS = [c.name for c in CloneAiCheckRow.__table__.columns]
-
 
 def _check(row: CloneAiCheckRow) -> StoredCloneAiCheck:
-    return StoredCloneAiCheck.model_validate(
-        {name: getattr(row, name) for name in _COLUMNS}
-    )
+    return StoredCloneAiCheck.model_validate(row, from_attributes=True)
 
 
 class CloneAiCheckRepository(CachedRepository):
@@ -39,6 +37,6 @@ class CloneAiCheckRepository(CachedRepository):
             rows = s.execute(
                 select(CloneAiCheckRow)
                 .where(CloneAiCheckRow.job_id.in_(job_ids))
-                .order_by(CloneAiCheckRow.id)
+                .order_by(CloneAiCheckRow.id),
             ).scalars()
             return [_check(r) for r in rows]

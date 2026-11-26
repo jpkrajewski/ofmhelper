@@ -430,6 +430,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dropbox"
+version = "12.2.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "stone" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/37/04/b275681559d4d64850c90eb511a43a7a9798310a144e983b17f40bb64b98/dropbox-12.2.5.tar.gz", hash = "sha256:3b7e15a86b7d2e4457acb6b8a9e3dfb82ab4b74415070c058abb60a720238019", size = 1322351, upload-time = "2026-11-13T23:26:02.071Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/c5/761ffadd35cdea6049ccc0270b4da2c34847fee264c7c9cad1ccc06a88a5/dropbox-12.2.5-py3-none-any.whl", hash = "sha256:2bedb65e49b44894efe284db7d71cab495084cdfc7bc37418f72075819fe1ef1", size = 724878, upload-time = "2026-11-13T23:26:00.414Z" },
+]
+
+[[package]]
 name = "editorconfig"
 version = "0.17.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1090,6 +1103,7 @@ dependencies = [
     { name = "alembic" },
     { name = "bgutil-ytdlp-pot-provider" },
     { name = "cryptography" },
+    { name = "dropbox" },
     { name = "fastapi" },
     { name = "gallery-dl" },
     { name = "google-api-python-client" },
@@ -1149,6 +1163,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.18.5" },
     { name = "bgutil-ytdlp-pot-provider", specifier = "==2.0.2" },
     { name = "cryptography", specifier = ">=50.0.0" },
+    { name = "dropbox", specifier = ">=12.2.4" },
     { name = "fastapi", specifier = ">=0.143.3" },
     { name = "gallery-dl", specifier = "==1.32.21" },
     { name = "google-api-python-client", specifier = ">=2.201.0" },
@@ -1175,7 +1190,7 @@ requires-dist = [
     { name = "sentry-sdk", specifier = "==2.74.0" },
     { name = "sqlalchemy", specifier = ">=2.0.52,<2.1" },
     { name = "uvicorn", specifier = ">=0.54.0" },
-    { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.11.20.232656.dev0" },
+    { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.11.24.232653.dev0" },
     { name = "yt-dlp-ejs", specifier = "==0.8.0" },
 ]
 
@@ -2247,6 +2262,19 @@ wheels = [
 ]
 
 [[package]]
+name = "stone"
+version = "3.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/65/d5/27f927b87016794feb8995814fde736b1a6fe43da99db448bc9aca6c5d46/stone-3.5.5.tar.gz", hash = "sha256:998e2d0909c859065547f5f54c7d11b66d019882bb4f773e78ec9f2023ca3694", size = 336033, upload-time = "2026-09-23T15:20:18.778Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/1c/e14e0618fc10f0e5a18ad29ec10665f4ab7e2b378e34ed0b0b00343f0351/stone-3.5.5-py3-none-any.whl", hash = "sha256:ff04dcfe37efef6bfe744f59f4df1dd1a43716f47e28d7cf1165eb984a0b2c33", size = 204000, upload-time = "2026-09-23T15:20:16.999Z" },
+]
+
+[[package]]
 name = "tenacity"
 version = "9.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2431,11 +2459,11 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.11.20.232656.dev0"
+version = "2026.11.24.232653.dev0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/5f/92/c2b2149a908cfe2e9336ca7d5f1fa8d961a9f0e3f9998bae1f53aab26036/yt_dlp-2026.11.20.232656.dev0.tar.gz", hash = "sha256:4e2d86ad0f897d0aae8a1345ec15a1a0fa985c9e34d15abe1df9e61bf99cfe65", size = 3052059, upload-time = "2026-11-20T23:31:37.411Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/19/c412e9a947a64f40d09bdbbbd10448026466af2093dc445450fb9a6d89d3/yt_dlp-2026.11.24.232653.dev0.tar.gz", hash = "sha256:adf0414b54844070275a24feff1240c00e77c953b4ebf5fc5ce22f4aaf4cc7f8", size = 3052115, upload-time = "2026-11-24T23:33:03.345Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/89/d1088aa78a91f0d52d6e6b53c2096076fb00376334813b3e2f2ee5b2937f/yt_dlp-2026.11.20.232656.dev0-py3-none-any.whl", hash = "sha256:ad1af580899c63dba2090f80de3ec5963df875bf8c9de08d6b9b71adfffb9301", size = 3188092, upload-time = "2026-11-20T23:31:34.384Z" },
+    { url = "https://files.pythonhosted.org/packages/99/70/b68285a2d10619cdf0202afbf50c3c12d8ebb8805478993027b7206975ce/yt_dlp-2026.11.24.232653.dev0-py3-none-any.whl", hash = "sha256:d9efc48001599179033cf97b9cb2c268be52eea10d068cb7a54e19f70aed7bf8", size = 3186866, upload-time = "2026-11-24T23:33:00.663Z" },
 ]
 
 [package.optional-dependencies]

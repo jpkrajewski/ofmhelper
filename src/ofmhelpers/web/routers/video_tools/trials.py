@@ -1,17 +1,21 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 
-from ofmhelpers.cache import JobQueue, QueueName, enqueue
+from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.features.trials import folder
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, CurrentUser, Scope
+from ofmhelpers.web.dependencies import Access, CurrentUser, Scope, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/trials", tags=["trials"], dependencies=[Access(Area.TRIALS)]
+    prefix="/trials",
+    tags=["trials"],
+    dependencies=[Access(Area.TRIALS)],
 )
 
 
@@ -19,9 +23,19 @@ def _encodes() -> Callable[..., object]:
     return JobQueue(name=QueueName.MEDIA).put
 
 
-def _trials(login_id: int, user: CurrentUser, scope: Scope) -> folder.Trials:
+def _trials(
+    login_id: int,
+    user: CurrentUser,
+    scope: Scope,
+    storage: Storage,
+) -> folder.Trials:
     trials = folder.Trials(
-        uid=user.id, scope=scope, login_id=login_id, encode=_encodes(), enqueue=enqueue
+        uid=user.id,
+        scope=scope,
+        folders=storage.folders,
+        login_id=login_id,
+        encode=_encodes(),
+        enqueue=JobQueue(name=QueueName.DEFAULT).put,
     )
     trials.owned()
     return trials
@@ -38,15 +52,23 @@ Reel = Annotated[folder.Reel, Depends(_reel)]
 
 
 @router.get("")
-def trials_page(request: Request, user: CurrentUser, scope: Scope) -> Response:
-    cards = folder.phone_cards(user.id, scope)
-    return render(request, "trials.html", board=cards.board, progress=cards.progress)
+def trials_page(request: Request, user: CurrentUser, storage: Storage) -> Response:
+    cards = folder.phone_cards(user.id, storage.folders)
+    return render(
+        request,
+        "trials.html",
+        {"board": cards.board, "progress": cards.progress},
+    )
 
 
 @router.get("/{login_id}")
 def folder_page(request: Request, trials: Trials) -> Response:
     opened = trials.open()
-    return render(request, "trials_folder.html", card=opened.card, view=opened.view)
+    return render(
+        request,
+        "trials_folder.html",
+        {"card": opened.card, "view": opened.view},
+    )
 
 
 @router.get("/{login_id}/live")
@@ -65,10 +87,12 @@ def cards(
     return render(
         request,
         "_trials_cards.html",
-        view=view,
-        reels=view.made_among(wanted),
-        pending=view.pending_among(wanted),
-        failed=view.failed_among(wanted),
+        {
+            "view": view,
+            "reels": view.made_among(wanted),
+            "pending": view.pending_among(wanted),
+            "failed": view.failed_among(wanted),
+        },
     )
 
 
@@ -93,13 +117,14 @@ def write_captions(reel: Reel) -> folder.Started:
 
 
 @router.post("/{login_id}/reel/{key}/select")
-def select(reel: Reel, selected: Annotated[bool, Form()] = False) -> folder.Selected:
+def select(reel: Reel, selected: Annotated[bool, Form()] = False) -> folder.Selected:  # noqa: FBT002
     return reel.select(selected)
 
 
 @router.post("/{login_id}/upload")
 def upload(
-    trials: Trials, approved: Annotated[list[str] | None, Form()] = None
+    trials: Trials,
+    approved: Annotated[list[str] | None, Form()] = None,
 ) -> folder.Uploading:
     return trials.upload(approved)
 

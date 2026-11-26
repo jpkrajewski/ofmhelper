@@ -4,6 +4,9 @@
 {% if not board.live %}
 <p class="dr-asof" role="status" hidden></p>
 {% endif %}
+{% if board.syncing_job_id %}
+{{ ui.notice("Setting up your folders…", hook="dr-syncing", attrs={"data-sync-poll": "/drive/sync/" ~ board.syncing_job_id}) }}
+{% endif %}
 {% if board.problem %}
 {% call ui.notice(kind="warn", hook="drive-connect") %}
     <span>{{ board.problem }}</span>
@@ -34,7 +37,7 @@
         {% if c.error %}
         <p class="dr-note dr-error">{{ c.error }}</p>
         {% elif not c.account_folder_id %}
-        <p class="dr-note">No folder yet: Sync makes it.</p>
+        {% if not board.syncing_job_id %}<p class="dr-note">No folder yet: Sync makes it.</p>{% endif %}
         {% elif c.unread %}
         <p class="dr-note">Reading from Drive…</p>
         {% else %}

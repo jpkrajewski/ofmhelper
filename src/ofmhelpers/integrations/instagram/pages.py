@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from pydantic import BaseModel
@@ -33,7 +35,10 @@ def login_tokens(html: str, referer: str) -> LoginTokens | None:
     if actor is None or dtsg is None:
         return None
     return LoginTokens(
-        actor_id=actor.group(1), fb_dtsg=dtsg.group(1), lsd=_lsd(html), referer=referer
+        actor_id=actor.group(1),
+        fb_dtsg=dtsg.group(1),
+        lsd=_lsd(html),
+        referer=referer,
     )
 
 

@@ -1,23 +1,16 @@
+# Copyright (C) 2026 jpkrajewski
+
 import statistics
-from enum import StrEnum
 lazy from collections.abc import Callable
 
 import imagehash
 import numpy as np
 import pdqhash
-from pydantic import BaseModel
 lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker.normalize import dihedral, views
-from ofmhelpers.media.repurpose.checker.sequence import SequenceMatch, best_line
-
-
-class HashKind(StrEnum):
-    PDQ = "pdq"
-    PHASH = "phash"
-    DHASH = "dhash"
-    WHASH = "whash"
-
+from ofmhelpers.media.repurpose.checker.schema import HashKind, HashScore
+from ofmhelpers.media.repurpose.checker.sequence import best_line
 
 SAME_PICTURE: dict[HashKind, int] = {
     HashKind.PDQ: 64,
@@ -31,17 +24,6 @@ _IMAGEHASH: dict[HashKind, Callable[[Image.Image], imagehash.ImageHash]] = {
     HashKind.DHASH: imagehash.dhash,
     HashKind.WHASH: imagehash.whash,
 }
-
-
-class HashScore(BaseModel, frozen=True):
-    kind: HashKind
-    bits: int
-    threshold: int
-    nearest: list[int]
-    median: float
-    minimum: int
-    matched_share: float
-    sequence: SequenceMatch
 
 
 def _packed(bits: np.ndarray) -> np.ndarray:
@@ -66,11 +48,11 @@ def _queried(kind: HashKind, frame: Image.Image) -> np.ndarray:
                 _packed(h)
                 for v in views(frame)
                 for h in pdqhash.compute_dihedral(_pdq(v))[0]
-            ]
+            ],
         )
     hasher = _IMAGEHASH[kind]
     return np.stack(
-        [_packed(hasher(d).hash) for v in views(frame) for d in dihedral(v)]
+        [_packed(hasher(d).hash) for v in views(frame) for d in dihedral(v)],
     )
 
 
@@ -87,7 +69,7 @@ def distances(kind: HashKind, kept: np.ndarray, copy: list[Image.Image]) -> np.n
     return np.stack(rows)
 
 
-def score(
+def score(  # noqa: PLR0913, PLR0917
     kind: HashKind,
     kept: np.ndarray,
     source_t: np.ndarray,

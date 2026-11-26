@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hmac
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -12,14 +14,16 @@ SUBJECT = "app-owner"
 
 def _codes() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(
-        settings.session.session_secret, salt="ofm-owner-sign-in"
+        settings.session.session_secret,
+        salt="ofm-owner-sign-in",
     )
 
 
 def password_ok(password: str) -> bool:
     admin = settings.web.app_password_admin
     return bool(admin) and hmac.compare_digest(
-        password.encode(), (admin or "").encode()
+        password.encode(),
+        (admin or "").encode(),
     )
 
 
@@ -28,12 +32,15 @@ def owner_code(nonce: str) -> str:
 
 
 class Owner:
-    name = "owner"
     label = "Big G Login"
     callback_method = "GET"
     local_consent = True
     linkable = False
     connects_drive = False
+
+    @property
+    def name(self) -> str:
+        return settings.signin.owner_provider
 
     def configured(self) -> bool:
         return bool(settings.web.app_password_admin)

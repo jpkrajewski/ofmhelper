@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 import zipfile
 from pathlib import Path
@@ -5,7 +7,6 @@ from typing import Protocol
 lazy from collections.abc import Callable
 
 from pydantic import BaseModel
-lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -13,22 +14,22 @@ from ofmhelpers.db.jobs.schema import Job, ResultFile
 from ofmhelpers.db.jobs.store import create_job, list_jobs_page
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.store import (
-    VIDEO_KINDS,
     make_job_dir,
-    require_upload_kind,
     safe_filename,
 )
+from ofmhelpers.features.jobs.models import JobCard
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.jobs.schema import JobCard, JobQueued
+from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.media.uniqify import MetadataMode, Strength, generate_variants
+lazy from ofmhelpers.features.assets.models import VideoUpload
 
 TASK = "uniqify"
 
 
 class Submitted(Protocol):
     @property
-    def file(self) -> UploadFile: ...
+    def file(self) -> VideoUpload: ...
 
     copies: int
     strength: Strength
@@ -68,7 +69,7 @@ def start(
     upload_root: Path,
     run: Callable[..., list[ResultFile]],
 ) -> JobQueued:
-    source = require_upload_kind(form.file.filename, VIDEO_KINDS)
+    source = form.file.filename or ""
     stem = Path(safe_filename(form.output_name or source)).stem
     if not stem:
         msg = "Invalid output name"
@@ -89,11 +90,11 @@ def start(
         "metadata": form.metadata.value,
     }
     job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
-    enqueue(run_job, job_id, run, {"job_dir": str(job_dir), **params})
+    enqueue(run_job, (job_id, run, {"job_dir": str(job_dir), **params}))
     return JobQueued(job_id=job_id)
 
 
-def run_uniqify(
+def run_uniqify(  # noqa: PLR0913, PLR0917
     job_dir: str,
     source: str,
     stem: str,

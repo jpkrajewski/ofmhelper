@@ -1,11 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
+
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.db.users import store as users
-from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.db.users.schema import Role, StorageProvider
 from ofmhelpers.features.signin.consent import redirect_uri
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import (
@@ -15,6 +15,8 @@ from ofmhelpers.features.signin.state import (
     take_verifier,
     unseal,
 )
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage import storage_choice
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
 from ofmhelpers.log import get_logger
 
@@ -41,25 +43,37 @@ def _identity(provider: Provider, back: Callback) -> _Verified:
         raise SignInError(msg)
     carried = unseal(back.cookie, provider.name, back.state)
     reply = provider.exchange(
-        back.code, redirect_uri(provider, back.site), take_verifier(carried.state)
+        back.code,
+        redirect_uri(provider, back.site),
+        take_verifier(carried.state),
     )
     return _Verified(carried=carried, identity=provider.identity(reply, carried.nonce))
 
 
 def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
-    if refresh_token:
-        enqueue(drive_folders.sync, user_id)
+    if not refresh_token:
+        return
+    storage_jobs.queue_sync(user_id)
+
+
+def _use_google_drive(user_id: int, refresh_token: str | None) -> None:
+    if not refresh_token:
+        return
+    storage_choice.use(user_id, StorageProvider.GDRIVE)
 
 
 def _link(
-    provider: Provider, carried: SignInState, user_id: int, identity: Identity
+    provider: Provider,
+    carried: SignInState,
+    user_id: int,
+    identity: Identity,
 ) -> Outcome:
     owner = users.get_user(user_id)
     may_link = owner is not None and owner.active and owner.role != Role.VA
     linked = may_link and users.link_identity(user_id, identity)
     note = "linked" if linked else "taken"
     if linked:
-        _sync_new_drive(user_id, identity.refresh_token)
+        _use_google_drive(user_id, identity.refresh_token)
     back = carried.next if linked and carried.next not in (HOME, "/account") else None
     return Outcome(redirect=back or f"/account?{provider.name}={note}")
 

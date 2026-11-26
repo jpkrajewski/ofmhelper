@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 from typing import Any
@@ -49,7 +51,10 @@ def _targets(sender: Sender, event: Event) -> list[str]:
     if owner.is_admin:
         return sender.targets()
     logger.info(
-        "event %s: user %s linked no %s", event.name, event.owner_id, sender.name
+        "event %s: user %s linked no %s",
+        event.name,
+        event.owner_id,
+        sender.name,
     )
     return []
 
@@ -74,9 +79,7 @@ def dispatch(event: dict[str, Any]) -> None:
 def deliver_to(sender_name: str, target: str, event: Event) -> None:
     JobQueue(name=QueueName.EVENTS).put(
         deliver,
-        sender_name,
-        target,
-        event.model_dump(mode="json"),
+        (sender_name, target, event.model_dump(mode="json")),
         job_timeout=settings.events.send_timeout_s,
         retry=_retry(),
         failure_ttl=settings.events.failed_keep_s,
@@ -146,7 +149,9 @@ class Delivery(BaseModel, frozen=True, arbitrary_types_allowed=True):
     def run(self) -> None:
         found, sender, target = self.found, self.sender, self.target
         with logfire.span(
-            "event {event} to {sender}", event=found.name, sender=sender.name
+            "event {event} to {sender}",
+            event=found.name,
+            sender=sender.name,
         ) as span:
             sent_key = self._sent_key()
             if sender.name in _off() or (sent_key and get_redis().exists(sent_key)):

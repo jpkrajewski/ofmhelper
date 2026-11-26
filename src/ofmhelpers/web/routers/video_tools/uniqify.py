@@ -1,11 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from pathlib import Path
 
-from fastapi import APIRouter, Form, Request, UploadFile
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import Response
 from pydantic import Field, field_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import VideoUpload
 from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.uniqify import service
 from ofmhelpers.features.uniqify.service import run_uniqify as _run_uniqify
@@ -17,7 +20,9 @@ from ofmhelpers.web.routers.task_helpers import add_job_routes, uploads_root
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/uniqify", tags=["uniqify"], dependencies=[Access(Area.UNIQIFY)]
+    prefix="/uniqify",
+    tags=["uniqify"],
+    dependencies=[Access(Area.UNIQIFY)],
 )
 
 
@@ -31,7 +36,7 @@ FILES_PREFIX = f"{router.prefix}/files"
 
 
 class UniqifyForm(FormModel):
-    file: UploadFile
+    file: VideoUpload
     copies: int = Field(5, ge=1)
     strength: Strength = Strength.HARD
     mirror_pct: float = Field(0.0, ge=0, le=100)
@@ -53,7 +58,7 @@ class UniqifyForm(FormModel):
 @router.get("")
 def form(request: Request, actor: Actor) -> Response:
     view = service.form_view(actor, FILES_PREFIX)
-    return render(request, "uniqify.html", **dict(view))
+    return render(request, "uniqify.html", dict(view))
 
 
 @router.post("/run", status_code=202)

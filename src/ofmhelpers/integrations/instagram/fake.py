@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import threading
 import time
@@ -238,7 +240,7 @@ class FakeInstagram:
                     pk=_pk(posted, ordinal, i),
                     code=reel_code(profile.username, i),
                     taken_at=int(posted),
-                )
+                ),
             )
         rows.sort(key=lambda r: (not r.reel.pinned, -r.taken_at))
         return rows
@@ -256,7 +258,11 @@ class FakeInstagram:
         )
 
     def _profile_page(
-        self, username: str, *, banned: bool, logged_in: bool
+        self,
+        username: str,
+        *,
+        banned: bool,
+        logged_in: bool,
     ) -> FakeReply:
         profile = self.profiles.get(username)
         if profile is None or banned:
@@ -269,7 +275,7 @@ class FakeInstagram:
         return FakeReply.text(
             f'<html><script>{{"profile_id":"{profile.pk}"}} '
             f'["LSD",[],{{"token":"{_LSD}"}}] {login} "pageID":"profilePage"'
-            "</script></html>"
+            "</script></html>",
         )
 
     def _crawler_page(self, username: str, *, banned: bool) -> FakeReply:
@@ -292,7 +298,7 @@ class FakeInstagram:
                 body = self._media(str(variables.get("media_id")))
             case _:
                 body = _ErrorBody(
-                    errors=[_ErrorMessage(message=f"unknown query {name}")]
+                    errors=[_ErrorMessage(message=f"unknown query {name}")],
                 )
         return FakeReply.json_body(body.model_dump(mode="json", by_alias=True))
 
@@ -313,8 +319,8 @@ class FakeInstagram:
                     is_verified=p.is_verified,
                     profile_pic_url=avatar,
                     hd_profile_pic_url_info=_Image(url=avatar),
-                )
-            )
+                ),
+            ),
         )
 
     def _clips(self, variables: dict[str, Any]) -> _ClipsBody:
@@ -329,17 +335,17 @@ class FakeInstagram:
                         play_count=r.reel.views,
                         image_versions2=_Images(candidates=[_Image(url=r.thumb)]),
                         clips_tab_pinned_user_ids=r.pinned_by,
-                    )
-                )
+                    ),
+                ),
             )
             for r in page.rows
         ]
         return _ClipsBody(
             data=_ClipsData(
                 clips_user=_ClipsUser(
-                    clips_connection=_Connection[_ClipEdge].of(edges, page.cursor)
-                )
-            )
+                    clips_connection=_Connection[_ClipEdge].of(edges, page.cursor),
+                ),
+            ),
         )
 
     def _timeline(self, variables: dict[str, Any]) -> _TimelineBody:
@@ -351,7 +357,7 @@ class FakeInstagram:
                     **r.video_node().model_dump(),
                     code=r.code,
                     timeline_pinned_user_ids=r.pinned_by,
-                )
+                ),
             )
             for r in page.rows
         ]
@@ -359,8 +365,8 @@ class FakeInstagram:
             data=_TimelineData(
                 xdt_api__v1__feed__user_timeline_graphql_connection=_Connection[
                     _TimelineEdge
-                ].of(edges, page.cursor)
-            )
+                ].of(edges, page.cursor),
+            ),
         )
 
     def _media(self, pk: str) -> _MediaBody:
@@ -368,9 +374,9 @@ class FakeInstagram:
         return _MediaBody(
             data=_MediaData(
                 xig_polaris_media=_GatedMedia(
-                    if_not_gated_logged_out=row.video_node() if row else None
-                )
-            )
+                    if_not_gated_logged_out=row.video_node() if row else None,
+                ),
+            ),
         )
 
     def _media_info(self, pk: str) -> FakeReply:
@@ -384,13 +390,16 @@ class FakeInstagram:
                         "video_versions": [{"url": row.video}],
                         "video_duration": row.reel.duration_s,
                         "taken_at": row.taken_at,
-                    }
-                ]
-            }
+                    },
+                ],
+            },
         )
 
     def _failure(
-        self, mode: str, proxy: str, request: requests.PreparedRequest
+        self,
+        mode: str,
+        proxy: str,
+        request: requests.PreparedRequest,
     ) -> FakeReply | None:
         if mode == "dead":
             msg = f"fake: proxy {proxy} is dead"
@@ -402,8 +411,10 @@ class FakeInstagram:
             return FakeReply.text(_SLOW_DOWN, 429)
         return None
 
-    def handle(
-        self, request: requests.PreparedRequest, proxies: Mapping[str, str]
+    def handle(  # noqa: PLR0911
+        self,
+        request: requests.PreparedRequest,
+        proxies: Mapping[str, str],
     ) -> FakeReply:
         url = urlsplit(request.url or "")
         proxy = proxies.get("https") or proxies.get("http") or ""
@@ -440,7 +451,8 @@ def cdn_reply(url: str) -> FakeReply:
         return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
     if path.endswith(".jpg"):
         return FakeReply(
-            body=fake_media.image(), headers={"Content-Type": "image/jpeg"}
+            body=fake_media.image(),
+            headers={"Content-Type": "image/jpeg"},
         )
     return FakeReply.text("Not found", 404)
 

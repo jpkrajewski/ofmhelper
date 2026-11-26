@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.stacked.client import StackedClient, reach, reachable
 from ofmhelpers.integrations.stacked.errors import (
     StackedAuthError,

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import subprocess
 lazy from pathlib import Path
@@ -12,7 +14,12 @@ TOOLS = VideoTools(timeout_s=60)
 
 
 def _clip(
-    dest: Path, seconds: float, *, size="64x36", audio=False, colour="red"
+    dest: Path,
+    seconds: float,
+    *,
+    size="64x36",
+    audio=False,
+    colour="red",
 ) -> Path:
     inputs = ["-f", "lavfi", "-i", f"color=c={colour}:size={size}:rate=10:d={seconds}"]
     if audio:
@@ -196,7 +203,8 @@ def test_colour_match_never_pushes_a_dark_piece_to_white(tmp_path):
 
 
 def test_colour_match_writes_its_copies_only_in_the_runs_work_folder(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     written = []
     real_write = VideoTools._write
@@ -250,7 +258,10 @@ def test_without_colour_match_each_piece_keeps_its_own_colour(tmp_path):
     ]
 
     out = TOOLS.join(
-        parts, tmp_path / "joined.mp4", Shape(width=16, height=9), work=tmp_path / "w"
+        parts,
+        tmp_path / "joined.mp4",
+        Shape(width=16, height=9),
+        work=tmp_path / "w",
     )
 
     assert _rgb(out, 3)[2] < _rgb(out, 0.5)[2] - 20
@@ -289,7 +300,10 @@ def test_last_frame_is_the_videos_very_last_frame(tmp_path):
 def test_join_takes_names_with_quotes_and_spaces(tmp_path):
     parts = [_clip(tmp_path / f"it's part {i}.mp4", 1) for i in range(2)]
     out = TOOLS.join(
-        parts, tmp_path / "o.mp4", Shape(width=16, height=9), work=tmp_path / "w"
+        parts,
+        tmp_path / "o.mp4",
+        Shape(width=16, height=9),
+        work=tmp_path / "w",
     )
     assert TOOLS.length(out) == pytest.approx(2, abs=0.2)
 
@@ -348,7 +362,10 @@ def test_cut_scales_a_piece_to_the_size_given(tmp_path):
     src = _clip(tmp_path / "src.mp4", 4, size="128x72")
 
     piece = TOOLS.cut(
-        src, Piece(start=1, length=2), tmp_path / "p.mp4", Shape(width=64, height=36)
+        src,
+        Piece(start=1, length=2),
+        tmp_path / "p.mp4",
+        Shape(width=64, height=36),
     )
 
     assert _probe(piece)["size"] == (64, 36)
@@ -359,7 +376,7 @@ def test_join_reads_many_pieces_of_any_size_into_one_shape(tmp_path):
     parts = [
         _clip(tmp_path / f"p{i}.mp4", 1, size=size, colour=colour)
         for i, (size, colour) in enumerate(
-            [("64x36", "red"), ("128x72", "green"), ("48x64", "blue")] * 4
+            [("64x36", "red"), ("128x72", "green"), ("48x64", "blue")] * 4,
         )
     ]
 

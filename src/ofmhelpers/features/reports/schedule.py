@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import date, datetime, timedelta
 from enum import StrEnum
 from zoneinfo import ZoneInfo

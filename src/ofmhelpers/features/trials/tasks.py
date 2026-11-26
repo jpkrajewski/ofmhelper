@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 import zlib
 from functools import partial
@@ -9,15 +11,15 @@ from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config.types import AccountFolder
-from ofmhelpers.features.drive.folders import (
-    ReviewPlace,
-    account_subfolder,
-    review_target,
-)
+from ofmhelpers.db.drive_folders.schema import DriveFile
 from ofmhelpers.features.jobs.runner import Requeued
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
+from ofmhelpers.features.storage.client import storage_of
+from ofmhelpers.features.storage.service import StorageServiceReview
 from ofmhelpers.features.trials import media
 from ofmhelpers.features.trials.captions import captions_for, understand
+from ofmhelpers.features.trials.constants import trials_constants
+from ofmhelpers.features.trials.schema import Made
 from ofmhelpers.features.trials.state import (
     FolderState,
     Recipe,
@@ -29,18 +31,17 @@ from ofmhelpers.features.trials.state import (
     locked,
     work_dir,
 )
-from ofmhelpers.integrations.gdrive import (
-    DriveApi,
+from ofmhelpers.integrations.storage import (
     DriveError,
-    DriveFile,
     FolderGoneError,
     FolderTrashedError,
+    StorageClient,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import (
-    run as pipeline_run,
-)
-lazy from ofmhelpers.media.repurpose.repurpose import RunResult
+from ofmhelpers.media.repurpose.pipelines.pipeline import Pipeline
+from ofmhelpers.media.repurpose.transformations.video import VideoSettings
+lazy from ofmhelpers.features.storage.models import ReviewPlace
+lazy from ofmhelpers.media.repurpose.pipelines.models import RepurposeResult
 
 logger = get_logger(__name__)
 
@@ -49,14 +50,8 @@ DOWNLOAD_FAILED = "Could not download it from Drive"
 MAKE_FAILED = "Could not make it"
 CAPTIONS_FAILED = "Could not write captions"
 UPLOAD_FAILED = "Could not upload it"
-NOTHING_NEW = "No new reels in POSTED"
 SOURCE_GONE = "Source video is gone from Drive"
 PIPELINE = "snapchat_iphone16_usa"
-
-
-class Made(BaseModel):
-    generated: int
-    failed: int
 
 
 class Captioned(BaseModel):
@@ -110,7 +105,7 @@ def forget_posted_folder(state: FolderState, gone_id: str) -> None:
         state.posted_folder_id = ""
 
 
-def _why(exc: Exception, had_source: bool) -> str:
+def _why(exc: Exception, had_source: bool) -> str:  # noqa: FBT001
     if isinstance(exc, FolderGoneError):
         return SOURCE_GONE
     if isinstance(exc, DriveError) or not had_source:
@@ -121,14 +116,25 @@ def _why(exc: Exception, had_source: bool) -> str:
 class Draws(BaseModel, extra="allow"): ...
 
 
-def _draws(ran: RunResult | None) -> Draws | None:
+def pipeline_run(src: Path, out: Path, *, caption: str, seed: int) -> RepurposeResult:
+    [made] = (
+        Pipeline.paths(src, out)
+        .seed(seed)
+        .load(PIPELINE)
+        .video(VideoSettings(snapchat_caption=caption))
+        .run()
+    )
+    return made
+
+
+def _draws(ran: RepurposeResult | None) -> Draws | None:
     if ran is None or ran.step is None:
         return None
     return Draws.model_validate(
         {
             **ran.step.model_dump(mode="json", exclude={"command"}),
             "seconds": ran.seconds,
-        }
+        },
     )
 
 
@@ -154,7 +160,7 @@ def _camera_name(source: str, taken: set[str], rng: random.Random) -> str:
             return name
 
 
-def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
+def _trash(drive: StorageClient, file_ids: list[str]) -> bool:
     fine = True
     for file_id in file_ids:
         try:
@@ -168,7 +174,7 @@ def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
 
 
 class _Trials(BaseModel, frozen=True, arbitrary_types_allowed=True):
-    drive: SkipValidation[DriveApi]
+    drive: SkipValidation[StorageClient]
     folder_id: str
     files: list[DriveFile]
 
@@ -176,7 +182,7 @@ class _Trials(BaseModel, frozen=True, arbitrary_types_allowed=True):
 class Folder(BaseModel, frozen=True):
     user_id: int
     login_id: int
-    refresh_token: str = ""
+    review: StorageServiceReview
 
     def _on_disk(self, reel: ReelState) -> bool:
         path = at(self.user_id, self.login_id, reel.local)
@@ -193,17 +199,19 @@ class Folder(BaseModel, frozen=True):
 
     def _drive(self) -> ReviewPlace | None:
         try:
-            found = review_target(self.refresh_token, self.user_id)
+            found = self.review.target()
         except DriveError:
             logger.warning(
-                "trials: Drive of user %s unreachable", self.user_id, exc_info=True
+                "trials: Drive of user %s unreachable",
+                self.user_id,
+                exc_info=True,
             )
             self._change(lambda s: s.report(DRIVE_PROBLEM))
             return None
         self._change(lambda s: s.report(None))
         return found
 
-    def _fetch(self, drive: DriveApi, key: str) -> str:
+    def _fetch(self, drive: StorageClient, key: str) -> str:
         got = drive.download(key)
         rel = f"src/{key}-{Path(got.name).name}"
         path = work_dir(self.user_id, self.login_id) / rel
@@ -215,14 +223,14 @@ class Folder(BaseModel, frozen=True):
         root = work_dir(self.user_id, self.login_id)
         if self._on_disk(reel):
             return root / str(reel.local)
-        found = self._drive() if self.refresh_token else None
+        found = self._drive() if self.review.client is not None else None
         if found is None:
             raise FileNotFoundError(reel.key)
         rel = self._fetch(found.drive, reel.key)
         self._change_reel(reel.key, partial(ReelState.source_back, local=rel))
         return root / rel
 
-    def _download(self, drive: DriveApi) -> None:
+    def _download(self, drive: StorageClient) -> None:
         for reel in self._load().reels:
             if reel.out or self._on_disk(reel):
                 continue
@@ -235,7 +243,7 @@ class Folder(BaseModel, frozen=True):
                 continue
             self._change_reel(reel.key, partial(ReelState.mark_downloaded, local=rel))
 
-    def _list_posted(self, drive: DriveApi) -> bool:
+    def _list_posted(self, drive: StorageClient) -> bool:
         posted_id = self._load().posted_folder_id
         if not posted_id:
             return False
@@ -248,7 +256,9 @@ class Folder(BaseModel, frozen=True):
             return False
         except DriveError:
             logger.warning(
-                "trials: POSTED of %s unreadable", self.login_id, exc_info=True
+                "trials: POSTED of %s unreadable",
+                self.login_id,
+                exc_info=True,
             )
             self._change(lambda s: s.report(DRIVE_PROBLEM))
             return False
@@ -264,7 +274,7 @@ class Folder(BaseModel, frozen=True):
         state = self._load()
         keys = [r.key for r in state.todo if self._on_disk(r)]
         if read and not state.todo:
-            self._change(lambda s: s.tell(NOTHING_NEW))
+            self._change(lambda s: s.tell(trials_constants().nothing_new))
         made: list[bool] = []
         for i, key in enumerate(keys):
             made.append(self.make(key))
@@ -308,12 +318,15 @@ class Folder(BaseModel, frozen=True):
             making.parent.mkdir(parents=True, exist_ok=True)
             with logfire.span("trials pipeline {key}", key=key):
                 ran = pipeline_run(
-                    src, making, caption=recipe.caption, seed=recipe.seed
+                    src,
+                    making,
+                    caption=recipe.caption,
+                    seed=recipe.seed,
                 )
             if not restore:
                 drew = _draws(ran)
                 recipe = recipe.model_copy(
-                    update={"draws": drew.model_dump() if drew else None}
+                    update={"draws": drew.model_dump() if drew else None},
                 )
             making.replace(out)
             with logfire.span("trials page media {key}", key=key):
@@ -346,7 +359,11 @@ class Folder(BaseModel, frozen=True):
 
     def _trials_folder(self, place: ReviewPlace, account_folder_id: str) -> str:
         with locked(self.user_id, self.login_id, "trials-folder", _FOLDER_LOCK_S):
-            return account_subfolder(place, account_folder_id, AccountFolder.TRIALS)
+            return self.review.account_subfolder(
+                place,
+                account_folder_id,
+                AccountFolder.TRIALS,
+            )
 
     def _open_trials(self, account_folder_id: str) -> _Trials | None:
         found = self._drive()
@@ -357,11 +374,15 @@ class Folder(BaseModel, frozen=True):
             trials_id = self._trials_folder(found, account_folder_id)
             self._change(lambda s: s.remember_trials_folder(trials_id))
             return _Trials(
-                drive=drive, folder_id=trials_id, files=drive.children(trials_id)
+                drive=drive,
+                folder_id=trials_id,
+                files=drive.children(trials_id),
             )
         except DriveError:
             logger.warning(
-                "trials: TRIALS folder for %s failed", self.login_id, exc_info=True
+                "trials: TRIALS folder for %s failed",
+                self.login_id,
+                exc_info=True,
             )
             self._change(lambda s: s.report(DRIVE_PROBLEM))
             return None
@@ -429,10 +450,18 @@ class Folder(BaseModel, frozen=True):
         return Uploaded(uploaded=len(landed))
 
 
-def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> Made | Requeued:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).make_trials()
+def _folder(user_id: int, login_id: int) -> Folder:
+    review = storage_of(user_id, interactive=False).review
+    return Folder(user_id=user_id, login_id=login_id, review=review)
+
+
+def make_trials(
+    *,
+    user_id: int,
+    login_id: int,
+    refresh_token: str = "",  # noqa: ARG001
+) -> Made | Requeued:
+    return _folder(user_id, login_id).make_trials()
 
 
 def generate_reels(
@@ -440,29 +469,27 @@ def generate_reels(
     user_id: int,
     login_id: int,
     keys: list[str] | None = None,
-    refresh_token: str = "",
+    refresh_token: str = "",  # noqa: ARG001
 ) -> Made:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).generate_reels(keys)
+    return _folder(user_id, login_id).generate_reels(keys)
 
 
 def write_captions(
-    *, user_id: int, login_id: int, key: str, refresh_token: str = ""
+    *,
+    user_id: int,
+    login_id: int,
+    key: str,
+    refresh_token: str = "",  # noqa: ARG001
 ) -> Captioned:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).write_captions(key)
+    return _folder(user_id, login_id).write_captions(key)
 
 
 def upload_trials(
     *,
     user_id: int,
-    refresh_token: str,
     login_id: int,
     account_folder_id: str,
     keys: list[str],
+    refresh_token: str = "",  # noqa: ARG001
 ) -> Uploaded:
-    return Folder(
-        user_id=user_id, login_id=login_id, refresh_token=refresh_token
-    ).upload_trials(account_folder_id, keys)
+    return _folder(user_id, login_id).upload_trials(account_folder_id, keys)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -51,7 +53,7 @@ PICTURE_TARGETS = frozendict(
             aspect="aspect_ratio",
             resolution="resolution",
         ),
-    }
+    },
 )
 
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 lazy from ofmhelpers.integrations.ai_providers.apiyi.fake import routes as apiyi_routes
@@ -43,5 +45,5 @@ def install_fakes() -> None:
             *pinterest_routes(),
             *snapchat_routes(),
             *x_routes(),
-        ]
+        ],
     )

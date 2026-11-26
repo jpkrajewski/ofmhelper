@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 from functools import lru_cache
@@ -24,7 +26,11 @@ class FakeReply(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def json_body(cls, data: Any, status: int = 200) -> FakeReply:
+    def json_body(
+        cls,
+        data: Mapping[str, Any] | list[Any],
+        status: int = 200,
+    ) -> FakeReply:
         return cls(
             status=status,
             body=json.dumps(data).encode(),
@@ -43,7 +49,10 @@ class FakeReply(BaseModel):
 @runtime_checkable
 class FakeHandler(Protocol):
     def __call__(
-        self, request: requests.PreparedRequest, proxies: Mapping[str, str], /
+        self,
+        request: requests.PreparedRequest,
+        proxies: Mapping[str, str],
+        /,
     ) -> FakeReply: ...
 
 
@@ -70,13 +79,13 @@ def register_fakes(routes: list[FakeRoute]) -> None:
 
 
 class FakeAdapter(BaseAdapter):
-    def send(
+    def send(  # noqa: PLR0913, PLR0917
         self,
         request: requests.PreparedRequest,
-        stream: bool = False,  # noqa: ARG002
-        timeout: Any = None,  # noqa: ARG002
-        verify: Any = True,  # noqa: ARG002
-        cert: Any = None,  # noqa: ARG002
+        stream: bool = False,  # noqa: ARG002, FBT001, FBT002
+        timeout: float | tuple[float | None, float | None] | None = None,  # noqa: ARG002
+        verify: bool | str = True,  # noqa: ARG002, FBT001, FBT002
+        cert: str | tuple[str, str] | None = None,  # noqa: ARG002
         proxies: Mapping[str, str] | None = None,
     ) -> requests.Response:
         host = urlsplit(request.url or "").hostname or ""
@@ -130,29 +139,68 @@ def page_session(page: ProfilePageSettings, proxy: str | None) -> requests.Sessi
             "User-Agent": page.user_agent,
             "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
-        }
+        },
     )
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
     return mount(session)
 
 
-def get(url: str, **kwargs: Any) -> requests.Response:
+def get(
+    url: str,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    stream: bool = False,
+    allow_redirects: bool = True,
+) -> requests.Response:
     if settings.infra.fake_externals:
-        return mount(requests.Session()).get(url, **kwargs)
-    return requests.get(url, **kwargs)  # noqa: S113
+        return mount(requests.Session()).get(
+            url,
+            timeout=timeout,
+            headers=headers,
+            stream=stream,
+            allow_redirects=allow_redirects,
+        )
+    return requests.get(
+        url,
+        timeout=timeout,
+        headers=headers,
+        stream=stream,
+        allow_redirects=allow_redirects,
+    )
 
 
-def post(url: str, **kwargs: Any) -> requests.Response:
+def post(
+    url: str,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    data: Mapping[str, str] | None = None,
+) -> requests.Response:
     if settings.infra.fake_externals:
-        return mount(requests.Session()).post(url, **kwargs)
-    return requests.post(url, **kwargs)  # noqa: S113
+        return mount(requests.Session()).post(
+            url,
+            timeout=timeout,
+            headers=headers,
+            data=data,
+        )
+    return requests.post(url, timeout=timeout, headers=headers, data=data)
 
 
-def head(url: str, **kwargs: Any) -> requests.Response:
+def head(
+    url: str,
+    *,
+    timeout: float | None = None,
+    allow_redirects: bool = False,
+) -> requests.Response:
     if settings.infra.fake_externals:
-        return mount(requests.Session()).head(url, **kwargs)
-    return requests.head(url, **kwargs)  # noqa: S113
+        return mount(requests.Session()).head(
+            url,
+            timeout=timeout,
+            allow_redirects=allow_redirects,
+        )
+    return requests.head(url, timeout=timeout, allow_redirects=allow_redirects)
 
 
 class ProxyPool:

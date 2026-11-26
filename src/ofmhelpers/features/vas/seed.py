@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import random
 import uuid
@@ -144,7 +146,10 @@ class _Work(BaseModel):
         reported = per_second * seconds if provider == "kie" else None
         meta = JobMeta(generations=[_generation(provider, target.model, reported)])
         return self._row(
-            "clone", at, source.model_copy(update={"params": params}), meta
+            "clone",
+            at,
+            source.model_copy(update={"params": params}),
+            meta,
         )
 
     def failed(self, at: float, source: Job) -> RecordedJob:
@@ -160,7 +165,11 @@ class _Work(BaseModel):
         )
 
     def generated(
-        self, at: float, source: Job, model: _Model, seconds: int
+        self,
+        at: float,
+        source: Job,
+        model: _Model,
+        seconds: int,
     ) -> RecordedJob:
         params = {**source.params, "provider": model.provider, "model": model.model}
         if model.usd is None:
@@ -196,7 +205,11 @@ class _Work(BaseModel):
         )
 
     def day(
-        self, start: float, sources: _Sources, rng: random.Random, back: int
+        self,
+        start: float,
+        sources: _Sources,
+        rng: random.Random,
+        back: int,
     ) -> list[RecordedJob]:
         at = start + 9 * _HOUR + rng.randint(0, 40) * 60
         rows = [self.event("login", at)]
@@ -225,6 +238,8 @@ class _Work(BaseModel):
 def _priced_providers() -> list[str]:
     found = []
     for name, price in clone_pricing().items():
+        if not price.billable:
+            continue
         try:
             price.per_second(RESOLUTION)
         except UnpricedError:  # silent: an unpriced provider is skipped

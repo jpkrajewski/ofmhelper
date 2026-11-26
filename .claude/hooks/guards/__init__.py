@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from guards import (
     baseline,
     context_size,
@@ -8,6 +10,7 @@ from guards import (
     host_checks,
     import_graph,
     no_comments,
+    no_getattr,
     no_rewrite,
     owner_word,
     pr_comments,
@@ -42,6 +45,7 @@ GUARDS = (
     secrets.GUARD,
     skills.GUARD,
     no_comments.GUARD,
+    no_getattr.GUARD,
     shell_writes.GUARD,
     review.GUARD,
     import_graph.GUARD,

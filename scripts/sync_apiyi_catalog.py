@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Writes integrations/ai_providers/apiyi/catalog.json: every APIYI model the
 app offers, hand-made from docs.apiyi.com (APIYI publishes no schema
 endpoint; pages read 2026-11-06, see apiyi/CLAUDE notes in
@@ -57,15 +59,17 @@ NO_FRAME_WITH_REFERENCES = {
                     {"required": ["reference_image_urls"]},
                     {"required": ["reference_video_urls"]},
                     {"required": ["reference_audio_urls"]},
-                ]
-            }
-        }
+                ],
+            },
+        },
     },
 }
 
 
 def schema(
-    properties: dict[str, Any], required: tuple[str, ...] = ("prompt",), **extra: Any
+    properties: dict[str, Any],
+    required: tuple[str, ...] = ("prompt",),
+    **extra: Any,
 ) -> dict[str, Any]:
     return {
         "type": "object",
@@ -104,10 +108,16 @@ WAN3 = schema(
         "first_frame_url": media("First frame", "image", "first_frame"),
         "last_frame_url": media("Last frame", "image", "last_frame"),
         "reference_image_urls": media(
-            "Reference images", "image", "reference_image", 10
+            "Reference images",
+            "image",
+            "reference_image",
+            10,
         ),
         "reference_video_urls": media(
-            "Reference videos", "video", "reference_video", 5
+            "Reference videos",
+            "video",
+            "reference_video",
+            5,
         ),
         "reference_audio_urls": media("Reference audio", "audio", "reference_audio", 5),
         "resolution": choice("Resolution", ["480P", "720P", "1080P"], "1080P"),
@@ -129,7 +139,12 @@ AUDIO_SETTING = choice("Sound", ["auto", "origin"], "auto")
 DASHSCOPE = [
     entry("wan3.0-video", "Wan 3.0", "Wan 3.0", "video", WAN3, fixed=WAN_FIXED),
     entry(
-        "wan3.0-video-prime", "Wan 3.0 Prime", "Wan 3.0", "video", WAN3, fixed=WAN_FIXED
+        "wan3.0-video-prime",
+        "Wan 3.0 Prime",
+        "Wan 3.0",
+        "video",
+        WAN3,
+        fixed=WAN_FIXED,
     ),
     entry(
         "wan2.7-t2v",
@@ -143,7 +158,7 @@ DASHSCOPE = [
                 "resolution": WAN27_RES,
                 "aspect_ratio": choice("Aspect ratio", WAN27_RATIOS, "16:9"),
                 "duration": seconds(2, 15),
-            }
+            },
         ),
         fixed=WAN_FIXED,
     ),
@@ -177,15 +192,21 @@ DASHSCOPE = [
                 "prompt": PROMPT,
                 "negative_prompt": NEGATIVE,
                 "reference_image_urls": media(
-                    "Reference images", "image", "reference_image", 5
+                    "Reference images",
+                    "image",
+                    "reference_image",
+                    5,
                 ),
                 "reference_video_urls": media(
-                    "Reference videos", "video", "reference_video", 5
+                    "Reference videos",
+                    "video",
+                    "reference_video",
+                    5,
                 ),
                 "resolution": WAN27_RES,
                 "aspect_ratio": choice("Aspect ratio", WAN27_RATIOS, "16:9"),
                 "duration": seconds(2, 15),
-            }
+            },
         ),
         fixed=WAN_FIXED,
     ),
@@ -199,7 +220,10 @@ DASHSCOPE = [
                 "prompt": PROMPT,
                 "video_url": media("Video", "video", "video"),
                 "reference_image_urls": media(
-                    "Reference images", "image", "reference_image", 4
+                    "Reference images",
+                    "image",
+                    "reference_image",
+                    4,
                 ),
                 "resolution": WAN27_RES,
                 "audio_setting": AUDIO_SETTING,
@@ -219,7 +243,7 @@ DASHSCOPE = [
                 "resolution": WAN27_RES,
                 "aspect_ratio": choice("Aspect ratio", HH_RATIOS, "16:9"),
                 "duration": seconds(3, 15),
-            }
+            },
         ),
         fixed={"watermark": False},
     ),
@@ -269,7 +293,10 @@ DASHSCOPE = [
                 "prompt": PROMPT,
                 "video_url": media("Video", "video", "video"),
                 "reference_image_urls": media(
-                    "Reference images", "image", "reference_image", 5
+                    "Reference images",
+                    "image",
+                    "reference_image",
+                    5,
                 ),
                 "resolution": WAN27_RES,
                 "audio_setting": AUDIO_SETTING,
@@ -286,7 +313,7 @@ DASHSCOPE = [
 SEEDANCE_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
 
 
-def seedance(
+def seedance(  # noqa: PLR0913, PLR0917
     model_id: str,
     label: str,
     resolutions: list[str],
@@ -305,13 +332,22 @@ def seedance(
                 "first_frame_url": media("First frame", "image", "first_frame"),
                 "last_frame_url": media("Last frame", "image", "last_frame"),
                 "reference_image_urls": media(
-                    "Reference images", "image", "reference_image", images
+                    "Reference images",
+                    "image",
+                    "reference_image",
+                    images,
                 ),
                 "reference_video_urls": media(
-                    "Reference videos", "video", "reference_video", clips
+                    "Reference videos",
+                    "video",
+                    "reference_video",
+                    clips,
                 ),
                 "reference_audio_urls": media(
-                    "Reference audio", "audio", "reference_audio", clips
+                    "Reference audio",
+                    "audio",
+                    "reference_audio",
+                    clips,
                 ),
                 "resolution": choice("Resolution", resolutions, "720p"),
                 "aspect_ratio": choice("Aspect ratio", SEEDANCE_RATIOS, "adaptive"),
@@ -393,7 +429,10 @@ WIDE_RATIOS = [*BASE_RATIOS, "1:4", "4:1", "1:8", "8:1"]
 
 
 def nano(
-    model_id: str, label: str, ratios: list[str], sizes: list[str] | None
+    model_id: str,
+    label: str,
+    ratios: list[str],
+    sizes: list[str] | None,
 ) -> dict[str, Any]:
     properties: dict[str, Any] = {
         "prompt": PROMPT,
@@ -445,7 +484,7 @@ GPT = [
                 ),
                 "quality": choice("Quality", ["low", "medium", "high"], "medium"),
                 "output_format": choice("Format", ["png", "jpeg", "webp"], "png"),
-            }
+            },
         ),
     ),
     entry(
@@ -458,9 +497,11 @@ GPT = [
                 "prompt": PROMPT,
                 "image_urls": media("Reference images", "image", "reference_image", 10),
                 "size": choice(
-                    "Size", ["auto", "1024x1024", "1536x1024", "1024x1536"], "auto"
+                    "Size",
+                    ["auto", "1024x1024", "1536x1024", "1024x1536"],
+                    "auto",
                 ),
-            }
+            },
         ),
     ),
     entry(
@@ -488,7 +529,7 @@ GPT = [
                     ],
                     "auto",
                 ),
-            }
+            },
         ),
     ),
 ]
@@ -498,7 +539,10 @@ GPT = [
 
 
 def seedream(
-    model_id: str, label: str, sizes: list[str], formats: list[str] | None
+    model_id: str,
+    label: str,
+    sizes: list[str],
+    formats: list[str] | None,
 ) -> dict[str, Any]:
     properties: dict[str, Any] = {
         "prompt": PROMPT,
@@ -528,7 +572,10 @@ SEEDREAM = [
     ),
     seedream("seedream-5-0-260128", "Seedream 5.0", ["2K", "3K"], ["jpeg", "png"]),
     seedream(
-        "seedream-5-0-pro-260628", "Seedream 5.0 Pro", ["1K", "2K"], ["jpeg", "png"]
+        "seedream-5-0-pro-260628",
+        "Seedream 5.0 Pro",
+        ["1K", "2K"],
+        ["jpeg", "png"],
     ),
     seedream("seedream-4-5-251128", "Seedream 4.5", ["2K", "4K"], None),
 ]
@@ -541,7 +588,11 @@ FLUX_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]
 
 
 def flux(
-    model_id: str, label: str, images: int, *, edit_only: bool = False
+    model_id: str,
+    label: str,
+    images: int,
+    *,
+    edit_only: bool = False,
 ) -> dict[str, Any]:
     refs = media("Reference images", "image", "reference_image", images)
     properties: dict[str, Any] = {"prompt": PROMPT, "image_urls": refs}
@@ -554,7 +605,11 @@ def flux(
     properties["aspect_ratio"] = choice("Aspect ratio (edits)", FLUX_RATIOS, "1:1")
     properties["output_format"] = choice("Format", ["jpeg", "png"], "jpeg")
     return entry(
-        model_id, label, "FLUX", "image", schema(properties, required=required)
+        model_id,
+        label,
+        "FLUX",
+        "image",
+        schema(properties, required=required),
     )
 
 
@@ -571,7 +626,8 @@ FLUX = [
 def main() -> None:
     catalog = [*DASHSCOPE, *SEEDANCE, *VEO_ENTRIES, *NANO, *GPT, *SEEDREAM, *FLUX]
     OUT.write_text(
-        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     print(f"{len(catalog)} models -> {OUT}")
 

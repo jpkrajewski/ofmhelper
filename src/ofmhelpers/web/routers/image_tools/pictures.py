@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -6,7 +8,8 @@ from pydantic import BaseModel, Field
 
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.db.picture_presets.schema import PicturePreset
-from ofmhelpers.features.jobs.schema import JobsQueued, TaskCard
+from ofmhelpers.features.jobs.models import TaskCard
+from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.pictures import service
 from ofmhelpers.features.pictures.service import LABEL, TASK, run_picture
 from ofmhelpers.features.pictures.targets import (
@@ -28,7 +31,7 @@ from ofmhelpers.web.dependencies import (
     OwnerId,
     Viewing,
 )
-from ofmhelpers.web.forms import Files, FormModel, PaidForm, Stripped
+from ofmhelpers.web.forms import FormModel, ImageFiles, PaidForm, Stripped
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_polled
@@ -51,7 +54,9 @@ __all__ = [
 ]
 
 router: APIRouter = APIRouter(
-    prefix="/pictures", tags=["pictures"], dependencies=[Access(Area.PICTURES)]
+    prefix="/pictures",
+    tags=["pictures"],
+    dependencies=[Access(Area.PICTURES)],
 )
 
 gallery = Gallery({TASK})
@@ -63,7 +68,7 @@ class PresetForm(FormModel):
     name: Stripped = Field(min_length=1, max_length=80)
     prompt: Stripped = Field(min_length=1, max_length=20000)
     aspect_ratio: str = Field("", max_length=16)
-    images: Files
+    images: ImageFiles
 
 
 class PresetEditForm(PresetForm):
@@ -79,7 +84,7 @@ def _cards(jobs: list[Job]) -> list[TaskCard]:
 
 
 @router.get("")
-def page(
+def page(  # noqa: PLR0913, PLR0917
     request: Request,
     owner_id: OwnerId,
     actor: Actor,
@@ -91,11 +96,13 @@ def page(
     return render(
         request,
         "pictures.html",
-        api_keys=api_keys,
-        gallery=_cards(first.jobs),
-        next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(viewer),
-        **dict(service.form_view(owner_id, actor, preset)),
+        {
+            "api_keys": api_keys,
+            "gallery": _cards(first.jobs),
+            "next_offset": first.next_offset,
+            "hidden_count": gallery.hidden_count(viewer),
+            **dict(service.form_view(owner_id, actor, preset)),
+        },
     )
 
 
@@ -105,8 +112,7 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     return render(
         request,
         "generate_gallery_fragment.html",
-        gallery=_cards(found.jobs),
-        next_offset=found.next_offset,
+        {"gallery": _cards(found.jobs), "next_offset": found.next_offset},
     )
 
 
@@ -115,8 +121,7 @@ def gallery_latest(request: Request, viewer: Viewing) -> Response:
     return render_polled(
         request,
         "generate_gallery_fragment.html",
-        gallery=_cards(gallery.page(viewer).jobs),
-        next_offset=None,
+        {"gallery": _cards(gallery.page(viewer).jobs), "next_offset": None},
     )
 
 
@@ -156,7 +161,7 @@ def delete_preset(preset_id: int, owner_id: OwnerId) -> PresetDeleted:
 class PictureRunForm(PaidForm):
     provider: str = Field(default_factory=default_provider)
     preset: int
-    pictures: Files
+    pictures: ImageFiles
     pictures_manifest: str = "[]"
 
 

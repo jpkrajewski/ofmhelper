@@ -1,7 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ipaddress
 import socket
-from typing import Any
 from urllib.parse import urljoin, urlsplit
+lazy from collections.abc import Mapping
 
 import requests
 
@@ -46,10 +48,22 @@ def check_public(url: str) -> None:
         raise NotPublicError(msg)
 
 
-def get(url: str, **kwargs: Any) -> requests.Response:
+def get(
+    url: str,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    stream: bool = False,
+) -> requests.Response:
     for _hop in range(MAX_REDIRECTS + 1):
         check_public(url)
-        response = outbound.get(url, allow_redirects=False, **kwargs)
+        response = outbound.get(
+            url,
+            allow_redirects=False,
+            timeout=timeout,
+            headers=headers,
+            stream=stream,
+        )
         if not response.is_redirect:
             try:
                 response.raise_for_status()

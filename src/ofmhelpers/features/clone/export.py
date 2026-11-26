@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
@@ -7,6 +9,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import ResultFile
 from ofmhelpers.db.jobs.store import merge_params
 from ofmhelpers.features.assets.store import register_generated_asset
+from ofmhelpers.features.refusals import ResumableError
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions, get_export
 
@@ -15,18 +18,20 @@ logger = get_logger(__name__)
 EXPORT_FAILURES = "export_failures"
 
 
-class ExportFailedError(RuntimeError):
+class ExportFailedError(ResumableError):
     def __init__(self, export: str) -> None:
         super().__init__(f"Export failed ({export}): run it again")
-        self.keep_request = True
 
 
-def export_choice(export: str | None, capcut: bool = False) -> str:
+def export_choice(export: str | None, capcut: bool = False) -> str:  # noqa: FBT001, FBT002
     return export or ("capcut" if capcut else "original")
 
 
 def exported_file(
-    result: ResultFile, export: str, options: ExportOptions, assets_root: Path
+    result: ResultFile,
+    export: str,
+    options: ExportOptions,
+    assets_root: Path,
 ) -> ResultFile:
     if result.path is None:
         return result
@@ -59,7 +64,7 @@ def exported_file(
     return ResultFile(name=dst.name, path=str(dst), remote_url=None)
 
 
-def export_results(
+def export_results(  # noqa: PLR0913
     job_id: str,
     results: list[ResultFile],
     export: str,

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from ofmhelpers.config import settings
@@ -47,9 +49,9 @@ def out_of_money(job_id: str, provider: str, error: str) -> None:
                 title=f"{provider}: no credits",
                 text=f"{_who(job_id)}: {error_line(error)}",
                 url=PAGE,
-                key=f"provider.no_credits:{provider}:{owner}:{int(time.time() // every)}",
+                key=f"provider.no_credits:{provider}:{owner}:{int(time.time() // every)}",  # noqa: E501
                 owner_id=owner,
-            )
+            ),
         )
     except Exception:
         logger.warning("no-credits notice of job %s not made", job_id, exc_info=True)

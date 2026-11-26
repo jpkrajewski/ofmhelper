@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 lazy from collections.abc import Callable
 
@@ -70,7 +72,7 @@ def answer_asks() -> None:
 
 def _start(chat_id: str, word: str) -> None:
     job_id = create_job(TASK, {"word": word})
-    enqueue(run_job, job_id, answer, {"chat_id": chat_id, "word": word})
+    enqueue(run_job, (job_id, answer, {"chat_id": chat_id, "word": word}))
 
 
 def answer(chat_id: str, word: str) -> None:

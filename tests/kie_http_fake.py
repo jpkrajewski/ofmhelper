@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest import mock
@@ -10,7 +12,7 @@ def kie_http():
     with (
         mock.patch.object(requests.Session, "request") as request,
         mock.patch(
-            "ofmhelpers.integrations.ai_providers.kie.client.requests.head"
+            "ofmhelpers.integrations.ai_providers.kie.client.requests.head",
         ) as head,
     ):
         yield SimpleNamespace(post=request, request=request, head=head)

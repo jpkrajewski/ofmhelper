@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import shutil
 import subprocess
 from contextlib import contextmanager
@@ -15,21 +17,28 @@ def binary(name: str) -> str:
 
 def run(args: list[str], timeout_s: int) -> str:
     with _failures(args, timeout_s):
-        return subprocess.run(
-            args, check=True, capture_output=True, text=True, timeout=timeout_s
+        return subprocess.run(  # noqa: S603
+            args,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
         ).stdout
 
 
 def run_bytes(args: list[str], timeout_s: int) -> bytes:
     with _failures(args, timeout_s):
-        return subprocess.run(
-            args, check=True, capture_output=True, timeout=timeout_s
+        return subprocess.run(  # noqa: S603
+            args,
+            check=True,
+            capture_output=True,
+            timeout=timeout_s,
         ).stdout
 
 
 def run_log(args: list[str], timeout_s: int) -> str:
     with _failures(args, timeout_s):
-        done = subprocess.run(args, check=True, capture_output=True, timeout=timeout_s)
+        done = subprocess.run(args, check=True, capture_output=True, timeout=timeout_s)  # noqa: S603
     return done.stderr.decode(errors="replace")
 
 

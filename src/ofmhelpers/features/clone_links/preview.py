@@ -1,6 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import math
-import re
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.db.cookies import store as login_cookies
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.clone_links.links import site_name
 from ofmhelpers.features.clone_links.models import LinkPreview
 from ofmhelpers.features.previews.render import previews_dir
@@ -24,14 +26,6 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.telemetry import in_this_trace
 
 logger = get_logger(__name__)
-
-THUMB_KEY = re.compile(r"^[0-9a-f]{24}$")
-CANNOT_OPEN = "Can't open this video"
-TOO_SLOW = "Took too long, try again"
-_LOGIN_WORDS = ("login", "log in", "sign in", "cookies", "no longer valid")
-_AUTH_REFUSED = ("http error 400", "http error 401")
-_THROTTLED = ("http error 429", "too many requests", "rate-limit", "rate limit")
-_NO_ANSWER = ("timed out", "connection", "temporarily unavailable")
 
 
 class Price(BaseModel):
@@ -61,18 +55,23 @@ def _says(error: str | None, words: tuple[str, ...]) -> bool:
     return any(word in lowered for word in words)
 
 
-def _why(info: VideoInfo, has_cookies: bool, url: str) -> str:
+def _why(info: VideoInfo, has_cookies: bool, url: str) -> str:  # noqa: FBT001
+    constants = clone_links_constants()
     last = info.error
     if not has_cookies:
         tries = (last, info.logged_out_error)
-        if any(_says(e, _LOGIN_WORDS + _THROTTLED) for e in tries):
+        if any(
+            _says(e, constants.login_words + constants.throttled_words) for e in tries
+        ):
             return needs_login(url)
-        return busy(url) if any(_says(e, _NO_ANSWER) for e in tries) else CANNOT_OPEN
-    if _says(last, _LOGIN_WORDS + _AUTH_REFUSED):
+        if any(_says(e, constants.no_answer_words) for e in tries):
+            return busy(url)
+        return constants.cannot_open
+    if _says(last, constants.login_words + constants.auth_refused_words):
         return needs_login(url)
-    if _says(last, _THROTTLED + _NO_ANSWER):
+    if _says(last, constants.throttled_words + constants.no_answer_words):
         return busy(url)
-    return CANNOT_OPEN
+    return constants.cannot_open
 
 
 def _info_key(key: str, user_id: int | None) -> str:
@@ -91,7 +90,9 @@ def _remembered(info_key: str) -> VideoInfo | None:
         return VideoInfo.model_validate_json(raw)
     except ValueError:
         logger.warning(
-            "clone-links: cached info %s unreadable", info_key, exc_info=True
+            "clone-links: cached info %s unreadable",
+            info_key,
+            exc_info=True,
         )
         return None
 
@@ -123,7 +124,7 @@ def _too_long(seconds: float, max_s: int) -> bool:
     return seconds > max_s
 
 
-def _shown(seconds: float, too_long: bool, max_s: int) -> float | None:
+def _shown(seconds: float, too_long: bool, max_s: int) -> float | None:  # noqa: FBT001
     shown = math.ceil(round(seconds * 10, 6)) / 10
     return None if too_long and shown <= max_s else shown
 
@@ -144,7 +145,11 @@ def preview(
         cookies = login_cookies.for_user(user_id)
         info = _read(url, cookies, until)
         if info is None:
-            return LinkPreview(url=url, max_s=price.max_s, error=TOO_SLOW)
+            return LinkPreview(
+                url=url,
+                max_s=price.max_s,
+                error=clone_links_constants().too_slow,
+            )
         if info.error or info.seconds is None:
             logger.info(
                 "clone-links preview %s: %s (logged out: %s)",
@@ -178,18 +183,28 @@ def _answer(done: Future[LinkPreview], url: str, price: Price) -> LinkPreview:
         return done.result()
     except Exception:
         logger.warning("clone-links preview %s failed", url, exc_info=True)
-        return LinkPreview(url=url, max_s=price.max_s, error=CANNOT_OPEN)
+        return LinkPreview(
+            url=url,
+            max_s=price.max_s,
+            error=clone_links_constants().cannot_open,
+        )
 
 
 def preview_all(
-    urls: list[str], user_id: int | None, price: Price, thumbs: str
+    urls: list[str],
+    user_id: int | None,
+    price: Price,
+    thumbs: str,
 ) -> Iterator[LinkPreview]:
     deadline_s = settings.clone_links.preview_deadline_s
     until = time.monotonic() + deadline_s
     pool = ThreadPoolExecutor(max_workers=settings.clone_links.preview_parallel)
     futures = {
         pool.submit(
-            in_this_trace(preview), url, user_id, price, thumbs, until=until
+            in_this_trace(
+                lambda link: preview(link, user_id, price, thumbs, until=until),
+            ),
+            url,
         ): url
         for url in urls
     }
@@ -213,6 +228,10 @@ def preview_all(
                 if future.done():
                     yield _answer(future, url, price)
                 else:
-                    yield LinkPreview(url=url, max_s=price.max_s, error=TOO_SLOW)
+                    yield LinkPreview(
+                        url=url,
+                        max_s=price.max_s,
+                        error=clone_links_constants().too_slow,
+                    )
     finally:
         pool.shutdown(wait=False, cancel_futures=True)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 from ofmhelpers.config import settings
@@ -39,7 +41,9 @@ class RunningHubProvider(Provider):
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
         return self.client.submit(
-            spec.model_id, wire_body(spec, payload).model_dump(), job=idempotency_key
+            spec.model_id,
+            wire_body(spec, payload).model_dump(),
+            job=idempotency_key,
         )
 
     def status(self, task_id: str) -> TaskState:
@@ -53,7 +57,9 @@ class RunningHubProvider(Provider):
             return TaskState(state="pending")
         if task.status in FAILED:
             return TaskState(
-                state="failed", error=task.failure, no_credits=is_no_credits(task.code)
+                state="failed",
+                error=task.failure,
+                no_credits=is_no_credits(task.code),
             )
         msg = f"RunningHub: task {task_id} answered status {task.status!r}"
         raise ProviderUnavailableError(msg)

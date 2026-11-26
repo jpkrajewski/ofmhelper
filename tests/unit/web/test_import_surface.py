@@ -1,4 +1,5 @@
-import importlib
+# Copyright (C) 2026 jpkrajewski
+
 import pickle
 
 import pytest
@@ -9,22 +10,14 @@ from ofmhelpers.web.routers import task_helpers
 
 TASK_HELPERS = (
     "assets_root",
-    "AUDIO_EXTS",
-    "IMAGE_EXTS",
     "uploads_root",
-    "VIDEO_EXTS",
-    "VIDEO_KINDS",
     "assets_root_for",
     "assets_root_for_actor",
     "assets_root_for_user",
     "in_asset_root",
-    "IMAGE_KINDS",
-    "MEDIA_KINDS",
-    "convert_heic_upload",
     "download_name",
     "asset_card",
     "build_ordered_paths",
-    "classify_kind",
     "job_assets",
     "add_job_routes",
     "job_inputs",
@@ -80,12 +73,11 @@ QUEUED_PATHS = {
     "ofmhelpers.web.routers.video_tools.edit.run_prepare": (
         "ofmhelpers.features.edit.service.run_prepare"
     ),
+    "ofmhelpers.features.drive.uploads.upload_files": (
+        "ofmhelpers.features.storage.jobs.upload_files"
+    ),
+    "ofmhelpers.features.drive.folders.sync": ("ofmhelpers.features.storage.jobs.sync"),
 }
-
-
-def _named(path: str) -> object:
-    module, name = path.rsplit(".", 1)
-    return getattr(importlib.import_module(module), name)
 
 
 @pytest.mark.parametrize(("old", "new"), QUEUED_PATHS.items())
@@ -93,14 +85,14 @@ def test_a_run_function_pickled_under_its_router_path_is_the_features(old, new):
     module, name = old.rsplit(".", 1)
     stored = f"c{module}\n{name}\n.".encode()
 
-    assert pickle.loads(stored) is _named(new)  # noqa: S301
+    assert pickle.loads(stored) is import_attribute(new)  # noqa: S301
 
 
 def test_run_job_still_answers_at_the_stores_path_rq_looks_up():
     old = import_attribute("ofmhelpers.db.stores.jobs.run_job")
 
     assert callable(old)
-    assert _named("ofmhelpers.features.jobs.runner.run_job") is not old
+    assert import_attribute("ofmhelpers.features.jobs.runner.run_job") is not old
 
 
 def test_the_stores_run_job_hands_the_job_to_the_registered_runner(monkeypatch):

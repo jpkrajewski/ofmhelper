@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import logging
 import logging.config
@@ -11,11 +13,6 @@ from ofmhelpers.redact import path_tokens
 lazy from ofmhelpers.config import settings
 
 _configured = False
-
-_RESERVED = frozenset(
-    logging.LogRecord("", 0, "", 0, "", None, None).__dict__
-) | frozenset({"asctime", "message", "taskName"})
-
 
 _ACCESS_ARGS = 5
 _LOGIN_CODE = re.compile(r"([?&]code=)[^&\s]+")
@@ -33,8 +30,6 @@ class JsonFormatter(logging.Formatter):
             payload["exc"] = self.formatException(record.exc_info)
         if record.stack_info:
             payload["stack"] = self.formatStack(record.stack_info)
-
-        payload.update({k: v for k, v in record.__dict__.items() if k not in _RESERVED})
         return json.dumps(payload, default=str)
 
 
@@ -55,8 +50,8 @@ class _HideLoginCodes(logging.Filter):
 
 class _HideJobArguments(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        for name in _JOB_ARGUMENTS:
-            if name in record.__dict__:
+        if record.levelno >= logging.ERROR:
+            for name in _JOB_ARGUMENTS:
                 setattr(record, name, _HIDDEN)
         return True
 
@@ -104,7 +99,11 @@ class LoggingConfig(BaseModel):
 
 
 def _config(
-    level: str, fmt: str, access_log: bool, *, logfire: bool = False
+    level: str,
+    fmt: str,
+    access_log: bool,  # noqa: FBT001
+    *,
+    logfire: bool = False,
 ) -> LoggingConfig:
     return LoggingConfig(
         formatters={
@@ -128,7 +127,8 @@ def _config(
             else None,
         ),
         root=_Logger(
-            handlers=["stdout", "logfire"] if logfire else ["stdout"], level=level
+            handlers=["stdout", "logfire"] if logfire else ["stdout"],
+            level=level,
         ),
         loggers={
             "uvicorn": _Logger(handlers=[], propagate=True),

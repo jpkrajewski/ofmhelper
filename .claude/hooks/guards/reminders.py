@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 from guards.event import ROOT, Guard, HookEvent, Verdict, context

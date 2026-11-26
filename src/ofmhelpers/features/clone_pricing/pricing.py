@@ -1,13 +1,16 @@
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
 
 from pydantic import BaseModel
 
-from ofmhelpers.config import WebSettings, settings
+from ofmhelpers.config import settings
 from ofmhelpers.features.clone_pricing.targets import (
     CloneTarget,
     PriceRate,
     clone_targets,
 )
+lazy from ofmhelpers.config.settings import WebSettings
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 
@@ -20,6 +23,7 @@ class ClonePrice(BaseModel):
     max_reference_s: int
     note: str
     unit: str = "credits"
+    billable: bool = True
 
     def per_second(self, resolution: str) -> float:
         try:
@@ -30,14 +34,15 @@ class ClonePrice(BaseModel):
 
 
 def _price(target: CloneTarget, rate: PriceRate, web: WebSettings) -> ClonePrice:
+    named = {name for name in (rate.per_second, rate.usd_per_credit) if name}
+    prices = web.model_dump(include=named)
     return ClonePrice(
-        credits_per_video_s=getattr(web, rate.per_second),
-        usd_per_credit=getattr(web, rate.usd_per_credit)
-        if rate.usd_per_credit
-        else 1.0,
+        credits_per_video_s=prices[rate.per_second],
+        usd_per_credit=prices[rate.usd_per_credit] if rate.usd_per_credit else 1.0,
         max_reference_s=target.max_reference_s,
         note=rate.note,
         unit=rate.unit,
+        billable=rate.billable,
     )
 
 
@@ -48,7 +53,7 @@ def clone_pricing() -> MappingProxyType[str, ClonePrice]:
             name: _price(target, target.price, web)
             for name, target in clone_targets().items()
             if target.price
-        }
+        },
     )
 
 

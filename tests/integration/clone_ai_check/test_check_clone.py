@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import logging
 import time
 lazy from pathlib import Path
@@ -7,14 +9,13 @@ from PIL import Image
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links.ai_check import (
-    RULES,
     Verdict,
     check_clone,
     sheet_at,
     still_count,
 )
 from ofmhelpers.features.clone_links.ai_check import check as check_module
-from ofmhelpers.features.clone_links.ai_check.check import NO_ANSWER, NO_MODEL, TOO_LONG
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.features.clone_links.folders import folder_for
 from ofmhelpers.integrations.llm.base import Answered
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY, FAKE_KEY_2, fake_gemini
@@ -48,7 +49,8 @@ class _Clock:
 
 
 @pytest.mark.parametrize(
-    ("seconds", "stills"), [(0.4, 2), (2.0, 3), (15.0, 16), (40.0, 16)]
+    ("seconds", "stills"),
+    [(0.4, 2), (2.0, 3), (15.0, 16), (40.0, 16)],
 )
 def test_one_still_a_second_both_ends_included_at_most_16(seconds, stills):
     assert still_count(seconds) == stills
@@ -63,7 +65,7 @@ def test_a_clean_reel_is_good_with_everything_kept_to_debug_it(video):
     assert found.glitch_percent == 0
     assert found.provider == "Gemini"
     assert found.model == "gemini-3.6-flash"
-    assert found.prompt_system == RULES
+    assert found.prompt_system == clone_links_constants().rules
     assert "Contact sheet of reel.mp4 (2.0 s, 3 stills)" in found.prompt_text
     assert "mirrored" not in found.prompt_text
     assert found.raw_answer.startswith("{")
@@ -93,7 +95,7 @@ def test_minor_glitches_the_model_is_sure_of_go_to_trial_reels(video):
             "reasoning": "Small hand and shirt problems add up.",
             "glitches": [{"at_s": 1.0, "what": "hand", "severity": "minor"}],
             "glitch_percent": 90,
-        }
+        },
     )
 
     found = check_clone(video)
@@ -104,7 +106,7 @@ def test_minor_glitches_the_model_is_sure_of_go_to_trial_reels(video):
 
 def test_no_glitch_and_zero_percent_is_good_reels(video):
     fake_gemini().answer_next(
-        {"reasoning": "Clean.", "glitches": [], "glitch_percent": 0}
+        {"reasoning": "Clean.", "glitches": [], "glitch_percent": 0},
     )
 
     found = check_clone(video)
@@ -162,7 +164,7 @@ def test_a_model_failure_is_the_checks_error_not_an_exception(video, monkeypatch
     found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER
+    assert found.error == clone_links_constants().no_answer
     assert found.error_kind == "quota"
     assert "Quota exceeded" in found.error_detail
     assert (found.provider, found.model) == ("Gemini", "gemini-3.6-flash")
@@ -191,7 +193,8 @@ def test_a_key_out_of_quota_hands_the_same_model_to_the_next_key(video, monkeypa
 
 
 def test_an_overloaded_model_goes_to_the_next_model_not_the_next_key(
-    video, monkeypatch
+    video,
+    monkeypatch,
 ):
     monkeypatch.setenv("GEMINI_API_KEY", f"{FAKE_KEY},{FAKE_KEY_2}")
     fake_gemini().fail_next(503, "UNAVAILABLE", "This model is overloaded")
@@ -214,7 +217,9 @@ def test_a_rejected_key_hands_over_to_the_next_key(video, monkeypatch):
 
 
 def test_every_gemini_out_of_quota_is_an_error_and_groq_never_judges(
-    video, monkeypatch, caplog
+    video,
+    monkeypatch,
+    caplog,
 ):
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
     for _ in range(4):
@@ -224,7 +229,7 @@ def test_every_gemini_out_of_quota_is_an_error_and_groq_never_judges(
         found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER
+    assert found.error == clone_links_constants().no_answer
     assert found.error_kind == "quota"
     chain = settings.llm.video_chain
     assert len(chain) == 4
@@ -251,7 +256,7 @@ def test_an_image_only_provider_in_the_chain_is_skipped(video, monkeypatch):
     found = check_clone(video)
 
     assert found.verdict is None
-    assert found.error == NO_ANSWER
+    assert found.error == clone_links_constants().no_answer
     assert found.error_kind == "quota"
     assert "groq: reads no video, skipped" in found.error_detail
     assert fake_groq().requests == []
@@ -266,7 +271,10 @@ def test_a_chain_of_image_only_providers_is_a_setup_error(video, monkeypatch):
     found = check_clone(video)
 
     assert found.verdict is None
-    assert (found.error, found.error_kind) == (NO_MODEL, "setup")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().no_model,
+        "setup",
+    )
     assert fake_groq().requests == []
     assert fake_gemini().requests == []
 
@@ -279,7 +287,10 @@ def test_no_key_is_a_setup_error_logged_as_one(video, monkeypatch, caplog):
         found = check_clone(video)
 
     assert found.verdict is None
-    assert (found.error, found.error_kind) == (NO_ANSWER, "setup")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().no_answer,
+        "setup",
+    )
     assert found.error_detail.count("no API key configured") == 2
     assert fake_gemini().requests == []
     hops = [r for r in caplog.records if "not set up" in r.getMessage()]
@@ -328,7 +339,10 @@ def test_no_model_is_asked_once_the_deadline_passed(video, monkeypatch):
 
     assert fake.models == ["gemini-3.6-flash"]
     assert found.verdict is None
-    assert (found.error, found.error_kind) == (TOO_LONG, "quota")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().too_long,
+        "quota",
+    )
     assert "The model is overloaded" in found.error_detail
     assert found.llm_s > settings.clone_ai_check.deadline_s
     assert (found.provider, found.model) == ("Gemini", "gemini-3.6-flash")
@@ -340,7 +354,10 @@ def test_a_deadline_gone_before_the_sheet_was_ready_asks_nobody(video, monkeypat
 
     found = check_clone(video)
 
-    assert (found.error, found.error_kind) == (TOO_LONG, "quota")
+    assert (found.error, found.error_kind) == (
+        clone_links_constants().too_long,
+        "quota",
+    )
     assert fake_gemini().requests == []
 
 

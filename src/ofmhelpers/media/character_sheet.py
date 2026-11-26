@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -14,7 +16,8 @@ def combine_side_by_side(sources: list[Path], dest: Path) -> Path:
         p
         if p.height == height
         else p.resize(
-            (round(p.width * height / p.height), height), Image.Resampling.LANCZOS
+            (round(p.width * height / p.height), height),
+            Image.Resampling.LANCZOS,
         )
         for p in panels
     ]

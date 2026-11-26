@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import inspect
 
 import pytest
@@ -69,8 +71,8 @@ class _Reruns(list):
 def reruns(monkeypatch):
     calls = _Reruns()
 
-    def enqueue_to(queue, *args, job_timeout=None):
-        calls.append(args)
+    def enqueue_to(queue, fn, args, job_timeout=None):
+        calls.append((fn, *args))
         calls.queues.append(queue)
         calls.timeouts.append(job_timeout)
 
@@ -166,10 +168,13 @@ def test_an_ancient_request_expires_instead_of_being_checked_forever(status, rer
 
 def test_any_provider_is_recovered_the_same_way(status, reruns):
     job_id = _job(
-        provider="higgsfield", model="higgsfield:alibaba/wan-3.0/text-to-video"
+        provider="higgsfield",
+        model="higgsfield:alibaba/wan-3.0/text-to-video",
     )
     _remember(
-        job_id, provider="higgsfield", model="higgsfield:alibaba/wan-3.0/text-to-video"
+        job_id,
+        provider="higgsfield",
+        model="higgsfield:alibaba/wan-3.0/text-to-video",
     )
     status["answer"] = TaskState(state="done", urls=["https://hf/x.mp4"])
 
@@ -231,7 +236,9 @@ def test_a_job_cut_off_after_its_request_finished_is_resumed(status, reruns, act
 
 
 def test_a_cut_off_job_with_nothing_to_resume_fails_instead_of_spinning(
-    status, reruns, active
+    status,
+    reruns,
+    active,
 ):
     job_id = _job(status="running", task="viral_reels")
 
@@ -354,6 +361,11 @@ _LOCAL_JOBS = {
         },
     ),
     "reels_unlock": ({}, {"user_id": 7}),
+    "storage_scan": ({}, {"user_id": 7, "job_id": "JOB"}),
+    "storage_bin": (
+        {"part": "TRIALS", "folder_id": "F1"},
+        {"user_id": 7, "job_id": "JOB", "part": "TRIALS", "folder_id": "F1"},
+    ),
 }
 
 
@@ -380,7 +392,10 @@ def _seven() -> str:
 
 @pytest.mark.parametrize("task", sorted(_LOCAL_JOBS))
 def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
-    task, status, restarts, active
+    task,
+    status,
+    restarts,
+    active,
 ):
     params, kwargs = _LOCAL_JOBS[task]
     job_id = create_job(task, params, actor=_seven())
@@ -402,7 +417,10 @@ def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
 
 
 def test_outside_production_a_cut_off_local_job_is_left_as_copied(
-    status, restarts, active, monkeypatch
+    status,
+    restarts,
+    active,
+    monkeypatch,
 ):
     monkeypatch.delenv("OFM_RECOVERY_RESTARTS")
     params, _kwargs = _LOCAL_JOBS["download_media"]
@@ -418,7 +436,10 @@ def test_outside_production_a_cut_off_local_job_is_left_as_copied(
 
 
 def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
-    status, restarts, active, monkeypatch
+    status,
+    restarts,
+    active,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_UNIQIFY_ENCODE_TIMEOUT_S", "600")
     monkeypatch.setenv("OFM_EDIT_CUT_TIMEOUT_S", "300")
@@ -434,7 +455,7 @@ def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
             [args[2].__name__ for args in restarts],
             zip(restarts.queues, restarts.timeouts, strict=True),
             strict=True,
-        )
+        ),
     )
     assert by_function == {
         "run_repurpose": (QueueName.MEDIA, 2400),
@@ -470,7 +491,9 @@ def test_a_second_restart_runs_with_the_same_arguments(status, restarts, active)
 
 
 def test_a_local_job_whose_params_cannot_be_read_fails_as_interrupted(
-    status, restarts, active
+    status,
+    restarts,
+    active,
 ):
     job_id = create_job("download_media", {"links": "an old shape"}, actor=_seven())
 
@@ -506,13 +529,17 @@ def test_without_a_view_of_the_queue_nothing_is_cut_off(status, reruns, monkeypa
 
 
 def test_a_job_queued_while_a_slow_sweep_settles_is_not_cut_off(
-    status, reruns, monkeypatch
+    status,
+    reruns,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
     queued = _job(status="running", task="clone_links")
     views = [set()]
     monkeypatch.setattr(
-        recovery, "active_job_ids", lambda: views.pop(0) if views else {queued}
+        recovery,
+        "active_job_ids",
+        lambda: views.pop(0) if views else {queued},
     )
 
     assert recovery.run_recovery_once() == {}
@@ -610,7 +637,9 @@ def test_a_job_with_a_piece_still_generating_waits(status, reruns, monkeypatch):
 
 
 def test_a_job_with_a_refused_piece_fails_and_forgets_every_piece(
-    status, reruns, monkeypatch
+    status,
+    reruns,
+    monkeypatch,
 ):
     job_id = _job(task="clone", model="kie:wan/3-0-video")
     for part in range(3):
@@ -665,7 +694,7 @@ def test_a_job_with_a_piece_whose_answer_was_lost_is_not_run_again_yet(status, r
             model=MODEL,
             task_id="",
             api_key="key-1",
-        )
+        ),
     )
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
 

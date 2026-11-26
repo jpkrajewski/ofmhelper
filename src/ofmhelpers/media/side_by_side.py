@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 from ofmhelpers.media import ffmpeg
@@ -10,14 +12,19 @@ def _half(index: int, height: int, label: str) -> str:
 
 
 def side_by_side(
-    left: Path, right: Path, dest: Path, *, height: int, timeout_s: int
+    left: Path,
+    right: Path,
+    dest: Path,
+    *,
+    height: int,
+    timeout_s: int,
 ) -> None:
     joined = ";".join(
         [
             _half(0, height, "l"),
             _half(1, height, "r"),
             "[l][r]hstack=inputs=2:shortest=1[v]",
-        ]
+        ],
     )
     ffmpeg.run(
         [

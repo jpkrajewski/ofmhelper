@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 
 import pytest
@@ -11,7 +13,7 @@ APP_CSS = [
 ]
 LANDING_CSS = CSS_DIR / "landing.css"
 PALETTE = re.compile(
-    r"^\s*--(paper|wash|line|grey|ink|accent-hue|accent-hue-2|red):\s*(#[0-9a-fA-F]{6});"
+    r"^\s*--(paper|wash|line|grey|ink|accent-hue|accent-hue-2|red):\s*(#[0-9a-fA-F]{6});",
 )
 COLOUR = re.compile(
     r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\("

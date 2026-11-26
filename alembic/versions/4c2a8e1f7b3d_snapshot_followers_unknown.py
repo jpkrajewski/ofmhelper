@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -18,13 +20,13 @@ def upgrade() -> None:
     op.execute(
         "UPDATE tracked_account_snapshots s SET followers = NULL"
         " FROM tracked_accounts a WHERE a.id = s.account_id"
-        " AND a.platform = 'snapchat' AND s.followers = 0"
+        " AND a.platform = 'snapchat' AND s.followers = 0",
     )
 
 
 def downgrade() -> None:
     op.execute(
-        "UPDATE tracked_account_snapshots SET followers = 0 WHERE followers IS NULL"
+        "UPDATE tracked_account_snapshots SET followers = 0 WHERE followers IS NULL",
     )
     op.alter_column(
         "tracked_account_snapshots",

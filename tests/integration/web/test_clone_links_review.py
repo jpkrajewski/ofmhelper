@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 lazy from pathlib import Path
 
@@ -27,10 +29,12 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links import review
 from ofmhelpers.features.clone_links.ai_check import unanswered
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.drive.space import DRIVE_FULL, drive_space
-from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.features.clone_links.constants import CloneLinksTask
+from ofmhelpers.features.storage import folders as drive_folders
+from ofmhelpers.features.storage.constants import storage_constants
+from ofmhelpers.features.storage.space import drive_space
 from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
+from ofmhelpers.integrations.storage.gdrive.fake import fake_drive
 from ofmhelpers.media import fake_media
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
@@ -55,7 +59,9 @@ def _video(tmp_path: Path, name: str = "clone.mp4") -> Path:
 
 def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> str:
     job_id = create_job(
-        review.RUN_TASK, {"link": REEL, "mirror": mirror}, actor=str(_owner(email))
+        CloneLinksTask.RUN,
+        {"link": REEL, "mirror": mirror},
+        actor=str(_owner(email)),
     )
     entry = (
         ResultFile(name=video.name, path=str(video))
@@ -63,7 +69,9 @@ def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> 
         else ResultFile(name="clone.mp4", path=None, remote_url="https://kie.example/c")
     )
     jobs_repository().update_status(
-        job_id, "done", result=[entry.model_dump(exclude_unset=True)]
+        job_id,
+        "done",
+        result=[entry.model_dump(exclude_unset=True)],
     )
     return job_id
 
@@ -85,7 +93,7 @@ def _set(review_id: int, **values) -> None:
         s.execute(
             update(CloneFromLinkRow)
             .where(CloneFromLinkRow.id == review_id)
-            .values(**values)
+            .values(**values),
         )
 
 
@@ -125,7 +133,7 @@ def test_a_review_leaves_a_job_row_naming_the_clone_it_checked(tmp_path):
 
     job_id, _video = _reviewed(tmp_path)
 
-    [row] = [job for job in history() if job.task == "clone_links_review"]
+    [row] = [job for job in history() if job.task == CloneLinksTask.REVIEW]
     assert row.status == "done"
     assert (row.params["clone_job"], row.params["file_index"]) == (job_id, 0)
     assert row.params["review_id"] == _row(job_id).id
@@ -148,7 +156,9 @@ def test_a_glitchy_video_lands_in_trial_reels_with_its_glitches(tmp_path):
 
 
 def test_a_check_that_raises_still_sends_the_video_to_trial_reels(
-    tmp_path, monkeypatch, capfire: CaptureLogfire
+    tmp_path,
+    monkeypatch,
+    capfire: CaptureLogfire,
 ):
     drive = fake_drive()
     ann = client(ANN)
@@ -183,7 +193,9 @@ def test_a_check_that_raises_still_sends_the_video_to_trial_reels(
 
 
 def test_a_used_up_ai_says_so_on_the_card_and_is_an_error_span(
-    tmp_path, monkeypatch, capfire: CaptureLogfire
+    tmp_path,
+    monkeypatch,
+    capfire: CaptureLogfire,
 ):
     ann = client(ANN)
     raw = "429 RESOURCE_EXHAUSTED: You exceeded your current quota"
@@ -191,7 +203,10 @@ def test_a_used_up_ai_says_so_on_the_card_and_is_an_error_span(
         review,
         "check_clone",
         lambda video, *, mirrored=False: unanswered(
-            video, "No AI model answered", "quota", detail=raw
+            video,
+            "No AI model answered",
+            "quota",
+            detail=raw,
         ),
     )
 
@@ -291,7 +306,8 @@ def test_a_result_kept_only_by_the_provider_gets_a_failed_review_saying_so(tmp_p
 
 
 def test_a_queue_that_refuses_the_review_fails_it_with_fixed_words(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     ann = client(ANN)
     video = _video(tmp_path)
@@ -314,7 +330,8 @@ def test_a_queue_that_refuses_the_review_fails_it_with_fixed_words(
 
 
 def test_start_reviews_never_raises_even_when_nothing_can_be_saved(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     client(ANN)
     video = _video(tmp_path)
@@ -350,7 +367,8 @@ def test_a_review_is_claimed_once(tmp_path):
 
 
 def test_a_run_whose_row_was_taken_over_writes_and_uploads_nothing(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     drive = fake_drive()
     client(ANN)
@@ -468,14 +486,14 @@ def test_a_failed_upload_is_tried_again_without_a_second_check(tmp_path):
     drive = fake_drive()
     ann = client(ANN)
     video = _video(tmp_path)
-    drive.fail_on(download_name(video.name))
+    drive.fail_on([download_name(video.name)])
     job_id = _done_run(video)
     review.start_reviews(job_id, _owner(), [str(video)])
     failed = _row(job_id)
     assert failed.status == "failed"
     assert failed.folder_name == GOOD_REELS
     assert "fake outage" not in _card(ann, job_id)["html"]
-    drive.fail_on()
+    drive.fail_on([])
     asked = len(fake_gemini().requests)
 
     outcomes = review.resume_reviews()
@@ -493,7 +511,7 @@ def test_a_failed_upload_is_tried_only_while_attempts_are_left(tmp_path):
     drive = fake_drive()
     client(ANN)
     video = _video(tmp_path)
-    drive.fail_on(download_name(video.name))
+    drive.fail_on([download_name(video.name)])
     job_id = _done_run(video)
     review.start_reviews(job_id, _owner(), [str(video)])
 
@@ -513,7 +531,7 @@ def test_a_full_drive_is_tried_again_only_once_it_has_room(tmp_path):
     video = _video(tmp_path)
     job_id = _done_run(video)
     review.start_reviews(job_id, _owner(), [str(video)])
-    assert _row(job_id).error == DRIVE_FULL
+    assert _row(job_id).error == storage_constants().drive_full
 
     assert review.resume_reviews()[f"review {_row(job_id).id}"] == "waiting for Drive"
     assert _row(job_id).attempts == 1
@@ -534,7 +552,9 @@ def test_an_upload_cut_off_after_it_reached_drive_is_adopted_not_doubled(tmp_pat
     claimed = store.claim(review_id)
     assert store.checked(claimed, None, GOOD_REELS)
     folder_id = drive_folders.review_folder(
-        users.refresh_token(_owner()), _owner(), GOOD_REELS
+        users.refresh_token(_owner()),
+        _owner(),
+        GOOD_REELS,
     ).folder_id
     made = drive.add_file(folder_id, download_name(video.name), "video/mp4")
     _set(review_id, started_at=_long_ago())

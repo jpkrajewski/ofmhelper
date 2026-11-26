@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -18,7 +20,8 @@ class Submitted(ApplicationForm):
 
 def _tokens() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(
-        settings.session.session_secret, salt="ofm-apply-form"
+        settings.session.session_secret,
+        salt="ofm-apply-form",
     )
 
 
@@ -39,7 +42,7 @@ def _token_problem(token: str) -> str | None:
 
 def submit(posted: Submitted, sender: str) -> None:
     form = ApplicationForm.model_validate(
-        posted.model_dump(exclude={"form_token", "website"})
+        posted.model_dump(exclude={"form_token", "website"}),
     )
     reason = (
         "honeypot filled"

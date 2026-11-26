@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.integrations.llm.chat_completions_fake import FakeChatCompletions
@@ -10,7 +12,7 @@ MODELS = frozenset(
         "meta-models/muse-spark-open",
         "openai/gpt-oss-20b",
         "openai/gpt-oss-120b",
-    }
+    },
 )
 
 

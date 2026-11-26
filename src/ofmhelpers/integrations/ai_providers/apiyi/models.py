@@ -1,7 +1,16 @@
-import re
-from typing import Annotated, Any, NoReturn
+# Copyright (C) 2026 jpkrajewski
 
-from pydantic import AliasChoices, BaseModel, BeforeValidator, Field, model_validator
+import re
+from typing import Annotated, NoReturn
+
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    JsonValue,
+    model_validator,
+)
 
 from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
@@ -18,7 +27,7 @@ lazy from ofmhelpers.integrations.ai_providers.apiyi.keys import group_of
 PROVIDER = "APIYI"
 
 PENDING = frozenset(
-    {"submitted", "in_progress", "queued", "pending", "running", "processing"}
+    {"submitted", "in_progress", "queued", "pending", "running", "processing"},
 )
 COMPLETED = frozenset({"completed", "succeeded", "success"})
 FAILED = frozenset({"failed", "canceled", "cancelled", "unknown"})
@@ -105,7 +114,10 @@ def _no_channel(message: str, said: str) -> NoReturn:
 
 
 def raise_for(
-    status: int, text: str, *, forbidden_is_refusal: bool = False
+    status: int,
+    text: str,
+    *,
+    forbidden_is_refusal: bool = False,
 ) -> NoReturn:
     read = _read_error(status, text)
     message, said = read.message, read.said
@@ -144,7 +156,7 @@ def raise_for_read(status: int, text: str) -> NoReturn:
 class Unwrapped(Lenient):
     @model_validator(mode="before")
     @classmethod
-    def _inner(cls, data: Any) -> Any:
+    def _inner(cls, data: JsonValue) -> JsonValue:
         if (
             isinstance(data, dict)
             and "status" not in data
@@ -163,7 +175,8 @@ class ApiyiSubmit(Unwrapped):
     output: ApiyiSubmitOutput | None = None
     request_id: Text = ""
     top_task_id: Text = Field(
-        default="", validation_alias=AliasChoices("task_id", "id")
+        default="",
+        validation_alias=AliasChoices("task_id", "id"),
     )
 
     @property

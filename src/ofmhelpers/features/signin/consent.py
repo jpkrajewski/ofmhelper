@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 
 from pydantic import BaseModel
@@ -45,7 +47,10 @@ def redirect_uri(provider: Provider, site: str) -> str:
 
 
 def begin(
-    provider: Provider, site: str, next_url: str, link_user_id: int | None
+    provider: Provider,
+    site: str,
+    next_url: str,
+    link_user_id: int | None,
 ) -> ConsentStart:
     pkce = pkce_pair()
     carried = SignInState(
@@ -59,7 +64,9 @@ def begin(
         keep_verifier(carried.state, pkce.verifier)
     except RedisError as exc:
         logger.warning(
-            "sign-in: verifier not kept for %s", provider.name, exc_info=True
+            "sign-in: verifier not kept for %s",
+            provider.name,
+            exc_info=True,
         )
         msg = "Sign-in is not available right now. Try again in a minute."
         raise UnavailableError(msg) from exc
@@ -88,6 +95,6 @@ def fake_callback(cookie: str, provider: str, state: str, email: str) -> str:
             email=email.strip().lower(),
             nonce=carried.nonce,
             refresh_token=carried.link_user_id is not None,
-        )
+        ),
     )
     return f"/auth/{provider}/callback?code={code}&state={state}"

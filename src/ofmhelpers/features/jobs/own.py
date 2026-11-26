@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.jobs.store import Readers, get_job, hide_job
 from ofmhelpers.features.jobs.schema import JobVisibility
 from ofmhelpers.features.refusals import NotFoundError
@@ -17,7 +19,7 @@ def own(job_id: str, actors: Readers) -> Job:
     return job
 
 
-def set_hidden(job_id: str, actors: Readers, hidden: bool) -> JobVisibility:
+def set_hidden(job_id: str, actors: Readers, hidden: bool) -> JobVisibility:  # noqa: FBT001
     job = hide_job(job_id, actors, hidden)
     if job is None:
         raise NotFoundError(NO_JOB)

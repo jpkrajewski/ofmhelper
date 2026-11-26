@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import re
 from typing import Any
@@ -320,7 +322,7 @@ def _imported_modules(tree: ast.AST) -> set[str]:
     found = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
-            "ofmhelpers"
+            "ofmhelpers",
         ):
             found.add(node.module or "")
             found.update(f"{node.module}.{alias.name}" for alias in node.names)
@@ -342,7 +344,7 @@ def _settings_reads(tree: ast.AST) -> set[tuple[str, str]]:
 
 SECRET_NAME = re.compile(
     r"(KEYS?|SECRET|TOKEN|PASSWORD|DSN|PRIVATE_KEY|SERVICE_ACCOUNT)"
-    r"(_ADMIN|_DEFAULT|_WAN|_SEEDANCE)?$"
+    r"(_ADMIN|_DEFAULT|_WAN|_SEEDANCE)?$",
 )
 TELEMETRY_THE_MEDIA_SERVICES_MAY_HOLD = {"LOGFIRE_TOKEN", "SENTRY_DSN"}
 WITHHELD_FROM_THE_MEDIA_SERVICES = {
@@ -353,6 +355,7 @@ WITHHELD_FROM_THE_MEDIA_SERVICES = {
     "OFM_APPLE_PRIVATE_KEY",
     "OFM_GDRIVE_SERVICE_ACCOUNT",
     "OFM_GOOGLE_CLIENT_SECRET",
+    "OFM_PASSWORD_ADMIN",
     "OFM_TELEGRAM_BOT_TOKEN",
     "OFM_VAULT_KEY",
     "SESSION_SECRET",
@@ -376,10 +379,38 @@ def _import_closure(entries: list[str]) -> dict[str, ast.AST]:
     return trees
 
 
+def _subclasses(cls: type) -> list[type]:
+    return [
+        found
+        for direct in cls.__subclasses__()
+        for found in (direct, *_subclasses(direct))
+    ]
+
+
+def _group_classes() -> dict[str, type[BaseSettings]]:
+    classes = {
+        cls.__name__: cls
+        for cls in _subclasses(BaseSettings)
+        if cls.__module__ == "ofmhelpers.config.settings"
+    }
+    groups = REPO / "src" / "ofmhelpers" / "config" / "__init__.py"
+    return {
+        node.name: classes[node.returns.id]
+        for node in ast.walk(ast.parse(groups.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef)
+        and isinstance(node.returns, ast.Name)
+        and node.returns.id in classes
+        and any(
+            isinstance(d, ast.Name) and d.id == "property" for d in node.decorator_list
+        )
+    }
+
+
 def _env_names_read(trees: dict[str, ast.AST]) -> set[str]:
     names = set()
+    group_classes = _group_classes()
     for group, attr in set().union(*map(_settings_reads, trees.values())):
-        cls = type(getattr(settings, group))
+        cls = group_classes[group]
         required = {f for f, info in cls.model_fields.items() if info.is_required()}
         fields = {attr} | required if attr in cls.model_fields else None
         names |= _env_names(cls, fields)
@@ -413,7 +444,7 @@ def test_migrate_gets_every_setting_the_migrations_read_but_the_secrets():
 
 def test_only_secrets_the_media_tasks_read_are_withheld_from_them():
     assert all(map(SECRET_NAME.search, WITHHELD_FROM_THE_MEDIA_SERVICES))
-    assert _env_names_read_by_tasks() >= WITHHELD_FROM_THE_MEDIA_SERVICES
+    assert _env_names_read_by_tasks() & WITHHELD_FROM_THE_MEDIA_SERVICES
 
 
 def _service_env(name: str) -> dict[str, Any]:

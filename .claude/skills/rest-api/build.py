@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 """Fetch Zalando's RESTful API Guidelines and keep the MUST rules, one file each.
 
 Writes `must.md` (id | chapter | title) and `rules/<id>.md` (the rule's text).
@@ -40,11 +42,12 @@ def main() -> None:
                 match.end() : following.start() if following else len(text)
             ].strip()
             (rules / f"{number}.md").write_text(
-                f"# [{number}] {level} {title}\n\n{body}\n", "utf-8"
+                f"# [{number}] {level} {title}\n\n{body}\n",
+                "utf-8",
             )
             if level == "MUST":
                 rows.append(
-                    f"{number} | {chapter[1] if chapter else entry['name']} | {title}"
+                    f"{number} | {chapter[1] if chapter else entry['name']} | {title}",
                 )
     (HERE / "must.md").write_text("\n".join(rows) + "\n", "utf-8")
     print(f"{len(rows)} MUST rules -> {rules}")

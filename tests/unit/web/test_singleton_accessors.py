@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db import cached_repository as cache_module
 from ofmhelpers.db.applications import store as applications
 from ofmhelpers.db.jobs import store as jobs

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST, Reel
 
 

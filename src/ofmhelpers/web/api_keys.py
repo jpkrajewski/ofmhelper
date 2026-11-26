@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from types import MappingProxyType
 
 lazy from starlette.requests import Request

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in_admin, sign_in_agency
@@ -5,9 +7,12 @@ from signin import make_user, sign_in_admin, sign_in_agency
 from ofmhelpers.db.drive_folders import store
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.drive import va_folders
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.storage.client import storage_of
+from ofmhelpers.features.storage.constants import StorageConstants
+from ofmhelpers.features.storage.models import StorageAccess
+from ofmhelpers.features.storage.service import StorageService
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -47,7 +52,7 @@ def _add_va(name: str, owner_id: int, email: str = "va@example.com") -> int:
 def test_a_new_va_gets_a_folder_named_after_them_in_the_owners_root(drive):
     va_id = _add_va("Noelyn", users.agency_id())
 
-    (folder,) = va_folders.of_owner(users.agency_id())
+    (folder,) = storage_of(users.agency_id(), interactive=False).va_folders.of_owner()
     assert (folder.user_id, folder.name, folder.root_folder_id) == (
         va_id,
         "Noelyn",
@@ -60,9 +65,9 @@ def test_the_sweep_makes_a_missing_folder_once_then_leaves_drive_alone(drive):
     va = make_user("va@example.com", Role.VA)
     users.set_owner(va.id, users.agency_id())
 
-    first = drive_folders.sync()
+    first = storage_jobs.sync()
     drive.clear_calls()
-    drive_folders.sync()
+    storage_jobs.sync()
 
     assert first.created == ["va@example.com"]
     assert drive.named("va@example.com", ROOT) != []
@@ -74,7 +79,7 @@ def test_a_folder_made_by_hand_is_adopted(drive):
 
     _add_va("Noelyn", users.agency_id())
 
-    (folder,) = va_folders.of_owner(users.agency_id())
+    (folder,) = storage_of(users.agency_id(), interactive=False).va_folders.of_owner()
     assert folder.folder_id == by_hand
     assert drive.named("Noelyn", ROOT) == [by_hand]
 
@@ -83,21 +88,27 @@ def test_an_owner_without_google_drive_gets_nothing_and_no_error(drive):
     owner = make_user("owner@example.com")
 
     _add_va("Noelyn", owner.id)
-    report = drive_folders.sync(owner.id)
+    report = storage_jobs.sync(owner.id)
 
-    assert va_folders.of_owner(owner.id) == []
+    assert storage_of(owner.id, interactive=False).va_folders.of_owner() == []
     assert report.failed == []
     assert report.not_connected == ["owner@example.com"]
 
 
 def test_a_renamed_va_renames_their_folder(drive):
     va_id = _add_va("Noelyn", users.agency_id())
-    (old,) = va_folders.of_owner(users.agency_id())
+    (old,) = storage_of(users.agency_id(), interactive=False).va_folders.of_owner()
     va = users.get_user(va_id)
     assert va is not None
     renamed = va.model_copy(update={"name": "Noelyn R."})
 
-    folder = va_folders.ensure(drive, ROOT, renamed, old)
+    access = StorageAccess(
+        owner_id=users.agency_id(),
+        client=drive,
+        constants=StorageConstants(),
+    )
+    vas = StorageService.compose(access).va_folders
+    folder = vas.ensure(ROOT, renamed, old)
 
     assert folder.folder_id == old.folder_id
     assert drive.named("Noelyn R.", ROOT) == [old.folder_id]

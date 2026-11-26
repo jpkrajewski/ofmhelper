@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 from functools import lru_cache
 from types import MappingProxyType

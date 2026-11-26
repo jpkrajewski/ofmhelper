@@ -1,19 +1,15 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel, ConfigDict, SkipValidation, ValidationError
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.repository import OwnsDataError
 from ofmhelpers.db.users.schema import Role, User, UserForm
-from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
+from ofmhelpers.features.storage import jobs as storage_jobs
 from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import Provider, configured
-from ofmhelpers.log import get_logger
-
-logger = get_logger(__name__)
 
 NO_USER = "No such user"
 
@@ -103,18 +99,12 @@ def _va_signs_in(va: User) -> str:
 
 
 def _make_va_folder(va: User) -> None:
-    if va.owner_id is None or not drive_folders.enabled():
+    if va.owner_id is None or not storage_jobs.enabled():
         return
-    owner = va.owner_id
-    job_id = create_job(drive_folders.SYNC_TASK, {"owner": owner}, actor=str(owner))
-    try:
-        enqueue(run_job, job_id, drive_folders.sync, {"owner": owner})
-    except Exception:
-        logger.exception("queueing the Drive sync for VA %s failed", va.id)
-        fail_job(job_id, "Could not queue the Drive sync")
+    storage_jobs.queue_sync(va.owner_id)
 
 
-def add(
+def add(  # noqa: PLR0911, PLR0913, PLR0917
     email: str,
     role: Role,
     name: str,
@@ -183,7 +173,7 @@ def set_owner(user: User, owner_id: int | None) -> None:
         _make_va_folder(moved)
 
 
-def set_active(user: User, active: bool) -> None:
+def set_active(user: User, active: bool) -> None:  # noqa: FBT001
     users.set_active(user.id, active=active)
 
 

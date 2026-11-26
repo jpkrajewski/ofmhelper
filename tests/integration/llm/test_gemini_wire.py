@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 import time
 lazy from pathlib import Path
@@ -84,7 +86,7 @@ def test_small_media_goes_inside_the_request_with_the_schema(waits, media):
     fake_gemini().answer_next({"ok": False, "problems": ["hands melt"]})
 
     found = get_llm(LLMUse.VIDEO).ask(
-        Prompt.of("Subject:", image, "Video:", video, system="You check videos."),
+        Prompt.of(["Subject:", image, "Video:", video], system="You check videos."),
         Verdict,
     )
 
@@ -101,13 +103,13 @@ def test_small_media_goes_inside_the_request_with_the_schema(waits, media):
 
 
 def test_a_temperature_the_prompt_names_is_sent(waits):
-    get_llm(LLMUse.VIDEO).ask(Prompt.of("Check", temperature=0.5), Verdict)
+    get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"], temperature=0.5), Verdict)
     [body] = fake_gemini().requests
     assert body["generationConfig"]["temperature"] == 0.5
 
 
 def test_the_answer_says_the_tokens_google_counted(waits):
-    found = get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict)
+    found = get_llm(LLMUse.VIDEO).answered(Prompt.of(["Check"]), Verdict)
     assert (found.input_tokens, found.thinking_tokens, found.output_tokens) == (
         USAGE["promptTokenCount"],
         USAGE["thoughtsTokenCount"],
@@ -118,7 +120,7 @@ def test_the_answer_says_the_tokens_google_counted(waits):
 def test_an_answer_asked_again_counts_the_tokens_of_both(waits):
     fake_gemini().answer_next({"verdict": "fine"})
 
-    found = get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict)
+    found = get_llm(LLMUse.VIDEO).answered(Prompt.of(["Check"]), Verdict)
 
     assert found.attempts == 2
     assert (found.input_tokens, found.thinking_tokens, found.output_tokens) == (
@@ -134,7 +136,7 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(clock):
     deadline = clock.monotonic() + 30
 
     with pytest.raises(LLMUnavailableError) as err:
-        get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict, deadline=deadline)
+        get_llm(LLMUse.VIDEO).answered(Prompt.of(["Check"]), Verdict, deadline=deadline)
 
     assert str(err.value) == "Gemini took too long"
     assert clock.slept == [5.0, 10.0]
@@ -149,7 +151,9 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(clock):
 def test_a_deadline_already_passed_sends_nothing(clock):
     with pytest.raises(LLMUnavailableError, match="Gemini took too long"):
         get_llm(LLMUse.VIDEO).answered(
-            Prompt.of("Check"), Verdict, deadline=clock.monotonic() - 1
+            Prompt.of(["Check"]),
+            Verdict,
+            deadline=clock.monotonic() - 1,
         )
     assert fake_gemini().requests == []
 
@@ -159,7 +163,7 @@ def test_a_big_file_is_uploaded_waited_on_and_deleted_after(waits, media, monkey
     fake_gemini().polls_until_active = 2
     _, video = media
 
-    found = get_llm(LLMUse.VIDEO).ask(Prompt.of("Check", video), Verdict)
+    found = get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check", video]), Verdict)
 
     assert found == Verdict(ok=True, problems=[])
     [body] = fake_gemini().requests
@@ -175,7 +179,7 @@ def test_a_file_google_cannot_process_is_an_input_error(waits, media, monkeypatc
     monkeypatch.setenv("OFM_LLM_INLINE_MAX_BYTES", "100")
     fake_gemini().fail_processing()
     with pytest.raises(LLMInputError, match="Gemini could not process clip.mp4"):
-        get_llm(LLMUse.VIDEO).ask(Prompt.of("Check", media[1]), Verdict)
+        get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check", media[1]]), Verdict)
     assert fake_gemini().requests == []
     assert fake_gemini().files == {}
 
@@ -184,7 +188,7 @@ def test_a_rate_limit_waits_googles_hint_then_answers(waits):
     fake_gemini().fail_next(429, "RESOURCE_EXHAUSTED", "Quota exceeded", 7)
     fake_gemini().fail_next(503, "UNAVAILABLE", "The model is overloaded")
 
-    found = get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+    found = get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"]), Verdict)
 
     assert found.ok is True
     assert waits == [7.0, 10.0]
@@ -195,7 +199,7 @@ def test_a_hint_longer_than_the_longest_wait_fails_at_once(waits, monkeypatch):
     monkeypatch.setenv("OFM_LLM_RETRY_MAX_WAIT_S", "30")
     fake_gemini().fail_next(429, "RESOURCE_EXHAUSTED", "Daily quota", 3600)
     with pytest.raises(LLMUnavailableError, match="rate limited or out of free quota"):
-        get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"]), Verdict)
     assert waits == []
     assert len(fake_gemini().requests) == 1
 
@@ -206,7 +210,7 @@ def test_an_outage_that_outlasts_the_retries_is_unavailable(waits, monkeypatch):
         fake_gemini().fail_next(500, "INTERNAL", "Internal error")
 
     with pytest.raises(LLMUnavailableError, match=r"Gemini is unavailable \(500\)"):
-        get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"]), Verdict)
 
     assert len(fake_gemini().requests) == 3
     assert waits == [5.0, 10.0]
@@ -214,32 +218,32 @@ def test_an_outage_that_outlasts_the_retries_is_unavailable(waits, monkeypatch):
 
 def test_a_wrong_key_is_never_retried(waits):
     with pytest.raises(LLMAuthError, match="Gemini: wrong API key"):
-        get_llm(LLMUse.VIDEO, api_key="not-the-key").ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO, api_key="not-the-key").ask(Prompt.of(["Check"]), Verdict)
     assert waits == []
 
 
 def test_an_unknown_model_is_a_setup_error(waits):
     with pytest.raises(LLMConfigError, match="gemini-0-nope is not found"):
-        get_llm(LLMUse.VIDEO, model="gemini-0-nope").ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO, model="gemini-0-nope").ask(Prompt.of(["Check"]), Verdict)
 
 
 def test_a_rejected_request_is_an_input_error(waits):
     fake_gemini().fail_next(400, "INVALID_ARGUMENT", "Unsupported MIME type")
     with pytest.raises(LLMInputError, match="rejected the request: Unsupported MIME"):
-        get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"]), Verdict)
 
 
 def test_a_safety_block_is_a_refusal(waits):
     fake_gemini().refuse_next()
     with pytest.raises(LLMRefusedError, match=r"refused the prompt \(PROHIBITED"):
-        get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"]), Verdict)
 
 
 def test_an_answer_in_another_shape_twice_is_an_output_error(waits):
     fake_gemini().answer_next({"verdict": "fine"})
     fake_gemini().answer_next({"verdict": "fine"})
     with pytest.raises(LLMOutputError, match="Gemini answered in the wrong shape"):
-        get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+        get_llm(LLMUse.VIDEO).ask(Prompt.of(["Check"]), Verdict)
     assert len(fake_gemini().requests) == 2
 
 
@@ -248,5 +252,8 @@ def test_media_a_provider_does_not_read_is_refused_before_sending(waits, media):
         media = frozenset({MediaKind.AUDIO})
 
     with pytest.raises(LLMInputError, match="Gemini does not read image, video"):
-        TextOnly(FAKE_KEY, "gemini-3.8-flash").ask(Prompt.of("Check", *media), Verdict)
+        TextOnly(FAKE_KEY, "gemini-3.8-flash").ask(
+            Prompt.of(["Check", *media]),
+            Verdict,
+        )
     assert fake_gemini().requests == []

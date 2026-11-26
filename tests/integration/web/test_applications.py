@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
@@ -52,8 +54,7 @@ def test_anonymous_submit_stores_every_field():
     assert r.headers["location"] == "/?applied=1"
 
     stored = applications_store.list_applications()[0]
-    for key, value in FORM.items():
-        assert getattr(stored, key) == value
+    assert stored.model_dump(include=set(FORM)) == FORM
 
 
 def test_thank_you_modal_only_shows_after_a_submission():
@@ -146,7 +147,7 @@ def test_crm_page_is_admin_only(va_client):
 
 def test_crm_page_lists_a_lead_stored_before_the_contact_rule(client):
     ApplicationRepository().add(
-        {"first_name": "Old", "last_name": "Lead", "email": "old@example.com"}
+        {"first_name": "Old", "last_name": "Lead", "email": "old@example.com"},
     )
 
     r = client.get("/applications")
@@ -175,7 +176,9 @@ def _stored() -> int:
 def test_a_bot_is_thanked_and_nothing_is_stored(changes, caplog):
     with caplog.at_level("WARNING", logger="ofmhelpers.web.routers.apply"):
         r = TestClient(app).post(
-            "/apply", data=_form(**changes), follow_redirects=False
+            "/apply",
+            data=_form(**changes),
+            follow_redirects=False,
         )
     assert (r.status_code, r.headers["location"]) == (303, "/?applied=1")
     assert _stored() == 0

@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -31,7 +33,7 @@ def upgrade() -> None:
                coalesce(currency, 'USD'), detail, at
         FROM chat_notifications
         WHERE kind = 'sale' AND amount_cents IS NOT NULL
-        """
+        """,
     )
     op.create_table(
         "report_runs",

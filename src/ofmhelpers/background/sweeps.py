@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import asyncio
 import signal
 from collections.abc import AsyncGenerator, Callable
@@ -21,7 +23,6 @@ from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
 from ofmhelpers.features.distribution import sweep as distribution_sweep
 from ofmhelpers.features.downloads import cleanup as downloads_cleanup
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
 from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.features.idempotency import service as idempotency
@@ -32,7 +33,8 @@ from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
-from ofmhelpers.features.trials import cleanup as trials_cleanup
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.features.trials import posted as trials_posted
 from ofmhelpers.features.users import idle as va_idle
 from ofmhelpers.features.viral import cleanup as viral_cleanup
 from ofmhelpers.log import configure_logging, get_logger
@@ -88,7 +90,7 @@ def sweeps() -> list[Sweep]:
             run=link_sync.queue_due_syncs,
             interval_s=lambda: settings.links.sync_check_interval_s,
             enabled=lambda: settings.links.syncing_in_background(
-                settings.infra.production
+                settings.infra.production,
             ),
         ),
         Sweep(
@@ -98,10 +100,10 @@ def sweeps() -> list[Sweep]:
         ),
         Sweep(
             name="drive",
-            run=drive_folders.sync,
+            run=storage_jobs.sync,
             interval_s=lambda: settings.gdrive.check_interval_s,
             enabled=lambda: (
-                drive_folders.enabled()
+                storage_jobs.enabled()
                 and settings.gdrive.sweeping(settings.infra.production)
             ),
         ),
@@ -150,9 +152,9 @@ def sweeps() -> list[Sweep]:
         ),
         Sweep(
             name="trials cleanup",
-            run=trials_cleanup.remove_old,
+            run=trials_posted.read_all,
             interval_s=lambda: settings.trials.sweep_s,
-            queue=QueueName.PREVIEWS,
+            queue=QueueName.DEFAULT,
         ),
         Sweep(
             name="downloads cleanup",

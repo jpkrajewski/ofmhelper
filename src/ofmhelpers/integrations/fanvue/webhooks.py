@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import hmac
 import json
@@ -50,9 +52,10 @@ def is_probe(raw: bytes, headers: Mapping[str, str]) -> bool:
     if _SIGNATURE in headers:
         return False
     try:
-        return json.loads(raw).get("type") == _PROBE
-    except ValueError, AttributeError:  # silent: not JSON: not a probe
+        body = json.loads(raw)
+    except ValueError:  # silent: not JSON: not a probe
         return False
+    return isinstance(body, Mapping) and body.get("type") == _PROBE
 
 
 class _Signature(BaseModel, frozen=True):
@@ -119,11 +122,11 @@ def _reaction_replies(event: ReactionEvent) -> list[ChatDelivery]:
         events=[ChatEvent(message_id=reply_id, from_fan=False, at=at, text="")],
     )
     return [
-        ChatDelivery(kind=DeliveryKind.MESSAGE, model_id=event.creator.uuid, read=read)
+        ChatDelivery(kind=DeliveryKind.MESSAGE, model_id=event.creator.uuid, read=read),
     ]
 
 
-def deliveries(raw: bytes) -> list[ChatDelivery]:
+def deliveries(raw: bytes) -> list[ChatDelivery]:  # noqa: PLR0911
     envelope = WebhookEnvelope.model_validate_json(raw)
     if envelope.type == REACTION:
         return _reaction_replies(ReactionEvent.model_validate(envelope.data))
@@ -132,8 +135,10 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
         read = _message_read(event, from_fan=envelope.type == MESSAGE_RECEIVED)
         return [
             ChatDelivery(
-                kind=DeliveryKind.MESSAGE, model_id=event.creator.uuid, read=read
-            )
+                kind=DeliveryKind.MESSAGE,
+                model_id=event.creator.uuid,
+                read=read,
+            ),
         ]
     if envelope.type == MESSAGE_DELETED:
         event = MessageEvent.model_validate(envelope.data)
@@ -142,14 +147,16 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
                 kind=DeliveryKind.DELETED,
                 model_id=event.creator.uuid,
                 message_id=event.uuid,
-            )
+            ),
         ]
     if envelope.type == MASS_SENT:
         mass = MassMessageEvent.model_validate(envelope.data)
         return [
             ChatDelivery(
-                kind=DeliveryKind.MASS, model_id=mass.creator.uuid, event_id=mass.uuid
-            )
+                kind=DeliveryKind.MASS,
+                model_id=mass.creator.uuid,
+                event_id=mass.uuid,
+            ),
         ]
     if envelope.type == SUBSCRIBED:
         subscription = SubscriptionEvent.model_validate(envelope.data)
@@ -158,7 +165,7 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
                 kind=DeliveryKind.SUBSCRIBED,
                 model_id=subscription.creator.uuid,
                 event_id=envelope.id,
-            )
+            ),
         ]
     if envelope.type == PAYMENT:
         payment = PaymentEvent.model_validate(envelope.data)
@@ -172,7 +179,7 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
                 currency=payment.currency,
                 detail="renewal" if renewal else payment.source,
                 at=payment.paid_at.timestamp() if payment.paid_at else None,
-            )
+            ),
         ]
     logger.info("fanvue %s delivery: nothing to do", envelope.type)
     return []

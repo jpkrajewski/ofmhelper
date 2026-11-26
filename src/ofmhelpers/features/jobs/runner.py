@@ -1,16 +1,18 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any
 lazy from collections.abc import Callable
 
 import logfire
 from opentelemetry import trace
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from redis.exceptions import RedisError
 from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.acting import Acting, Via, acting
 from ofmhelpers.cache import QueueName, enqueue_to, running_job
 from ofmhelpers.db.jobs import store
-from ofmhelpers.db.jobs.schema import GenerationRecord, JobMeta
+from ofmhelpers.db.jobs.schema import DownloadResult, GenerationRecord, JobMeta
 from ofmhelpers.db.users import store as users
 from ofmhelpers.features.account.keys import keep_used, key_tail
 from ofmhelpers.features.clone_pricing.cost import cost_of
@@ -25,6 +27,7 @@ from ofmhelpers.features.refusals import (
     ForbiddenError,
     NotFoundError,
     RefusedError,
+    ResumableError,
     TooSoonError,
     TryAgainError,
 )
@@ -53,8 +56,8 @@ class Requeued(BaseModel): ...
 
 
 def resumable(exc: BaseException) -> bool:
-    return isinstance(exc, (ProviderError, JobTimeoutException)) or bool(
-        getattr(exc, "keep_request", False)
+    return isinstance(exc, (ProviderError, JobTimeoutException)) or (
+        isinstance(exc, ResumableError) and exc.keep_request
     )
 
 
@@ -82,7 +85,7 @@ def refused(exc: BaseException) -> bool:
     )
 
 
-def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     header = store.task_of(job_id)
     if header is None:
         logger.warning("job %s no longer exists: not run", job_id)
@@ -90,7 +93,9 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
         return
     if _actor_deactivated(header.actor):
         logger.warning(
-            "job %s: actor %s was deactivated: not run", job_id, header.actor
+            "job %s: actor %s was deactivated: not run",
+            job_id,
+            header.actor,
         )
         store.record_failure(job_id, DEACTIVATED)
         tasks.forget(job_id)
@@ -152,11 +157,11 @@ def _actor_deactivated(actor: str | None) -> bool:
     return user is not None and not user.active
 
 
-def start_job(
+def start_job(  # noqa: PLR0913
     task: str,
-    params: dict,
+    params: dict[str, Any],
     run: Callable[..., Any],
-    kwargs: dict,
+    kwargs: dict[str, Any],
     *,
     actor: str | None,
     queue: QueueName | None = None,
@@ -167,18 +172,22 @@ def start_job(
     enqueue_to(
         queue or QueueName.DEFAULT,
         run_job,
-        job_id,
-        run,
-        {"job_id": job_id, **kwargs},
+        (job_id, run, {"job_id": job_id, **kwargs}),
         job_timeout=job_timeout,
         at_front=at_front,
     )
     return job_id
 
 
-def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None:
+def _record_outcome(
+    span: logfire.LogfireSpan,
+    job_id: str,
+    result: JsonValue | BaseModel | list[BaseModel],
+) -> None:
     items = result if isinstance(result, list) else []
-    failed = [item for item in items if getattr(item, "success", True) is False]
+    failed = [
+        item for item in items if isinstance(item, DownloadResult) and not item.success
+    ]
     if not failed:
         return
     span.set_attributes({"results": len(items), "results_failed": len(failed)})
@@ -188,7 +197,7 @@ def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None
         job_id,
         len(failed),
         len(items),
-        [getattr(item, "error", None) for item in failed],
+        [item.error for item in failed],
     )
 
 
@@ -202,11 +211,11 @@ def _job_acting(job_id: str, task: str, actor: str | None) -> Acting:
     )
 
 
-def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     running = running_job()
     queue = running.queue if running else QueueName.DEFAULT
     timeout = running.timeout if running else None
-    enqueue_to(queue, run_job, job_id, fn, kwargs, job_timeout=timeout)
+    enqueue_to(queue, run_job, (job_id, fn, kwargs), job_timeout=timeout)
     logger.info("job %s back in line on %s", job_id, queue.value)
 
 
@@ -215,7 +224,7 @@ def _queue_previews(job_id: str) -> None:
     if job is None:
         return
     try:
-        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, job.local_paths())
+        enqueue_to(QueueName.PREVIEWS, warm_previews, (job.id, job.local_paths()))
     except RedisError:
         logger.warning("could not queue previews of job %s", job_id, exc_info=True)
 
@@ -227,14 +236,16 @@ def _keep_cost(job_id: str) -> None:
                 {
                     **task.model_dump(exclude={"api_key"}),
                     "key_tail": key_tail(task.api_key),
-                }
+                },
             )
             for task in tasks.of_job(job_id)
         ]
         job = store.get_job(job_id)
         if made and job is not None:
             store.keep_cost(
-                job_id, JobMeta(generations=made), cost_of(job.params, made)
+                job_id,
+                JobMeta(generations=made),
+                cost_of(job.params, made),
             )
     except Exception:
         logger.warning("could not keep the cost of job %s", job_id, exc_info=True)

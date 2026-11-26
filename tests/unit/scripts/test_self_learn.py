@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 import json
 from datetime import UTC, datetime, timedelta
@@ -6,7 +8,8 @@ lazy from pathlib import Path
 from repo_paths import REPO
 
 _spec = importlib.util.spec_from_file_location(
-    "self_learn", REPO / "scripts/self_learn.py"
+    "self_learn",
+    REPO / "scripts/self_learn.py",
 )
 assert _spec is not None
 assert _spec.loader is not None
@@ -48,7 +51,7 @@ def _results(minute: int, results: list[tuple[str, str, bool]]) -> dict:
             "content": [
                 {"type": "tool_result", "tool_use_id": i, "content": c, "is_error": e}
                 for i, c, e in results
-            ]
+            ],
         },
     }
 
@@ -82,7 +85,8 @@ def test_the_digest_finds_corrections_failures_and_waste(tmp_path):
             _assistant(2, "m1", [("r1", "Read", read), ("r2", "Read", read)]),
             _assistant(2, "m1", [("r3", "Read", read)]),
             _results(
-                3, [("r1", "x" * 5000, False), ("r2", "y", False), ("r3", "z", False)]
+                3,
+                [("r1", "x" * 5000, False), ("r2", "y", False), ("r3", "z", False)],
             ),
             _assistant(
                 4,
@@ -116,7 +120,8 @@ def test_the_digest_finds_corrections_failures_and_waste(tmp_path):
             _prompt(7, "brief from the main agent"),
             _assistant(8, "s1", [("c1", "Bash", {"command": "pytest"})]),
             _results(
-                9, [("c1", "PreToolUse:Bash hook error: run tests in Docker", True)]
+                9,
+                [("c1", "PreToolUse:Bash hook error: run tests in Docker", True)],
             ),
         ],
     )
@@ -129,7 +134,7 @@ def test_the_digest_finds_corrections_failures_and_waste(tmp_path):
                 "event": "PreToolUse",
                 "tool": "Bash",
                 "verdicts": ["tests:deny"],
-            }
+            },
         )
         + "\n"
         + json.dumps(
@@ -138,7 +143,7 @@ def test_the_digest_finds_corrections_failures_and_waste(tmp_path):
                 "event": "Stop",
                 "tool": "",
                 "verdicts": ["review_before_done:block"],
-            }
+            },
         )
         + "\n"
         + '{"at": "2026-11-01T1\n',
@@ -153,10 +158,10 @@ def test_the_digest_finds_corrections_failures_and_waste(tmp_path):
     ]
     assert (d.interrupted, d.rejected) == (1, 1)
     assert [(f.what, f.count) for f in d.failures] == [
-        ("Bash: PreToolUse:Bash hook error: run tests in Docker", 2)
+        ("Bash: PreToolUse:Bash hook error: run tests in Docker", 2),
     ]
     assert [(b.what, b.count) for b in d.blocks] == [
-        ("tests:deny (PreToolUse Bash)", 1)
+        ("tests:deny (PreToolUse Bash)", 1),
     ]
     [cost] = d.costs
     assert (cost.subagents, cost.output_tokens, cost.fresh_input_tokens) == (
@@ -255,7 +260,8 @@ def test_the_digest_reports_test_runs_reviews_stops_pushes_and_peak_context(tmp_
                 "type": "user",
                 "timestamp": _at(6),
                 "message": {
-                    "content": "<task-notification><task-id>b1</task-id>test.sh: pytest exit 0 in 77s\nRESULT GREEN</task-notification>"
+                    "content": "<task-notification><task-id>b1</task-id>test.sh: "
+                    "pytest exit 0 in 77s\nRESULT GREEN</task-notification>",
                 },
             },
         ],
@@ -298,7 +304,7 @@ def _notification(minute: int, tool_id: str) -> dict:
         "timestamp": _at(minute),
         "attachment": {
             "type": "queued_command",
-            "prompt": f"<task-notification><task-id>b9</task-id><tool-use-id>{tool_id}</tool-use-id><status>completed</status></task-notification>",
+            "prompt": f"<task-notification><task-id>b9</task-id><tool-use-id>{tool_id}</tool-use-id><status>completed</status></task-notification>",  # noqa: E501
         },
     }
 
@@ -318,7 +324,8 @@ def test_runs_that_end_in_a_file_are_paired_with_the_summary_read_later(tmp_path
                 ],
             ),
             _results(
-                5, [("f1", "exit=0\nSUMMARY exit 0: 3 passed\nRESULT GREEN", False)]
+                5,
+                [("f1", "exit=0\nSUMMARY exit 0: 3 passed\nRESULT GREEN", False)],
             ),
             _assistant(
                 6,
@@ -444,3 +451,57 @@ def test_an_attachment_line_without_its_key_is_skipped(tmp_path):
     d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
 
     assert d.test_runs == []
+
+
+def _queued(minute: int, text: str, kind: str) -> dict:
+    return {
+        "type": "attachment",
+        "timestamp": _at(minute),
+        "attachment": {
+            "type": "queued_command",
+            "prompt": text,
+            "origin": {"kind": kind},
+        },
+    }
+
+
+def test_a_message_typed_while_the_agent_works_counts_as_an_owner_prompt(tmp_path):
+    logs = tmp_path / "logs"
+    _write(
+        logs / "aaaa7777-main.jsonl",
+        [
+            _prompt(1, "go"),
+            _queued(2, "no, use D:/ not C:/", "human"),
+            _queued(
+                3,
+                "<task-notification>done</task-notification>",
+                "task-notification",
+            ),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [p.text for p in d.prompts] == ["go", "no, use D:/ not C:/"]
+
+
+def test_a_queued_record_of_a_wrong_shape_is_skipped(tmp_path):
+    logs = tmp_path / "logs"
+    wrong = [
+        {"type": "attachment", "timestamp": _at(2), "attachment": "just text"},
+        _queued(3, ["a", "list"], "human"),
+        {
+            "type": "attachment",
+            "timestamp": _at(4),
+            "attachment": {
+                "type": "queued_command",
+                "prompt": "x",
+                "origin": "human",
+            },
+        },
+    ]
+    _write(logs / "aaaa8888-main.jsonl", [_prompt(1, "go"), *wrong])
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [p.text for p in d.prompts] == ["go"]

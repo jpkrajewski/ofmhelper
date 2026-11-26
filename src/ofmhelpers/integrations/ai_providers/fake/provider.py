@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import subprocess
 import time
 import uuid
@@ -31,20 +33,21 @@ def _frame(prompt: str) -> Image.Image:
     draw = ImageDraw.Draw(img)
     draw.text((24, 24), "FAKE AI MODEL", fill=(255, 255, 255))
     draw.text(
-        (24, 60), "(this is a placeholder, not a real generation)", fill=(190, 190, 220)
+        (24, 60),
+        "(this is a placeholder, not a real generation)",
+        fill=(190, 190, 220),
     )
     draw.multiline_text((24, 110), prompt[:500], fill=(255, 255, 255))
     return img
 
 
 def _video(frame: Path, out: Path) -> None:
-    seconds = settings.aigen.fake_video_duration_s
     command = [
-        "ffmpeg", "-y", "-loop", "1", "-i", str(frame), "-t", str(seconds),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
+        "ffmpeg", "-y", "-loop", "1", "-i", str(frame), "-t", "1",
+        "-vf", "scale=640:480", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
     ]  # fmt: skip
     try:
-        subprocess.run(command, capture_output=True, check=True)
+        subprocess.run(command, capture_output=True, check=True)  # noqa: S603
     except FileNotFoundError as exc:
         msg = "Fake AI: ffmpeg isn't installed/on PATH, can't fake a video"
         raise ProviderInputError(msg) from exc
@@ -59,7 +62,7 @@ class FakeProvider(Provider):
     name = "fake"
     label = "Fake AI (testing)"
     rank = 1000
-    needs_key = False
+    needs_key = True
 
     @classmethod
     def default_key(cls) -> str | None:
@@ -73,7 +76,7 @@ class FakeProvider(Provider):
         time.sleep(float(payload.get("delay") or 0))  # type: ignore[arg-type]
         if payload.get("outcome") == "error":
             raise ProviderGenerationError(
-                str(payload.get("error_message") or "Fake AI: simulated failure")
+                str(payload.get("error_message") or "Fake AI: simulated failure"),
             )
         task_id = uuid.uuid4().hex[:12]
         frame = _frame(str(payload.get("prompt", "")))

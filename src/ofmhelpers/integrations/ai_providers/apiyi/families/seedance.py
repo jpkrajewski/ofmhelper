@@ -1,5 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
 import re
 from typing import Any
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, Field, model_serializer
 
@@ -94,7 +96,7 @@ class Body(BaseModel):
         return {"model": self.model, "content": content, **self.settings}
 
 
-def wire_body(spec: ModelSpec, payload: Payload, link: Any) -> Body:
+def wire_body(spec: ModelSpec, payload: Payload, link: Callable[[str], str]) -> Body:
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     media_fields = {f.name for f in spec.media_fields}
@@ -114,7 +116,7 @@ def wire_body(spec: ModelSpec, payload: Payload, link: Any) -> Body:
         refs = value if isinstance(value, list) else [value]
         content.extend(
             Item.model_validate(
-                {"type": kind, kind: {"url": link(str(ref))}, "role": role}
+                {"type": kind, kind: {"url": link(str(ref))}, "role": role},
             )
             for ref in refs
             if ref
@@ -131,11 +133,18 @@ class Seedance(Family):
     prefixes = ("doubao-seedance", "seedance")
 
     def submit(
-        self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
+        self,
+        client: ApiyiClient,
+        spec: ModelSpec,
+        payload: Payload,
+        job: str,
     ) -> str:
         body = wire_body(spec, payload, client.link)
         response = client.submit(
-            TASKS, json=body.model_dump(), headers=HEADERS, refuse=refused_moderated
+            TASKS,
+            json=body.model_dump(),
+            headers=HEADERS,
+            refuse=refused_moderated,
         )
         task_id = parsed(response, SeedanceSubmit, PROVIDER).id
         if not task_id:
@@ -152,7 +161,10 @@ class Seedance(Family):
 
     def status(self, client: ApiyiClient, task_id: str) -> TaskState:
         response = client.call(
-            "GET", f"{TASKS}/{task_id}", refused_read, headers=HEADERS
+            "GET",
+            f"{TASKS}/{task_id}",
+            refused_read,
+            headers=HEADERS,
         )
         task = parsed(response, SeedanceTask, PROVIDER)
         state = task.status.lower()

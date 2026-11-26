@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
@@ -38,7 +40,7 @@ SPEC = _spec(
         "link_url": {"type": "string", "format": "uri"},
         "elements": {"type": "array", "items": {"type": "object"}},
         "style": {"type": "object"},
-    }
+    },
 )
 
 
@@ -68,7 +70,7 @@ def test_form_fields_are_the_scalars_only():
 
 def test_parse_form_types_the_strings_and_drops_blanks():
     parsed = SPEC.parse_form(
-        {"prompt": "hi", "duration": "7", "cfg": "0.5", "sound": "false", "seed": ""}
+        {"prompt": "hi", "duration": "7", "cfg": "0.5", "sound": "false", "seed": ""},
     ).model_dump()
 
     assert parsed == {"prompt": "hi", "duration": 7, "cfg": 0.5, "sound": False}

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 
 import pytest
@@ -7,7 +9,7 @@ from signin import make_user, make_user_with_password, sign_in
 from ofmhelpers.cache import get_redis
 from ofmhelpers.cache.rate_limit import clear_failed_user_logins
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields
 from ofmhelpers.db.distribution import store as distribution_store
 from ofmhelpers.db.event_targets import store as event_targets
 from ofmhelpers.db.models import DeviceLoginRow, LoginRow
@@ -63,7 +65,9 @@ def test_an_inactive_persons_start_token_links_nothing(telegram_on):
     get_redis().set(
         "telegram:link:tok-inactive",
         telegram.PendingLink(
-            user_id=owner.id, issued_at=time.time(), stamp=""
+            user_id=owner.id,
+            issued_at=time.time(),
+            stamp="",
         ).model_dump_json(),
     )
     users.set_active(owner.id, active=False)
@@ -143,7 +147,12 @@ def test_the_agency_root_excludes_the_thumbnail_cache(tmp_path, monkeypatch):
 def test_a_login_that_is_not_theirs_is_a_404_and_writes_nothing(tmp_path, monkeypatch):
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     phone = devices.add_device(
-        DeviceFields(label="Phone 07", model_id="iphone-13", color_id="blue", owner="A")
+        DeviceFields(
+            label="Phone 07",
+            model_id="iphone-13",
+            color_id="blue",
+            owner="A",
+        ),
     )
     added = devices.add_login(phone, LoginFields(service="instagram", username="x.ig"))
     assert added is not None
@@ -163,7 +172,10 @@ def test_a_login_that_is_not_theirs_is_a_404_and_writes_nothing(tmp_path, monkey
 def _orphan(owner_id: int, username: str) -> int:
     with session_scope() as s:
         row = LoginRow(
-            service="instagram", provider="", username=username, user_id=owner_id
+            service="instagram",
+            provider="",
+            username=username,
+            user_id=owner_id,
         )
         s.add(row)
         s.flush()

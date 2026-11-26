@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -26,7 +28,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_model_contacts_model_id", "model_contacts", ["model_id"], unique=False
+        "ix_model_contacts_model_id",
+        "model_contacts",
+        ["model_id"],
+        unique=False,
     )
 
 

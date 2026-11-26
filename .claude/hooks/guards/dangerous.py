@@ -1,10 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 from guards.event import Guard, HookEvent, Verdict, deny
 from guards.shell import UNREADABLE, Statement, shell_statements
 
 NAME = "dangerous"
 UNREADABLE_COMMAND = (
-    "The guards cannot read this command (an undecodable powershell -EncodedCommand, or scripts "
-    "nested more than 3 deep), so none of their rules could be checked. Write the command out plainly."
+    "The guards cannot read this command (an undecodable "
+    "powershell -EncodedCommand, or scripts "
+    "nested more than 3 deep), so none of their rules "
+    "could be checked. Write the command out plainly."
 )
 DRIVE_ROOTS = {"", "/c", "c:", "C:"}
 RUF100 = (
@@ -12,8 +16,10 @@ RUF100 = (
     "(101 removed on 2026-11-08). Clear stale noqas with a plain ruff check --fix."
 )
 FIND_ROOT = (
-    "Never search the whole disk from this Windows host: an orphaned find keeps crawling for hours "
-    "after the shell times out. Search a bounded path, or look a library up inside the tests image."
+    "Never search the whole disk from this Windows "
+    "host: an orphaned find keeps crawling for hours "
+    "after the shell times out. Search a bounded path, "
+    "or look a library up inside the tests image."
 )
 BARE_COMPOSE = (
     "Locally every docker compose command takes both files: "
@@ -24,8 +30,10 @@ DOWN_VOLUMES = (
     "down -v deletes the data volumes. Never; stop or recreate containers instead."
 )
 SSH_STDIN = (
-    "Never pipe a script into ssh ... bash -s: the first command that reads stdin eats the rest "
-    "and bash exits 0 (2026-07-27 deploy). Copy the script to the server and run that file."
+    "Never pipe a script into ssh ... bash -s: the "
+    "first command that reads stdin eats the rest "
+    "and bash exits 0 (2026-07-27 deploy). Copy "
+    "the script to the server and run that file."
 )
 SCP_ENV = (
     "Never copy a .env onto a server: the server .env holds production secrets. "
@@ -33,7 +41,7 @@ SCP_ENV = (
 )
 
 
-def problem(statement: Statement) -> str:
+def problem(statement: Statement) -> str:  # noqa: PLR0911
     words, program = statement.words, statement.program
     if program == UNREADABLE:
         return UNREADABLE_COMMAND

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import mimetypes
 import random
@@ -115,7 +117,8 @@ class PinterestClient:
         self._base = f"https://{host}"
         self._session = outbound.mount(requests.Session())
         mine = sorted(
-            (c for c in jar if _sent_to(c, host)), key=lambda c: len(c.domain)
+            (c for c in jar if _sent_to(c, host)),
+            key=lambda c: len(c.domain),
         )
         for cookie in mine:
             self._session.cookies.set_cookie(cookie)
@@ -129,7 +132,7 @@ class PinterestClient:
                 "X-Pinterest-Source-Url": SOURCE_URL,
                 "X-Pinterest-AppState": "active",
                 "Referer": f"{self._base}{SOURCE_URL}",
-            }
+            },
         )
 
     @property
@@ -139,7 +142,8 @@ class PinterestClient:
             key=lambda c: len(c.domain),
         )
         return next(
-            (c.value or "" for c in reversed(found) if _sent_to(c, self._host)), ""
+            (c.value or "" for c in reversed(found) if _sent_to(c, self._host)),
+            "",
         )
 
     def cookies_txt(self) -> str:
@@ -162,7 +166,8 @@ class PinterestClient:
 
     def board(self, name: str) -> PinterestBoard:
         found = next(
-            (b for b in self.boards() if b.name.casefold() == name.casefold()), None
+            (b for b in self.boards() if b.name.casefold() == name.casefold()),
+            None,
         )
         if found is not None:
             return found
@@ -249,8 +254,8 @@ class PinterestClient:
                         "durationMs": video_ms,
                         "isFromImage": False,
                         "startTimestampMs": -1,
-                    }
-                ]
+                    },
+                ],
             }
         data = self._create(
             "/v3/media/uploads/register/batch/",
@@ -328,11 +333,17 @@ def _answer(answer: requests.Response, what: str) -> ResourceResponse:
         text = _snippet(answer)
         if "Invalid Resource Request" in text:
             logger.error(
-                "pinterest %s refused the request (%s): %s", what, status, text
+                "pinterest %s refused the request (%s): %s",
+                what,
+                status,
+                text,
             )
         else:
             logger.warning(
-                "pinterest %s answered %s (logged out): %s", what, status, text
+                "pinterest %s answered %s (logged out): %s",
+                what,
+                status,
+                text,
             )
         raise PinterestLoggedOutError
     try:

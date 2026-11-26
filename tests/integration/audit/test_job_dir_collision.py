@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -14,7 +16,8 @@ def _draws(*names: str):
 
 
 def test_make_job_dir_draws_again_when_the_name_is_taken(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     existing = tmp_path / TAKEN
     existing.mkdir()

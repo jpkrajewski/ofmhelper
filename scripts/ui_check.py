@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import argparse
 import fnmatch
 import os
@@ -6,11 +8,11 @@ import subprocess
 import sys
 import tempfile
 import traceback
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
+lazy from collections.abc import Callable
 
 import requests
 from PIL import Image
@@ -58,11 +60,11 @@ NETWORK = "Failed to load resource"
 OFFLINE = "ERR_INTERNET_DISCONNECTED"
 RAW = re.compile(
     r"JSON|undefined|\bnull\b|NaN|\[object|Traceback|Exception|SyntaxError"
-    r"|TypeError|Unexpected token|<[a-zA-Z!/]|XHR"
+    r"|TypeError|Unexpected token|<[a-zA-Z!/]|XHR",
 )
 TEXT_TYPES = ("text", "search", "url", "email", "password", "tel", "number")
 FIELDS = ", ".join(
-    ("textarea", "input:not([type])", *(f"input[type={t}]" for t in TEXT_TYPES))
+    ("textarea", "input:not([type])", *(f"input[type={t}]" for t in TEXT_TYPES)),
 )
 DOWNLOAD_LINKS = "#dl-urls"
 SPOOF_PICKED = '.file-picker[data-field="video"] li'
@@ -142,10 +144,12 @@ class PageForm(BaseModel, frozen=True):
 
 API_KEY = Fill(selector="#api-key", text="ui-check-key", only_if_empty=True)
 SUBJECT = Pick(
-    selector='.file-picker[data-field="image"] .file-add-input', kind="image"
+    selector='.file-picker[data-field="image"] .file-add-input',
+    kind="image",
 )
 ONE_VIDEO = Pick(
-    selector='.file-picker[data-field="video"] .file-add-input', kind="video"
+    selector='.file-picker[data-field="video"] .file-add-input',
+    kind="video",
 )
 PAGES: frozendict[str, PageForm] = frozendict(
     {
@@ -207,11 +211,12 @@ PAGES: frozendict[str, PageForm] = frozendict(
             fills=(
                 API_KEY,
                 Fill(
-                    selector='#generate-form textarea[name="prompt"]', text="ui check"
+                    selector='#generate-form textarea[name="prompt"]',
+                    text="ui check",
                 ),
             ),
         ),
-    }
+    },
 )
 
 
@@ -249,7 +254,9 @@ class Reply(BaseModel, frozen=True):
 
     def fulfill(self, route: Route) -> None:
         route.fulfill(
-            status=self.status, content_type=self.content_type, body=self.body
+            status=self.status,
+            content_type=self.content_type,
+            body=self.body,
         )
 
 
@@ -486,7 +493,10 @@ def verdict(method: str, url: str, post: str) -> Verdict:
 
 class Mock:
     def __init__(
-        self, context: BrowserContext, post: str, reply: Callable[[Route], None]
+        self,
+        context: BrowserContext,
+        post: str,
+        reply: Callable[[Route], None],
     ) -> None:
         self.post = post
         self.reply = reply
@@ -521,7 +531,7 @@ class Mock:
 
 
 class Check:
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         browser: Browser,
         base_url: str,
@@ -611,7 +621,8 @@ class Check:
 
     def posted(self, response: Response) -> bool:
         return response.request.method == "POST" and fnmatch.fnmatchcase(
-            response.url, self.form.post
+            response.url,
+            self.form.post,
         )
 
     def load(self) -> Step:
@@ -632,7 +643,11 @@ class Check:
             context.close()
 
     def answered(
-        self, name: str, reply: Callable[[Route], None], *, offline: bool = False
+        self,
+        name: str,
+        reply: Callable[[Route], None],
+        *,
+        offline: bool = False,
     ) -> Step:
         context = self.context()
         try:
@@ -823,7 +838,7 @@ class Check:
         if not link:
             return Step(
                 problems=[
-                    "no finished download with one link on the page to send again"
+                    "no finished download with one link on the page to send again",
                 ],
                 console=watch.lines,
             )
@@ -897,18 +912,18 @@ def guarded(name: str, run: Callable[[], Step]) -> Step:
     print(f"ui_check: {name}", flush=True)
     try:
         step = run()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return Step(
             name=name,
             problems=[
-                f"the step crashed: {type(exc).__name__}: {first_line(str(exc))}"
+                f"the step crashed: {type(exc).__name__}: {first_line(str(exc))}",
             ],
             console=traceback.format_exc().splitlines()[-12:],
         )
     return step.model_copy(update={"name": name})
 
 
-def run_all(check: Check, real: bool) -> list[Step]:
+def run_all(check: Check, real: bool) -> list[Step]:  # noqa: FBT001
     planned: dict[str, Callable[[], Step]] = {"load": check.load}
     if check.form.can_submit:
         planned |= {
@@ -999,7 +1014,7 @@ def parse_args(argv: list[str]) -> Args:
     parser.add_argument("--submit")
     parser.add_argument("--post")
     parser.add_argument("--real", action="store_true")
-    return Args.model_validate(vars(parser.parse_args(argv)))
+    return Args.model_validate(parser.parse_args(argv), from_attributes=True)
 
 
 def refusal(args: Args, form: PageForm) -> str | None:
@@ -1048,7 +1063,8 @@ def run(argv: list[str]) -> int:
         args = parse_args(argv)
     except SystemExit:
         finish(
-            "FAIL", "usage: ui_check.py <path> [--submit <sel> --post <glob>] [--real]"
+            "FAIL",
+            "usage: ui_check.py <path> [--submit <sel> --post <glob>] [--real]",
         )
         return 2
     form = form_for(args)
@@ -1077,10 +1093,11 @@ def run(argv: list[str]) -> int:
 def main() -> int:
     try:
         return run(sys.argv[1:])
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
         finish(
-            "FAIL", f"the check crashed: {type(exc).__name__}: {first_line(str(exc))}"
+            "FAIL",
+            f"the check crashed: {type(exc).__name__}: {first_line(str(exc))}",
         )
         return 1
 

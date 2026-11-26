@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import binascii
 import hashlib
@@ -64,8 +66,10 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
         read = _message_read(data)
         return [
             ChatDelivery(
-                kind=DeliveryKind.MESSAGE, model_id=data.creator_user_id, read=read
-            )
+                kind=DeliveryKind.MESSAGE,
+                model_id=data.creator_user_id,
+                read=read,
+            ),
         ]
     if envelope.type == MESSAGE_DELETED:
         data = MessageEventData.model_validate(envelope.data)
@@ -74,7 +78,7 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
                 kind=DeliveryKind.DELETED,
                 model_id=data.creator_user_id,
                 message_id=str(data.message.message_id),
-            )
+            ),
         ]
     if envelope.type == MASS_MESSAGE_COMPLETED:
         mass = MassMessageEventData.model_validate(envelope.data)
@@ -83,6 +87,6 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
                 kind=DeliveryKind.MASS,
                 model_id=mass.creator_user_id,
                 event_id=mass.mass_message_id,
-            )
+            ),
         ]
     return []

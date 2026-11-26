@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from urllib.parse import parse_qs, urlsplit
 
@@ -80,7 +82,9 @@ def test_navigation_without_sec_fetch_headers_still_redirects():
 def test_authenticated_fetch_is_untouched():
     logged_in = TestClient(app)
     logged_in.post(
-        "/login", data={"password": "test-admin", "next": "/"}, follow_redirects=False
+        "/login",
+        data={"password": "test-admin", "next": "/"},
+        follow_redirects=False,
     )
 
     r = logged_in.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "cors"})
@@ -117,7 +121,9 @@ def test_session_max_age_is_configurable():
 def test_pages_expose_the_session_deadline_to_the_client():
     logged_in = TestClient(app)
     logged_in.post(
-        "/login", data={"password": "test-admin", "next": "/"}, follow_redirects=False
+        "/login",
+        data={"password": "test-admin", "next": "/"},
+        follow_redirects=False,
     )
 
     body = logged_in.get("/generate").text
@@ -128,7 +134,8 @@ def test_pages_expose_the_session_deadline_to_the_client():
 
 def test_a_signed_out_download_fails_instead_of_saving_the_login_page():
     r = _request(
-        "/download-media/files/abc12345/0?dl=1", {"sec-fetch-mode": "navigate"}
+        "/download-media/files/abc12345/0?dl=1",
+        {"sec-fetch-mode": "navigate"},
     )
 
     assert r.status_code == 401
@@ -153,7 +160,9 @@ _HOUR = 3600
 def _signed_in() -> TestClient:
     person = TestClient(app)
     person.post(
-        "/login", data={"password": "test-admin", "next": "/"}, follow_redirects=False
+        "/login",
+        data={"password": "test-admin", "next": "/"},
+        follow_redirects=False,
     )
     return person
 

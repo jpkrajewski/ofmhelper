@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import Column, Index, engine_from_config, pool
+from sqlalchemy.schema import Constraint, SchemaItem
 
 from alembic import context
 from ofmhelpers.config import settings
@@ -18,10 +21,9 @@ target_metadata = Base.metadata
 RETIRED_TABLES = frozenset({"drive_day_folders"})
 
 
-def include_object(obj, name, type_, _reflected, _compare_to):
-    table = (
-        name if type_ == "table" else getattr(getattr(obj, "table", None), "name", None)
-    )
+def include_object(obj: SchemaItem, name, type_, _reflected, _compare_to):
+    owner = obj.table if isinstance(obj, Column | Index | Constraint) else None
+    table = name if type_ == "table" else owner.name if owner is not None else None
     return table not in RETIRED_TABLES
 
 
@@ -47,7 +49,7 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         connection.exec_driver_sql(
             "SELECT set_config('ofm.via', 'migration', false), "
-            "set_config('ofm.ref', 'alembic', false)"
+            "set_config('ofm.ref', 'alembic', false)",
         )
         connection.commit()
         context.configure(

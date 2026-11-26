@@ -1,9 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.db.downloads import store as downloads
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.jobs.schema import AssetCard, FailedSource, error_reason
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 lazy from ofmhelpers.db.jobs.schema import Job
 
@@ -13,19 +15,19 @@ class JobAssets(BaseModel):
     failed_sources: list[FailedSource] = []
 
 
-def asset_card(
+def asset_card(  # noqa: PLR0913, PLR0917
     name: str,
     index: int,
     files_prefix: str,
     source: str | None = None,
     remote_url: str | None = None,
-    local: bool = True,
+    local: bool = True,  # noqa: FBT001, FBT002
     job_id: str = "",
-    removed: bool = False,
+    removed: bool = False,  # noqa: FBT001, FBT002
     again_error: str | None = None,
 ) -> AssetCard:
     local_url = f"{files_prefix}/{index}"
-    kind = classify_kind(name)
+    kind = FileKind.from_ext(name)
     if removed:
         card = _removed_card(name, index, local_url, job_id, source)
         if again_error is None:
@@ -34,13 +36,13 @@ def asset_card(
             update={
                 "removed_reason": error_reason(again_error),
                 "removed_error": again_error,
-            }
+            },
         )
-    previewed = local and kind in ("image", "video")
+    previewed = local and kind in (FileKind.IMAGE, FileKind.VIDEO)
     preview_url = f"{local_url}/preview" if previewed else None
     if (
         previewed
-        and kind == "video"
+        and kind == FileKind.VIDEO
         and not previews.preview_path(job_id, index, kind).is_file()
     ):
         preview_url = local_url
@@ -53,17 +55,25 @@ def asset_card(
         download_name=download_name(name, job_id),
         local_fallback_url=local_url if remote_url else None,
         preview_url=preview_url,
-        poster_url=f"{local_url}/poster" if previewed and kind == "video" else None,
+        poster_url=f"{local_url}/poster"
+        if previewed and kind == FileKind.VIDEO
+        else None,
         source=source,
     )
 
 
 def _removed_card(
-    name: str, index: int, local_url: str, job_id: str, source: str | None
+    name: str,
+    index: int,
+    local_url: str,
+    job_id: str,
+    source: str | None,
 ) -> AssetCard:
-    kind = classify_kind(name)
-    poster = kind == "video" and previews.poster_path(job_id, index).is_file()
-    preview = kind == "image" and previews.preview_path(job_id, index, kind).is_file()
+    kind = FileKind.from_ext(name)
+    poster = kind == FileKind.VIDEO and previews.poster_path(job_id, index).is_file()
+    preview = (
+        kind == FileKind.IMAGE and previews.preview_path(job_id, index, kind).is_file()
+    )
     return AssetCard(
         name=name,
         index=index,
@@ -119,6 +129,6 @@ def job_assets(job: Job, files_prefix: str) -> JobAssets:
                     job_id=job.id,
                     removed=len(assets) in removed,
                     again_error=r.again_error,
-                )
+                ),
             )
     return JobAssets(assets=assets, failed_sources=failed_sources)

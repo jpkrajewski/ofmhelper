@@ -1,9 +1,11 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any, NoReturn
-lazy from collections.abc import Callable
+lazy from collections.abc import Callable, Mapping
 
 import requests
 from pydantic import BaseModel, ConfigDict
-from urllib3.exceptions import NewConnectionError
+from urllib3.exceptions import MaxRetryError, NewConnectionError
 
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
@@ -26,20 +28,36 @@ def _never_sent(exc: requests.RequestException) -> bool:
         return True
     cause = exc.args[0] if exc.args else None
     return isinstance(exc, requests.ConnectionError) and isinstance(
-        getattr(cause, "reason", cause), NewConnectionError
+        cause.reason if isinstance(cause, MaxRetryError) else cause,
+        NewConnectionError,
     )
 
 
-def call(
+def call(  # noqa: PLR0913
     session: requests.Session,
     label: str,
     refused: Callable[[requests.Response], NoReturn],
     method: str,
     url: str,
-    **kwargs: Any,
+    *,
+    timeout: float | None = None,
+    headers: Mapping[str, str] | None = None,
+    params: Mapping[str, Any] | None = None,
+    json: Mapping[str, Any] | None = None,
+    data: Mapping[str, Any] | None = None,
+    files: Mapping[str, Any] | list[tuple[str, Any]] | None = None,
 ) -> requests.Response:
     try:
-        response = session.request(method, url, **kwargs)
+        response = session.request(
+            method,
+            url,
+            timeout=timeout,
+            headers=headers,
+            params=params,
+            json=json,
+            data=data,
+            files=files,
+        )
     except requests.RequestException as exc:
         msg = f"{label} unreachable: {exc.__class__.__name__}"
         raise ProviderUnavailableError(msg, maybe_made=not _never_sent(exc)) from exc
@@ -49,7 +67,10 @@ def call(
 
 
 def parsed[M: BaseModel](
-    response: requests.Response, model: type[M], label: str, what: str = "answer"
+    response: requests.Response,
+    model: type[M],
+    label: str,
+    what: str = "answer",
 ) -> M:
     try:
         return model.model_validate(response.json())

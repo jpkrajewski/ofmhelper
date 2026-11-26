@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import json
 
@@ -50,6 +52,7 @@ def _fake_ai_job(client: TestClient, prompt: str) -> str:
         data={
             "provider": "fake",
             "model": "fake:image",
+            "api_key": "fake-key",
             "prompt": prompt,
             "delay": "0",
             "outcome": "error",
@@ -89,7 +92,9 @@ def test_va_reuse_picker_excludes_admin_uploads(admin, va, assets_dir):
 
 
 def test_user_uploads_land_in_their_folder_and_the_agency_never_sees_them(
-    admin, va, assets_dir
+    admin,
+    va,
+    assets_dir,
 ):
     _fake_ai_job(va, "v")
     _fake_ai_job(admin, "a")
@@ -113,9 +118,10 @@ def test_an_admin_cannot_reuse_a_users_file_by_path(admin, va, assets_dir):
         data={
             "provider": "fake",
             "model": "fake:image",
+            "api_key": "fake-key",
             "prompt": "p",
             "reference_image_urls_manifest": json.dumps(
-                [{"kind": "existing", "path": stored["path"]}]
+                [{"kind": "existing", "path": stored["path"]}],
             ),
         },
     )
@@ -143,9 +149,10 @@ def test_va_cannot_reuse_an_admin_file_by_path(admin, va, assets_dir):
         data={
             "provider": "fake",
             "model": "fake:image",
+            "api_key": "fake-key",
             "prompt": "p",
             "reference_image_urls_manifest": json.dumps(
-                [{"kind": "existing", "path": admin_file["path"]}]
+                [{"kind": "existing", "path": admin_file["path"]}],
             ),
         },
     )

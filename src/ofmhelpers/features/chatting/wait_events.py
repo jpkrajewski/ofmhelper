@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import time
 
@@ -61,14 +63,17 @@ def _fresh(platform: ChatPlatform, usernames: set[str]) -> set[str]:
 
 
 def _block(
-    platform: ChatPlatform, models: dict[_Model, list[OpenWait]], now: float
+    platform: ChatPlatform,
+    models: dict[_Model, list[OpenWait]],
+    now: float,
 ) -> str:
     lines = [f"{platform.label}:"]
     for (_, username), waits in sorted(models.items()):
         lines += ["", f"Chats unanswered ({len(waits)}): @{username}"]
         longest = sorted(waits, key=lambda w: w.started_at)
         lines += [
-            f"- {wait.fan_name or _NO_NAME} (unanswered {waited(now - wait.started_at)})"
+            f"- {wait.fan_name or _NO_NAME} (unanswered "
+            f"{waited(now - wait.started_at)})"
             for wait in longest[:_MAX_FANS]
         ]
         if len(longest) > _MAX_FANS:
@@ -92,7 +97,8 @@ def _event(waiting: dict[_Model, list[OpenWait]], now: float, key: str) -> Event
 
 
 def _untold(
-    waiting: dict[_Model, list[OpenWait]], chats_due: set[ChatKey]
+    waiting: dict[_Model, list[OpenWait]],
+    chats_due: set[ChatKey],
 ) -> list[OpenWait]:
     due = [
         wait

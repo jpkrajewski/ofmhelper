@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 lazy from starlette.types import ASGIApp
 

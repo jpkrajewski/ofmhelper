@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import time
 from pathlib import Path
@@ -15,6 +17,7 @@ from ofmhelpers.config.settings import (
     CloneLongSettings,
     DistributionSettings,
     DownloadersSettings,
+    DropboxSettings,
     ElyumSettings,
     EventsSettings,
     ExportSettings,
@@ -39,6 +42,7 @@ from ofmhelpers.config.settings import (
     SignInSettings,
     SnapchatSettings,
     StackedSettings,
+    StorageSettings,
     TelegramSettings,
     TelemetrySettings,
     ThreadsSettings,
@@ -197,6 +201,14 @@ class Settings:
     @property
     def gdrive(self) -> GDriveSettings:
         return self._group(GDriveSettings)
+
+    @property
+    def storage(self) -> StorageSettings:
+        return self._group(StorageSettings)
+
+    @property
+    def dropbox(self) -> DropboxSettings:
+        return self._group(DropboxSettings)
 
     @property
     def llm(self) -> LLMSettings:

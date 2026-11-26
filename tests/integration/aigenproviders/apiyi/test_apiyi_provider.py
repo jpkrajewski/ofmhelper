@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import time
 from pathlib import Path
@@ -120,7 +122,9 @@ def test_image_to_video_hands_apiyi_a_link_to_the_first_frame(provider, image):
 
 
 def test_a_clone_sends_its_references_in_order_cited_the_wan_way(
-    provider, image, video
+    provider,
+    image,
+    video,
 ):
     spec = get_spec(WAN)
     body = spec.request(
@@ -173,7 +177,9 @@ def test_a_wrong_key_is_refused_before_a_link_is_handed_out(fake_externals, imag
 
 
 def test_without_a_public_https_address_a_reference_is_refused_before_paying(
-    provider, monkeypatch, image
+    provider,
+    monkeypatch,
+    image,
 ):
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
     spec = get_spec(WAN)
@@ -194,7 +200,7 @@ def test_a_first_frame_with_references_is_refused_before_anything_is_sent(image)
                 "prompt": "p",
                 "first_frame_url": str(image),
                 "reference_image_urls": [str(image)],
-            }
+            },
         )
 
 
@@ -259,7 +265,9 @@ def test_a_reference_alibaba_could_not_download_is_sent_again(provider, monkeypa
 
 
 def test_the_last_try_links_a_big_image_as_a_jpeg_under_the_link_limit(
-    provider, tmp_path, monkeypatch
+    provider,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0, 0]")
     big = tmp_path / "sheet.png"
@@ -410,8 +418,8 @@ def test_an_unknown_status_keeps_the_task_remembered(provider):
     fake.tasks["t-1"] = {"polls": 99, "failure": None}
     fake._read = staticmethod(  # type: ignore[method-assign]
         lambda task_id, state, **_: FakeReply.json_body(
-            {"id": task_id, "status": "paused"}
-        )
+            {"id": task_id, "status": "paused"},
+        ),
     )
 
     with pytest.raises(ProviderUnavailableError, match="paused"):
@@ -420,7 +428,7 @@ def test_an_unknown_status_keeps_the_task_remembered(provider):
 
 def test_a_task_read_wrapped_in_data_is_read_too():
     task = ApiyiTask.model_validate(
-        {"data": {"id": "t", "status": "completed", "result_url": "https://x/y.mp4"}}
+        {"data": {"id": "t", "status": "completed", "result_url": "https://x/y.mp4"}},
     )
 
     assert (task.state, task.urls) == ("completed", ["https://x/y.mp4"])
@@ -449,7 +457,10 @@ def test_a_users_own_key_is_never_swapped(provider, monkeypatch):
 
     with pytest.raises(ProviderAuthError):
         runner.generate(
-            ApiyiProvider("sk-usersOwnKey"), get_spec(WAN), {"prompt": "p"}, "own"
+            ApiyiProvider("sk-usersOwnKey"),
+            get_spec(WAN),
+            {"prompt": "p"},
+            "own",
         )
     assert fake_apiyi().created == []
 
@@ -525,7 +536,7 @@ def test_a_failed_media_link_is_not_read_as_moderation():
                 "code": "InvalidURL",
                 "message": "url not reachable: https://s/green_dress.jpg",
             },
-        }
+        },
     )
 
     assert error_reason(task.failure) != "Flagged content"
@@ -553,7 +564,7 @@ def test_apiyis_real_moderated_task_reads_as_flagged_content():
             "error": {
                 "code": "DataInspectionFailed",
                 "message": "Input may contain risk",
-            }
+            },
         },
         {"output": {"task_status": "FAILED", "code": "IPInfringementSuspect"}},
     ],
@@ -582,7 +593,7 @@ def test_a_code_cited_in_the_message_that_is_not_moderation_stays_its_reason():
                 "message": "[InvalidParameter] url not reachable: https://s/green_dress.jpg",
                 "type": "task_failed",
             },
-        }
+        },
     )
 
     assert task.failure == (

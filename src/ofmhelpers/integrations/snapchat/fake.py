@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
@@ -46,7 +48,10 @@ PROFILES = (
         ],
     ),
     FakeSnapProfile(
-        username="fake_hidden", title="Hidden", subscribers=0, public=False
+        username="fake_hidden",
+        title="Hidden",
+        subscribers=0,
+        public=False,
     ),
 )
 
@@ -61,10 +66,10 @@ def _user(profile: FakeSnapProfile) -> UserProfile:
             "subscriberCount": str(profile.subscribers),
             "profilePictureUrl": f"{CDN}/{profile.username}.jpg",
             "hostUserId": f"host-{profile.username}",
-        }
+        },
     )
     return UserProfile.model_validate(
-        {"$case": "publicProfileInfo", "publicProfileInfo": public}
+        {"$case": "publicProfileInfo", "publicProfileInfo": public},
     )
 
 
@@ -77,7 +82,7 @@ def _spotlight(spot: FakeSpotlight, index: int) -> SpotlightMetadata:
                 "thumbnailUrl": f"{CDN}/{index}.jpg",
             },
             "engagementStats": {"viewCount": spot.views},
-        }
+        },
     )
 
 
@@ -98,7 +103,7 @@ def page(profile: FakeSnapProfile) -> str:
                 *(SpotlightMetadata() for _ in range(profile.hidden)),
                 *(_spotlight(s, i) for i, s in spots),
             ],
-        }
+        },
     )
     data = NextData.model_validate({"props": {"pageProps": props}})
     return (
@@ -108,7 +113,8 @@ def page(profile: FakeSnapProfile) -> str:
 
 
 def _handler(
-    request: requests.PreparedRequest, _proxies: Mapping[str, str]
+    request: requests.PreparedRequest,
+    _proxies: Mapping[str, str],
 ) -> FakeReply:
     name = urlsplit(request.url or "").path.strip("/").removeprefix("@").lower()
     found = next((p for p in PROFILES if p.username == name), None)

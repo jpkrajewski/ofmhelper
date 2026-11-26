@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -6,35 +8,14 @@ from pydantic import BaseModel, ConfigDict
 lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker import audio, frames, sscd, tmk, visual
-from ofmhelpers.media.repurpose.checker.audio import AudioScore
 from ofmhelpers.media.repurpose.checker.normalize import is_flat, normalize
-from ofmhelpers.media.repurpose.checker.sscd import DescriptorScore
-from ofmhelpers.media.repurpose.checker.tmk import TmkScore
-from ofmhelpers.media.repurpose.checker.visual import HashKind, HashScore
+from ofmhelpers.media.repurpose.checker.schema import CheckReport, HashKind
 from ofmhelpers.media.repurpose.probe import probe
 
 _DEFAULT_FPS = 1.0
 _SOURCE_FPS = 10.0
 _DEFAULT_TIMEOUT_S = 600
 CAUGHT_SHARE = 0.5
-
-
-class CheckReport(BaseModel, frozen=True):
-    source_file: Path
-    copy_file: Path
-    source_frames: int
-    copy_frames: int
-    flat_copy_frames: int
-    hashes: list[HashScore]
-    descriptors: list[DescriptorScore] = []
-    tmk: TmkScore | None = None
-    audio: AudioScore | None
-    looks_like_source: bool
-    sounds_like_source: bool | None
-
-    @property
-    def unique(self) -> bool:
-        return not self.looks_like_source and not self.sounds_like_source
 
 
 class _Usable(BaseModel):
@@ -55,7 +36,7 @@ class _SourceHashes(BaseModel):
 def _usable(sampled: frames.Sampled) -> _Usable:
     images = sampled.images
     picked = [i for i, f in enumerate(images) if not is_flat(f)] or list(
-        range(len(images))
+        range(len(images)),
     )
     times = np.array([sampled.times[i] for i in picked])
     return _Usable(images=[normalize(images[i]) for i in picked], times=times)
@@ -88,7 +69,12 @@ def check(
     copy_frames, copy_t = copy_usable.images, copy_usable.times
     hashes = [
         visual.score(
-            kind, stored.kept[kind], stored.times, copy_frames, copy_t, 1 / fps
+            kind,
+            stored.kept[kind],
+            stored.times,
+            copy_frames,
+            copy_t,
+            1 / fps,
         )
         for kind in HashKind
     ]
@@ -101,7 +87,8 @@ def check(
     sound = None
     if probe(source, timeout_s).has_audio and probe(copy, timeout_s).has_audio:
         sound = audio.compare(
-            audio.fingerprint(source, timeout_s), audio.fingerprint(copy, timeout_s)
+            audio.fingerprint(source, timeout_s),
+            audio.fingerprint(copy, timeout_s),
         )
     return CheckReport(
         source_file=source,

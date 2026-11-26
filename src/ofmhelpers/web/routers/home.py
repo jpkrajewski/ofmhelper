@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
@@ -25,7 +27,9 @@ def home(request: Request) -> Response:
 )
 def server(request: Request) -> Response:
     return render(
-        request, "_server_status.html", server=server_status(), duration=duration
+        request,
+        "_server_status.html",
+        {"server": server_status(), "duration": duration},
     )
 
 

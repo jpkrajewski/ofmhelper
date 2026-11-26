@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -33,13 +35,14 @@ def _make_link(user_id: int, slug: str, host: str, dest: str) -> int:
                 target="onlyfans",
                 account_id=None,
                 creator="",
-            )
+            ),
         ],
     )
     provider = link_keys.client(user_id, "self")
     assert provider is not None
     short_links.created(
-        link_id, provider.create(NewLink(slug=slug, domain=host, destination=dest))
+        link_id,
+        provider.create(NewLink(slug=slug, domain=host, destination=dest)),
     )
     return link_id
 
@@ -93,7 +96,10 @@ def test_stats_read_the_click_log_over_a_range(client):
     user = sign_in(client)
     self_links.add_domain("bridge.example.com", user.id)
     link_id = _make_link(
-        user.id, "dany", "bridge.example.com", "https://onlyfans.com/dany"
+        user.id,
+        "dany",
+        "bridge.example.com",
+        "https://onlyfans.com/dany",
     )
 
     now = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)

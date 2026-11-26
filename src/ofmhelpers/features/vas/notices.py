@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -30,7 +32,7 @@ def logged_in(user: User) -> None:
             text=_whose(user),
             url=PAGE,
             owner_id=user.owner_id,
-        )
+        ),
     )
 
 

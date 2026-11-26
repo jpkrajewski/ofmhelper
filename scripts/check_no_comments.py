@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import ast
 import io
 import re
@@ -24,20 +26,44 @@ REGEX_MAY_FOLLOW_WORDS = (
     "await",
 )
 TEMPLATE_COMMENT = re.compile(r"\{#(?!\s*djlint:)|<!--")
+COPYRIGHT = re.compile(r"#\s*Copyright \(C\) \d{4}", re.IGNORECASE)
 
 
 def python_comment_lines(source: str) -> list[int]:
+    tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    first_code_line = next(
+        (
+            token.start[0]
+            for token in tokens
+            if token.type
+            not in (
+                tokenize.COMMENT,
+                tokenize.NL,
+                tokenize.NEWLINE,
+                tokenize.INDENT,
+                tokenize.DEDENT,
+                tokenize.ENCODING,
+                tokenize.ENDMARKER,
+            )
+        ),
+        None,
+    )
     return [
         token.start[0]
-        for token in tokenize.generate_tokens(io.StringIO(source).readline)
-        if token.type == tokenize.COMMENT and not token.string.startswith(DIRECTIVES)
+        for token in tokens
+        if token.type == tokenize.COMMENT
+        and not token.string.startswith(DIRECTIVES)
+        and not (
+            COPYRIGHT.match(token.string)
+            and (first_code_line is None or token.start[0] < first_code_line)
+        )
     ]
 
 
 def python_docstring_lines(source: str) -> list[int]:
     owners = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     return [
-        getattr(node, "lineno", 1)
+        1 if isinstance(node, ast.Module) else node.lineno
         for node in ast.walk(ast.parse(source))
         if isinstance(node, owners) and ast.get_docstring(node) is not None
     ]

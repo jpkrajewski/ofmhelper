@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import secrets
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -51,7 +53,7 @@ def seal(carried: SignInState) -> str:
 def unseal(cookie: str, name: str, state: str) -> SignInState:
     try:
         carried = SignInState.model_validate(
-            _serializer().loads(cookie, max_age=settings.signin.state_ttl_s)
+            _serializer().loads(cookie, max_age=settings.signin.state_ttl_s),
         )
     except (BadSignature, ValidationError) as exc:
         msg = "This sign-in took too long or was not started here"
@@ -64,7 +66,9 @@ def unseal(cookie: str, name: str, state: str) -> SignInState:
 
 def keep_verifier(state: str, verifier: str) -> None:
     get_redis().set(
-        _VERIFIER_KEY.format(state=state), verifier, ex=settings.signin.state_ttl_s
+        _VERIFIER_KEY.format(state=state),
+        verifier,
+        ex=settings.signin.state_ttl_s,
     )
 
 

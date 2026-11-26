@@ -1,5 +1,6 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
-import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -12,6 +13,7 @@ from ofmhelpers.features.clone_links.ai_check.models import (
     CloneAiVerdict,
     ErrorKind,
 )
+from ofmhelpers.features.clone_links.constants import clone_links_constants
 from ofmhelpers.integrations.llm import (
     LLMAuthError,
     LLMConfigError,
@@ -33,49 +35,6 @@ lazy from ofmhelpers.integrations.llm.base import Answered
 
 logger = get_logger(__name__)
 
-RULES = """\
-You check short AI-generated videos (Instagram reels) before they are posted.
-You get a contact sheet of one whole video: stills from its first frame to its
-last, in time order (left to right, top to bottom), each labelled with its time.
-
-Look for anything that gives the video away as AI-made or broken:
-- faces melting, warping or turning into someone else
-- bodies: extra or missing limbs, fingers or heads; joints bending the wrong
-  way; parts merging; missing features (no belly button, no nipples)
-- clothes: changing, morphing, appearing or vanishing between stills; fabric
-  fused with skin; clothes that make no sense on this person (a man in a
-  strapless tube top, a top missing the straps it needs, one sleeve only)
-- garbled or nonsense text and logos on clothes or objects
-- objects or background appearing out of nowhere, smeared or dissolving
-
-Ordinary motion blur, lighting changes, camera moves and cuts are fine.
-
-List every problem. Mark one "blocking" when it alone would show a viewer
-the reel is AI-made or broken, "minor" when it is easy to miss.
-The percent is how sure you are the whole reel should not be posted: any
-blocking problem makes it high, and several minor ones can add up to high.
-Keep it short: a few words per problem, one sentence of reasoning."""
-
-MIRRORED = (
-    " The video was mirrored left to right on purpose: text and logos reading"
-    " backwards are not a glitch."
-)
-
-UNREADABLE = "Could not read the video"
-NO_SHEET = "Could not make the contact sheet"
-TOO_LONG = "AI check took too long"
-NO_ANSWER = "No AI model answered"
-NO_MODEL = "No AI model set up to check videos"
-_REASONS: tuple[tuple[type[LLMError], str], ...] = (
-    (LLMOutputError, "The AI gave a broken answer"),
-    (LLMRefusedError, "The AI refused to check this video"),
-    (LLMAuthError, "The AI key was rejected"),
-    (LLMInputError, "The AI could not take this video"),
-)
-FAILED = "The AI check failed"
-
-_ERRORS = (OSError, RuntimeError, ValueError, subprocess.SubprocessError)
-
 
 class _NoAnswer(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
@@ -93,23 +52,31 @@ def still_count(seconds: float) -> int:
 
 
 def prompt_text(
-    video: Path, seconds: float, stills: int, *, mirrored: bool = False
+    video: Path,
+    seconds: float,
+    stills: int,
+    *,
+    mirrored: bool = False,
 ) -> str:
     return (
         f"Contact sheet of {video.name} ({seconds:.1f} s, {stills} stills)."
-        + (MIRRORED if mirrored else "")
+        + (clone_links_constants().mirrored if mirrored else "")
         + " Is it too glitchy to post?"
     )
 
 
 def unanswered(
-    video: Path, error: str, kind: ErrorKind = "failed", *, detail: str | None = None
+    video: Path,
+    error: str,
+    kind: ErrorKind = "failed",
+    *,
+    detail: str | None = None,
 ) -> CloneAiCheck:
     s = settings.clone_ai_check
     return CloneAiCheck(
         video=str(video),
         frame_px=s.frame_px,
-        prompt_system=RULES,
+        prompt_system=clone_links_constants().rules,
         prompt_text="",
         error=error,
         error_kind=kind,
@@ -119,31 +86,39 @@ def unanswered(
 
 def check_clone(video: Path, *, mirrored: bool = False) -> CloneAiCheck:
     s = settings.clone_ai_check
+    constants = clone_links_constants()
     started = time.monotonic()
     deadline = started + s.deadline_s
     found = CloneAiCheck(
-        video=str(video), frame_px=s.frame_px, prompt_system=RULES, prompt_text=""
+        video=str(video),
+        frame_px=s.frame_px,
+        prompt_system=constants.rules,
+        prompt_text="",
     )
     try:
         seconds = video_seconds(video, s.ffmpeg_timeout_s)
-    except _ERRORS as exc:
+    except constants.read_errors as exc:
         logger.warning("AI check: cannot read %s", video, exc_info=True)
-        return _failed(found, UNREADABLE, "failed", str(exc))
+        return _failed(found, constants.unreadable, "failed", str(exc))
     count = still_count(seconds)
     text = prompt_text(video, seconds, count, mirrored=mirrored)
     found = found.model_copy(update={"video_seconds": seconds, "prompt_text": text})
+    sheet_errors: tuple[type[BaseException], ...] = (
+        *constants.read_errors,
+        LLMInputError,
+    )
     with tempfile.TemporaryDirectory(prefix="clone_ai_check-") as work:
         try:
             sheet = sheet_at(video, Path(work) / "sheet.jpg", count)
-            prompt = Prompt.of(text, sheet, system=RULES)
-        except (*_ERRORS, LLMInputError) as exc:
+            prompt = Prompt.of([text, sheet], system=constants.rules)
+        except sheet_errors as exc:
             logger.warning("AI check: no contact sheet of %s", video, exc_info=True)
-            return _failed(found, NO_SHEET, "failed", str(exc))
+            return _failed(found, constants.no_sheet, "failed", str(exc))
         found = found.model_copy(
             update={
                 "stills_at": still_times(seconds, count),
                 "sheet_s": round(time.monotonic() - started, 3),
-            }
+            },
         )
         asked_at = time.monotonic()
         asked = _ask(prompt, deadline)
@@ -165,23 +140,31 @@ def check_clone(video: Path, *, mirrored: bool = False) -> CloneAiCheck:
             "input_tokens": asked.input_tokens,
             "thinking_tokens": asked.thinking_tokens,
             "output_tokens": asked.output_tokens,
-        }
+        },
     )
 
 
-def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswer:
+def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswer:  # noqa: C901, PLR0911, PLR0912
+    constants = clone_links_constants()
     said: list[str] = []
     provider = model = ""
     unavailable = False
 
     def none_answered(error: LLMError, reason: str) -> _NoAnswer:
         return _NoAnswer(
-            error=error, reason=reason, said=said, provider=provider, model=model
+            error=error,
+            reason=reason,
+            said=said,
+            provider=provider,
+            model=model,
         )
 
     for name in settings.llm.video_chain:
         if time.monotonic() >= deadline:
-            return none_answered(LLMUnavailableError(TOO_LONG), TOO_LONG)
+            return none_answered(
+                LLMUnavailableError(constants.too_long),
+                constants.too_long,
+            )
         kind, _, named = name.partition(":")
         try:
             cls = llm_class(kind.strip().lower())
@@ -197,23 +180,34 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
         keys: list[str | None] = [*cls.default_keys()] or [None]
         for number, key in enumerate(keys, start=1):
             if time.monotonic() >= deadline:
-                return none_answered(LLMUnavailableError(TOO_LONG), TOO_LONG)
+                return none_answered(
+                    LLMUnavailableError(constants.too_long),
+                    constants.too_long,
+                )
             entry = f"{name} (key {number} of {len(keys)})" if len(keys) > 1 else name
             try:
                 return get_llm(LLMUse.VIDEO, provider=name, api_key=key).answered(
-                    prompt, CloneAiVerdict, deadline=deadline
+                    prompt,
+                    CloneAiVerdict,
+                    deadline=deadline,
                 )
             except LLMQuotaError as exc:
                 said.append(_said(entry, exc))
                 unavailable = True
                 logger.warning(
-                    "AI check: %s out of quota (%s)", entry, exc, exc_info=True
+                    "AI check: %s out of quota (%s)",
+                    entry,
+                    exc,
+                    exc_info=True,
                 )
             except LLMUnavailableError as exc:
                 said.append(_said(entry, exc))
                 unavailable = True
                 logger.warning(
-                    "AI check: %s unavailable (%s)", entry, exc, exc_info=True
+                    "AI check: %s unavailable (%s)",
+                    entry,
+                    exc,
+                    exc_info=True,
                 )
                 break
             except LLMAuthError as exc:
@@ -231,12 +225,18 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
                 logger.warning("AI check: %s failed", entry, exc_info=True)
                 return none_answered(exc, _reason(exc))
     if time.monotonic() >= deadline:
-        return none_answered(LLMUnavailableError(TOO_LONG), TOO_LONG)
+        return none_answered(
+            LLMUnavailableError(constants.too_long),
+            constants.too_long,
+        )
     if not provider:
-        return none_answered(LLMConfigError(NO_MODEL), NO_MODEL)
+        return none_answered(LLMConfigError(constants.no_model), constants.no_model)
     if unavailable:
-        return none_answered(LLMUnavailableError(NO_ANSWER), NO_ANSWER)
-    return none_answered(LLMConfigError(NO_ANSWER), NO_ANSWER)
+        return none_answered(
+            LLMUnavailableError(constants.no_answer),
+            constants.no_answer,
+        )
+    return none_answered(LLMConfigError(constants.no_answer), constants.no_answer)
 
 
 def _said(name: str, exc: LLMError) -> str:
@@ -254,11 +254,24 @@ def _kind(exc: LLMError) -> ErrorKind:
 
 
 def _reason(exc: LLMError) -> str:
-    return next((r for cls, r in _REASONS if isinstance(exc, cls)), FAILED)
+    constants = clone_links_constants()
+    match exc:
+        case LLMOutputError():
+            return constants.broken_answer
+        case LLMRefusedError():
+            return constants.refused
+        case LLMAuthError():
+            return constants.key_rejected
+        case LLMInputError():
+            return constants.cannot_take_video
+        case _:
+            return constants.check_failed
 
 
 def _unanswered_check(
-    found: CloneAiCheck, asked: _NoAnswer, llm_s: float
+    found: CloneAiCheck,
+    asked: _NoAnswer,
+    llm_s: float,
 ) -> CloneAiCheck:
     kind = _kind(asked.error)
     detail = "\n".join(asked.said) or str(asked.error)
@@ -272,7 +285,7 @@ def _unanswered_check(
     )
     return _failed(
         found.model_copy(
-            update={"provider": asked.provider, "model": asked.model, "llm_s": llm_s}
+            update={"provider": asked.provider, "model": asked.model, "llm_s": llm_s},
         ),
         asked.reason,
         kind,
@@ -281,10 +294,13 @@ def _unanswered_check(
 
 
 def _failed(
-    found: CloneAiCheck, error: str, kind: ErrorKind, detail: str
+    found: CloneAiCheck,
+    error: str,
+    kind: ErrorKind,
+    detail: str,
 ) -> CloneAiCheck:
     return found.model_copy(
-        update={"error": error, "error_kind": kind, "error_detail": detail}
+        update={"error": error, "error_kind": kind, "error_detail": detail},
     )
 
 

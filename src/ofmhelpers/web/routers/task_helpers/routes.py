@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 lazy from collections.abc import Callable
 
@@ -6,7 +8,7 @@ from fastapi.responses import Response
 
 from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.features.jobs import own
-from ofmhelpers.features.jobs.schema import JobStatusPayload
+from ofmhelpers.features.jobs.models import JobStatusPayload
 from ofmhelpers.web.dependencies import Actors
 from ofmhelpers.web.routers.task_helpers.responses import (
     job_assets,
@@ -28,13 +30,13 @@ def _pending_text(pending_message: Callable[[Job], str], job: Job) -> str:
         return "Working…"
 
 
-def add_job_routes(
+def add_job_routes(  # noqa: PLR0913, PLR0917
     router: APIRouter,
     title: str,
     pending_message: Callable[[Job], str],
     back_url: str,
     back_label: str,
-    show_inputs: bool = False,
+    show_inputs: bool = False,  # noqa: FBT001, FBT002
 ) -> None:
     files_prefix = f"{router.prefix}/files"
 
@@ -45,14 +47,16 @@ def add_job_routes(
         return render(
             request,
             "job_status.html",
-            job=job,
-            assets=found.assets,
-            failed_sources=found.failed_sources,
-            job_inputs=job_inputs(job) if show_inputs else None,
-            title=title,
-            pending_message=_pending_text(pending_message, job),
-            back_url=back_url,
-            back_label=back_label,
+            {
+                "job": job,
+                "assets": found.assets,
+                "failed_sources": found.failed_sources,
+                "job_inputs": job_inputs(job) if show_inputs else None,
+                "title": title,
+                "pending_message": _pending_text(pending_message, job),
+                "back_url": back_url,
+                "back_label": back_label,
+            },
         )
 
     @router.get("/jobs/{job_id}/status")
@@ -61,7 +65,10 @@ def add_job_routes(
 
     @router.get("/files/{job_id}/{index}")
     def download_file(
-        job_id: str, index: int, actors: Actors, dl: Annotated[int, Query()] = 0
+        job_id: str,
+        index: int,
+        actors: Actors,
+        dl: Annotated[int, Query()] = 0,
     ) -> Response:
         return serve_job_file(own.find(job_id, actors), index, as_attachment=bool(dl))
 

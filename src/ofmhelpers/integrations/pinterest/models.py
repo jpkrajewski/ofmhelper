@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -121,7 +123,7 @@ class _Page(BaseModel):
     clips: list[_Clip]
     layout: int = 0
     style: dict[str, str] = Field(
-        default_factory=lambda: {"background_color": "#FFFFFF"}
+        default_factory=lambda: {"background_color": "#FFFFFF"},
     )
 
 
@@ -146,7 +148,7 @@ class PinCreate(BaseModel):
             "pin.id",
             "pin.image_signature",
             "pin.story_pin_data_id",
-        ]
+        ],
     )
     is_comments_allowed: bool = True
     is_unified_builder: bool = True
@@ -176,9 +178,9 @@ class PinCreate(BaseModel):
                             clip_type=1 if m.video else 0,
                             source_media_height=m.height,
                             source_media_width=m.width,
-                        )
+                        ),
                     ],
-                )
+                ),
             ],
         )
         return cls(

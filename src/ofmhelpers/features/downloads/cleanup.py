@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -10,7 +13,7 @@ from ofmhelpers.db.downloads.schema import Download
 from ofmhelpers.db.jobs.schema import Named
 from ofmhelpers.db.jobs.store import naming_each
 from ofmhelpers.features.assets.store import assets_root_for_user
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 from ofmhelpers.log import get_logger
@@ -18,7 +21,8 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 _BATCH = 50
-_RULES = ("unused", "cloned", "max")
+type Rule = Literal["unused", "cloned", "max"]
+_RULES: tuple[Rule, ...] = ("unused", "cloned", "max")
 
 
 class _Judged(BaseModel):
@@ -28,7 +32,7 @@ class _Judged(BaseModel):
     fragment: str | None = None
     use: Named | None = None
     idle_since: datetime
-    rule: str | None = None
+    rule: Rule | None = None
 
     @property
     def path(self) -> Path:
@@ -103,7 +107,7 @@ def _look(file: Download, *, write: bool) -> _Judged:
     )
 
 
-def _rule(seen: _Judged, now: datetime) -> str | None:
+def _rule(seen: _Judged, now: datetime) -> Rule | None:
     cfg = settings.downloaders
     idle = now - seen.idle_since
     if idle <= timedelta(seconds=cfg.keep_unused_s):
@@ -169,12 +173,14 @@ def _keeps_asset(seen: _Judged, now: datetime) -> bool:
 
 def _thumbnail(seen: _Judged) -> None:
     shown = previews.ResultPreview(
-        source=seen.path, job_id=seen.file.job_id, index=seen.file.position
+        source=seen.path,
+        job_id=seen.file.job_id,
+        index=seen.file.position,
     )
-    kind = classify_kind(seen.path.name)
-    if kind == "video":
+    kind = FileKind.from_ext(seen.path.name)
+    if kind == FileKind.VIDEO:
         shown.poster()
-    elif kind == "image":
+    elif kind == FileKind.IMAGE:
         shown.make()
 
 
@@ -207,9 +213,9 @@ def _delete_files(seen: _Judged, now: datetime) -> int:
     folder = seen.path.parent
     if folder != DownloadConfig().output_dir and not any(folder.iterdir()):
         folder.rmdir()
-    if classify_kind(seen.path.name) == "video":
-        previews.preview_path(file.job_id, file.position, "video").unlink(
-            missing_ok=True
+    if FileKind.from_ext(seen.path.name) == FileKind.VIDEO:
+        previews.preview_path(file.job_id, file.position, FileKind.VIDEO).unlink(
+            missing_ok=True,
         )
         previews.failed_path(file.job_id, file.position).unlink(missing_ok=True)
     if not _keeps_asset(seen, now):
@@ -240,7 +246,13 @@ def _sweep_one(seen: _Judged, now: datetime, done: Swept) -> None:
         return
     done.removed += 1
     done.freed += freed
-    setattr(done, seen.rule, getattr(done, seen.rule) + 1)
+    match seen.rule:
+        case "unused":
+            done.unused += 1
+        case "cloned":
+            done.cloned += 1
+        case "max":
+            done.max += 1
 
 
 def _idle_before(now: datetime) -> datetime:

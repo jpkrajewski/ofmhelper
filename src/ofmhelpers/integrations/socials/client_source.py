@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import random
 import time
 from typing import ClassVar
@@ -80,7 +82,11 @@ class ClientSource(AccountSource):
         return answers
 
     def _one(
-        self, handle: str, pool: ProxyPool, tries: int, cookies: str | None
+        self,
+        handle: str,
+        pool: ProxyPool,
+        tries: int,
+        cookies: str | None,
     ) -> AccountStats | Refusal | None:
         failures: list[RetryableError] = []
         for attempt in range(tries):
@@ -105,7 +111,11 @@ class ClientSource(AccountSource):
                 )
             except SocialError as exc:
                 logger.warning(
-                    "%s @%s: scan refused: %s", self.key, handle, exc, exc_info=True
+                    "%s @%s: scan refused: %s",
+                    self.key,
+                    handle,
+                    exc,
+                    exc_info=True,
                 )
                 return Refusal(message=str(exc))
         if all(isinstance(f, RateLimitedError) for f in failures):

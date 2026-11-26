@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import inspect
 import logging
 import multiprocessing
@@ -28,7 +30,9 @@ def test_perform_job_takes_what_rq_passes_it():
 def test_work_configures_logging_in_its_own_process(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        worker_module, "configure_logging", lambda *a, **kw: calls.append(1)
+        worker_module,
+        "configure_logging",
+        lambda *a, **kw: calls.append(1),
     )
     monkeypatch.setattr(Worker, "work", lambda self, *a, **kw: True)
 
@@ -42,15 +46,24 @@ def test_work_forwards_its_arguments_to_rq(monkeypatch):
     seen = {}
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
     monkeypatch.setattr(
-        Worker, "work", lambda self, *a, **kw: seen.update(args=a, kwargs=kw) or True
+        Worker,
+        "work",
+        lambda self, burst, logging_level, date_format, log_format, max_jobs, max_idle_time, with_scheduler, dequeue_strategy: (  # noqa: E501
+            seen.update(
+                burst=burst,
+                with_scheduler=with_scheduler,
+                logging_level=logging_level,
+            )
+            or True
+        ),
     )
 
     w = ConfiguredWorker.__new__(ConfiguredWorker)
     w.work(burst=True, with_scheduler=True, logging_level="DEBUG")
 
-    assert seen["kwargs"]["burst"] is True
-    assert seen["kwargs"]["with_scheduler"] is True
-    assert seen["kwargs"]["logging_level"] == "DEBUG"
+    assert seen["burst"] is True
+    assert seen["with_scheduler"] is True
+    assert seen["logging_level"] == "DEBUG"
 
 
 class _Pool:
@@ -140,7 +153,9 @@ def test_worker_logger_is_named_for_the_module_not_main():
 def _group(monkeypatch, tmp_path, pool) -> multiprocessing.Process:
     monkeypatch.setattr(worker_module, "_preload_jobs", lambda: None)
     monkeypatch.setattr(
-        worker_module.QueueWorkers, "run", lambda self: pool(self.queue, tmp_path)
+        worker_module.QueueWorkers,
+        "run",
+        lambda self: pool(self.queue, tmp_path),
     )
     queues = [QueueName.DEFAULT, QueueName.CLONE_LINKS, QueueName.EVENTS]
     group = multiprocessing.get_context("fork").Process(target=QueueGroup(queues).run)
@@ -173,7 +188,8 @@ def _gone(pid: int) -> bool:
 
 
 def test_each_queue_of_a_group_has_its_own_pool_and_a_stop_reaches_them_all(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     group = _group(monkeypatch, tmp_path, _serving)
     pools = _pools(tmp_path, 3)
@@ -196,7 +212,8 @@ def _events_dies(queue: QueueName, folder) -> None:
 
 
 def test_a_pool_that_dies_takes_the_container_down_to_be_started_again(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     group = _group(monkeypatch, tmp_path, _events_dies)
     pools = _pools(tmp_path, 3)

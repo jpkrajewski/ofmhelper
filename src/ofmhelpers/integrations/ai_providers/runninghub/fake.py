@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import threading
@@ -28,7 +30,8 @@ class TaskBody(BaseModel):
     client_id: str = Field(default="", serialization_alias="clientId")
     prompt_tips: str = Field(default="", serialization_alias="promptTips")
     failed_reason: dict[str, Any] = Field(
-        default_factory=dict, serialization_alias="failedReason"
+        default_factory=dict,
+        serialization_alias="failedReason",
     )
     usage: dict[str, Any] | None = None
 
@@ -38,7 +41,9 @@ class TaskBody(BaseModel):
 
 def _refused(code: int, message: str, task_id: str = "") -> FakeReply:
     return TaskBody(
-        task_id=task_id, error_code=str(code), error_message=message
+        task_id=task_id,
+        error_code=str(code),
+        error_message=message,
     ).reply()
 
 
@@ -58,7 +63,7 @@ class FakeRunningHub:
         authorized = request.headers.get("Authorization") == f"Bearer {FAKE_KEY}"
         if not authorized and path == f"{_API}media/upload/binary":
             return FakeReply.json_body(
-                {"code": 1, "msg": "ApiKey verification failed: API Key not found"}
+                {"code": 1, "msg": "ApiKey verification failed: API Key not found"},
             )
         if not authorized:
             raw = request.body
@@ -78,7 +83,7 @@ class FakeRunningHub:
                         "download_url": f"https://{FILES_HOST}/input/{number}?q-sign=x",
                         "filename": f"openapi/{number}",
                     },
-                }
+                },
             )
         raw = request.body
         body = json.loads(raw if isinstance(raw, (str, bytes)) and raw else b"{}")
@@ -139,7 +144,8 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
     if urlsplit(request.url or "").path.endswith(".mp4"):
         return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
     return FakeReply(
-        body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+        body=fake_media.image(fmt="PNG"),
+        headers={"Content-Type": "image/png"},
     )
 
 

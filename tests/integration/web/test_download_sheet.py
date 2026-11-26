@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from datetime import date, timedelta
 lazy from pathlib import Path
@@ -15,11 +17,20 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role, UserForm
 from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.assets import store as asset_store
-from ofmhelpers.features.downloads import service, sheet
-from ofmhelpers.features.drive.folders import root_name
-from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive, fake_person
-from ofmhelpers.integrations.gdrive.models import SheetTab
+from ofmhelpers.features.downloads import links, sheet
+from ofmhelpers.features.storage.constants import StorageConstants
+from ofmhelpers.features.storage.models import StorageAccess
+from ofmhelpers.features.storage.service import StorageService
+from ofmhelpers.integrations.storage import (
+    RECONNECT,
+    DriveError,
+    SheetTab,
+)
+from ofmhelpers.integrations.storage.gdrive.fake import (
+    FakeDrive,
+    fake_drive,
+    fake_person,
+)
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"
@@ -58,6 +69,11 @@ def _client(email: str = OWNER, *, google: bool = True) -> TestClient:
     if google:
         user_repository().signed_in(c.user.id, "", f"fake-refresh:{email}")  # type: ignore[attr-defined]
     return c
+
+
+def root_name() -> str:
+    access = StorageAccess(owner_id=1, client=None, constants=StorageConstants())
+    return StorageService.compose(access).folders.root_name()
 
 
 def _root(email: str) -> str:
@@ -147,7 +163,9 @@ def test_only_the_links_added_since_are_downloaded(downloads):
 def test_a_link_pasted_by_hand_before_is_not_downloaded_again(downloads):
     client = _client()
     pasted = client.post(
-        "/download-media/run", data={"urls": A}, headers=keyed()
+        "/download-media/run",
+        data={"urls": A},
+        headers=keyed(),
     ).json()["job_id"]
     _type(OWNER, A, B)
 
@@ -203,7 +221,7 @@ def test_links_queued_stay_new_when_the_queue_failed(downloads, monkeypatch):
         raise ConnectionError(msg)
 
     with monkeypatch.context() as broken:
-        broken.setattr(service, "enqueue", down)
+        broken.setattr(links, "enqueue", down)
         with pytest.raises(ConnectionError, match="queue is down"):
             client.post(URL)
     assert downloads.fetched == []
@@ -232,6 +250,8 @@ def test_the_button_rests_after_a_click_and_drive_is_not_asked(drive, downloads)
 
 def test_a_refused_click_does_not_rest_the_button(downloads):
     client = _client()
+    yesterday = SheetTab(name="Sheet1", rows=[[sheet.today() - timedelta(days=1)]])
+    fake_drive().add_sheet(_root(OWNER), "content_links", [yesterday])
     assert client.post(URL).status_code == 404
     assert client.post(URL).status_code == 404
     page = client.get("/download-assets").text
@@ -321,12 +341,7 @@ def test_everyone_reads_the_sheet_in_their_own_drive(downloads):
     _type(OWNER, A)
     _root(OTHER)
 
-    r = other.post(URL)
-
-    assert r.status_code == 404
-    assert r.json()["detail"] == (
-        f"No sheet named content_links in {root_name()} in Google Drive"
-    )
+    assert _click(other)["new"] == 0
     assert downloads.fetched == []
     assert _click(owner)["new"] == 1
 
@@ -355,16 +370,19 @@ def test_without_google_drive_the_click_says_to_connect_it(downloads):
     assert r.json() == {"detail": "Connect Google Drive on your Account page"}
 
 
-def test_no_root_folder_and_no_sheet_say_which_sheet_is_missing():
+def test_a_missing_sheet_is_made_with_todays_column_once(downloads):
     client = _client()
-    wanted = f"No sheet named content_links in {root_name()} in Google Drive"
-
-    r = client.post(URL)
-    assert (r.status_code, r.json()["detail"]) == (404, wanted)
-
     _type(OWNER, A, name="some other sheet")
-    r = client.post(URL)
-    assert (r.status_code, r.json()["detail"]) == (404, wanted)
+
+    first = _click(client)
+    _rested(client)
+    again = _click(client)
+
+    made = fake_drive().named("content_links", _root(OWNER))
+    assert len(made) == 1
+    assert fake_drive().sheet(made[0]).tabs[0].rows == [[sheet.today()]]
+    assert (first["new"], again["new"]) == (0, 0)
+    assert downloads.fetched == []
 
 
 def test_a_sheet_without_todays_date_says_so(drive, downloads):
@@ -401,7 +419,8 @@ def test_a_refused_google_sign_in_says_to_reconnect(drive, downloads):
 
 
 def test_a_drive_failure_is_one_plain_sentence_and_nothing_is_marked(
-    downloads, monkeypatch
+    downloads,
+    monkeypatch,
 ):
     client = _client()
     _type(OWNER, A)

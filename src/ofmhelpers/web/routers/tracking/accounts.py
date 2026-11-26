@@ -1,12 +1,14 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from ofmhelpers.db.tracked_accounts.models import AddAccounts
 from ofmhelpers.db.tracked_accounts.schema import (
     AccountQuery,
-    AddAccounts,
     AddResult,
     AssignCreator,
     Notes,
@@ -16,11 +18,13 @@ from ofmhelpers.features.accounts import page
 from ofmhelpers.features.accounts.removal import remove_accounts
 from ofmhelpers.features.accounts.tracker import sync_now
 from ofmhelpers.web.access import Area
-from ofmhelpers.web.dependencies import Access, OwnerId, Scope
+from ofmhelpers.web.dependencies import Access, OwnerId, Scope, Storage
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
-    prefix="/accounts", tags=["accounts"], dependencies=[Access(Area.ACCOUNTS)]
+    prefix="/accounts",
+    tags=["accounts"],
+    dependencies=[Access(Area.ACCOUNTS)],
 )
 
 ListQuery = Annotated[AccountQuery, Query()]
@@ -33,7 +37,7 @@ class _Count(BaseModel):
 @router.get("")
 def index(request: Request, query: ListQuery, scope: Scope) -> Response:
     view = page.list_view(query, scope)
-    return render(request, "accounts.html", query=query, **dict(view))
+    return render(request, "accounts.html", {"query": query, **dict(view)})
 
 
 @router.post("/add")
@@ -52,8 +56,8 @@ def creator(body: AssignCreator, scope: Scope) -> _Count:
 
 
 @router.post("/delete")
-def delete(body: SelectedAccounts, scope: Scope) -> _Count:
-    return _Count(count=remove_accounts(body.ids, scope))
+def delete(body: SelectedAccounts, scope: Scope, storage: Storage) -> _Count:
+    return _Count(count=remove_accounts(body.ids, scope, storage.folders))
 
 
 @router.post("/{account_id}/notes")
@@ -64,7 +68,10 @@ def notes(account_id: int, body: Notes, scope: Scope) -> Notes:
 
 @router.get("/{account_id}")
 def analytics(
-    request: Request, account_id: int, query: ListQuery, scope: Scope
+    request: Request,
+    account_id: int,
+    query: ListQuery,
+    scope: Scope,
 ) -> Response:
     view = page.analytics_view(account_id, query, scope)
-    return render(request, "account_analytics.html", query=query, **dict(view))
+    return render(request, "account_analytics.html", {"query": query, **dict(view)})

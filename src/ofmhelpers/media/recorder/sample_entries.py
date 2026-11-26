@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import struct
 
 from ofmhelpers.media.mov_atoms import Atom, parse
@@ -28,7 +30,7 @@ def _descriptor(tag: int, body: bytes) -> bytes:
             0x80 | (n >> 14 & 0x7F),
             0x80 | (n >> 7 & 0x7F),
             n & 0x7F,
-        ]
+        ],
     )
     return bytes([tag]) + length + body
 
@@ -70,7 +72,11 @@ def audio_entry(profile: DeviceProfile) -> Atom:
         + struct.pack(">HHhH", a.channels, _SAMPLE_SIZE_BITS, _COMPRESSION_ID_VBR, 0)
         + struct.pack(">I", a.sample_rate << 16)
         + struct.pack(
-            ">IIII", _AAC_FRAME_SAMPLES, 1, a.channels, _SAMPLE_SIZE_BITS // 8
+            ">IIII",
+            _AAC_FRAME_SAMPLES,
+            1,
+            a.channels,
+            _SAMPLE_SIZE_BITS // 8,
         )
     )
     wave = Atom(

@@ -7,18 +7,18 @@
 {% set drive_switch = dated and drive_filter is defined and can(request, "drive-upload") %}
 <div class="ph-toolbar"{% if kept %} data-keep{% elif not hidden_count %} hidden{% endif %}{% if dated %} data-zone-times{% endif %}>
     {% if dated %}
-    {{ ui.date_range(here, dates.date_from, dates.date_to, dates.today, keep={"va": dates.va, "not_uploaded": 1 if dates.not_uploaded else none}, clear=here ~ dates.link(date_from=none, date_to=none)) }}
+    {{ ui.date_range(here, dates.date_from, dates.date_to, dates.today, keep={"va": dates.va, "not_uploaded": 1 if dates.not_uploaded else none}, clear=here ~ dates.link({'date_from': none, 'date_to': none})) }}
     {% if makers %}
     {% set picked = makers | selectattr("id", "equalto", dates.va) | first %}
     {% call ui.menu_button(picked.label if picked else "VAs", "users", hook="made-by") %}
-        {{ ui.menu_choice("Everyone", here ~ dates.link(va=none), current=not picked) }}
-        {% for maker in makers %}{{ ui.menu_choice(maker.label, here ~ dates.link(va=maker.id), current=maker.id == dates.va) }}{% endfor %}
+        {{ ui.menu_choice("Everyone", here ~ dates.link({'va': none}), current=not picked) }}
+        {% for maker in makers %}{{ ui.menu_choice(maker.label, here ~ dates.link({'va': maker.id}), current=maker.id == dates.va) }}{% endfor %}
     {% endcall %}
     {% endif %}
     {% endif %}
     <div class="toolbar-actions">
         {% if tour is defined %}{{ ui.button("How to", icon="play", hook="tour-open") }}{% endif %}
-        {% if drive_switch %}{{ ui.button("Show not uploaded to Drive", href=here ~ dates.link(not_uploaded=not dates.not_uploaded), icon="folder", hook="not-uploaded", attrs={"aria-pressed": "true" if dates.not_uploaded else "false"}) }}{% endif %}
+        {% if drive_switch %}{{ ui.button("Show not uploaded to Drive", href=here ~ dates.link({'not_uploaded': not dates.not_uploaded}), icon="folder", hook="not-uploaded", attrs={"aria-pressed": "true" if dates.not_uploaded else "false"}) }}{% endif %}
         {% if sop is defined %}{{ ui.button("SOP", icon="list", hook="sop-open") }}{% endif %}
         {% if sheet_button %}{{ ui.button("Download from Drive sheet", icon="download", hook="sheet-download", attrs={"data-cooldown-s": sheet_cooldown_s}) }}{% endif %}
         {% if request is not defined or can(request, "hide") %}{{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": kept and not hidden_count}) }}{% endif %}

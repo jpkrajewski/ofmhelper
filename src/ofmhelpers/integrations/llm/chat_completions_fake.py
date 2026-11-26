@@ -1,6 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
 import json
 import threading
 from typing import Any
+lazy from collections.abc import Mapping
 
 import httpx
 
@@ -25,7 +27,7 @@ def _error(
     return httpx.Response(code, json={"error": error}, headers=headers)
 
 
-def _not_strict(node: Any) -> str | None:
+def _not_strict(node: Mapping[str, Any] | list[Any]) -> str | None:  # noqa: PLR0911
     if isinstance(node, list):
         return next((r for r in map(_not_strict, node) if r), None)
     if not isinstance(node, dict):
@@ -44,7 +46,11 @@ def _not_strict(node: Any) -> str | None:
 
 class FakeChatCompletions:
     def __init__(
-        self, host: str, key: str, models: frozenset[str], max_images: int
+        self,
+        host: str,
+        key: str,
+        models: frozenset[str],
+        max_images: int,
     ) -> None:
         self.host = host
         self.key = key
@@ -58,11 +64,14 @@ class FakeChatCompletions:
     def answer_next(self, answer: dict[str, Any] | str) -> None:
         with self._lock:
             self._replies.append(
-                answer if isinstance(answer, str) else json.dumps(answer)
+                answer if isinstance(answer, str) else json.dumps(answer),
             )
 
     def fail_next(
-        self, code: int, message: str, retry_after_s: float | None = None
+        self,
+        code: int,
+        message: str,
+        retry_after_s: float | None = None,
     ) -> None:
         with self._lock:
             self._replies.append(_error(code, message, retry_after_s))
@@ -75,7 +84,7 @@ class FakeChatCompletions:
                     "Failed to generate JSON. Please adjust your prompt.",
                     error_code="json_validate_failed",
                     generated=generated,
-                )
+                ),
             )
 
     def filter_next(self) -> None:
@@ -126,10 +135,11 @@ class FakeChatCompletions:
         if images > self.max_images:
             return _error(
                 400,
-                f"Too many images provided. This model supports up to {self.max_images} images",
+                f"Too many images provided. This model "
+                f"supports up to {self.max_images} images",
             )
         why = _not_strict(
-            body.get("response_format", {}).get("json_schema", {}).get("schema")
+            body.get("response_format", {}).get("json_schema", {}).get("schema"),
         )
         if why:
             return _error(400, f"Invalid JSON schema for strict mode: {why}")
@@ -147,7 +157,7 @@ class FakeChatCompletions:
                         "index": 0,
                         "message": {"role": "assistant", "content": content},
                         "finish_reason": finish_reason,
-                    }
+                    },
                 ],
                 "usage": USAGE,
             },

@@ -1,6 +1,8 @@
+# Copyright (C) 2026 jpkrajewski
+
 import math
 from collections.abc import Callable
-from typing import Self
+from typing import Any, Self
 lazy from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -15,11 +17,11 @@ from ofmhelpers.db.jobs.store import (
     reopen_job,
     running_jobs,
 )
-from ofmhelpers.db.users.store import refresh_token
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
+from ofmhelpers.features.storage.service import StorageServiceFolders
 from ofmhelpers.features.trials import media, tasks
+from ofmhelpers.features.trials.constants import TrialsPhase
 from ofmhelpers.features.trials.state import (
     CAPTION_MAX,
     FolderState,
@@ -31,23 +33,19 @@ from ofmhelpers.features.trials.state import (
     load,
 )
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.db.drive_folders.schema import DriveBoard, DriveCard
+lazy from ofmhelpers.db.drive_folders.models import DriveBoard, DriveCard
 lazy from ofmhelpers.db.jobs.schema import Job
 
 logger = get_logger(__name__)
 
 TASK = "trials"
-GENERATE = "Making trials"
-REMAKE = "Making one trial"
-CAPTIONS = "Writing captions"
-UPLOAD = "Uploading"
 RUNS: frozendict[str, Callable[..., object]] = frozendict(
     {
-        GENERATE: tasks.make_trials,
-        REMAKE: tasks.generate_reels,
-        CAPTIONS: tasks.write_captions,
-        UPLOAD: tasks.upload_trials,
-    }
+        TrialsPhase.GENERATE: tasks.make_trials,
+        TrialsPhase.REMAKE: tasks.generate_reels,
+        TrialsPhase.CAPTIONS: tasks.write_captions,
+        TrialsPhase.UPLOAD: tasks.upload_trials,
+    },
 )
 _RESTARTS_MAX = 2
 
@@ -255,8 +253,8 @@ class FolderView(BaseModel):
         )
 
 
-def _card(scope: int | None, viewer: int, login_id: int) -> DriveCard:
-    board = drive_folders.board(owner=scope, viewer=viewer, live=False)
+def _card(folders: StorageServiceFolders, viewer: int, login_id: int) -> DriveCard:
+    board = folders.saved_board(viewer=viewer)
     card = next((c for c in board.cards if c.target.login_id == login_id), None)
     if card is None:
         raise NotFoundError(NO_FOLDER)
@@ -290,8 +288,8 @@ class _Synced(BaseModel):
     state: FolderState
 
 
-def _sync_state(scope: int | None, viewer: int, login_id: int) -> _Synced:
-    card = _card(scope, viewer, login_id)
+def _sync_state(folders: StorageServiceFolders, viewer: int, login_id: int) -> _Synced:
+    card = _card(folders, viewer, login_id)
     state = load(viewer, login_id)
     before = state.model_dump_json()
 
@@ -305,11 +303,13 @@ def _sync_state(scope: int | None, viewer: int, login_id: int) -> _Synced:
     return _Synced(card=card, state=state)
 
 
-def read_posted(uid: int, login_id: int) -> None:
+def read_posted(folders: StorageServiceFolders, uid: int, login_id: int) -> bool:
     try:
-        _sync_state(uid, uid, login_id)
+        card = _sync_state(folders, uid, login_id).card
     except NotFoundError:  # silent: a login with no card any more has nothing to read
         logger.info("trials: no folder card for login %s", login_id)
+        return False
+    return bool(card.posted_folder_id) and not card.error and not card.unread
 
 
 class PhoneCards(BaseModel):
@@ -322,13 +322,15 @@ class OpenedFolder(BaseModel):
     view: FolderView
 
 
-def phone_cards(uid: int, scope: int | None) -> PhoneCards:
-    board = drive_folders.board(owner=scope, viewer=uid, live=False)
+def phone_cards(uid: int, folders: StorageServiceFolders) -> PhoneCards:
+    board = folders.saved_board(viewer=uid)
     running = {j.id for j in running_jobs() if j.actor == str(uid)}
     line = JobQueue(name=QueueName.MEDIA).line()
     progress = {
         c.target.login_id: FolderProgress.of(
-            load(uid, c.target.login_id), running, line
+            load(uid, c.target.login_id),
+            running,
+            line,
         )
         for c in board.cards
     }
@@ -352,22 +354,24 @@ class _Claim:
     def launch(
         self,
         enqueue: Callable[..., object],
-        fn: Callable,
+        fn: Callable[..., object],
         reels: int,
+        task_args: dict[str, Any] | None = None,
         *,
         at_front: bool = False,
-        **kwargs,
     ) -> None:
         trials = settings.trials
         if self.job_id is None:
             return
-        args = {k: v for k, v in kwargs.items() if k != "refresh_token"}
-        merge_params(self.job_id, {"args": args})
+        task_args = task_args or {}
+        merge_params(self.job_id, {"args": task_args})
         enqueue(
             run_job,
-            self.job_id,
-            fn,
-            {"user_id": self.uid, "login_id": self.login_id, **kwargs},
+            (
+                self.job_id,
+                fn,
+                {"user_id": self.uid, "login_id": self.login_id, **task_args},
+            ),
             job_timeout=trials.job_grace_s + trials.per_reel_s * max(1, reels),
             at_front=at_front,
         )
@@ -378,7 +382,6 @@ class TrialsRun(BaseModel):
 
     user_id: int
     login_id: int
-    refresh_token: str = ""
 
 
 class RemakeArgs(BaseModel):
@@ -400,8 +403,7 @@ def replay_run(job: Job) -> TrialsRun | None:
             "user_id": uid,
             "login_id": int(job.params["login"]),
             **args,
-            "refresh_token": refresh_token(uid) or "",
-        }
+        },
     )
 
 
@@ -410,27 +412,25 @@ def restart(job: Job) -> bool:
     label = job.params.get("label")
     args = job.params.get("args")
     if (
-        label not in (GENERATE, REMAKE, UPLOAD)
+        label not in (TrialsPhase.GENERATE, TrialsPhase.REMAKE, TrialsPhase.UPLOAD)
         or job.actor is None
         or restarts >= _RESTARTS_MAX
-        or (label != GENERATE and not isinstance(args, dict))
+        or (label != TrialsPhase.GENERATE and not isinstance(args, dict))
     ):
         return False
-    remake = RemakeArgs.model_validate(args) if label == REMAKE else None
-    upload = UploadArgs.model_validate(args) if label == UPLOAD else None
+    remake = RemakeArgs.model_validate(args) if label == TrialsPhase.REMAKE else None
+    upload = UploadArgs.model_validate(args) if label == TrialsPhase.UPLOAD else None
     uid, login_id = int(job.actor), int(job.params["login"])
     merge_params(job.id, {"restarts": restarts + 1})
     reopen_job(job.id)
     claim = _Claim(uid, login_id, str(label))
     claim.job_id = job.id
-    token = refresh_token(uid) or ""
     if remake is not None:
         claim.launch(
             JobQueue(name=QueueName.MEDIA).put,
             tasks.generate_reels,
             len(remake.keys),
-            refresh_token=token,
-            keys=remake.keys,
+            {"keys": remake.keys},
         )
         return True
     if upload is None:
@@ -438,7 +438,6 @@ def restart(job: Job) -> bool:
             JobQueue(name=QueueName.MEDIA).put,
             tasks.make_trials,
             len(load(uid, login_id).reels),
-            refresh_token=token,
         )
         return True
     stored = {r.key for r in load(uid, login_id).reels if r.stored}
@@ -447,9 +446,7 @@ def restart(job: Job) -> bool:
         JobQueue(name=QueueName.MEDIA if remade else QueueName.DEFAULT).put,
         tasks.upload_trials,
         len(upload.keys),
-        refresh_token=token,
-        account_folder_id=upload.account_folder_id,
-        keys=upload.keys,
+        {"account_folder_id": upload.account_folder_id, "keys": upload.keys},
     )
     return True
 
@@ -457,6 +454,7 @@ def restart(job: Job) -> bool:
 class Trials(BaseModel, frozen=True):
     uid: int
     scope: int | None
+    folders: StorageServiceFolders
     login_id: int
     encode: Callable[..., object]
     enqueue: Callable[..., object]
@@ -466,9 +464,10 @@ class Trials(BaseModel, frozen=True):
             raise NotFoundError(NO_FOLDER)
 
     def open(self) -> OpenedFolder:
-        synced = _sync_state(self.scope, self.uid, self.login_id)
+        synced = _sync_state(self.folders, self.uid, self.login_id)
         return OpenedFolder(
-            card=synced.card, view=FolderView.of(self.uid, synced.state)
+            card=synced.card,
+            view=FolderView.of(self.uid, synced.state),
         )
 
     def live(self) -> FolderLive:
@@ -481,15 +480,12 @@ class Trials(BaseModel, frozen=True):
     def claim(self, label: str) -> _Claim:
         return _Claim(self.uid, self.login_id, label)
 
-    def token(self) -> str:
-        return refresh_token(self.uid) or ""
-
     def busy(self, job_id: str | None) -> bool:
         return _at_work(self.uid, job_id)
 
     def generate(self) -> Started:
-        _sync_state(self.scope, self.uid, self.login_id)
-        claim = self.claim(GENERATE)
+        _sync_state(self.folders, self.uid, self.login_id)
+        claim = self.claim(TrialsPhase.GENERATE)
 
         def take(state: FolderState) -> None:
             if not self.busy(state.job_id):
@@ -500,17 +496,12 @@ class Trials(BaseModel, frozen=True):
 
         state = change(self.uid, self.login_id, take)
         if claim.job_id:
-            claim.launch(
-                self.encode,
-                tasks.make_trials,
-                len(state.reels),
-                refresh_token=self.token(),
-            )
+            claim.launch(self.encode, tasks.make_trials, len(state.reels))
         return Started(started=bool(claim.job_id))
 
     def upload(self, approved: list[str] | None) -> Uploading:
         wanted = set(approved or [])
-        claim = self.claim(UPLOAD)
+        claim = self.claim(TrialsPhase.UPLOAD)
         claimed: list[str] = []
 
         def take(state: FolderState) -> None:
@@ -531,10 +522,8 @@ class Trials(BaseModel, frozen=True):
                 self.encode if remade else self.enqueue,
                 tasks.upload_trials,
                 len(claimed),
+                {"account_folder_id": state.account_folder_id, "keys": claimed},
                 at_front=True,
-                refresh_token=self.token(),
-                account_folder_id=state.account_folder_id,
-                keys=claimed,
             )
         return Uploading(uploading=claimed)
 
@@ -550,7 +539,7 @@ class Reel(BaseModel, frozen=True):
         return state
 
     def remake(self, caption: str | None = None) -> Started:
-        claim = self.trials.claim(REMAKE)
+        claim = self.trials.claim(TrialsPhase.REMAKE)
 
         def take(reel: ReelState) -> None:
             if not self.trials.busy(reel.job_id):
@@ -562,14 +551,13 @@ class Reel(BaseModel, frozen=True):
                 self.trials.encode,
                 tasks.generate_reels,
                 1,
+                {"keys": [self.key]},
                 at_front=True,
-                keys=[self.key],
-                refresh_token=self.trials.token(),
             )
         return Started(started=bool(claim.job_id))
 
     def ask_captions(self) -> Started:
-        claim = self.trials.claim(CAPTIONS)
+        claim = self.trials.claim(TrialsPhase.CAPTIONS)
 
         def take(reel: ReelState) -> None:
             if not reel.captions and not self.trials.busy(reel.job_id):
@@ -581,8 +569,7 @@ class Reel(BaseModel, frozen=True):
                 self.trials.enqueue,
                 tasks.write_captions,
                 1,
-                key=self.key,
-                refresh_token=self.trials.token(),
+                {"key": self.key},
             )
         return Started(started=bool(claim.job_id))
 
@@ -592,7 +579,7 @@ class Reel(BaseModel, frozen=True):
             return Started(started=False)
         return self.remake(text)
 
-    def select(self, selected: bool) -> Selected:
+    def select(self, selected: bool) -> Selected:  # noqa: FBT001
         self._change(lambda r: r.select(selected))
         return Selected(selected=selected)
 

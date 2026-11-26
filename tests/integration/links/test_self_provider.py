@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime, timedelta
 
 from signin import make_user
@@ -31,11 +33,11 @@ def _make_live_link(user_id: int, slug: str, host: str, destination: str) -> str
                 target="onlyfans",
                 account_id=None,
                 creator="",
-            )
+            ),
         ],
     )
     made = _client(user_id).create(
-        NewLink(slug=slug, domain=host, destination=destination)
+        NewLink(slug=slug, domain=host, destination=destination),
     )
     short_links.created(link_id, made)
     return made.remote_id

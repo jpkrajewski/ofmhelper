@@ -1,43 +1,12 @@
-from enum import StrEnum
+# Copyright (C) 2026 jpkrajewski
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from ofmhelpers.db.jobs.schema import ResultFile
-from ofmhelpers.features.jobs.schema import TaskCard
+from ofmhelpers.features.jobs.models import TaskCard
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
-lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep
-
-
-class Medium(StrEnum):
-    VIDEO = "video"
-    AUDIO = "audio"
-
-
-class MethodScore(BaseModel, frozen=True):
-    method: str
-    medium: Medium
-    percent: int
-
-
-class CopyScore(BaseModel, frozen=True):
-    methods: list[MethodScore] = []
-    looks_like_source: bool
-    sounds_like_source: bool | None
-
-    @property
-    def unique(self) -> bool:
-        return not self.looks_like_source and not self.sounds_like_source
-
-
-class RepurposeResult(ResultFile):
-    score: CopyScore | None = None
-    attempts: int = 1
-    step: EncodeStep | None = None
 
 
 class RepurposeCard(TaskCard):
-    score: CopyScore | None = None
-    attempts: int = 1
     mirrored: bool | None = None
     turn: float | None = None
     drive_uploads: list[DriveUpload] = Field(default_factory=list)

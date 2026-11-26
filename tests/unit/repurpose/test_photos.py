@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import json
 import random
 import subprocess
@@ -17,7 +19,7 @@ from ofmhelpers.media.repurpose.photos.models import (
 )
 
 THREADS = json.loads(
-    Path(photo_models.__file__).with_name("threads.json").read_text(encoding="utf-8")
+    Path(photo_models.__file__).with_name("threads.json").read_text(encoding="utf-8"),
 )
 
 
@@ -93,7 +95,11 @@ def test_a_set_is_different_pictures_with_the_phones_exif(tmp_path):
     dest = [tmp_path / "out" / f"IMG_{i}.JPG" for i in range(4)]
 
     written = write_photos(
-        clip, dest, preset=_preset(tmp_path), seed="s1", timeout_s=30
+        clip,
+        dest,
+        preset=_preset(tmp_path),
+        seed="s1",
+        timeout_s=30,
     )
 
     assert 1 <= len(written) <= 4

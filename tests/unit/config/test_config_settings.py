@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import re
 
@@ -160,7 +162,6 @@ def test_aigen_settings_keep_the_kie_era_defaults(clean_env):
     assert s.resume_max_age_s == 48 * 3600
     assert (s.poll_timeout_s, s.video_poll_timeout_s) == (1000, 1800)
     assert s.download_timeout_s == 60
-    assert s.fake_video_duration_s == 3
 
 
 def test_aigen_settings_still_read_the_old_kie_env_names(monkeypatch):
@@ -317,3 +318,11 @@ def test_the_compose_database_password_comes_from_the_environment(monkeypatch):
     assert InfraSettings(_env_file=None).database_url == (
         "postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers"
     )
+
+
+def test_character_sheet_image_limits_must_be_ordered(monkeypatch):
+    monkeypatch.setenv("OFM_CHARACTER_SHEET_MIN_IMAGES", "5")
+    monkeypatch.setenv("OFM_CHARACTER_SHEET_MAX_IMAGES", "4")
+
+    with pytest.raises(ValidationError, match="MIN_IMAGES must not exceed"):
+        WebSettings(_env_file=None)

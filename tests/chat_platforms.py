@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import hashlib
 import hmac
@@ -94,7 +96,13 @@ class StackedDriver:
         return len([p for _, p in self.fake.calls if "/chats" in p])
 
     def _message_event(
-        self, kind: str, fan: str, message_id: str, *, from_fan: bool, at: float
+        self,
+        kind: str,
+        fan: str,
+        message_id: str,
+        *,
+        from_fan: bool,
+        at: float,
     ) -> dict[str, Any]:
         user = fan if from_fan else self.model_id
         return {
@@ -118,12 +126,20 @@ class StackedDriver:
 
     def message(self, fan: str, message_id: str, *, from_fan: bool, at: float) -> dict:
         return self._message_event(
-            "message.created", fan, message_id, from_fan=from_fan, at=at
+            "message.created",
+            fan,
+            message_id,
+            from_fan=from_fan,
+            at=at,
         )
 
     def deleted(self, fan: str, message_id: str, at: float) -> dict:
         return self._message_event(
-            "message.deleted", fan, message_id, from_fan=True, at=at
+            "message.deleted",
+            fan,
+            message_id,
+            from_fan=True,
+            at=at,
         )
 
     def mass(self, mass_id: str) -> dict:
@@ -162,7 +178,10 @@ class StackedDriver:
         }
 
     def signed(
-        self, body: dict, secret: str | None = None, age_s: float = 0
+        self,
+        body: dict,
+        secret: str | None = None,
+        age_s: float = 0,
     ) -> tuple[bytes, dict[str, str]]:
         raw = json.dumps(body).encode()
         delivery = f"msg_{hashlib.sha256(raw).hexdigest()[:16]}"
@@ -177,7 +196,11 @@ class StackedDriver:
         }
 
     def react(
-        self, fan: str, message_id: str, at: float, by_model: bool = True
+        self,
+        fan: str,
+        message_id: str,
+        at: float,
+        by_model: bool = True,  # noqa: FBT001
     ) -> None:
         who = self.model_id if by_model else fan
         self.fake.add_reaction(self.channel(fan), int(message_id), who, int(at * 1000))
@@ -254,7 +277,13 @@ class FanvueDriver:
         return {"uuid": fan, "email": None, "display_name": fan, "handle": fan}
 
     def _message_event(
-        self, kind: str, fan: str, message_id: str, *, from_fan: bool, at: float
+        self,
+        kind: str,
+        fan: str,
+        message_id: str,
+        *,
+        from_fan: bool,
+        at: float,
     ) -> dict[str, Any]:
         return {
             "id": f"{kind}:{message_id}",
@@ -277,7 +306,11 @@ class FanvueDriver:
 
     def deleted(self, fan: str, message_id: str, at: float) -> dict:
         return self._message_event(
-            "creator.message.deleted", fan, message_id, from_fan=True, at=at
+            "creator.message.deleted",
+            fan,
+            message_id,
+            from_fan=True,
+            at=at,
         )
 
     def mass(self, mass_id: str) -> dict:
@@ -318,7 +351,10 @@ class FanvueDriver:
         }
 
     def signed(
-        self, body: dict, secret: str | None = None, age_s: float = 0
+        self,
+        body: dict,
+        secret: str | None = None,
+        age_s: float = 0,
     ) -> tuple[bytes, dict[str, str]]:
         raw = json.dumps(body).encode()
         stamp = str(int(time.time() - age_s))
@@ -330,7 +366,11 @@ class FanvueDriver:
         }
 
     def react(
-        self, fan: str, message_id: str, at: float, by_model: bool = True
+        self,
+        fan: str,
+        message_id: str,
+        at: float,
+        by_model: bool = True,  # noqa: FBT001
     ) -> None:
         del fan, at
         self._reactions[message_id] = by_model
@@ -354,7 +394,7 @@ class FanvueDriver:
                     "created_at": _iso(at),
                     "metadata": {},
                 },
-            }
+            },
         )
         reply = client.post("/events/fanvue", content=raw, headers=headers)
         assert reply.status_code == HTTPStatus.OK

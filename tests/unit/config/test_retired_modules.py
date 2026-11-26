@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import fnmatch
 
 from ofmhelpers.config.retired import retired

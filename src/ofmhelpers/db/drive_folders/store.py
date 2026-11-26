@@ -1,17 +1,19 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 lazy from contextlib import AbstractContextManager
 
 from ofmhelpers.db.devices.store import list_devices
+from ofmhelpers.db.drive_folders.models import DriveTarget
 from ofmhelpers.db.drive_folders.repository import DriveFolderRepository
 from ofmhelpers.db.drive_folders.schema import (
     AccountScan,
-    DriveTarget,
     StoredFolder,
     StoredFolders,
     VaFolder,
 )
 from ofmhelpers.db.users.store import list_users
-lazy from ofmhelpers.db.drive_folders.schema import DriveFile
+lazy from ofmhelpers.db.drive_folders.schema import PostedSeen
 lazy from ofmhelpers.db.users.schema import User
 
 _SERVICE = "instagram"
@@ -36,7 +38,8 @@ def targets(owner: int | None = None) -> list[DriveTarget]:
                     followers=login.tracked_followers,
                 )
     return sorted(
-        found.values(), key=lambda t: (t.followers is None, -(t.followers or 0))
+        found.values(),
+        key=lambda t: (t.followers is None, -(t.followers or 0)),
     )
 
 
@@ -89,16 +92,14 @@ def forget_posted_folder(login_id: int) -> None:
     _repository().save_posted_folder(login_id, None)
 
 
-def record_posted(
-    login_id: int, folder_id: str, files: list[DriveFile], seen_at: float
-) -> int | None:
-    rows = [(f.id, f.name, f.kind) for f in files]
-    return _repository().record_posted(login_id, folder_id, rows, seen_at)
+def record_posted(seen: list[PostedSeen], seen_at: float) -> int | None:
+    return _repository().record_posted(seen, seen_at)
 
 
 def save_scans(scans: dict[int, AccountScan], at: float) -> None:
     _repository().save_scans(
-        {k: v.model_dump(mode="json", by_alias=True) for k, v in scans.items()}, at
+        {k: v.model_dump(mode="json", by_alias=True) for k, v in scans.items()},
+        at,
     )
 
 

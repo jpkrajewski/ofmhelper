@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 from io import BytesIO
 
@@ -8,6 +10,7 @@ from openpyxl import load_workbook
 from pydantic import ValidationError
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, select, table, text
+from statements import counting
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.devices import store
@@ -16,16 +19,13 @@ from ofmhelpers.db.devices.catalog import (
     catalog,
     find_model,
     get_service,
+    login_username,
     services,
 )
 from ofmhelpers.db.devices.catalog.schema import CameraLayout
+from ofmhelpers.db.devices.models import DeviceFields, LoginFields, PhoneQuery
 from ofmhelpers.db.devices.repository import DuplicateError
-from ofmhelpers.db.devices.schema import (
-    AddedLogin,
-    DeviceFields,
-    LoginFields,
-    PhoneQuery,
-)
+from ofmhelpers.db.devices.schema import AddedLogin
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.tracked_accounts.store import list_accounts, track
@@ -62,7 +62,8 @@ def _phone(label: str = "Phone 01", **extra) -> int:
 
 def _add_login(device_id: int, service: str, username: str, **extra: str) -> int:
     added = store.add_login(
-        device_id, LoginFields(service=service, username=username, **extra)
+        device_id,
+        LoginFields(service=service, username=username, **extra),
     )
     assert added is not None
     return added.id
@@ -215,7 +216,7 @@ def test_services_include_mail_providers_socials_and_custom():
     ):
         assert key in keys
     assert get_service("threads").link("brand") == "https://www.threads.net/@brand"
-    assert get_service("threads").username("@Brand") == "brand"
+    assert login_username(get_service("threads"), "@Brand") == "brand"
     assert get_service("custom").custom
     assert get_service("custom").kind is ServiceKind.OTHER
     with pytest.raises(ValueError, match="Unknown login service"):
@@ -223,11 +224,12 @@ def test_services_include_mail_providers_socials_and_custom():
 
 
 def test_usernames_are_stored_the_way_the_service_writes_them():
-    assert get_service("gmail").username("  Anna.B@Gmail.com ") == "anna.b@gmail.com"
-    assert get_service("x").username("@SomeOne") == "someone"
+    gmail = get_service("gmail")
+    assert login_username(gmail, "  Anna.B@Gmail.com ") == "anna.b@gmail.com"
+    assert login_username(get_service("x"), "@SomeOne") == "someone"
     insta = get_service("instagram")
-    assert insta.username("https://www.instagram.com/Yuki_K/") == "yuki_k"
-    assert get_service("custom").username("  JohnDoe ") == "JohnDoe"
+    assert login_username(insta, "https://www.instagram.com/Yuki_K/") == "yuki_k"
+    assert login_username(get_service("custom"), "  JohnDoe ") == "JohnDoe"
 
 
 def test_custom_service_needs_its_provider_name():
@@ -240,7 +242,11 @@ def test_custom_service_needs_its_provider_name():
 
 def test_secrets_are_ciphertext_in_the_database_and_absent_from_lists():
     login_id = _add_login(
-        _phone(), "instagram", "yuki", password="hunter2", backup_codes="111\n222"
+        _phone(),
+        "instagram",
+        "yuki",
+        password="hunter2",
+        backup_codes="111\n222",
     )
     password, codes = _raw_login(login_id)
     assert "hunter2" not in password
@@ -362,7 +368,8 @@ def test_one_account_on_two_phones_is_stored_once():
     second = _phone("Phone 02")
     login_id = _add_login(first, "gmail", "team@gmail.com", password="pw")
     added = store.add_login(
-        second, LoginFields(service="gmail", username="Team@Gmail.com")
+        second,
+        LoginFields(service="gmail", username="Team@Gmail.com"),
     )
     assert added == AddedLogin(id=login_id, existed=True)
     assert _count("logins") == 1
@@ -388,7 +395,8 @@ def test_linking_never_overwrites_a_different_password():
     _add_login(first, "gmail", "a@b.c", password="one")
     with pytest.raises(DuplicateError, match="already saved with other password"):
         store.add_login(
-            second, LoginFields(service="gmail", username="a@b.c", password="two")
+            second,
+            LoginFields(service="gmail", username="a@b.c", password="two"),
         )
     with pytest.raises(DuplicateError, match="already on this phone"):
         store.add_login(first, LoginFields(service="gmail", username="a@b.c"))
@@ -599,7 +607,8 @@ def test_admin_flow(admin):
     device = r.json()["id"]
     assert admin.post("/phones/add", json={"label": "Phone 05"}).status_code == 409
     bad = admin.post(
-        "/phones/add", json={"label": "y", "model_id": "iphone-12", "color_id": "gold"}
+        "/phones/add",
+        json={"label": "y", "model_id": "iphone-12", "color_id": "gold"},
     )
     assert bad.status_code == 422
     assert "never came in" in bad.text
@@ -611,7 +620,8 @@ def test_admin_flow(admin):
     assert r.json() == {"id": r.json()["id"], "linked": False}
     login_id = r.json()["id"]
     dup = admin.post(
-        f"/phones/{device}/logins", json={"service": "x", "username": "brand"}
+        f"/phones/{device}/logins",
+        json={"service": "x", "username": "brand"},
     )
     assert dup.status_code == 409
     assert "already on this phone" in dup.json()["detail"]
@@ -647,7 +657,7 @@ def _workbook(client: TestClient):
     r = client.get("/phones/export.xlsx")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith(
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     assert r.headers["content-disposition"].startswith('attachment; filename="phones-')
     assert r.headers["cache-control"] == "no-store"
@@ -744,3 +754,39 @@ def test_accounts_page_shows_the_phone_in_place_of_notes(va):
     assert "<span>Anna</span>" in html
     assert html.count("data-no-phone") == 1
     assert f'id="phone-{device}"' in va.get("/phones").text
+
+
+def test_archived_logins_are_read_in_one_query_whatever_their_count():
+    first, second = _phone("Phone 01"), _phone("Phone 02")
+    ids = [_add_login(first, "instagram", f"user{n}") for n in range(4)]
+    _add_login(second, "instagram", "user0")
+    store.archive_logins(ids)
+
+    with counting() as seen:
+        archived = store.archived_logins()
+
+    assert len(seen.run) == 1
+    assert {a.username: a.on for a in archived} == {
+        "user0": ["Phone 01", "Phone 02"],
+        "user1": ["Phone 01"],
+        "user2": ["Phone 01"],
+        "user3": ["Phone 01"],
+    }
+
+
+def test_the_phone_list_comes_from_the_cache_until_a_phone_changes():
+    phone = _phone("Phone 01")
+    _add_login(phone, "instagram", "anna")
+
+    with counting() as first:
+        store.list_devices()
+    with counting() as cached:
+        store.list_devices()
+    store.retire_device(phone)
+    with counting() as fresh:
+        [device] = store.list_devices()
+
+    assert cached.reading("devices") == []
+    assert len(fresh.reading("devices")) == len(first.reading("devices")) == 2
+    assert device.retired
+    assert [x.username for x in device.logins] == ["anna"]

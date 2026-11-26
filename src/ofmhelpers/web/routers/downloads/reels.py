@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -43,11 +45,11 @@ def form(
     ratio: RatioQuery = None,
 ) -> Response:
     view = page.page_view(scope, group, rank, ratio)
-    return render(request, "reels.html", **dict(view))
+    return render(request, "reels.html", dict(view))
 
 
 @router.get("/feed")
-def feed_page(
+def feed_page(  # noqa: PLR0913, PLR0917
     request: Request,
     scope: Scope,
     group: GroupQuery = None,
@@ -56,20 +58,24 @@ def feed_page(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Response:
     found = page.feed_page(scope, group, rank, ratio, offset)
-    return render(request, "_reels_feed_page.html", **dict(found))
+    return render(request, "_reels_feed_page.html", dict(found))
 
 
 @router.get("/thumb/{code}")
 def thumb(code: ReelCode, scope: Scope) -> FileResponse:
     return FileResponse(
-        page.cover(code, scope), media_type="image/webp", headers=_THUMB_CACHE
+        page.cover(code, scope),
+        media_type="image/webp",
+        headers=_THUMB_CACHE,
     )
 
 
 @router.get("/watchlist")
 def watchlist(request: Request, scope: Scope, group: GroupQuery = None) -> Response:
     return render(
-        request, "_reels_watch_rows.html", **dict(page.watch_rows(scope, group))
+        request,
+        "_reels_watch_rows.html",
+        dict(page.watch_rows(scope, group)),
     )
 
 

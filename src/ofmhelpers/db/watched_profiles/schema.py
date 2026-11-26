@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import re
 from statistics import median
 from typing import Annotated
@@ -26,7 +28,7 @@ GLOBAL_CDN_HOST = "scontent.cdninstagram.com"
 def _global_cdn(value: str) -> str:
     parts = urlsplit(value)
     if parts.scheme != "https" or not (parts.hostname or "").endswith(
-        CDN_HOST_SUFFIXES
+        CDN_HOST_SUFFIXES,
     ):
         return value
     return parts._replace(netloc=GLOBAL_CDN_HOST).geturl()
@@ -43,8 +45,13 @@ class ProfileHandle(BaseModel):
     def _bare(cls, value: str) -> str:
         text = str(value).strip()
         if "instagram.com" in text:
-            text = urlsplit(text if "//" in text else f"https://{text}").path
-            text = next((part for part in text.split("/") if part), "")
+            has_scheme = text.lower().startswith(("http://", "https://", "//"))
+            parts = urlsplit(text if has_scheme else f"https://{text}")
+            host = (parts.hostname or "").lower().rstrip(".")
+            if host != "instagram.com" and not host.endswith(".instagram.com"):
+                msg = f"Not an Instagram username: {value!r}"
+                raise ValueError(msg)
+            text = next((part for part in parts.path.split("/") if part), "")
         text = text.lstrip("@").strip("/")
         if not _USERNAME.fullmatch(text):
             msg = f"Not an Instagram username: {value!r}"
@@ -162,7 +169,9 @@ class WatchedProfile(BaseModel):
 
     @classmethod
     def most_reels(
-        cls, profiles: list[WatchedProfile], excluding: str | None
+        cls,
+        profiles: list[WatchedProfile],
+        excluding: str | None,
     ) -> str | None:
         rest = [p for p in profiles if p.username != excluding]
         top = max(rest, key=lambda p: (p.reel_count, p.views_total), default=None)

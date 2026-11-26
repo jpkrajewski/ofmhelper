@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.db.clone_ai_checks.schema import (
@@ -7,7 +9,7 @@ from ofmhelpers.db.clone_ai_checks.schema import (
     StoredCloneAiCheck,
 )
 from ofmhelpers.db.jobs.schema import Job
-from ofmhelpers.features.jobs.schema import CloneLinksCard
+from ofmhelpers.features.jobs.models import CloneLinksCard
 
 NOW = 1_800_000_000.0
 STALE_S = 1800
@@ -50,7 +52,10 @@ def _card(*, path: str | None = "/v.mp4", review=None, status="done") -> CloneLi
         created_at=NOW,
     )
     return CloneLinksCard.from_job(
-        job, [], [], task_label="", poll_prefix="/clone-links", review=review
+        job,
+        [],
+        [],
+        {"task_label": "", "poll_prefix": "/clone-links", "review": review},
     )
 
 

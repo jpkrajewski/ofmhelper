@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 
 from ofmhelpers.db.users.store import agency_id
@@ -11,7 +13,8 @@ def _repository() -> WatchedProfileRepository:
 
 
 def list_watched(
-    group: str | None = None, owner: int | None = None
+    group: str | None = None,
+    owner: int | None = None,
 ) -> list[WatchedProfile]:
     profiles = [
         p for p in _repository().list_all(owner) if group is None or p.group == group
@@ -43,16 +46,23 @@ def watchers(username: str) -> list[int]:
 
 
 def watch(
-    username: str, group: str | None = None, *, user_id: int | None = None
+    username: str,
+    group: str | None = None,
+    *,
+    user_id: int | None = None,
 ) -> bool:
     return _repository().add(
-        username, group, agency_id() if user_id is None else user_id
+        username,
+        group,
+        agency_id() if user_id is None else user_id,
     )
 
 
 def set_group(username: str, group: str | None, user_id: int | None = None) -> bool:
     return _repository().set_group(
-        username, group, agency_id() if user_id is None else user_id
+        username,
+        group,
+        agency_id() if user_id is None else user_id,
     )
 
 
@@ -69,10 +79,14 @@ def claim_due(interval_s: float | None, claim_ttl_s: float) -> list[str]:
 
 
 def record_scan(
-    username: str, result: ProfileReels | None, error: str | None = None
+    username: str,
+    result: ProfileReels | None,
+    error: str | None = None,
 ) -> None:
     _repository().record_scan(
-        username, result.model_dump(mode="json") if result else None, error
+        username,
+        result.model_dump(mode="json") if result else None,
+        error,
     )
 
 

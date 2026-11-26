@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from functools import lru_cache
 
@@ -11,7 +13,7 @@ def _repository() -> DriveUploadRepository:
     return DriveUploadRepository()
 
 
-def queue(
+def queue(  # noqa: PLR0913, PLR0917
     job_id: str,
     file_index: int,
     login_id: int | None,
@@ -21,7 +23,13 @@ def queue(
 ) -> int | None:
     stale_before = time.time() - settings.gdrive.upload_stale_s
     return _repository().queue(
-        job_id, file_index, login_id, user_id, folder_name, stale_before, va_id
+        job_id,
+        file_index,
+        login_id,
+        user_id,
+        folder_name,
+        stale_before,
+        va_id,
     )
 
 
@@ -34,7 +42,8 @@ def uploader(upload_id: int) -> int | None:
 
 
 def for_jobs(
-    job_ids: list[str], uploaders: frozenset[int] | None = None
+    job_ids: list[str],
+    uploaders: frozenset[int] | None = None,
 ) -> list[DriveUpload]:
     return _repository().for_jobs(job_ids, uploaders)
 
@@ -63,5 +72,8 @@ def finish(
     error: str | None = None,
 ) -> None:
     _repository().finish(
-        upload_id, drive_file_id=drive_file_id, drive_url=drive_url, error=error
+        upload_id,
+        drive_file_id=drive_file_id,
+        drive_url=drive_url,
+        error=error,
     )

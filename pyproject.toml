@@ -25,7 +25,7 @@ dependencies = [
     # [curl-cffi]: browser impersonation, which extractors behind Cloudflare
     # demand (PornHub 403s without it: "no impersonate target is available",
     # prod 2026-10-22).
-    "yt-dlp[curl-cffi]>=2026.11.20.232656.dev0",
+    "yt-dlp[curl-cffi]>=2026.11.24.232653.dev0",
     # Ships the JS runtime yt-dlp's "ejs:github" remote component needs
     # (downloaders/generic.py); imported by yt-dlp, never by us.
     "yt-dlp-ejs==0.8.0",
@@ -63,6 +63,7 @@ dependencies = [
     # Meta's PDQ (256-bit, dihedral) for repurpose.checker; sdist only on
     # Linux, built with the g++ of the Dockerfile's build/test stages.
     "pdqhash>=0.2.8",
+    "dropbox>=12.2.4",
 ]
 
 [dependency-groups]
@@ -123,6 +124,7 @@ packages = ["src/ofmhelpers"]
 
 [tool.mypy]
 python_version = "3.15"
+strict = true
 # The code runs only on Linux (Docker, the server); the pre-commit hook may
 # run mypy on a Windows host, where Linux-only modules (fcntl) do not exist.
 platform = "linux"
@@ -146,57 +148,15 @@ line-length = 88
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    # Checks run in Docker against a bind-mounted checkout; from a Windows host
-    # every file shows up executable there, so this would flag every file.
-    "EXE002",
-    # Formatter owns layout; these fight `ruff format`.
-    "COM812",
-    "E501",
-    # No copyright headers in this repo.
-    "CPY001",
-    # No docstrings at all (CLAUDE.md). Parameters may go unannotated; every
-    # function in src/ declares what it returns (ANN201-206 stay on), and
-    # tests/unit/architecture checks that it is never a dict, a tuple or Any.
+    # Docstrings are forbidden in this repo (CLAUDE.md).
     "D",
-    "ANN001",
-    "ANN002",
-    "ANN003",
-    "ANN401",
-    # stdout IS the log here (Docker captures it). Note ruff's T201 fix
-    # DELETES the print rather than converting it -- never autofix this.
-    "T201",
-    # ffmpeg/ffprobe/yt-dlp run with fixed argv lists, never shell=True.
-    "S603",
-    "S607",
-    # Arity/complexity metrics. Route handlers and generation wrappers mirror
-    # their API contracts one-parameter-per-field; collapsing them into config
-    # objects is a refactor with no correctness payoff.
-    "PLR0911",
-    "PLR0912",
-    "PLR0913",
-    "PLR0915",
-    "PLR0917",
-    "C901",
-    # Boolean flags here are form/query fields and provider knobs, not
-    # call-site readability traps.
-    "FBT001",
-    "FBT002",
-    # Deliberate fault isolation at external boundaries: a job runner, an
-    # API-key sweep loop, or a per-post parse must record the failure and
-    # keep going rather than take the worker down. Every site does something
-    # with the exception (logs it, stores it on the job, falls back).
-    "BLE001",
-    # ruff 0.17's default conventions want `import datetime as dt`: churn in 15
-    # files for no gain, and the module name reads better here.
-    "ICN001",
-    # An import only annotations use: `lazy import` saves nothing for the stdlib,
-    # which is loaded anyway (TC001/TC002 stay on: first- and third-party ones
-    # really do not load until used).
-    "TC003",
 ]
 
 # Annotations these classes read when the class is created: an import they use
 # is a runtime import.
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "(?i)copyright \\(c\\) \\d{4}"
+
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = [
     "pydantic.BaseModel",
@@ -239,23 +199,50 @@ ignore-variadic-names = true
 "src/ofmhelpers/web/routers/inventory/phones.py" = ["FAST003"]
 # `{user_id}` reaches role / active / delete through `OtherUser`.
 "src/ofmhelpers/web/routers/admin/users.py" = ["FAST003"]
+# Long lines are template or data content (LLM prompt templates, a usage
+# command, SQL fragments), not code layout. report.py is below with T201.
+"src/ofmhelpers/features/trials/captions.py" = ["E501"]
+"scripts/sync_kie_catalog.py" = ["E501"]
+"tests/integration/db/test_audit.py" = ["E501"]
+# Browser-driver scripts embed minified JS in triple-quoted page templates.
+"tests/e2e/test_backlog_pages.py" = ["E501"]
+"tests/e2e/test_notifications_menu.py" = ["E501"]
 "src/ofmhelpers/web/dependencies.py" = ["TC001", "TC002"]
 "src/ofmhelpers/web/forms.py" = ["TC001", "TC002"]
-# Lazy singletons that rebuild when the configured URL changes -- `global`
-# is inherent to the pattern.
-"src/ofmhelpers/cache/redis.py" = ["PLW0603"]
-"src/ofmhelpers/db/session.py" = ["PLW0603"]
 # Same: a once-per-process "already configured" flag.
 "src/ofmhelpers/log.py" = ["PLW0603"]
 # `lifespan(app)` is Starlette's required signature.
 "src/ofmhelpers/web/main.py" = ["ARG001"]
 # DSP helpers share one (audio, sr, ...) positional shape by design.
 "src/ofmhelpers/media/radio_comms_fx.py" = ["ARG001"]
+# Operator CLIs run with python -m: stdout is their output (piped JSON,
+# progress lines), not logging.
+"src/ofmhelpers/background/replay.py" = ["T201"]
+"src/ofmhelpers/features/audit/__main__.py" = ["T201"]
+"src/ofmhelpers/features/clone/examples.py" = ["T201"]
+"src/ofmhelpers/features/distribution/__main__.py" = ["T201"]
+"src/ofmhelpers/features/downloads/cleanup.py" = ["T201"]
+"src/ofmhelpers/features/phones/backup.py" = ["T201"]
+"src/ofmhelpers/features/vas/seed.py" = ["T201"]
+"src/ofmhelpers/media/repurpose/lab/report.py" = ["E501", "T201"]
+"src/ofmhelpers/media/repurpose/lab/search.py" = ["T201"]
 # Standalone scripts and migrations aren't importable packages.
-"scripts/**" = ["INP001", "ANN"]
+"scripts/**" = [
+    "INP001",
+    "ANN",
+    "T201",  # CLI tools print their output
+    "S603",
+    "S607",  # fixed-argv subprocess, never shell
+]
 "alembic/**" = ["INP001", "ANN"]
 # Claude Code hooks: standalone scripts the harness runs.
-".claude/**" = ["INP001", "ANN"]
+".claude/**" = [
+    "INP001",
+    "ANN",
+    "T201",  # stdout is the harness protocol
+    "S603",
+    "S607",  # fixed-argv git subprocess
+]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

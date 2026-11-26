@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -39,7 +41,9 @@ def _download(client, tmp_path: Path, *names: str, failed: str | None = None) ->
     if failed:
         result.append(DownloadResult(url=failed, success=False, error="gone"))
     job_id = create_job(
-        "download_media", {"urls": ["https://x/1"]}, actor=str(client.user.id)
+        "download_media",
+        {"urls": ["https://x/1"]},
+        actor=str(client.user.id),
     )
     run_job(job_id, lambda r=result: r, {})
     return job_id
@@ -91,7 +95,9 @@ def test_a_failed_link_says_why_on_the_card_not_in_a_tooltip(client, tmp_path):
     (folder / "a.mp4").write_bytes(b"a")
     result = [
         DownloadResult(
-            url="https://x/1", success=True, output_paths=[folder / "a.mp4"]
+            url="https://x/1",
+            success=True,
+            output_paths=[folder / "a.mp4"],
         ),
         DownloadResult(
             url=reel,
@@ -100,7 +106,9 @@ def test_a_failed_link_says_why_on_the_card_not_in_a_tooltip(client, tmp_path):
         ),
     ]
     job_id = create_job(
-        "download_media", {"urls": ["https://x/1", reel]}, actor=str(client.user.id)
+        "download_media",
+        {"urls": ["https://x/1", reel]},
+        actor=str(client.user.id),
     )
     run_job(job_id, lambda r=result: r, {})
 
@@ -133,7 +141,11 @@ def test_the_owner_sends_a_vas_download_on_to_edit(client, tmp_path, assets):
     folder.mkdir()
     (folder / "a.mp4").write_bytes(b"a.mp4")
     result = [
-        DownloadResult(url="https://x/1", success=True, output_paths=[folder / "a.mp4"])
+        DownloadResult(
+            url="https://x/1",
+            success=True,
+            output_paths=[folder / "a.mp4"],
+        ),
     ]
     job = create_job("download_media", {"urls": ["https://x/1"]}, actor=str(va.id))
     run_job(job, lambda: result, {})
@@ -149,12 +161,16 @@ def test_the_owner_sends_a_vas_download_on_to_edit(client, tmp_path, assets):
 
 @pytest.mark.parametrize("target", ["clone", "clone-long", "edit"])
 def test_a_card_sends_its_own_video_and_stores_only_that(
-    client, tmp_path, assets, target
+    client,
+    tmp_path,
+    assets,
+    target,
 ):
     job = _download(client, tmp_path, "a.mp4", "b.mp4", "c.mp4")
 
     r = client.post(
-        "/download-media/send", data={"job_id": job, "target": target, "index": "1"}
+        "/download-media/send",
+        data={"job_id": job, "target": target, "index": "1"},
     )
 
     assert r.status_code == 200, r.text
@@ -166,7 +182,8 @@ def test_clone_long_stores_only_the_video_it_opens_with(client, tmp_path, assets
     job = _download(client, tmp_path, "a.mp4", "b.mp4", "c.mp4")
 
     r = client.post(
-        "/download-media/send", data={"job_id": job, "target": "clone-long"}
+        "/download-media/send",
+        data={"job_id": job, "target": "clone-long"},
     )
 
     assert len(_sent(r)) == 1
@@ -197,7 +214,8 @@ def test_a_negative_index_is_refused(client, tmp_path):
     job = _download(client, tmp_path, "a.mp4")
 
     r = client.post(
-        "/download-media/send", data={"job_id": job, "target": "clone", "index": "-1"}
+        "/download-media/send",
+        data={"job_id": job, "target": "clone", "index": "-1"},
     )
 
     assert r.status_code == 422

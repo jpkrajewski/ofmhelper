@@ -1,18 +1,20 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin, sign_in_agency
 
 from ofmhelpers.db.devices import store as devices
-from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.devices.models import DeviceFields
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.watched_profiles.store import list_watched
 from ofmhelpers.features.accounts import page as accounts
 from ofmhelpers.features.accounts import tracker as account_tracker
-from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.reels import page as reels
 from ofmhelpers.features.reels import watch as reel_watch
-from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.features.storage import jobs as storage_jobs
+from ofmhelpers.integrations.storage.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web.main import app
 
 PHONE = {
@@ -138,10 +140,11 @@ def test_tracked_accounts_and_creators_are_per_user(ann, bob):
     assert ann_account.creator == "Mia"
     assert bob.get(f"/accounts/{ann_account.id}").status_code == 404
     assert bob.post("/accounts/delete", json={"ids": [ann_account.id]}).json() == {
-        "count": 0
+        "count": 0,
     }
     assert bob.post(
-        "/accounts/creator", json={"ids": [ann_account.id], "creator": "X"}
+        "/accounts/creator",
+        json={"ids": [ann_account.id], "creator": "X"},
     ).json() == {"count": 0}
     assert "Mia" not in bob.get("/accounts").text
 
@@ -161,7 +164,7 @@ def test_an_admin_does_not_see_or_change_a_users_account(ann):
             == 404
         )
         assert admin.post("/accounts/delete", json={"ids": [account.id]}).json() == {
-            "count": 0
+            "count": 0,
         }
     assert "ann.only" in ann.get("/accounts").text
 
@@ -177,10 +180,10 @@ def test_watch_lists_and_groups_are_per_user_one_scan_each(ann, bob, monkeypatch
     ann_id = users.by_email("ann@example.com").id
     bob_id = users.by_email("bob@example.com").id
     assert [(p.username, p.group) for p in list_watched(owner=ann_id)] == [
-        ("star", "asian")
+        ("star", "asian"),
     ]
     assert [(p.username, p.group) for p in list_watched(owner=bob_id)] == [
-        ("star", "gay")
+        ("star", "gay"),
     ]
     assert [p.username for p in list_watched()] == ["star"]
 
@@ -212,7 +215,7 @@ def test_an_admin_moves_and_removes_only_their_own_watched_row(ann, bob):
     ann_id = users.by_email("ann@example.com").id
     bob_id = users.by_email("bob@example.com").id
     assert [(p.username, p.group) for p in list_watched(owner=admin_id)] == [
-        ("shared.star", "vip")
+        ("shared.star", "vip"),
     ]
     assert [p.group for p in list_watched(owner=ann_id)] == ["asian"]
     assert [p.group for p in list_watched(owner=bob_id)] == ["gay"]
@@ -229,7 +232,7 @@ def test_an_admins_group_feed_keeps_a_profile_an_older_row_has_elsewhere(ann, bo
     bob.post("/reels/watch", data={"profiles": "grouped.later", "group": "gay"})
 
     assert [(p.username, p.group) for p in list_watched("gay")] == [
-        ("grouped.later", "gay")
+        ("grouped.later", "gay"),
     ]
     assert [p.group for p in list_watched() if p.username == "grouped.later"] == [None]
 
@@ -247,7 +250,7 @@ def test_each_users_folders_live_in_their_own_drive(ann, bob, drive):
     ann_login = _add_login(ann, _add_phone(ann), "ann.ig", "")
     _add_login(bob, _add_phone(bob, owner="Bob"), "bob.ig", "")
 
-    drive_folders.sync()
+    storage_jobs.sync()
 
     ann_root = users.by_email("ann@example.com").drive_root_id
     bob_root = users.by_email("bob@example.com").drive_root_id
@@ -281,9 +284,10 @@ def test_an_admin_sees_and_syncs_only_their_own_drive_cards(ann, bob, drive):
         assert "ann.ig" not in html
         assert "bob.ig" not in html
 
-    drive_folders.sync()
+    storage_jobs.sync()
     (ann_folder,) = drive.named(
-        "ann.ig - Anna", users.by_email("ann@example.com").drive_root_id
+        "ann.ig - Anna",
+        users.by_email("ann@example.com").drive_root_id,
     )
     file_id = drive.add_file(ann_folder, "a.jpg", thumbnail=True)
     assert admin.get(f"/drive/thumb/{ann_login}/{file_id}").status_code == 404

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.features.trials.captions import captions_for, understand
 from ofmhelpers.features.trials.state import (
     FolderState,

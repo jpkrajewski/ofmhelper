@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import itertools
 import json
 import threading
@@ -65,7 +67,7 @@ class FakeApiyi:
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
 
-    def handle(self, request: requests.PreparedRequest) -> FakeReply:
+    def handle(self, request: requests.PreparedRequest) -> FakeReply:  # noqa: PLR0911
         key = str(request.headers.get("Authorization", "")).removeprefix("Bearer ")
         if key != FAKE_KEY and key not in self.key_models:
             return error(401, "invalid_api_key", "无效的令牌 (invalid token)")
@@ -75,7 +77,7 @@ class FakeApiyi:
                 self.model_lists += 1
             listed = self.key_models.get(key, ["wan3.0-video", "wan3.0-video-prime"])
             return FakeReply.json_body(
-                {"object": "list", "data": [{"id": model} for model in listed]}
+                {"object": "list", "data": [{"id": model} for model in listed]},
             )
         other = self.families.handle(request, path)
         if other is not None:
@@ -85,7 +87,8 @@ class FakeApiyi:
                 return FakeReply.json_body(
                     {
                         "code": "AccessDenied",
-                        "message": "current user api does not support synchronous calls",
+                        "message": "current user api does "
+                        "not support synchronous calls",
                     },
                     status=403,
                 )
@@ -116,7 +119,7 @@ class FakeApiyi:
             {
                 "output": {"task_id": task_id, "task_status": "PENDING"},
                 "request_id": f"req-{task_id[-6:]}",
-            }
+            },
         )
 
     def _task(self, task_id: str) -> FakeReply:
@@ -147,16 +150,25 @@ class FakeApiyi:
         return self._read(task_id, "completed", progress="100%", result_url=url)
 
     @staticmethod
-    def _read(task_id: str, state: str, **fields: Any) -> FakeReply:
-        return FakeReply.json_body(
-            {
-                "id": task_id,
-                "status": state,
-                "result_url": None,
-                "error": None,
-                **fields,
-            }
-        )
+    def _read(  # noqa: PLR0913, PLR0917
+        task_id: str,
+        state: str,
+        progress: str | None = None,
+        result_url: str | None = None,
+        error: dict[str, str] | None = None,
+        fail_reason: str | None = None,
+    ) -> FakeReply:
+        body: dict[str, Any] = {
+            "id": task_id,
+            "status": state,
+            "result_url": result_url,
+            "error": error,
+        }
+        if progress is not None:
+            body["progress"] = progress
+        if fail_reason is not None:
+            body["fail_reason"] = fail_reason
+        return FakeReply.json_body(body)
 
 
 @lru_cache(maxsize=1)
@@ -169,7 +181,8 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
         return FakeReply(body=b"AccessDenied", status=403)
     if urlsplit(request.url or "").path.endswith(".png"):
         return FakeReply(
-            body=fake_media.image(fmt="PNG"), headers={"Content-Type": "image/png"}
+            body=fake_media.image(fmt="PNG"),
+            headers={"Content-Type": "image/png"},
         )
     return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})
 

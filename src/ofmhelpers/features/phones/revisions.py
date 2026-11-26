@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
@@ -38,5 +40,8 @@ class Revisions(BaseModel, frozen=True):
             for login in device.logins:
                 if login.id in back:
                     track_login(
-                        login.service, login.username, user_id=self.scope, revive=True
+                        login.service,
+                        login.username,
+                        user_id=self.scope,
+                        revive=True,
                     )

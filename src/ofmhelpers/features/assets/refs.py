@@ -1,9 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 import heapq
 import os
 import re
 import threading
 from functools import lru_cache
-from operator import attrgetter
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -23,7 +24,7 @@ from ofmhelpers.features.assets.store import (
     in_asset_root,
     strip_asset_hash_prefix,
 )
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import (
     PREVIEW_ERRORS,
     write_atomic,
@@ -55,13 +56,13 @@ def _entry(file: StoredFile, used_at: float | None = None) -> RefEntry:
     return RefEntry(
         path=file.path,
         name=strip_asset_hash_prefix(name),
-        kind=classify_kind(name),
+        kind=FileKind.from_ext(name),
         mtime=file.mtime,
         used_at=used_at,
     )
 
 
-def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
+def stored_files(root: Path, kind: FileKind | None) -> list[StoredFile]:
     found: list[StoredFile] = []
     thumbs = thumbs_dir()
     for dirpath, dirnames, filenames in os.walk(root):
@@ -73,7 +74,7 @@ def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
             and in_asset_root(root, Path(dirpath, d, "_"))
         ]
         for name in filenames:
-            if kind and classify_kind(name) != kind:
+            if kind and FileKind.from_ext(name) != kind:
                 continue
             path = Path(dirpath, name)
             try:
@@ -84,11 +85,14 @@ def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
 
 
 def _newest(files: list[StoredFile], limit: int) -> list[RefEntry]:
-    return [_entry(f) for f in heapq.nlargest(limit, files, key=attrgetter("mtime"))]
+    return [_entry(f) for f in heapq.nlargest(limit, files, key=lambda f: f.mtime)]
 
 
 def listing(
-    assets_root: Path, owner_id: int, kind: str | None, limit: int | None
+    assets_root: Path,
+    owner_id: int,
+    kind: FileKind | None,
+    limit: int | None,
 ) -> list[RefEntry]:
     files = stored_files(assets_root, kind)
     if limit is not None:
@@ -119,7 +123,9 @@ def _restorable(path: str, actor: str | None) -> RestorableRef | None:
 
 
 def missing(
-    assets_root: Path, paths: list[str], actor: str | None = None
+    assets_root: Path,
+    paths: list[str],
+    actor: str | None = None,
 ) -> MissingRefs:
     gone = [
         p
@@ -128,7 +134,8 @@ def missing(
     ]
     found = (_restorable(path, actor) for path in gone)
     return MissingRefs(
-        missing=gone, restorable=[ref for ref in found if ref is not None]
+        missing=gone,
+        restorable=[ref for ref in found if ref is not None],
     )
 
 
@@ -155,12 +162,12 @@ def visible(assets_root: Path, path: str) -> Path:
     return file_path
 
 
-def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
+def _make_thumb(source: Path, thumb: Path, kind: FileKind, size: int) -> None:
     if thumb.is_file():
         return
     thumb.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if kind == "image":
+        if kind == FileKind.IMAGE:
             write_atomic(thumb, lambda tmp: write_image_thumb(source, tmp, size))
         else:
             write_video_thumb(source, thumb, size)
@@ -172,8 +179,8 @@ def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
 
 def thumb(assets_root: Path, path: str, size: int) -> Path:
     file_path = visible(assets_root, path)
-    kind = classify_kind(file_path.name)
-    if kind not in ("image", "video"):
+    kind = FileKind.from_ext(file_path.name)
+    if kind not in (FileKind.IMAGE, FileKind.VIDEO):
         msg = "No thumbnail for this file type"
         raise NotFoundError(msg)
     digest = file_path.name.split("__", 1)[0]

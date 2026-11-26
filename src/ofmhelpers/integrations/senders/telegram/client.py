@@ -1,7 +1,10 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 from functools import lru_cache
 from http import HTTPStatus
 from typing import Any
+lazy from collections.abc import Mapping
 
 import requests
 from pydantic import ValidationError
@@ -47,7 +50,7 @@ class TelegramClient:
                     "text": text,
                     "link_preview_options": {"is_disabled": True},
                 },
-            ).result
+            ).result,
         )
 
     def delete_message(self, chat_id: str, message_id: int) -> None:
@@ -71,7 +74,10 @@ class TelegramClient:
         return [read for raw in found.result if (read := _update(raw)) is not None]
 
     def _call(
-        self, method: str, payload: dict[str, Any], extra_wait_s: float = 0
+        self,
+        method: str,
+        payload: dict[str, Any],
+        extra_wait_s: float = 0,
     ) -> Reply:
         try:
             response = self._session.post(
@@ -92,7 +98,7 @@ class TelegramClient:
         return reply
 
 
-def _update(raw: Any) -> Update | None:
+def _update(raw: Mapping[str, Any]) -> Update | None:
     try:
         return Update.model_validate(raw)
     except ValidationError:  # silent: the error quotes someone's words
@@ -113,7 +119,8 @@ def _refusal(method: str, reply: Reply) -> TelegramError:
     code = reply.error_code or 0
     permanent = HTTPStatus.BAD_REQUEST <= code < HTTPStatus.INTERNAL_SERVER_ERROR
     return TelegramError(
-        msg, permanent=permanent and code != HTTPStatus.TOO_MANY_REQUESTS
+        msg,
+        permanent=permanent and code != HTTPStatus.TOO_MANY_REQUESTS,
     )
 
 

@@ -1,3 +1,7 @@
+# Copyright (C) 2026 jpkrajewski
+
+from typing import Any
+
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -25,20 +29,20 @@ class CookieRepository:
             holders = set(
                 s.execute(
                     select(UserCookiesRow.user_id).where(
-                        UserCookiesRow.user_id.in_(user_ids)
-                    )
-                ).scalars()
+                        UserCookiesRow.user_id.in_(user_ids),
+                    ),
+                ).scalars(),
             )
         return next((u for u in user_ids if u in holders), None)
 
     def save(self, user_id: int, cookies: str, file_name: str) -> float:
-        values: dict = {"cookies": cookies, "file_name": file_name}
+        values: dict[str, Any] = {"cookies": cookies, "file_name": file_name}
         with session_scope() as s:
             saved = s.execute(
                 insert(UserCookiesRow)
                 .values(user_id=user_id, **values)
                 .on_conflict_do_update(index_elements=["user_id"], set_=values)
-                .returning(UserCookiesRow.updated_at)
+                .returning(UserCookiesRow.updated_at),
             ).scalar_one()
         return saved.timestamp()
 
@@ -47,6 +51,6 @@ class CookieRepository:
             removed = s.execute(
                 delete(UserCookiesRow)
                 .where(UserCookiesRow.user_id == user_id)
-                .returning(UserCookiesRow.user_id)
+                .returning(UserCookiesRow.user_id),
             )
             return bool(removed.all())

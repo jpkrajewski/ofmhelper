@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import pytest
 
 from ofmhelpers.integrations.cookie_jar import CookieFileError, load_jar
@@ -22,7 +24,7 @@ def test_only_pinterest_cookies_are_kept():
             (".pinterest.com", "_pinterest_sess", "s"),
             (".instagram.com", "sessionid", "x"),
             ("pl.pinterest.com", "csrftoken", "p"),
-        )
+        ),
     )
 
     assert "_pinterest_sess" in kept
@@ -36,7 +38,7 @@ def test_a_locale_host_is_used_with_its_own_csrftoken():
             (".pinterest.com", "_pinterest_sess", "s"),
             ("www.pinterest.com", "csrftoken", "w"),
             ("pl.pinterest.com", "csrftoken", "p"),
-        )
+        ),
     )
 
     sent = sorted((c.domain, c.name) for c in client._session.cookies)
@@ -54,7 +56,7 @@ def test_without_a_locale_host_www_is_used():
         _txt(
             (".pinterest.com", "_pinterest_sess", "s"),
             ("www.pinterest.com", "csrftoken", "w"),
-        )
+        ),
     )
 
     assert client._base == "https://www.pinterest.com"
@@ -72,10 +74,13 @@ def test_what_pinterest_renews_is_what_is_saved():
         _txt(
             (".pinterest.com", "_pinterest_sess", "old"),
             ("www.pinterest.com", "csrftoken", "w"),
-        )
+        ),
     )
     client._session.cookies.set(
-        "_pinterest_sess", "renewed", domain=".pinterest.com", path="/"
+        "_pinterest_sess",
+        "renewed",
+        domain=".pinterest.com",
+        path="/",
     )
 
     saved = client.cookies_txt()

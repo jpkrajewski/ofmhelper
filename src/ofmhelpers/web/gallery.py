@@ -1,17 +1,19 @@
+# Copyright (C) 2026 jpkrajewski
+
 from collections.abc import Callable, Collection, Mapping
 from datetime import date, datetime, time, timedelta
-from typing import Annotated, Any, Self
+from typing import Annotated, Self
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field, JsonValue, PrivateAttr, model_validator
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.schema import Created
 from ofmhelpers.features.jobs.gallery import GalleryAsk, gallery_jobs, hidden_jobs
+from ofmhelpers.monitoring.telemetry import LoggedFields
 from ofmhelpers.web.access import Action, allowed
-from ofmhelpers.web.forms import LoggedFields
 from ofmhelpers.web.time_zones import time_zone
 lazy from ofmhelpers.db.jobs.schema import GalleryJobs
 lazy from ofmhelpers.db.users.schema import Viewer
@@ -31,7 +33,7 @@ class GalleryQuery(LoggedFields):
 
     @model_validator(mode="before")
     @classmethod
-    def _blank_is_unset(cls, data: Any) -> Any:
+    def _blank_is_unset(cls, data: JsonValue) -> JsonValue:
         if isinstance(data, Mapping):
             return {k: v for k, v in data.items() if v != ""}
         return data
@@ -67,7 +69,7 @@ class GalleryQuery(LoggedFields):
     def today(self) -> date:
         return datetime.now(ZoneInfo(self._zone)).date()
 
-    def link(self, **changes: object) -> str:
+    def link(self, changes: dict[str, object]) -> str:
         return self.model_copy(update={"offset": 0, **changes}).filters
 
     @property
@@ -133,7 +135,7 @@ class Gallery:
                 by_use=self.by_use,
                 created=asked.created,
                 not_uploaded=asked.not_uploaded,
-            )
+            ),
         )
 
     def hidden_count(self, viewer: Viewer) -> int:

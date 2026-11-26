@@ -1,23 +1,24 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
+import io
 import os
 import secrets
 import shutil
 import tempfile
 from pathlib import Path
+from typing import BinaryIO, Protocol, cast
 
-from starlette.datastructures import UploadFile
+import pillow_heif
+from PIL import Image
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.users.store import get_user
-from ofmhelpers.features.kinds import (
-    AUDIO_EXTS,
-    IMAGE_EXTS,
-    VIDEO_EXTS,
-    classify_kind,
-)
+from ofmhelpers.features.constants import file_kind_constants
 from ofmhelpers.features.refusals import AssetRefusedError
 from ofmhelpers.log import get_logger
-from ofmhelpers.media.heic import HEIC_EXTENSIONS, heic_to_jpeg
+lazy from ofmhelpers.features.assets.models import MediaUpload
+lazy from ofmhelpers.features.kinds import FileKind
 lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
 
 logger = get_logger(__name__)
@@ -74,45 +75,99 @@ def assets_root_for_actor(actor: str | None) -> Path:
     return _user_root(actor)
 
 
-IMAGE_KINDS = frozenset({"image"})
-
-
-VIDEO_KINDS = frozenset({"video"})
-
-
-MEDIA_KINDS = frozenset({"image", "video", "audio"})
-
-
-def require_upload_kind(name: str | None, allowed: frozenset[str]) -> str:
-    safe = safe_filename(name)
-    if classify_kind(safe) not in allowed:
-        allowed_exts = sorted(
-            ext
-            for kind, exts in (
-                ("image", IMAGE_EXTS),
-                ("video", VIDEO_EXTS),
-                ("audio", AUDIO_EXTS),
-            )
-            if kind in allowed
-            for ext in exts
-        )
+def require_upload_kind(kind: FileKind, allowed: frozenset[FileKind]) -> None:
+    if kind not in allowed:
+        allowed_exts = sorted(ext for kind in allowed for ext in kind.extensions)
         msg = f"Unsupported file type. Allowed: {', '.join(allowed_exts)}"
         raise AssetRefusedError(msg)
-    return safe
 
 
-def convert_heic_upload(upload: UploadFile) -> UploadFile:
-    name = upload.filename or ""
-    path = Path(name.replace("\\", "/"))
-    if path.suffix.lower() not in HEIC_EXTENSIONS:
-        return upload
+class _MultiFrameImage(Protocol):
+    format: str
+    n_frames: int
+    width: int
+    height: int
+
+    def seek(self, frame: int) -> None: ...
+
+    def load(self) -> None: ...
+
+
+def _load_multi_frame(image: _MultiFrameImage) -> None:
+    frame_limit = settings.web.max_image_frames
+    if image.format in file_kind_constants().sequential_frame_formats:
+        frame_count = frame_limit + 1
+    else:
+        frame_count = image.n_frames
+        if frame_count > frame_limit:
+            msg = "Too many image frames"
+            raise AssetRefusedError(msg)
+    total_pixels = 0
+    for frame_index in range(frame_count):
+        try:
+            image.seek(frame_index)
+        except EOFError:
+            if image.format in file_kind_constants().sequential_frame_formats:
+                break
+            raise
+        if frame_index == frame_limit:
+            msg = "Too many image frames"
+            raise AssetRefusedError(msg)
+        total_pixels += image.width * image.height
+        if total_pixels > settings.web.max_image_total_pixels:
+            msg = "Image exceeds the pixel limit"
+            raise AssetRefusedError(msg)
+        image.load()
+
+
+def _require_gif_trailer(file: BinaryIO) -> None:
+    file.seek(-1, 2)
+    if file.read(1) != b";":
+        raise OSError
+
+
+def validate_image(file: BinaryIO) -> BinaryIO:
     try:
-        jpeg = heic_to_jpeg(upload.file)
+        Image.open(file).verify()
+        file.seek(0)
+        with Image.open(file) as image:
+            if image.format in file_kind_constants().multi_frame_formats:
+                _load_multi_frame(cast("_MultiFrameImage", image))
+            else:
+                image.load()
+            if image.format == "GIF":
+                _require_gif_trailer(file)
+    except AssetRefusedError:
+        raise
+    except OSError, SyntaxError, ValueError, Image.DecompressionBombError, EOFError:
+        msg = "Unreadable image"
+        raise AssetRefusedError(msg) from None
+    finally:
+        file.seek(0)
+    return file
+
+
+def jpeg_from_heic_or_current(src: BinaryIO, path: Path) -> BinaryIO:
+    if path.suffix.lower() not in file_kind_constants().heic_extensions:
+        return src
+    try:
+        img = pillow_heif.open_heif(src, convert_hdr_to_8bit=True).to_pillow()
+        out = io.BytesIO()
+        img.convert("RGB").save(
+            out,
+            "JPEG",
+            quality=100,
+            subsampling=0,
+            icc_profile=img.info.get("icc_profile"),
+            exif=img.info.get("exif") or b"",
+        )
+        out.seek(0)
     except ValueError:
-        logger.warning("could not decode HEIC upload %s", name, exc_info=True)
+        logger.warning("could not decode HEIC upload %s", path.name, exc_info=True)
         msg = "Unreadable HEIC image"
         raise AssetRefusedError(msg) from None
-    return UploadFile(file=jpeg, filename=path.with_suffix(".jpg").name)
+    else:
+        return out
 
 
 def strip_asset_hash_prefix(filename: str) -> str:
@@ -152,16 +207,15 @@ def _free_name(job_dir: Path, name: str) -> Path:
     return dest
 
 
-def save_upload(job_dir: Path, upload: UploadFile) -> str:
+def save_upload(job_dir: Path, upload: MediaUpload) -> str:
     dest = _free_name(job_dir, safe_filename(upload.filename))
     with dest.open("wb") as out:
         shutil.copyfileobj(upload.file, out)
     return str(dest)
 
 
-def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
-    upload = convert_heic_upload(upload)
-    stored_name = require_upload_kind(upload.filename, MEDIA_KINDS)
+def save_asset(upload: MediaUpload, assets_root: Path | None = None) -> str:
+    stored_name = safe_filename(upload.filename)
     assets_root = assets_root or _store_root()
     assets_root.mkdir(parents=True, exist_ok=True)
 
@@ -191,7 +245,8 @@ def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
 
 
 def register_generated_asset(
-    path: Path, assets_root: Path | None = None
+    path: Path,
+    assets_root: Path | None = None,
 ) -> Path | None:
     assets_root = assets_root or _store_root()
     try:

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from enum import StrEnum
 
 from pydantic import BaseModel
@@ -135,6 +137,13 @@ NAV = (
         icon="upload",
         place=NavPlace.MORE,
         area=Area.HANDMADE,
+    ),
+    NavItem(
+        href="/storage",
+        label="Storage",
+        icon="archive",
+        place=NavPlace.MORE,
+        area=Area.STORAGE,
     ),
     NavItem(
         href="/trials",

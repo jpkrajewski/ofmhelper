@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from decimal import Decimal
 
 import pytest
@@ -102,8 +104,12 @@ def test_submits_once_waits_and_saves_the_result(tmp_path):
 def test_a_rerun_resumes_the_remembered_request_instead_of_paying_again():
     tasks.remember(
         tasks.ProviderTask(
-            job_id="job2", provider="kie", model=SPEC.key, task_id="old", api_key="k"
-        )
+            job_id="job2",
+            provider="kie",
+            model=SPEC.key,
+            task_id="old",
+            api_key="k",
+        ),
     )
     provider = ScriptedProvider([DONE])
 
@@ -134,7 +140,9 @@ def test_a_failed_generation_fails_with_the_providers_reason_and_is_forgotten():
 
 
 UNFETCHED = TaskState(
-    state="failed", error="Scripted: Chinese server is slow", unfetched=True
+    state="failed",
+    error="Scripted: Chinese server is slow",
+    unfetched=True,
 )
 
 
@@ -171,8 +179,12 @@ def test_a_resend_leaves_the_jobs_other_parts_remembered(monkeypatch):
     monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0]")
     tasks.remember(
         tasks.ProviderTask(
-            job_id="job5e", provider="kie", model=SPEC.key, task_id="paid", api_key="k"
-        )
+            job_id="job5e",
+            provider="kie",
+            model=SPEC.key,
+            task_id="paid",
+            api_key="k",
+        ),
     )
     provider = ScriptedProvider([UNFETCHED, DONE])
 
@@ -191,7 +203,7 @@ def test_any_other_failure_is_never_sent_again():
 
 def test_a_generation_ended_for_want_of_credits_is_no_credits():
     provider = ScriptedProvider(
-        [TaskState(state="failed", error="balance too low", no_credits=True)]
+        [TaskState(state="failed", error="balance too low", no_credits=True)],
     )
 
     with pytest.raises(ProviderNoCreditsError, match="balance too low"):
@@ -221,7 +233,8 @@ def test_several_results_are_saved_side_by_side(tmp_path):
 
 def test_a_rate_limited_submit_waits_the_providers_hint_and_goes_again(slept):
     provider = ScriptedProvider(
-        [DONE], submit_errors=[ProviderRateLimitError("slow down", retry_after_s=42)]
+        [DONE],
+        submit_errors=[ProviderRateLimitError("slow down", retry_after_s=42)],
     )
 
     runner.generate(provider, SPEC, {}, "job8")
@@ -236,7 +249,8 @@ def test_a_rate_limited_submit_waits_the_providers_hint_and_goes_again(slept):
 
 def test_a_rate_limit_hint_past_the_budget_fails_at_once(slept):
     provider = ScriptedProvider(
-        [], submit_errors=[ProviderRateLimitError("slow down", retry_after_s=3600)]
+        [],
+        submit_errors=[ProviderRateLimitError("slow down", retry_after_s=3600)],
     )
 
     with pytest.raises(ProviderRateLimitError):
@@ -276,7 +290,8 @@ def test_any_other_submit_failure_is_never_resent(slept, error):
 
 def test_a_failed_download_is_tried_again(slept):
     provider = ScriptedProvider(
-        [DONE], download_errors=[ProviderUnavailableError("connection reset")]
+        [DONE],
+        download_errors=[ProviderUnavailableError("connection reset")],
     )
 
     [path] = runner.generate(provider, SPEC, {}, "job12")
@@ -312,10 +327,10 @@ def test_a_download_failing_for_another_reason_is_not_retried(slept):
 def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
     job_id = create_job("ai", {"prompt": "p"}, actor=str(make_user().id))
     first = ScriptedProvider(
-        [TaskState(state="done", urls=["https://cdn/x/a.mp4"], cost_usd=0.4)]
+        [TaskState(state="done", urls=["https://cdn/x/a.mp4"], cost_usd=0.4)],
     )
     second = ScriptedProvider(
-        [TaskState(state="done", urls=["https://cdn/x/b.mp4"], cost_usd=0.25)]
+        [TaskState(state="done", urls=["https://cdn/x/b.mp4"], cost_usd=0.25)],
     )
 
     def run() -> list[str]:

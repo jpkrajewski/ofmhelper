@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 lazy from collections.abc import Callable
@@ -44,7 +46,7 @@ class QueueJob(BaseModel):
 
 
 _IN_LINE = frozenset(
-    {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED}
+    {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED},
 )
 _ONCE_FAILURE_TTL_S = 3600
 
@@ -64,16 +66,17 @@ class Line(BaseModel, frozen=True):
 class JobQueue(BaseModel, frozen=True):
     name: QueueName
 
-    def put(
+    def put(  # noqa: PLR0913, PLR0917
         self,
         fn: Callable[..., Any],
-        *args: Any,
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
         job_timeout: int | None = None,
         retry: Retry | None = None,
         failure_ttl: int | None = None,
-        at_front: bool = False,
-        **kwargs: Any,
+        at_front: bool = False,  # noqa: FBT001, FBT002
     ) -> Job | None:
+        kwargs = kwargs or {}
         if not settings.infra.rq_async:
             fn(*args, **kwargs)
             return None
@@ -98,9 +101,14 @@ class JobQueue(BaseModel, frozen=True):
         )
         return rq_job
 
-    def put_once(self, key: str, fn: Callable[[], Any]) -> bool:
+    def put_once(
+        self,
+        key: str,
+        fn: Callable[..., Any],
+        args: tuple[Any, ...] = (),
+    ) -> bool:
         if not settings.infra.rq_async:
-            fn()
+            fn(*args)
             return True
         queue = get_queue(self.name)
         before = queue.fetch_job(key)
@@ -108,6 +116,7 @@ class JobQueue(BaseModel, frozen=True):
             return False
         queue.enqueue(
             fn,
+            *args,
             job_id=key,
             description=f"{fn.__module__}.{fn.__qualname__}",
             result_ttl=0,
@@ -130,7 +139,10 @@ class JobQueue(BaseModel, frozen=True):
                 return True
         except Exception:
             logger.warning(
-                "could not drop %s from %s", job_id, self.name, exc_info=True
+                "could not drop %s from %s",
+                job_id,
+                self.name,
+                exc_info=True,
             )
         return False
 
@@ -203,7 +215,7 @@ def queue_loads() -> list[QueueLoad]:
                     waiting=queue.count,
                     failed=queue.failed_job_registry.count,
                     oldest_wait_s=_waited_s(queue),
-                )
+                ),
             )
     except Exception:
         logger.warning("could not read the queues", exc_info=True)
@@ -225,21 +237,31 @@ def running_job() -> RunningJob | None:
 
 
 def enqueue(
-    fn: Callable[..., Any], *args: Any, job_timeout: int | None = None, **kwargs: Any
+    fn: Callable[..., Any],
+    args: tuple[Any, ...] = (),
+    kwargs: dict[str, Any] | None = None,
+    job_timeout: int | None = None,
 ) -> Job | None:
     return JobQueue(name=QueueName.DEFAULT).put(
-        fn, *args, job_timeout=job_timeout, **kwargs
+        fn,
+        args,
+        kwargs,
+        job_timeout=job_timeout,
     )
 
 
-def enqueue_to(
+def enqueue_to(  # noqa: PLR0913, PLR0917
     queue: QueueName,
     fn: Callable[..., Any],
-    *args: Any,
+    args: tuple[Any, ...] = (),
+    kwargs: dict[str, Any] | None = None,
     job_timeout: int | None = None,
-    at_front: bool = False,
-    **kwargs: Any,
+    at_front: bool = False,  # noqa: FBT001, FBT002
 ) -> Job | None:
     return JobQueue(name=queue).put(
-        fn, *args, job_timeout=job_timeout, at_front=at_front, **kwargs
+        fn,
+        args,
+        kwargs,
+        job_timeout=job_timeout,
+        at_front=at_front,
     )

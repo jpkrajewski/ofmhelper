@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (C) 2026 jpkrajewski
+
+lazy from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -35,12 +37,15 @@ def upgrade() -> None:
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("user_id", "key"),
         sa.CheckConstraint(
-            "status IN ('started', 'done')", name="ck_idempotency_keys_status"
+            "status IN ('started', 'done')",
+            name="ck_idempotency_keys_status",
         ),
         sa.CheckConstraint("length(key) <= 255", name="ck_idempotency_keys_key_length"),
     )
     op.create_index(
-        "ix_idempotency_keys_created_at", "idempotency_keys", ["created_at"]
+        "ix_idempotency_keys_created_at",
+        "idempotency_keys",
+        ["created_at"],
     )
     op.create_index(
         "ix_jobs_running_user_id",

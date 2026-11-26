@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
@@ -12,7 +14,7 @@ from pydantic import (
     model_serializer,
 )
 
-from ofmhelpers.config import WebSettings
+from ofmhelpers.config.settings import WebSettings
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
@@ -26,6 +28,7 @@ class PriceRate(BaseModel):
     usd_per_credit: str | None = None
     unit: str = "credits"
     note: str
+    billable: bool = True
 
     @field_validator("per_second", "usd_per_credit")
     @classmethod
@@ -100,12 +103,12 @@ class CloneValues(BaseModel):
         return values
 
 
-def clone_values(
+def clone_values(  # noqa: PLR0913, PLR0917
     target: CloneTarget,
     prompt: str,
     resolution: str,
     duration: int,
-    audio: bool,
+    audio: bool,  # noqa: FBT001
     images: list[str],
     video: str,
 ) -> CloneValues:

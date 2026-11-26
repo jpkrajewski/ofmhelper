@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import io
 import os
 import tempfile
@@ -61,7 +63,9 @@ def _make_mp4(folder: Path, path: Path) -> None:
 
 @lru_cache(maxsize=16)
 def image(
-    color: str = "teal", size: tuple[int, int] = (320, 568), fmt: str = "JPEG"
+    color: str = "teal",
+    size: tuple[int, int] = (320, 568),
+    fmt: str = "JPEG",
 ) -> bytes:
     out = io.BytesIO()
     Image.new("RGB", size, color).save(out, fmt)

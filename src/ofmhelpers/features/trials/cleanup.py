@@ -1,14 +1,21 @@
-import time
-from pathlib import Path
+# Copyright (C) 2026 jpkrajewski
+
 from types import MappingProxyType
+lazy from pathlib import Path
 
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
-from ofmhelpers.features.trials import folder, media
-from ofmhelpers.features.trials.state import FolderState, ReelState, at, change, load
+from ofmhelpers.features.trials import media
+from ofmhelpers.features.trials.state import (
+    FolderState,
+    ReelState,
+    at,
+    change,
+    load,
+)
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
@@ -56,7 +63,10 @@ def _delete(paths: list[Path]) -> int:
 
 
 def _due(
-    uid: int, login_id: int, state: FolderState, now: float
+    uid: int,
+    login_id: int,
+    state: FolderState,
+    now: float,
 ) -> MappingProxyType[str, int]:
     due: dict[str, int] = {}
     for reel in state.ready:
@@ -83,7 +93,6 @@ def _due(
 
 
 def clean(uid: int, login_id: int, now: float) -> int:
-    folder.read_posted(uid, login_id)
     freed = 0
     while True:
         due = _due(uid, login_id, load(uid, login_id), now)
@@ -99,7 +108,10 @@ class _Batch(BaseModel, frozen=True):
 
 
 def _clean_batch(
-    uid: int, login_id: int, now: float, due: MappingProxyType[str, int]
+    uid: int,
+    login_id: int,
+    now: float,
+    due: MappingProxyType[str, int],
 ) -> _Batch:
     freed = cleaned = 0
 
@@ -114,7 +126,7 @@ def _clean_batch(
             ):
                 continue
             freed += _delete(
-                [copy, media.preview_path(copy), *_source_files(uid, login_id, reel)]
+                [copy, media.preview_path(copy), *_source_files(uid, login_id, reel)],
             )
             reel.cleaned()
             cleaned += 1
@@ -131,16 +143,4 @@ def _clean_batch(
 
 
 def remove_old() -> None:
-    now = time.time()
-    root = Path(settings.infra.uploads_root) / "trials"
-    freed = 0
-    for found in root.glob("*/*/state.json"):
-        login, user = found.parent, found.parent.parent
-        if not (user.name.isdigit() and login.name.isdigit()):
-            continue
-        try:
-            freed += clean(int(user.name), int(login.name), now)
-        except Exception:
-            logger.warning("trials: cleanup of %s failed", login, exc_info=True)
-    if freed:
-        logger.info("trials sweep freed %.1f GB", freed / 1e9)
+    logger.info("trials: the POSTED read moved to features/trials/posted.py read_all")

@@ -1,9 +1,12 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location(
-    "check_no_comments", ROOT / "scripts" / "check_no_comments.py"
+    "check_no_comments",
+    ROOT / "scripts" / "check_no_comments.py",
 )
 assert SPEC is not None
 assert SPEC.loader is not None
@@ -22,6 +25,10 @@ def test_the_check_sees_comments_and_docstrings():
     template = "{# x #}{# djlint:off #}\n<!-- y -->"
 
     assert check.problem_lines("src/m.py", python) == [1, 3]
+    headered = "# Copyright (C) 2026 owner\nimport os\nx = 1  # why\n"
+    assert check.problem_lines("src/m.py", headered) == [3]
+    late = "import os\n# Copyright (C) 2026 owner\n"
+    assert check.problem_lines("src/m.py", late) == [2]
     assert check.problem_lines("src/ofmhelpers/web/static/js/a.js", script) == [1, 2]
     assert check.problem_lines("src/ofmhelpers/web/static/css/a.css", style) == [1]
     assert check.problem_lines("src/ofmhelpers/web/templates/a.html", template) == [

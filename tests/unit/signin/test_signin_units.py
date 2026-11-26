@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import base64
 import hashlib
 import json
@@ -76,7 +78,9 @@ def test_apples_client_secret_is_an_es256_jwt_its_key_verifies(monkeypatch):
     assert len(raw) == 64
     der = encode_dss_signature(int.from_bytes(raw[:32]), int.from_bytes(raw[32:]))
     key.public_key().verify(
-        der, f"{header}.{payload}".encode(), ec.ECDSA(hashes.SHA256())
+        der,
+        f"{header}.{payload}".encode(),
+        ec.ECDSA(hashes.SHA256()),
     )
     with pytest.raises(InvalidSignature):
         key.public_key().verify(der, b"tampered", ec.ECDSA(hashes.SHA256()))
@@ -104,8 +108,8 @@ def test_id_token_claims_apples_string_true_and_the_nonce_check():
                 "iss": "i",
                 "aud": ["x", "a"],
                 "exp": 100,
-            }
-        )
+            },
+        ),
     )
     assert (found.email, found.email_verified) == ("a@b.c", True)
     assert checked(found, "n", issuers=("i",), audience="a", now=1) is found
@@ -145,6 +149,6 @@ def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
 def test_a_hash_made_with_other_parameters_still_verifies():
     salt = b"0123456789abcdef"
     key = hashlib.scrypt(b"older password", salt=salt, n=2**14, r=8, p=1, dklen=32)
-    stored = f"scrypt${2**14}$8$1${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}"
+    stored = f"scrypt${2**14}$8$1${base64.b64encode(salt).decode()}${base64.b64encode(key).decode()}"  # noqa: E501
     assert verify_password("older password", stored)
     assert not verify_password("other password", stored)

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 lazy from pathlib import Path
 
 import pytest
@@ -7,7 +9,7 @@ from playwright.sync_api import expect
 from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST
 lazy from ofmhelpers.db.clone_examples import store as clone_examples
 lazy from ofmhelpers.db.devices import store as devices
-lazy from ofmhelpers.db.devices.schema import DeviceFields
+lazy from ofmhelpers.db.devices.models import DeviceFields
 lazy from ofmhelpers.db.jobs.schema import JobPreview
 lazy from ofmhelpers.db.jobs.store import create_job, set_job_preview
 lazy from ofmhelpers.features.jobs.runner import run_job
@@ -22,7 +24,9 @@ PROMPT = "Replace the guy in @Video1 with subject from @Image1, no tattoos"
 def _clone(owner: int, out: Path | None = None) -> str:
 
     job_id = create_job(
-        "clone", {"prompt": PROMPT, "export": "capcut"}, actor=str(owner)
+        "clone",
+        {"prompt": PROMPT, "export": "capcut"},
+        actor=str(owner),
     )
     if out is not None:
         out.write_bytes(b"png")
@@ -55,7 +59,7 @@ def test_a_generated_clone_still_being_exported_shows_one_video_and_says_so(
 
     expect(card.locator("video[data-preview]")).to_have_attribute("src", hosted)
     expect(card.locator("[data-stage]")).to_have_text(
-        "Generated. Encoding: CapCut export…"
+        "Generated. Encoding: CapCut export…",
     )
     card.evaluate(
         """card => {
@@ -63,14 +67,16 @@ def test_a_generated_clone_still_being_exported_shows_one_video_and_says_so(
             frame.dataset.cloneSource = "";
             card.prepend(frame);
             card.dispatchEvent(new CustomEvent("gallery:card-preview", {bubbles: true}));
-        }"""
+        }""",
     )
     expect(card.locator("[data-clone-source]")).to_have_count(0)
     assert va.js_errors == []
 
 
 def test_the_sop_shows_the_fixed_examples_and_a_prompt_is_used(
-    admin: Session, va: Session, tmp_path: Path
+    admin: Session,
+    va: Session,
+    tmp_path: Path,
 ):
 
     job_id = _clone(ADMIN_ID, tmp_path / "result.png")

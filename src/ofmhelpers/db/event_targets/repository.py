@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +13,7 @@ class EventTargetRepository:
         row = UserEventTargetRow
         with session_scope() as s:
             return s.execute(
-                select(row.target).where(row.user_id == user_id, row.sender == sender)
+                select(row.target).where(row.user_id == user_id, row.sender == sender),
             ).scalar_one_or_none()
 
     def save(self, user_id: int, sender: str, target: str) -> bool:
@@ -21,8 +23,9 @@ class EventTargetRepository:
                     insert(UserEventTargetRow)
                     .values(user_id=user_id, sender=sender, target=target)
                     .on_conflict_do_update(
-                        index_elements=["user_id", "sender"], set_={"target": target}
-                    )
+                        index_elements=["user_id", "sender"],
+                        set_={"target": target},
+                    ),
                 )
         except IntegrityError as exc:  # silent: the person is gone, the caller logs it
             if "user_event_targets_user_id_fkey" not in str(exc.orig):
@@ -36,6 +39,6 @@ class EventTargetRepository:
             gone = s.execute(
                 delete(row)
                 .where(row.user_id == user_id, row.sender == sender)
-                .returning(row.user_id)
+                .returning(row.user_id),
             )
             return bool(gone.all())

@@ -1,6 +1,9 @@
+# Copyright (C) 2026 jpkrajewski
+
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from guards.event import Guard, HookEvent, Verdict, context
@@ -8,10 +11,11 @@ from guards.event import Guard, HookEvent, Verdict, context
 NAME = "docker_up"
 DOCKER_DESKTOP = Path(
     os.environ.get("CLAUDE_GUARDS_DOCKER_DESKTOP")
-    or r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
+    or r"C:\Program Files\Docker\Docker\Docker Desktop.exe",
 )
 STARTED = (
-    "Docker Desktop was down at session start, so it was started; the engine answers within "
+    "Docker Desktop was down at session start, so "
+    "it was started; the engine answers within "
     "seconds and the dev stack comes back by itself."
 )
 NOT_STARTED = (
@@ -28,7 +32,10 @@ def engine_answers() -> bool:
     try:
         return (
             subprocess.run(
-                [*docker_cli(), "info"], capture_output=True, timeout=8, check=False
+                [*docker_cli(), "info"],
+                capture_output=True,
+                timeout=8,
+                check=False,
             ).returncode
             == 0
         )
@@ -42,11 +49,11 @@ def engine_answers() -> bool:
 def check(_event: HookEvent) -> Verdict | None:
     if engine_answers() or not DOCKER_DESKTOP.is_file():
         return None
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.DETACHED_PROCESS
     try:
-        subprocess.Popen(
-            [str(DOCKER_DESKTOP)],
-            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
-        )
+        subprocess.Popen([str(DOCKER_DESKTOP)], creationflags=creationflags)
     except OSError as error:
         return context(NAME, NOT_STARTED.format(error=error))
     return context(NAME, STARTED)

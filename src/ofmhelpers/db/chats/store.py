@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from functools import lru_cache
 lazy from collections.abc import Callable
@@ -44,7 +46,9 @@ def forget_open(platform: ChatPlatform, channel_id: str) -> None:
 
 
 def forget_message(
-    platform: ChatPlatform, message_id: str, model_username: str
+    platform: ChatPlatform,
+    message_id: str,
+    model_username: str,
 ) -> None:
     _repository().forget_message(platform, message_id, model_username)
 
@@ -58,7 +62,9 @@ def models(platform: ChatPlatform) -> list[str]:
 
 
 def fan_messages(
-    platform: ChatPlatform, username: str, since: float
+    platform: ChatPlatform,
+    username: str,
+    since: float,
 ) -> list[FanMessage]:
     return _repository().fan_messages(platform, username, since)
 
@@ -68,7 +74,9 @@ def open_waits(before: float) -> list[OpenWait]:
 
 
 def save_notification(
-    platform: ChatPlatform, delivery: ChatDelivery, username: str
+    platform: ChatPlatform,
+    delivery: ChatDelivery,
+    username: str,
 ) -> None:
     _repository().save_notification(
         platform,
@@ -103,13 +111,17 @@ def counts_between(kind: DeliveryKind, since: float, until: float) -> list[Model
 
 
 def models_reaching_chats(
-    platform: ChatPlatform, since: float, min_chats: int
+    platform: ChatPlatform,
+    since: float,
+    min_chats: int,
 ) -> list[ModelReach]:
     return _repository().models_reaching_chats(platform, since, min_chats)
 
 
 def recent_mass_messages(
-    platform: ChatPlatform, username: str, since: float
+    platform: ChatPlatform,
+    username: str,
+    since: float,
 ) -> list[str]:
     return _repository().recent_events(platform, username, DeliveryKind.MASS, since)
 
@@ -131,7 +143,8 @@ def webhook_targets(platform: ChatPlatform) -> list[WebhookTarget]:
 
 
 def drop_webhooks_except(
-    platform: ChatPlatform, model_ids: list[str]
+    platform: ChatPlatform,
+    model_ids: list[str],
 ) -> list[ChatWebhook]:
     return _repository().drop_webhooks_except(platform, model_ids)
 
@@ -145,7 +158,9 @@ def accounts(platform: ChatPlatform) -> list[ChatAccount]:
 
 
 def save_account(
-    platform: ChatPlatform, account: ChatAccount, tokens: ChatTokens
+    platform: ChatPlatform,
+    account: ChatAccount,
+    tokens: ChatTokens,
 ) -> None:
     _repository().save_account(platform, account, tokens, settings.web.base_url)
 
@@ -158,5 +173,9 @@ def fresh_token(
     valid_until: float,
 ) -> str | None:
     return _repository().fresh_token(
-        platform, account_id, renew, valid_until, settings.web.base_url
+        platform,
+        account_id,
+        renew,
+        valid_until,
+        settings.web.base_url,
     )

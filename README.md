@@ -289,12 +289,12 @@ docker compose -f docker-compose.yml exec -T postgres \
 
 Off the server, automatically: `scripts/pull_backup.sh`, run on the owner's PC
 (reads `deploy.local.env`, read-only on the server), saves into
-`~/ofmhelpers-backups` (`OFM_BACKUP_DIR`): `db/` the verified
+`OFM_BACKUP_DIR` (default `~/ofmhelpers-backups`; the owner's PC: `D:/ofmhelpers/backups`): `db/` the verified
 pg_dump, `env/` the server `.env` (mode 600; above all `OFM_VAULT_KEY`), the
 newest 14 of each (`OFM_BACKUP_KEEP`). Nothing else: no `uploads/`, no media.
-`scripts/schedule_backup.ps1` (PowerShell, once) registers it daily at 04:00
+`scripts/schedule_backup.ps1 -BackupDir /d/ofmhelpers/backups` (PowerShell, once) registers it daily at 04:00
 (task `ofmhelpers-pull-backup`; a missed run starts when the PC is on). Every
-scheduled run appends its time, output and `exit=` to `~/ofmhelpers-backups/pull.log`;
+scheduled run appends its time, output and `exit=` to `pull.log` in that folder;
 Task Scheduler's "Last Run Result" 0 = ok. Live since 2026-11-20.
 
 A restore needs exactly these two: the dump and the `.env`. Drill (proved on

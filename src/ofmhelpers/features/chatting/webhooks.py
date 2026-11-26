@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 from typing import Any
 lazy from collections.abc import Mapping
@@ -70,7 +72,9 @@ def can_make_webhooks() -> bool:
 
 
 def _save_rows(
-    source: ChatSource, models: list[ChatModel], made: CreatedSubscription
+    source: ChatSource,
+    models: list[ChatModel],
+    made: CreatedSubscription,
 ) -> None:
     for model in models:
         chats.save_webhook(
@@ -151,11 +155,13 @@ def drop_unreached(source: ChatSource, reached: ChatModels) -> None:
     if reached.failed or reached.unread or not reached.found:
         return
     dropped = chats.drop_webhooks_except(
-        source.platform, [model.model_id for model in reached.found]
+        source.platform,
+        [model.model_id for model in reached.found],
     )
     for row in dropped:
         logger.warning(
-            "%s: webhook row of %s removed, no account or key reaches it; its subscription stays live",
+            "%s: webhook row of %s removed, no account or "
+            "key reaches it; its subscription stays live",
             source.platform.value,
             row.model_username,
         )
@@ -178,7 +184,10 @@ def ensure_destinations() -> None:
                 _ensure_owner(source, models, mine, url)
             except ChatSourceError:
                 logger.warning(
-                    "%s %s: no webhook", source.platform.value, owner, exc_info=True
+                    "%s %s: no webhook",
+                    source.platform.value,
+                    owner,
+                    exc_info=True,
                 )
 
 
@@ -189,7 +198,9 @@ def note_bulk_sends(source: ChatSource) -> None:
     now = time.time()
     config = settings.chatting
     for reach in chats.models_reaching_chats(
-        platform, now - config.mass_window_s, config.mass_min_chats
+        platform,
+        now - config.mass_window_s,
+        config.mass_min_chats,
     ):
         username = reach.model_username
         if chats.recent_mass_messages(platform, username, now - config.mass_gap_s):
@@ -251,7 +262,9 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
             chats.save_notification(platform, delivery, username)
         else:
             logger.info(
-                "%s sale of %s cents: no pop-up", platform.value, delivery.amount_cents
+                "%s sale of %s cents: no pop-up",
+                platform.value,
+                delivery.amount_cents,
             )
 
 

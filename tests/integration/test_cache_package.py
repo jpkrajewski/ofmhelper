@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import importlib
 
 import pytest
@@ -61,8 +63,8 @@ def test_a_job_can_carry_its_own_time_limit(monkeypatch):
     monkeypatch.setenv("OFM_RQ_ASYNC", "true")
     monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
 
-    long_job = queue_module.enqueue(print, "a", job_timeout=6900)
-    other_job = queue_module.enqueue(print, "b")
+    long_job = queue_module.enqueue(print, ("a",), job_timeout=6900)
+    other_job = queue_module.enqueue(print, ("b",))
 
     assert [long_job.timeout, other_job.timeout] == [6900, 2700]
     queue_module.get_redis().flushdb()
@@ -71,5 +73,10 @@ def test_a_job_can_carry_its_own_time_limit(monkeypatch):
 def test_inline_mode_never_hands_the_time_limit_to_the_function(monkeypatch):
     monkeypatch.setenv("OFM_RQ_ASYNC", "false")
     seen = []
-    queue_module.enqueue(lambda *a, **k: seen.append((a, k)), 1, job_timeout=9, x=2)
+    queue_module.enqueue(
+        lambda *a, **k: seen.append((a, k)),
+        (1,),
+        {"x": 2},
+        job_timeout=9,
+    )
     assert seen == [((1,), {"x": 2})]

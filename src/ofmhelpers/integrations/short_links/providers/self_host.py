@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import time
 lazy from datetime import date
 
@@ -52,5 +54,6 @@ class SelfProvider(LinkProvider):
 
     def usage(self) -> Usage:
         return Usage(
-            used=store.live_count(self.user_id), limit=settings.links.self_link_limit
+            used=store.live_count(self.user_id),
+            limit=settings.links.self_link_limit,
         )

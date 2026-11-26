@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import hashlib
 import subprocess
 import tempfile
@@ -9,7 +11,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 
@@ -31,7 +33,9 @@ class FailedBeforeError(RuntimeError): ...
 def write_atomic(dest: Path, write: Callable[[Path], None]) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        dir=dest.parent, suffix=dest.suffix, delete=False
+        dir=dest.parent,
+        suffix=dest.suffix,
+        delete=False,
     ) as tmp:
         tmp_path = Path(tmp.name)
     try:
@@ -49,7 +53,12 @@ def write_image_thumb(source: Path, dest: Path, size: int) -> None:
 
 
 def write_video_thumb(
-    source: Path, dest: Path, size: int, *, pre_filter: str = "", at_s: float = 0
+    source: Path,
+    dest: Path,
+    size: int,
+    *,
+    pre_filter: str = "",
+    at_s: float = 0,
 ) -> None:
 
     def write(tmp: Path) -> None:
@@ -130,8 +139,8 @@ def write_video_preview(
     write_atomic(dest, write)
 
 
-def preview_path(job_id: str, index: int, kind: str) -> Path:
-    suffix = ".mp4" if kind == "video" else ".webp"
+def preview_path(job_id: str, index: int, kind: FileKind) -> Path:
+    suffix = ".mp4" if kind == FileKind.VIDEO else ".webp"
     return previews_dir() / f"{job_id}_{index}{suffix}"
 
 
@@ -178,12 +187,14 @@ class ResultPreview(BaseModel, frozen=True):
             marker.write_text(f"{_stamp(self.source)}:{count}", encoding="utf-8")
         except OSError:
             logger.warning(
-                "preview failure of %s not marked", self.source, exc_info=True
+                "preview failure of %s not marked",
+                self.source,
+                exc_info=True,
             )
 
     def make(self) -> Path:
         source = self.source
-        kind = classify_kind(source.name)
+        kind = FileKind.from_ext(source.name)
         dest = preview_path(self.job_id, self.index, kind)
         if dest.is_file():
             return dest
@@ -191,7 +202,7 @@ class ResultPreview(BaseModel, frozen=True):
             msg = f"preview of {source.name} failed lately"
             raise FailedBeforeError(msg)
         try:
-            if kind == "video":
+            if kind == FileKind.VIDEO:
                 write_video_preview(source, dest)
             else:
                 size = settings.web.image_preview_px
@@ -215,7 +226,7 @@ def file_thumb(source: Path) -> Path:
     if dest.is_file():
         return dest
     size = settings.web.poster_size
-    if classify_kind(source.name) == "video":
+    if FileKind.from_ext(source.name) == FileKind.VIDEO:
         write_video_thumb(source, dest, size)
     else:
         write_atomic(dest, lambda tmp: write_image_thumb(source, tmp, size))
@@ -225,7 +236,7 @@ def file_thumb(source: Path) -> Path:
 class _Source(BaseModel, frozen=True):
     index: int
     path: Path
-    kind: str
+    kind: FileKind
 
 
 def _media(sources: list[str | None]) -> list[_Source]:
@@ -234,8 +245,8 @@ def _media(sources: list[str | None]) -> list[_Source]:
         if raw is None:
             continue
         path = Path(raw)
-        kind = classify_kind(path.name)
-        if kind in ("image", "video") and path.is_file():
+        kind = FileKind.from_ext(path.name)
+        if kind in (FileKind.IMAGE, FileKind.VIDEO) and path.is_file():
             found.append(_Source(index=index, path=path, kind=kind))
     return found
 
@@ -245,7 +256,9 @@ def is_warm(job_id: str, sources: list[str | None]) -> bool:
         ResultPreview(source=item.path, job_id=job_id, index=item.index).failed_before()
         or (
             preview_path(job_id, item.index, item.kind).is_file()
-            and (item.kind != "video" or poster_path(job_id, item.index).is_file())
+            and (
+                item.kind != FileKind.VIDEO or poster_path(job_id, item.index).is_file()
+            )
         )
         for item in _media(sources)
     )
@@ -261,7 +274,7 @@ def warm_previews(job_id: str, sources: list[str | None]) -> None:
             result.make()
         except PREVIEW_ERRORS:
             logger.warning("could not preview %s", path, exc_info=True)
-        if item.kind != "video":
+        if item.kind != FileKind.VIDEO:
             continue
         try:
             result.poster()

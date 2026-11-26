@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -10,7 +12,7 @@ depends_on = None
 
 
 class _Table:
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         name: str,
         *,
@@ -312,7 +314,7 @@ def _convert(t: _Table) -> None:
         op.execute(
             f"ALTER TABLE {t.name} ALTER COLUMN {column} TYPE timestamptz "
             f"USING to_timestamp({column}), "
-            f"ALTER COLUMN {column} SET DEFAULT now()"
+            f"ALTER COLUMN {column} SET DEFAULT now()",
         )
     if t.add is not None:
         column, source = t.add
@@ -339,12 +341,12 @@ def _convert(t: _Table) -> None:
 def _triggers(t: _Table) -> None:
     op.execute(
         f"CREATE TRIGGER {t.name}_stamp BEFORE INSERT OR UPDATE ON {t.name} "
-        f"FOR EACH ROW EXECUTE FUNCTION stamp_row('{t.quiet}')"
+        f"FOR EACH ROW EXECUTE FUNCTION stamp_row('{t.quiet}')",
     )
     op.execute(
         f"CREATE TRIGGER {t.name}_audit AFTER INSERT OR UPDATE OR DELETE "
         f"ON {t.name} FOR EACH ROW EXECUTE FUNCTION "
-        f"audit_row('{t.quiet}', '{t.masked}', '{t.keys}', '{t.owner}')"
+        f"audit_row('{t.quiet}', '{t.masked}', '{t.keys}', '{t.owner}')",
     )
 
 
@@ -375,11 +377,14 @@ def upgrade() -> None:
         ),
         sa.Column("changes", JSONB(), nullable=False),
         sa.CheckConstraint(
-            "op IN ('INSERT', 'UPDATE', 'DELETE')", name="ck_audit_log_op"
+            "op IN ('INSERT', 'UPDATE', 'DELETE')",
+            name="ck_audit_log_op",
         ),
     )
     op.create_index(
-        "ix_audit_log_table_name_row_id_id", "audit_log", ["table_name", "row_id", "id"]
+        "ix_audit_log_table_name_row_id_id",
+        "audit_log",
+        ["table_name", "row_id", "id"],
     )
     op.create_index("ix_audit_log_actor_id_id", "audit_log", ["actor_id", "id"])
     op.create_index("ix_audit_log_owner_id_id", "audit_log", ["owner_id", "id"])
@@ -392,15 +397,15 @@ def upgrade() -> None:
     op.execute(
         "CREATE TRIGGER jobs_audit AFTER UPDATE OF hidden_at ON jobs FOR EACH ROW "
         "WHEN (OLD.hidden_at IS DISTINCT FROM NEW.hidden_at) "
-        "EXECUTE FUNCTION audit_row('', '', 'id', 'user_id')"
+        "EXECUTE FUNCTION audit_row('', '', 'id', 'user_id')",
     )
     op.execute(
         "CREATE TRIGGER audit_log_append_only BEFORE UPDATE OR DELETE "
-        "ON audit_log FOR EACH ROW EXECUTE FUNCTION audit_log_guard()"
+        "ON audit_log FOR EACH ROW EXECUTE FUNCTION audit_log_guard()",
     )
     op.execute(
         "CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON audit_log "
-        "FOR EACH STATEMENT EXECUTE FUNCTION audit_log_guard()"
+        "FOR EACH STATEMENT EXECUTE FUNCTION audit_log_guard()",
     )
 
 
@@ -419,7 +424,7 @@ def downgrade() -> None:
             op.execute(
                 f"ALTER TABLE {t.name} ALTER COLUMN {column} DROP DEFAULT, "
                 f"ALTER COLUMN {column} TYPE double precision "
-                f"USING extract(epoch FROM {column})"
+                f"USING extract(epoch FROM {column})",
             )
         for old, new in t.rename.items():
             op.alter_column(t.name, new, new_column_name=old)

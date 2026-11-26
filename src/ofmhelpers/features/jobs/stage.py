@@ -1,3 +1,5 @@
+# Copyright (C) 2026 jpkrajewski
+
 from ofmhelpers.db.jobs.schema import Job, JobStatus
 from ofmhelpers.media.exports import exports
 
