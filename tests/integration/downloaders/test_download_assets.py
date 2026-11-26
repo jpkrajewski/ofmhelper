@@ -160,7 +160,7 @@ def test_empty_submissions_rejected_cleanly(client):
     r = client.post("/download-videos/run", data={"urls": "  \n  "})
     assert r.status_code == 400
     r = client.post("/clean-images/run")
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):

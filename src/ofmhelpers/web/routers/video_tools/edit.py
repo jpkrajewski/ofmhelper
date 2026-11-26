@@ -3,11 +3,12 @@
 from typing import Annotated, Self
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Query, Request, UploadFile
+from fastapi import APIRouter, File, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import Field, model_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets.models import VideoUpload
 from ofmhelpers.features.clone_pricing.targets import clone_targets
 from ofmhelpers.features.edit import service
 from ofmhelpers.features.edit.clips import Clip
@@ -86,7 +87,7 @@ def page(
 def upload(
     assets_root: AssetsRoot,
     actor: Actor,
-    file: Annotated[UploadFile, File()],
+    file: Annotated[VideoUpload, File(media_type="video/*")],
 ) -> EditVideo:
     return service.upload(file, assets_root, actor, run_prepare)
 

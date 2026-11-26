@@ -178,7 +178,7 @@ def test_run_rejects_a_non_video(client):
         "/uniqify/run",
         files={"file": ("page.html", b"<script>", "text/html")},
     )
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 @pytest.mark.parametrize("copies", ["0", "51"])

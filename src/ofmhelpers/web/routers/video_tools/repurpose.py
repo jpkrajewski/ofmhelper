@@ -23,7 +23,7 @@ from ofmhelpers.web.dependencies import (
     OwnerId,
     Storage,
 )
-from ofmhelpers.web.forms import Files, FormModel, at_most
+from ofmhelpers.web.forms import FormModel, VideoFiles, at_most
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
@@ -39,7 +39,7 @@ router = APIRouter(
 
 
 class RepurposeForm(FormModel):
-    video: Files
+    video: VideoFiles
     video_manifest: str = "[]"
     copies: int = Field(DEFAULT_COPIES, ge=1)
 

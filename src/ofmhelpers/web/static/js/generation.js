@@ -392,7 +392,12 @@
                 }
                 if (xhr.status < 200 || xhr.status >= 300) {
                     window.Idempotency.refused(form, key, xhr.status);
-                    throw new Error(data.detail || "Request failed.");
+                    const detail = data.detail;
+                    const message = typeof detail === "string" ? detail
+                        : Array.isArray(detail) && detail.length
+                          ? detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ")
+                          : "Request failed.";
+                    throw new Error(message);
                 }
 
                 function track(theCard, jobId) {

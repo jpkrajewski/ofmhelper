@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import html as html_lib
+import io
 import json
 import re
 import subprocess
@@ -11,6 +12,7 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 from idempotent import keyed
+from PIL import Image
 from signin import sign_in, sign_in_agency
 
 import ofmhelpers.media.exports as exports_module
@@ -56,10 +58,16 @@ def fake_runs(monkeypatch):
     monkeypatch.setattr(clone_run, "run_ai", lambda *_a, **_k: [])
 
 
-def _post(client, videos, data=None):
-    files = [("image", ("face.png", b"img", "image/png"))] + [
-        ("videos", (name, f"video-{name}".encode(), "video/mp4")) for name in videos
-    ]
+def _png(value: int = 0) -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", (8, 8), (value, value, value)).save(out, "PNG")
+    return out.getvalue()
+
+
+def _post(client, videos, data=None, image: bytes | None = None):
+    files = [
+        ("image", ("face.png", _png() if image is None else image, "image/png")),
+    ] + [("videos", (name, f"video-{name}".encode(), "video/mp4")) for name in videos]
     form = {
         "api_key": "k",
         "image_manifest": NEW,
@@ -67,6 +75,15 @@ def _post(client, videos, data=None):
         **(data or {}),
     }
     return client.post("/clone/run", data=form, files=files, headers=keyed())
+
+
+def test_run_rejects_invalid_image_content(client):
+    before = len(list_jobs())
+
+    r = _post(client, ["a.mp4"], image=b"not an image")
+
+    assert r.status_code == 422
+    assert len(list_jobs()) == before
 
 
 @pytest.mark.parametrize(
@@ -192,8 +209,8 @@ def test_run_rejects_a_bad_submit(client, videos, data, detail):
 @pytest.mark.usefixtures("fake_runs")
 def test_every_run_gets_all_the_subject_images(client):
     files = [
-        ("image", (name, name.encode(), "image/png"))
-        for name in ("front.png", "side.png")
+        ("image", (name, _png(index), "image/png"))
+        for index, name in enumerate(("front.png", "side.png"))
     ] + [("videos", (n, n.encode(), "video/mp4")) for n in ("a.mp4", "b.mp4")]
     r = client.post(
         "/clone/run",
@@ -213,7 +230,10 @@ def test_every_run_gets_all_the_subject_images(client):
 @pytest.mark.usefixtures("fake_runs")
 def test_run_caps_subject_images(client, monkeypatch):
     monkeypatch.setenv("OFM_CLONE_MAX_IMAGES", "1")
-    files = [("image", (n, n.encode(), "image/png")) for n in ("x.png", "y.png")]
+    files = [
+        ("image", (name, _png(index), "image/png"))
+        for index, name in enumerate(("x.png", "y.png"))
+    ]
     files.append(("videos", ("a.mp4", b"a", "video/mp4")))
     r = client.post(
         "/clone/run",
@@ -432,7 +452,7 @@ def _post_clips(client, clips, data=None, key=None):
             **(data or {}),
         },
         files=[
-            ("image", ("face.png", b"img", "image/png")),
+            ("image", ("face.png", _png(), "image/png")),
             *[("videos", (c.name, c.read_bytes(), "video/mp4")) for c in clips],
         ],
     )
@@ -560,7 +580,7 @@ def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
     )
     targets = MappingProxyType({**clone.CLONE_TARGETS, "higgsfield": swapped})
     monkeypatch.setattr(clone_service, "clone_targets", lambda: targets)
-    files = [("image", (f"{i}.png", bytes([i]), "image/png")) for i in range(10)]
+    files = [("image", (f"{i}.png", _png(i), "image/png")) for i in range(10)]
     files.append(("videos", ("a.mp4", b"a", "video/mp4")))
     before = len(list_jobs())
 

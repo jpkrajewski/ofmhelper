@@ -122,7 +122,7 @@ def test_an_open_socket_of_someone_deactivated_since_is_closed_at_the_next_chang
         notifications.changed(owner)
 
         with pytest.raises(WebSocketDisconnect) as closed:
-            next_sent(socket)
+            next_lines(socket)
     assert closed.value.code == 1008
 
 

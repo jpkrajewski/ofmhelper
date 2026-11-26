@@ -263,7 +263,8 @@ def test_an_upload_is_a_video_kept_in_edit_staging(client, mine, tmp_path):
         "/edit/upload",
         files={"file": ("notes.txt", b"hi", "text/plain")},
     )
-    assert refused.json() == {"detail": "Pick a video file"}
+    assert refused.status_code == 422
+    assert "Unsupported file type. Allowed:" in str(refused.json()["detail"])
 
 
 def test_an_upload_over_the_size_cap_is_refused_unsaved(client, mine, monkeypatch):

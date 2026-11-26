@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request
 from fastapi.responses import Response
 
+from ofmhelpers.features.assets.models import FileUpload
 from ofmhelpers.features.distribution import service
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, CurrentUser, Scope, Storage
@@ -26,7 +27,7 @@ def _distribution(
     return service.Distribution(uid=user.id, scope=scope, storage=storage)
 
 
-def _uploads(files: list[UploadFile]) -> list[service.Upload]:
+def _uploads(files: Annotated[list[FileUpload], File()]) -> list[service.Upload]:
     return [
         service.Upload(name=f.filename or "cookies.txt", file=f.file) for f in files
     ]

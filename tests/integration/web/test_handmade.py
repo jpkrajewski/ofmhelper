@@ -125,22 +125,28 @@ def test_the_owner_takes_a_vas_reel_back_out_of_drive(drive):
 
 
 @pytest.mark.parametrize(
-    ("files", "why"),
+    ("files", "why", "status"),
     [
-        ([], "Pick at least one video"),
-        (_reels("a.mp4", "b.mp4", "c.mp4"), "At most 2 videos at once"),
-        ([("files", ("notes.txt", b"x", "text/plain"))], None),
+        ([], "Pick at least one video", 400),
+        (_reels("a.mp4", "b.mp4", "c.mp4"), "At most 2 videos at once", 400),
+        ([("files", ("notes.txt", b"x", "text/plain"))], None, 422),
     ],
 )
-def test_what_is_not_a_short_batch_of_videos_is_refused(drive, monkeypatch, files, why):
+def test_what_is_not_a_short_batch_of_videos_is_refused(
+    drive,
+    monkeypatch,
+    files,
+    why,
+    status,
+):
     monkeypatch.setenv("OFM_HANDMADE_MAX_FILES", "2")
     _owner()
     va = _va()
 
     r = va.post("/handmade/run", files=files) if files else va.post("/handmade/run")
 
-    assert r.status_code == 400
-    if why is not None:
+    assert r.status_code == status
+    if status == 400:
         assert r.json()["detail"] == why
 
 

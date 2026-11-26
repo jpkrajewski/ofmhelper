@@ -4,8 +4,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from starlette.datastructures import FormData
+from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
 
+from ofmhelpers.features.assets.models import (
+    MediaUpload,
+    validate_audio_upload,
+    validate_image_upload,
+    validate_video_upload,
+)
 from ofmhelpers.features.generate import service
 from ofmhelpers.features.generate.service import (
     TASK,
@@ -15,6 +22,8 @@ from ofmhelpers.features.generate.service import (
     start_runs,
 )
 from ofmhelpers.features.jobs.schema import JobsQueued
+from ofmhelpers.features.kinds import FileKind
+from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
@@ -31,8 +40,25 @@ router = APIRouter(
 )
 
 
-async def _form(request: Request) -> FormData:
-    return await request.form()
+async def _form(request: Request) -> service.AiInput:
+    data = await request.form()
+    try:
+        spec = service.model_spec(str(data.get("model") or ""))
+    except NotFoundError:  # silent: prepare_run returns the unknown-model refusal
+        return service.AiInput(data=data, uploads={})
+    validators = {
+        FileKind.IMAGE: validate_image_upload,
+        FileKind.VIDEO: validate_video_upload,
+        FileKind.AUDIO: validate_audio_upload,
+    }
+    uploads: dict[str, list[MediaUpload]] = {}
+    for field in spec.media_fields:
+        uploads[field.name] = [
+            await run_in_threadpool(validators[FileKind(field.kind)], value)
+            for value in data.getlist(field.name)
+            if isinstance(value, UploadFile)
+        ]
+    return service.AiInput(data=data, uploads=uploads)
 
 
 @router.get("/fields")
@@ -46,7 +72,7 @@ def fields(request: Request, model: Annotated[str, Query()]) -> Response:
 
 @router.post("/run", status_code=202, dependencies=[Idempotent])
 def run(
-    form: Annotated[FormData, Depends(_form)],
+    form: Annotated[service.AiInput, Depends(_form)],
     assets_root: AssetsRoot,
     owner_id: OwnerId,
     actor: Actor,

@@ -2,14 +2,13 @@
 
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict
-lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.drive_folders.models import UploadTarget
@@ -29,7 +28,7 @@ from ofmhelpers.features.clone_pricing.targets import (
 from ofmhelpers.features.jobs.models import CloneCard
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import CloneSource
-from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import CloneRefusedError
 from ofmhelpers.integrations.ai_providers.base import provider_class
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
@@ -37,6 +36,7 @@ from ofmhelpers.media.exports import exports
 from ofmhelpers.monitoring.telemetry import in_this_trace
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.assets.models import ImageUpload, MediaUpload, VideoUpload
 lazy from ofmhelpers.features.storage.service import StorageServiceUploads
 
 TASK = "clone"
@@ -117,8 +117,8 @@ def video_seconds(path: str, probe: Callable[[Path, int], float]) -> float:
         raise CloneRefusedError(msg) from exc
 
 
-def require_kind(paths: list[str], kind: str, label: str) -> None:
-    if any(classify_kind(p) != kind for p in paths):
+def require_kind(paths: list[str], kind: FileKind, label: str) -> None:
+    if any(FileKind.from_ext(p) != kind for p in paths):
         msg = f"{label} must be {kind} files"
         raise CloneRefusedError(msg)
 
@@ -154,8 +154,8 @@ def plan_runs(  # noqa: PLR0913, PLR0917
     probe: Callable[[str], float],
 ) -> list[CloneRun]:
     _require_counts(images, videos)
-    require_kind(images, "image", "The subject")
-    require_kind(videos, "video", "Videos")
+    require_kind(images, FileKind.IMAGE, "The subject")
+    require_kind(videos, FileKind.VIDEO, "Videos")
     target = choices.target
     with ThreadPoolExecutor(settings.web.clone_probe_workers) as pool:
         seconds = list(pool.map(in_this_trace(probe), videos))
@@ -201,9 +201,9 @@ class Submitted(Protocol):
     prompt: str
     audio: bool
     mirror: bool
-    image: list[UploadFile]
+    image: list[ImageUpload]
     image_manifest: str
-    videos: list[UploadFile]
+    videos: list[VideoUpload]
     videos_manifest: str
 
 
@@ -216,7 +216,7 @@ class Submit(BaseModel):
     run: Callable[..., Any]
     probe: Callable[[str], float]
 
-    def _picked(self, manifest: str, files: list[UploadFile]) -> list[str]:
+    def _picked(self, manifest: str, files: Sequence[MediaUpload]) -> list[str]:
         return build_ordered_paths(
             manifest,
             files,
@@ -360,14 +360,14 @@ def _stored_copy(path: str, assets_root: Path) -> str | None:
     if kept := keep_files(
         [path, str(assets_root / Path(path).name)],
         assets_root,
-        "image",
+        FileKind.IMAGE,
     ):
         return kept[0]
     digest = _digest(path)
     if not _SHA256.fullmatch(digest):
         return None
     others = sorted(str(p) for p in assets_root.glob(f"{digest}__*"))
-    return next(iter(keep_files(others, assets_root, "image")), None)
+    return next(iter(keep_files(others, assets_root, FileKind.IMAGE)), None)
 
 
 def upload_states(
