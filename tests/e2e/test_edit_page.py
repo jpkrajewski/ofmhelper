@@ -68,6 +68,27 @@ def _timecode(va: Session) -> tuple[int, int]:
     return int(seconds), int(frame)
 
 
+def test_an_upload_validation_error_shows_its_plain_message(va: Session, clip: Path):
+    va.goto("/edit")
+    va.page.route(
+        "**/edit/upload",
+        lambda route: route.fulfill(
+            status=422,
+            json={"detail": [{"msg": "Value error, File is empty"}]},
+        ),
+    )
+
+    va.page.locator(".file-picker .file-add-input").set_input_files(str(clip))
+
+    expect(va.page.locator("#edit-status")).to_have_text("File is empty")
+    assert va.js_errors == [
+        (
+            "Failed to load resource: the server responded with a status of 422 "
+            "(Unprocessable Entity)"
+        ),
+    ]
+
+
 def test_each_frame_step_moves_the_marker_by_one_frame(va: Session, clip: Path):
     _open(va, clip)
     strip = va.page.locator("#edit-timeline")

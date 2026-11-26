@@ -45,7 +45,7 @@
         }
         if (typeof data.detail === "string") return data.detail;
         if (Array.isArray(data.detail) && data.detail.length) {
-            return data.detail.map((d) => d.msg).join("; ");
+            return data.detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ");
         }
         return `Request failed (${xhr.status}).`;
     }

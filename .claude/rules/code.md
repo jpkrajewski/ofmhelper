@@ -62,3 +62,10 @@ def register_provider[P: type[Provider]](cls: P) -> P:
     return cls
 
 This is forbidden. Explicit registration through a registry or dependency injection is mandatory.
+
+Use ABC exclusively; never bypass, weaken, or circumvent contracts or strict typing to make code work—fix the underlying design instead.
+
+Explicitd code instead of dyanmic
+
+Maximum possible validation of data should be at schema fastapi level, for example list length, url parsing the shecma should take care of this,
+and prepare a validated object for a service, so we dont depend on the fastapi contract

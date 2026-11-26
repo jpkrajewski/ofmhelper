@@ -25,8 +25,14 @@
 
     function failure(status, body) {
         if (status === 413) return new Error(TOO_BIG);
-        const worded = status === 400 && typeof body?.detail === "string";
-        return new Error(worded ? body.detail : FAILED);
+        const detail = body?.detail;
+        if (Array.isArray(detail) && detail.length) {
+            return new Error(
+                detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ")
+            );
+        }
+        const worded = status === 400 && typeof detail === "string";
+        return new Error(worded ? detail : FAILED);
     }
 
     async function answer(request) {

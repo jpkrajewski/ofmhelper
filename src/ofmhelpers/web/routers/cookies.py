@@ -1,9 +1,10 @@
 # Copyright (C) 2026 jpkrajewski
 
-from fastapi import APIRouter, Request, UploadFile
+from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ofmhelpers.features.accounts.tracker import rescan_limited
+from ofmhelpers.features.assets.models import FileUpload
 from ofmhelpers.features.cookies import service
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.web.access import Area
@@ -38,7 +39,7 @@ def form(request: Request, owner_id: OwnerId, note: str | None = None) -> Respon
 
 
 @router.post("")
-def upload_cookies(request: Request, owner_id: OwnerId, file: UploadFile) -> Response:
+def upload_cookies(request: Request, owner_id: OwnerId, file: FileUpload) -> Response:
     try:
         service.upload(owner_id, file.file, file.filename, file.size, rescan_limited)
     except RefusedError as exc:  # silent: shown on the page
