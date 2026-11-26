@@ -17,6 +17,7 @@ from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.features.generate.service import run_ai
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import JobsQueued
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.pictures.targets import (
     PICTURE_TARGETS,
     PRESET_ASPECTS,
@@ -208,6 +209,9 @@ def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
         assets_root,
         user_id=owner_id,
     )
+    if any(FileKind.from_ext(path) != FileKind.IMAGE for path in paths):
+        msg = "Pictures only"
+        raise RefusedError(msg)
     most = settings.pictures.max_pictures
     if not 1 <= len(paths) <= most:
         msg = f"Add 1 to {most} pictures to recreate"

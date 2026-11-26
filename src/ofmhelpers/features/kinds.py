@@ -4,7 +4,7 @@ from enum import StrEnum, auto
 from pathlib import Path
 from typing import Self
 
-HEIC_EXTENSIONS = frozenset({".heic", ".heif"})
+from ofmhelpers.features.constants import file_kind_constants
 
 
 class FileKind(StrEnum):
@@ -19,7 +19,7 @@ class FileKind(StrEnum):
             case FileKind.IMAGE:
                 return frozenset(
                     {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"},
-                ).union(HEIC_EXTENSIONS)
+                ).union(file_kind_constants().heic_extensions)
             case FileKind.VIDEO:
                 return frozenset({".mp4", ".mov", ".webm", ".mkv", ".m4v"})
             case FileKind.AUDIO:

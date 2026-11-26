@@ -15,7 +15,8 @@ from ofmhelpers.features.assets.store import (
     safe_filename,
     validate_image,
 )
-from ofmhelpers.features.kinds import HEIC_EXTENSIONS, FileKind
+from ofmhelpers.features.constants import file_kind_constants
+from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import AssetRefusedError
 
 
@@ -57,7 +58,7 @@ class ValidatedSanitizedMediaUpload(UploadFile):
         if kind == FileKind.IMAGE:
             path = Path(upload.filename)
             upload.file = jpeg_from_heic_or_current(upload.file, path)
-            if path.suffix.lower() in HEIC_EXTENSIONS:
+            if path.suffix.lower() in file_kind_constants().heic_extensions:
                 upload.filename = path.with_suffix(".jpg").name
             upload.file = validate_image(upload.file)
         return cls(

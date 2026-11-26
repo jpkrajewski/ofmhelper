@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.features.assets.models import (
@@ -53,7 +54,7 @@ async def _form(request: Request) -> service.AiInput:
     uploads: dict[str, list[MediaUpload]] = {}
     for field in spec.media_fields:
         uploads[field.name] = [
-            validators[FileKind(field.kind)](value)
+            await run_in_threadpool(validators[FileKind(field.kind)], value)
             for value in data.getlist(field.name)
             if isinstance(value, UploadFile)
         ]

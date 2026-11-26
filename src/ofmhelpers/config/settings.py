@@ -186,6 +186,16 @@ class WebSettings(BaseSettings):
         ge=1,
         validation_alias="OFM_MAX_UPLOAD_MB",
     )
+    max_image_frames: int = Field(
+        default=1000,
+        ge=1,
+        validation_alias="OFM_MAX_IMAGE_FRAMES",
+    )
+    max_image_total_pixels: int = Field(
+        default=200_000_000,
+        ge=1,
+        validation_alias="OFM_MAX_IMAGE_TOTAL_PIXELS",
+    )
     handmade_max_upload_mb: int = Field(
         default=1024,
         ge=1,
