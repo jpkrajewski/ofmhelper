@@ -38,6 +38,7 @@ CDN = "https://scontent-waw2-2.cdninstagram.com/v/x.mp4"
         "https://www.instagram.com/sheep_love33/",
         "instagram.com/Sheep_Love33/reels/",
         "  https://www.instagram.com/sheep_love33?hl=en ",
+        "https://www.instagram.com./sheep_love33/",
     ],
 )
 def test_profile_handle_is_the_bare_username(raw):
@@ -48,6 +49,11 @@ def test_profile_handle_is_the_bare_username(raw):
 def test_profile_handle_rejects_non_usernames(raw):
     with pytest.raises(ValidationError):
         ProfileHandle(username=raw)
+
+
+def test_profile_handle_rejects_a_lookalike_instagram_host():
+    with pytest.raises(ValueError, match="Not an Instagram username"):
+        ProfileHandle(username="https://instagram.com.evil.example/sheep_love33")
 
 
 def test_cdn_urls_only():

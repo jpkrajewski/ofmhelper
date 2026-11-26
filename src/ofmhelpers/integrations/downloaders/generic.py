@@ -178,7 +178,10 @@ def is_media_file(path: Path) -> bool:
 
 
 def is_tiktok_url(url: str) -> bool:
-    return "tiktok.com" in url.lower()
+    has_scheme = url.lower().startswith(("http://", "https://", "//"))
+    parts = urlsplit(url if has_scheme else f"https://{url}")
+    host = (parts.hostname or "").lower().rstrip(".")
+    return host == "tiktok.com" or host.endswith(".tiktok.com")
 
 
 @lru_cache(maxsize=1)

@@ -3,6 +3,8 @@
 import sys
 import time
 
+import pytest
+
 from ofmhelpers.integrations.downloaders import generic
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 
@@ -26,6 +28,22 @@ def _original(tmp_path):
     path = tmp_path / "clip.mp4"
     path.write_bytes(b"hevc")
     return path
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://www.tiktok.com/@person/video/123", True),
+        ("https://vm.tiktok.com/abc", True),
+        ("www.tiktok.com/@person/video/123", True),
+        ("www.tiktok.com/@person/video/123?next=https://example.com", True),
+        ("https://www.tiktok.com./@person/video/123", True),
+        ("https://example.com/watch?next=tiktok.com", False),
+        ("https://tiktok.com.evil.example/@person/video/123", False),
+    ],
+)
+def test_tiktok_detection_checks_the_hostname(url: str, *, expected: bool):
+    assert generic.is_tiktok_url(url) is expected
 
 
 def test_a_hanging_re_encode_is_stopped_and_the_original_kept(monkeypatch, tmp_path):
