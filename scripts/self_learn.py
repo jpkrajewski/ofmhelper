@@ -30,6 +30,8 @@ TEST_SH = re.compile(
     r"(?:^|[;&|(\n])\s*(?:\w+=\S+\s+)*(?:(?:bash|sh)\s+)?(?:\S*/)?scripts/test\.sh(?:\s+([^\s|;&>]+))?",
 )
 BACKGROUND_ID = re.compile(r"running in background with ID: (\w+)")
+KIMI_BACKGROUND_ID = re.compile(r"task_id:\s*([\w-]+)")
+KIMI_NOTIFICATION_ID = re.compile(r'<notification id="task:([\w-]+)"')
 TASK_ID = re.compile(r"<task-id>(\w+)</task-id>")
 TOOL_USE_ID = re.compile(r"<tool-use-id>(\w+)</tool-use-id>")
 TEST_EXIT = re.compile(r"test\.sh: pytest exit (\d+) in (\d+)s")
@@ -176,6 +178,7 @@ def _tool_results(content: object) -> list[dict[str, Any]]:
 def _target(tool_input: dict[str, Any]) -> str:
     raw = (
         tool_input.get("file_path")
+        or tool_input.get("path")
         or tool_input.get("command")
         or tool_input.get("query")
     )
@@ -241,6 +244,12 @@ class TestRuns:
         if tool_id in self.pending and QUIET_RUN.search(command):
             self.quiet.add(tool_id)
 
+    def answer_kimi(self, key: str, text: str, stamp: str) -> None:
+        if key in self.pending and (started := KIMI_BACKGROUND_ID.search(text)):
+            self.background[started.group(1)] = key
+            return
+        self.answer(key, text, stamp)
+
     def answer(self, key: str, text: str, stamp: str) -> None:
         tool_id = self.background.get(key, key)
         if tool_id not in self.pending:
@@ -259,6 +268,13 @@ class TestRuns:
         if found and found.group(1) in self.pending:
             self.completed.add(found.group(1))
             self.ended[found.group(1)] = _when(stamp)
+
+    def notified_kimi(self, text: str, stamp: str) -> None:
+        found = KIMI_NOTIFICATION_ID.search(text)
+        if found and found.group(1) in self.background:
+            tool_id = self.background[found.group(1)]
+            self.completed.add(tool_id)
+            self.ended[tool_id] = _when(stamp)
 
     def _read_summary(self, text: str, stamp: str) -> None:
         verdict = _test_verdict(text, own=False)
@@ -380,14 +396,21 @@ def read_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | No
             continue
         if entry.get("type") == "attachment":
             attached = entry.get("attachment")
-            if isinstance(attached, dict) and isinstance(attached.get("prompt"), str):
-                runs.notified(attached["prompt"], entry["timestamp"])
-            if owner and _is_queued_owner_prompt(attached):
+            attached_prompt = (
+                attached.get("prompt") if isinstance(attached, dict) else None
+            )
+            if isinstance(attached_prompt, str):
+                runs.notified(attached_prompt, entry["timestamp"])
+            if (
+                owner
+                and isinstance(attached_prompt, str)
+                and _is_queued_owner_prompt(attached)
+            ):
                 prompts.append(
                     Correction(
                         at=entry["timestamp"][:16],
                         session=path.stem[:8],
-                        text=str(attached["prompt"])[:TEXT_MAX],
+                        text=attached_prompt[:TEXT_MAX],
                     ),
                 )
             continue
@@ -498,6 +521,194 @@ def sessions(logs: Path, since: datetime) -> list[SessionLog]:
     return found
 
 
+def _kimi_matches(path: Path) -> bool:
+    with path.open(encoding="utf-8") as lines:
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if entry.get("type") != "changeNotifier.snapshot":
+                continue
+            workspaces = entry.get("workspacePrimaryByWorkspace") or {}
+            return any(
+                str(workspace).casefold() == str(ROOT).casefold()
+                for workspace in workspaces.values()
+            )
+    return False
+
+
+def _kimi_stamp(entry: dict[str, Any]) -> datetime:
+    return datetime.fromtimestamp(entry["time"] / 1000, UTC)
+
+
+def _kimi_prompt_text(entry: dict[str, Any]) -> str:
+    parts = entry.get("input") or []
+    return "\n".join(
+        str(part.get("text") or "")
+        for part in parts
+        if isinstance(part, dict)
+        and not str(part.get("text") or "").startswith(
+            ("<notification", "<system-reminder>", CONTINUED),
+        )
+    ).strip()
+
+
+def read_kimi_session(path: Path, since: datetime, *, owner: bool) -> SessionLog | None:  # noqa: C901, PLR0912, PLR0915
+    session = path.parents[2].name.removeprefix("session_")
+    tools: dict[str, tuple[str, str]] = {}
+    usage = Counter[str]()
+    reads = Counter[str]()
+    outputs: list[tuple[int, str]] = []
+    prompts: list[Correction] = []
+    errors: list[str] = []
+    interrupted = rejected = 0
+    stamps: list[str] = []
+    runs = TestRuns(session[:8])
+    pushes: set[str] = set()
+    reviews = Counter[str]()
+    task_stops = refused_pushes = peak = 0
+    with path.open(encoding="utf-8") as lines:
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                print(f"self_learn: skipped a broken line in {path}", file=sys.stderr)
+                continue
+            if not isinstance(entry.get("time"), int):
+                continue
+            stamp = _kimi_stamp(entry)
+            if stamp < since:
+                continue
+            stamps.append(stamp.isoformat())
+            kind = entry.get("type")
+            if kind == "turn.prompt":
+                notification_text = _text(entry.get("input") or [])
+                runs.notified_kimi(notification_text, stamp.isoformat())
+                if notification := KIMI_NOTIFICATION_ID.search(notification_text):
+                    runs.answer(
+                        notification.group(1),
+                        notification_text,
+                        stamp.isoformat(),
+                    )
+                if not owner:
+                    continue
+                text = _kimi_prompt_text(entry)
+                origin = entry.get("origin") or {}
+                if text and origin.get("kind") == "user":
+                    prompts.append(
+                        Correction(
+                            at=stamp.isoformat()[:16],
+                            session=session[:8],
+                            text=text[:TEXT_MAX],
+                        ),
+                    )
+                interrupted += INTERRUPTED in text
+                continue
+            if kind == "usage.record":
+                u = entry.get("usage") or {}
+                usage["output"] += u.get("output", 0)
+                usage["fresh"] += u.get("inputOther", 0) + u.get(
+                    "inputCacheCreation",
+                    0,
+                )
+                usage["cached"] += u.get("inputCacheRead", 0)
+                continue
+            if kind == "token_counting.measured":
+                peak = max(peak, entry.get("tokens", 0))
+                continue
+            if kind != "context.append_loop_event":
+                continue
+            event = entry.get("event") or {}
+            event_kind = event.get("type")
+            tool_id = str(event.get("toolCallId") or "")
+            if event_kind == "tool.call":
+                name = str(event.get("name") or "?")
+                args = event.get("args") or {}
+                target = _target(args)
+                tools[tool_id] = (name, target)
+                if name == "Read":
+                    reads[target] += 1
+                task_stops += name == "TaskStop"
+                command = str(args.get("command", ""))
+                preset = _test_preset(command) if name == "Bash" else None
+                if preset:
+                    runs.launch(tool_id, preset, stamp.isoformat())
+                    runs.run_without_output(tool_id, command)
+                if name in {"Bash", "Read"}:
+                    runs.read_summary_file(tool_id, str(args.get("path") or command))
+                if name == "Bash" and GIT_PUSH.search(command):
+                    pushes.add(tool_id)
+                if label := _review_label(name, args):
+                    reviews[label] += 1
+                continue
+            if event_kind != "tool.result":
+                continue
+            result = event.get("result") or {}
+            text = str(result.get("output") or "")
+            name, target = tools.get(tool_id, ("?", ""))
+            outputs.append((len(text), f"{name} {target}"))
+            refused_pushes += tool_id in pushes and REFUSED_PUSH in text
+            runs.answer_kimi(tool_id, text, stamp.isoformat())
+            if REJECTED in text:
+                rejected += 1
+            elif result.get("isError"):
+                errors.append(f"{name}: {_first_line(text)}")
+    if not stamps:
+        return None
+    minutes = int((_when(stamps[-1]) - _when(stamps[0])).total_seconds() // 60)
+    return SessionLog(
+        cost=SessionCost(
+            session=session[:8],
+            started=stamps[0][:16],
+            minutes=minutes,
+            subagents=0,
+            output_tokens=usage["output"],
+            fresh_input_tokens=usage["fresh"],
+            cache_read_tokens=usage["cached"],
+            peak_context_tokens=peak,
+            rereads=[
+                Repeat(what=w, count=c)
+                for w, c in reads.most_common()
+                if c >= REREAD_MIN
+            ],
+            biggest=[
+                Repeat(what=w, count=n)
+                for n, w in sorted(outputs, reverse=True)[:BIGGEST]
+            ],
+        ),
+        prompts=prompts,
+        interrupted=interrupted,
+        rejected=rejected,
+        errors=errors,
+        test_runs=runs.all(),
+        reviews=[Repeat(what=w, count=c) for w, c in reviews.most_common()],
+        task_stops=task_stops,
+        refused_pushes=refused_pushes,
+    )
+
+
+def kimi_sessions(root: Path, since: datetime) -> list[SessionLog]:
+    found = []
+    cutoff = since.timestamp()
+    for path in sorted(root.glob("wd_*/session_*/agents/main/wire.jsonl")):
+        if path.stat().st_mtime < cutoff or not _kimi_matches(path):
+            continue
+        main = read_kimi_session(path, since, owner=True)
+        if main is None:
+            continue
+        agents = path.parent.parent
+        runs = [
+            run
+            for sub in sorted(agents.glob("*/wire.jsonl"))
+            if sub != path
+            and sub.stat().st_mtime >= cutoff
+            and (run := read_kimi_session(sub, since, owner=False)) is not None
+        ]
+        found.append(_with_subagents(main, runs))
+    return found
+
+
 def _merged(repeats: Iterable[Repeat]) -> list[Repeat]:
     total = Counter[str]()
     for repeat in repeats:
@@ -525,8 +736,16 @@ def guard_blocks(audit: Path, since: datetime) -> list[Repeat]:
     return [Repeat(what=w, count=c) for w, c in counts.most_common(TOP)]
 
 
-def digest(logs: Path, audit: Path, since: datetime) -> Digest:
+def digest(
+    logs: Path,
+    audit: Path,
+    since: datetime,
+    *,
+    kimi_root: Path | None = None,
+) -> Digest:
     found = sessions(logs, since)
+    if kimi_root is not None:
+        found += kimi_sessions(kimi_root, since)
     errors = Counter(e for s in found for e in s.errors)
     return Digest(
         since=since.isoformat(timespec="minutes"),
@@ -613,7 +832,12 @@ def main(argv: list[str]) -> int:
         if argv[:1] == ["--days"]
         else last_pass()
     )
-    d = digest(project_logs(), AUDIT, since)
+    d = digest(
+        project_logs(),
+        AUDIT,
+        since,
+        kimi_root=Path.home() / ".kimi-code" / "sessions",
+    )
     report = OUT / f"{datetime.now(UTC):%Y-%m-%d-%H%M%S}.md"
     report.write_text(render(d), encoding="utf-8", newline="\n")
     print(

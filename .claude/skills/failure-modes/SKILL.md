@@ -33,11 +33,13 @@ Bugs reviewers found in one session (2026-11-20, idempotency, 8 review rounds): 
 - Rule: Pydantic at the edge, length caps, structured hashing: hash name-value pairs, never `name=value` joined strings (`a=b` and `a`,`=b` collide).
 - Copy: `web/idempotency.py` `_field` and `_fields` (fields hashed as pairs).
 - Test: 10k characters, emoji, RTL, `<script>`, empty; `scripts/ui_check.py` does this on the page (skill `ui-check`).
+- Decoder/validator reviews start with a failure matrix: every accepted format and alias, single- and multi-frame variants, truncation at the header, a later frame and the trailer, iterator-normalized EOF, and decoder-exception normalization. Each regression fixture isolates one defect so another check cannot make it pass.
 
 ## 6. Scale
 - Rule: an index for every column a query filters or sorts on (JSONB keys included: a missing JSONB index was a finding); a retention sweep for every table that only grows; polls back off and pause while the tab is hidden; one slow row never blocks the list.
 - Copy: `web/static/js/repurpose.js` `followUploads` (backoff x1.5 to a cap, waits on `visibilitychange`); `.claude/rules/database.md`.
 - Test: query plan or index assertion in an integration test; a sweep test with old rows.
+- Decoder budgets cover aggregate work, not only per-file bytes or per-frame dimensions: cap frames × pixels/bytes and enforce the cap before metadata operations such as `n_frames` that themselves scan the whole input.
 
 ## 7. JS crash
 - Rule: null-safe DOM access; one failing card never stops the others (`Promise.allSettled`, a 4xx drops only that card from the poll); every e2e asserts `js_errors == []`.

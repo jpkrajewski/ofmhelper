@@ -505,3 +505,232 @@ def test_a_queued_record_of_a_wrong_shape_is_skipped(tmp_path):
     d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
 
     assert [p.text for p in d.prompts] == ["go"]
+
+
+def _kimi_entry(minute: int, kind: str, **fields) -> dict:
+    stamp = NOW + timedelta(minutes=minute)
+    return {"type": kind, "time": int(stamp.timestamp() * 1000), **fields}
+
+
+def _kimi_tool(minute: int, kind: str, tool_id: str, **fields) -> dict:
+    event = {"type": kind, "toolCallId": tool_id, **fields}
+    return _kimi_entry(minute, "context.append_loop_event", event=event)
+
+
+def test_kimi_wire_sessions_are_included_in_the_digest(tmp_path):
+    logs = tmp_path / "claude"
+    kimi = tmp_path / "kimi"
+    session = kimi / "wd_repo" / "session_12345678" / "agents"
+    main = session / "main" / "wire.jsonl"
+    entries = [
+        _kimi_entry(
+            0,
+            "changeNotifier.snapshot",
+            workspacePrimaryByWorkspace={"wd_repo": str(REPO)},
+        ),
+        _kimi_entry(
+            1,
+            "turn.prompt",
+            origin={"kind": "user"},
+            input=[{"type": "text", "text": "why did this break again?"}],
+        ),
+        _kimi_entry(
+            2,
+            "turn.prompt",
+            origin={"kind": "user"},
+            input=[
+                {"type": "text", "text": "<notification>task completed</notification>"},
+            ],
+        ),
+        _kimi_entry(
+            2,
+            "turn.prompt",
+            origin={"kind": "user"},
+            input=[
+                {
+                    "type": "text",
+                    "text": "<system-reminder>ignore this</system-reminder>",
+                },
+            ],
+        ),
+        _kimi_entry(
+            3,
+            "usage.record",
+            usage={
+                "inputOther": 100,
+                "inputCacheCreation": 20,
+                "inputCacheRead": 1000,
+                "output": 50,
+            },
+        ),
+        _kimi_entry(3, "token_counting.measured", tokens=5000),
+        _kimi_tool(
+            4,
+            "tool.call",
+            "g1",
+            name="Bash",
+            args={"command": "git push origin dev"},
+        ),
+        _kimi_tool(
+            4,
+            "tool.call",
+            "r1",
+            name="Bash",
+            args={"command": "python .claude/skills/kimi/ask.py review task.md"},
+        ),
+        _kimi_tool(
+            5,
+            "tool.result",
+            "g1",
+            result={"output": "error: failed to push some refs", "isError": True},
+        ),
+        _kimi_tool(
+            5,
+            "tool.result",
+            "r1",
+            result={"output": "NO FINDINGS", "isError": False},
+        ),
+        _kimi_entry(6, "subagent.spawned", subagentId="agent-0"),
+    ]
+    main.parent.mkdir(parents=True)
+    main.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+    subagent = session / "agent-0" / "wire.jsonl"
+    subagent_entries = [
+        _kimi_entry(
+            7,
+            "usage.record",
+            usage={
+                "inputOther": 30,
+                "inputCacheCreation": 5,
+                "inputCacheRead": 200,
+                "output": 25,
+            },
+        ),
+        _kimi_entry(7, "token_counting.measured", tokens=6000),
+        _kimi_tool(
+            8,
+            "tool.result",
+            "x1",
+            result={"output": "ValueError: bad fixture", "isError": True},
+        ),
+    ]
+    subagent.parent.mkdir(parents=True)
+    subagent.write_text(
+        "\n".join(json.dumps(e) for e in subagent_entries) + "\n",
+        encoding="utf-8",
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW, kimi_root=kimi)
+
+    assert len(d.costs) == 1
+    assert [p.text for p in d.prompts] == ["why did this break again?"]
+    assert d.refused_pushes == 1
+    assert sum(r.count for r in d.reviews) == 1
+    [cost] = d.costs
+    assert (cost.subagents, cost.output_tokens, cost.fresh_input_tokens) == (1, 75, 155)
+    assert (cost.cache_read_tokens, cost.peak_context_tokens) == (1200, 5000)
+    assert any("failed to push" in failure.what for failure in d.failures)
+    assert any("bad fixture" in failure.what for failure in d.failures)
+
+
+def test_kimi_background_test_runs_pair_with_notifications_and_summary(tmp_path):
+    logs = tmp_path / "claude"
+    kimi = tmp_path / "kimi"
+    main = kimi / "wd_repo" / "session_87654321" / "agents" / "main" / "wire.jsonl"
+    entries = [
+        _kimi_entry(
+            0,
+            "changeNotifier.snapshot",
+            workspacePrimaryByWorkspace={"wd_repo": str(REPO)},
+        ),
+        _kimi_tool(
+            1,
+            "tool.call",
+            "t1",
+            name="Bash",
+            args={"command": "scripts/test.sh deploy > reports/deploy.log 2>&1"},
+        ),
+        _kimi_tool(
+            2,
+            "tool.result",
+            "t1",
+            result={"output": "task_id: bash-test1", "isError": False},
+        ),
+        _kimi_tool(
+            3,
+            "tool.call",
+            "early1",
+            name="Read",
+            args={"path": "reports/latest/summary.txt"},
+        ),
+        _kimi_tool(
+            4,
+            "tool.result",
+            "early1",
+            result={"output": "SUMMARY exit 1: stale result\nRESULT NOT GREEN"},
+        ),
+        _kimi_entry(
+            5,
+            "turn.prompt",
+            origin={"kind": "user"},
+            input=[
+                {
+                    "type": "text",
+                    "text": (
+                        '<notification id="task:bash-test1">completed</notification>'
+                    ),
+                },
+            ],
+        ),
+        _kimi_tool(
+            6,
+            "tool.call",
+            "r1",
+            name="Read",
+            args={"path": "reports/latest/summary.txt"},
+        ),
+        _kimi_tool(
+            7,
+            "tool.result",
+            "r1",
+            result={"output": "SUMMARY exit 0: 9 passed\nRESULT GREEN"},
+        ),
+    ]
+    main.parent.mkdir(parents=True)
+    main.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW, kimi_root=kimi)
+
+    assert [(t.preset, t.seconds, t.result) for t in d.test_runs] == [
+        ("deploy", 240, "green"),
+    ]
+    assert d.prompts == []
+
+
+def test_claude_foreground_result_with_a_task_id_still_finishes(tmp_path):
+    logs = tmp_path / "logs"
+    _write(
+        logs / "eeee9999-main.jsonl",
+        [
+            _prompt(1, "run it"),
+            _assistant(
+                2,
+                "m1",
+                [("t1", "Bash", {"command": "scripts/test.sh deploy"})],
+            ),
+            _results(
+                3,
+                [
+                    (
+                        "t1",
+                        "task_id: bash-test1\nSUMMARY exit 0: 9 passed\nRESULT GREEN",
+                        False,
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
+
+    assert [(t.preset, t.result) for t in d.test_runs] == [("deploy", "green")]

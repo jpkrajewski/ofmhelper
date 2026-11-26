@@ -93,6 +93,12 @@ a file (`reports/loops/push.log`), not through a pipe; then compare
 needs the gh token's `workflow` scope; if refused, the owner runs
 `! gh auth refresh -s workflow`.
 
+A follow-up fix committed while HEAD is not a clean local `dev`: never push
+that HEAD to `dev` and never repair a diverged shared `dev`. Fetch, create
+`ship/<topic>` directly from `origin/dev`, cherry-pick only this session's
+commit, then push `HEAD:dev`. Preserve unrelated untracked files; no stash or
+rebase.
+
 ## 5. CI on dev
 `gh run list --workflow CI --branch dev --limit 1`, then `gh run watch <id>
 --exit-status`. Red: `gh run view <id> --log-failed`, fix, back to step 2
