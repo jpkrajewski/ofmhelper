@@ -102,6 +102,7 @@ class VideoConstants(KnobConstants, frozen=True):
         },
     )
     min_kept_share: float = 0.5
+    work_headroom: float = 1.5
     right_angle: float = 1.5708
     noise_min: float = 0.05
     handheld: HandheldConstants = HandheldConstants()
