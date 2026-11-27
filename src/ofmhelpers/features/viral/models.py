@@ -6,7 +6,8 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.db.jobs.schema import Job, JobStatus, ResultFile
-from ofmhelpers.features.jobs.schema import AssetCard, error_reason
+from ofmhelpers.features.jobs.models import AssetCard
+from ofmhelpers.features.jobs.schema import error_reason
 from ofmhelpers.integrations.apify.instagram import ApifyItemError, ApifyReel
 
 __all__ = ["ApifyItemError", "ApifyReel", "SavedReel", "ViralFind"]

@@ -11,7 +11,8 @@ lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets.store import safe_filename
-from ofmhelpers.features.files.schema import DirEntry, FileEntry
+from ofmhelpers.features.files.models import FileEntry
+from ofmhelpers.features.files.schema import DirEntry
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import ConflictError, NotFoundError, RefusedError
 lazy from ofmhelpers.features.assets.models import MediaUpload

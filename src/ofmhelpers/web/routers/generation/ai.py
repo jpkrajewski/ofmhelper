@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -31,6 +32,8 @@ from ofmhelpers.web.templates_config import render_polled
 
 __all__ = ["TASK", "describe", "router", "run_ai"]
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/ai",
     tags=["ai"],
@@ -44,6 +47,7 @@ async def _form(request: Request) -> service.AiInput:
     try:
         spec = service.model_spec(str(data.get("model") or ""))
     except NotFoundError:
+        logger.debug("ai form: unknown model, no uploads read", exc_info=True)
         return service.AiInput(data=data, uploads={})
     validators = {
         FileKind.IMAGE: validate_image_upload,

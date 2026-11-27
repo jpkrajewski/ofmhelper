@@ -7,8 +7,6 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, computed_field
 
-from ofmhelpers.features.kinds import FileKind
-
 FALLBACK = "Failed"
 _WHO = re.compile(r"^([A-Za-z][\w.\- ]{1,23}): (.+)$", re.DOTALL)
 _SAID_MAX = 240
@@ -241,22 +239,6 @@ def download_reason(error: str | None) -> str:
     return said if len(said) <= _DOWNLOAD_SAID_MAX else capped
 
 
-class AssetCard(BaseModel):
-    name: str
-    index: int
-    kind: FileKind
-    view_url: str
-    download_url: str
-    download_name: str
-    local_fallback_url: str | None = None
-    preview_url: str | None = None
-    poster_url: str | None = None
-    source: str | None = None
-    removed: bool = False
-    removed_reason: str | None = None
-    removed_error: str | None = None
-
-
 class FailedSource(BaseModel):
     source: str
     error: str
@@ -299,26 +281,9 @@ class CloneQueued(BaseModel):
     batch: str | None = None
 
 
-class ReferenceAsset(BaseModel):
-    name: str
-    kind: FileKind
-    view_url: str
-
-
 class InputSetting(BaseModel):
     label: str
     value: Any
-
-
-class InputFileGroup(BaseModel):
-    label: str
-    assets: list[ReferenceAsset]
-
-
-class JobInputs(BaseModel):
-    settings: list[InputSetting]
-    long_text: list[InputSetting]
-    file_groups: list[InputFileGroup]
 
 
 class ActionLogEntry(BaseModel):

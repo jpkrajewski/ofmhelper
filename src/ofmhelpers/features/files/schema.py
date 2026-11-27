@@ -2,18 +2,11 @@
 
 from pydantic import BaseModel
 
-from ofmhelpers.features.kinds import FileKind
-
 
 class DirEntry(BaseModel):
     name: str
     rel_path: str
     mtime: float = 0
-
-
-class FileEntry(DirEntry):
-    size: str
-    kind: FileKind = FileKind.OTHER
 
 
 class FileTile(BaseModel):
