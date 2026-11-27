@@ -14,11 +14,6 @@ class AssignAccount(BaseModel):
     replace: bool = False
 
 
-class LoginSecrets(BaseModel):
-    password: str
-    backup_codes: str
-
-
 class AddedLogin(BaseModel):
     model_config = ConfigDict(frozen=True)
 

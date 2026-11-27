@@ -3,7 +3,7 @@
 import logging
 from urllib.parse import urlencode
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role, StorageProvider
@@ -50,13 +50,13 @@ def _identity(provider: Provider, back: Callback) -> _Verified:
     return _Verified(carried=carried, identity=provider.identity(reply, carried.nonce))
 
 
-def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
+def _sync_new_drive(user_id: int, refresh_token: SecretStr | None) -> None:
     if not refresh_token:
         return
     storage_jobs.queue_sync(user_id)
 
 
-def _use_google_drive(user_id: int, refresh_token: str | None) -> None:
+def _use_google_drive(user_id: int, refresh_token: SecretStr | None) -> None:
     if not refresh_token:
         return
     storage_choice.use(user_id, StorageProvider.GDRIVE)

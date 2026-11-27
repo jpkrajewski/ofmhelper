@@ -36,7 +36,7 @@ def for_user(user_id: int | None) -> str | None:
     if user_id is None:
         return None
     row = _readable(user_id)
-    return row.cookies if row else None
+    return row.cookies.get_secret_value() if row else None
 
 
 def for_watched(username: str) -> str | None:

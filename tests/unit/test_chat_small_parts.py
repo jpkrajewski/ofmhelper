@@ -5,7 +5,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from ofmhelpers.db.chats.schema import ChatEvent, ChatPosition, ChatRead, ReadScope
+from ofmhelpers.db.chats.schema import (
+    ChatEvent,
+    ChatPosition,
+    ChatRead,
+    ChatTokens,
+    ChatWebhook,
+    CreatedSubscription,
+    ReadScope,
+)
 from ofmhelpers.features.notifications.service import money
 from ofmhelpers.monitoring.log_records import RedactFilter
 from ofmhelpers.redact import MASK
@@ -92,3 +100,45 @@ def test_a_round_knows_each_chats_last_message_read():
     assert scope.seen == {"a": "7", "b": "9"}
     assert scope.open_channels == {"b"}
     assert scope.thorough is False
+
+
+def test_a_created_subscription_secret_is_masked_but_recoverable():
+    subscription = CreatedSubscription(
+        id="sub",
+        url="https://example.invalid",
+        secret="created-secret",
+    )
+
+    assert "created-secret" not in repr(subscription)
+    assert "created-secret" not in subscription.model_dump_json()
+    assert subscription.secret.get_secret_value() == "created-secret"
+
+
+def test_a_webhook_secret_is_masked_but_recoverable():
+    webhook = ChatWebhook(
+        model_id="model",
+        model_username="creator",
+        webhook_id="hook",
+        url="https://example.invalid",
+        secret="webhook-secret",
+    )
+
+    assert "webhook-secret" not in repr(webhook)
+    assert "webhook-secret" not in webhook.model_dump_json()
+    assert webhook.secret.get_secret_value() == "webhook-secret"
+
+
+def test_chat_tokens_are_masked_but_recoverable():
+    tokens = ChatTokens(
+        access_token="access-secret",
+        refresh_token="refresh-secret",
+        expires_at=123.0,
+    )
+
+    representation = repr(tokens)
+    serialized = tokens.model_dump_json()
+    for secret in ("access-secret", "refresh-secret"):
+        assert secret not in representation
+        assert secret not in serialized
+    assert tokens.access_token.get_secret_value() == "access-secret"
+    assert tokens.refresh_token.get_secret_value() == "refresh-secret"

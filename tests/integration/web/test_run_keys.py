@@ -41,7 +41,9 @@ def _user(email: str = "keys@example.com", role: Role = Role.USER) -> int:
 
 
 def _saved(user_id: int) -> dict[str, str]:
-    return {k.provider: k.api_key for k in users.api_keys(user_id).keys}
+    return {
+        k.provider: k.api_key.get_secret_value() for k in users.api_keys(user_id).keys
+    }
 
 
 def test_account_lists_one_apiyi_key_per_token_group():

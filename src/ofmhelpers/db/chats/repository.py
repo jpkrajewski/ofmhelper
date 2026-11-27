@@ -430,8 +430,8 @@ class ChatRepository:
             "username": account.username,
             "is_agency": account.is_agency,
             "needs_reconnect": False,
-            "access_token": tokens.access_token,
-            "refresh_token": tokens.refresh_token,
+            "access_token": tokens.access_token.get_secret_value(),
+            "refresh_token": tokens.refresh_token.get_secret_value(),
             "expires_at": tokens.expires_at,
         }
         with session_scope() as s:
@@ -473,10 +473,10 @@ class ChatRepository:
             if tokens is None:
                 row.needs_reconnect = True
                 return None
-            row.access_token = tokens.access_token
-            row.refresh_token = tokens.refresh_token
+            row.access_token = tokens.access_token.get_secret_value()
+            row.refresh_token = tokens.refresh_token.get_secret_value()
             row.expires_at = tokens.expires_at
-            return tokens.access_token
+            return tokens.access_token.get_secret_value()
 
     def webhooks(self, platform: str) -> list[ChatWebhook]:
         with session_scope() as s:
@@ -525,7 +525,12 @@ class ChatRepository:
             return [ChatWebhook.model_validate(dict(row)) for row in dropped.mappings()]
 
     def save_webhook(self, platform: str, webhook: ChatWebhook) -> None:
-        values = webhook.model_dump(exclude={"model_id"})
+        values = {
+            "model_username": webhook.model_username,
+            "webhook_id": webhook.webhook_id,
+            "url": webhook.url,
+            "secret": webhook.secret.get_secret_value(),
+        }
         with session_scope() as s:
             s.execute(
                 insert(ChatWebhookRow)

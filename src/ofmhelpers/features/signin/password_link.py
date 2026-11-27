@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
 
 from ofmhelpers.db.users.schema import PasswordForm, User
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
@@ -25,8 +25,15 @@ def page(token: str) -> LinkPage:
 
 def set_password(token: str, password: str, confirm: str) -> Outcome | LinkPage:
     try:
-        form = PasswordForm(password=password, confirm=confirm)
-        user = credentials.set_password_with_link(token, form.password, form.confirm)
+        form = PasswordForm(
+            password=SecretStr(password),
+            confirm=SecretStr(confirm),
+        )
+        user = credentials.set_password_with_link(
+            token,
+            form.password.get_secret_value(),
+            form.confirm.get_secret_value(),
+        )
     except (ValueError, ValidationError) as exc:  # silent: shown on the page
         message = (
             str(exc)

@@ -312,7 +312,7 @@ def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(
         "ann.ig",
         ["Phone 01"],
     )
-    assert devices.secrets(login).password == "pw"
+    assert devices.secrets(login).password.get_secret_value() == "pw"
     assert "ann.ig" not in [a.handle for a in list_accounts()]
 
     client = _client()
@@ -1235,7 +1235,7 @@ def test_removed_on_accounts_it_leaves_the_phones_and_drive_password_kept(drive)
     assert drive.item(folder).trashed
     assert [x.id for d in devices.list_devices() for x in d.logins] == [other_login]
     assert [a.id for a in devices.archived_logins()] == [login]
-    assert devices.secrets(login).password == "pw"
+    assert devices.secrets(login).password.get_secret_value() == "pw"
     assert "ann.ig" not in [a.handle for a in list_accounts()]
     assert storage_jobs.sync().created == []
 
@@ -1294,7 +1294,7 @@ def test_adding_an_archived_account_again_brings_it_back(drive):
 
     assert again == AddedLogin(id=login, existed=True)
     assert devices.archived_logins() == []
-    assert devices.secrets(login).password == "pw"
+    assert devices.secrets(login).password.get_secret_value() == "pw"
 
 
 def test_a_posted_folder_gone_mid_scan_never_removes_the_account(drive, monkeypatch):
@@ -1326,7 +1326,7 @@ def test_an_archived_account_with_no_phone_left_is_not_restored(drive):
 
     assert r.status_code == 409
     assert [a.id for a in devices.archived_logins()] == [login]
-    assert devices.secrets(login).password == "pw"
+    assert devices.secrets(login).password.get_secret_value() == "pw"
 
 
 def test_an_archived_account_is_restored_onto_its_phone(drive):

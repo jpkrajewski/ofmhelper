@@ -24,6 +24,7 @@ RANK = {
     "db": 1,
     "cache": 1,
     "config": 1,
+    "utils": 0,
 }
 TOP_LEVEL_MODULES = {"acting", "log", "logging", "redact"}
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}

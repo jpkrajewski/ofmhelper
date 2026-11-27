@@ -77,7 +77,7 @@ def finish(user_id: int, session_id: str, code: str, state: str) -> bool:
         return False
     try:
         tokens = oauth.exchange(code, _redirect_uri(), verifier)
-        me = FanvueClient(lambda: tokens.access_token).me()
+        me = FanvueClient(tokens.access_token.get_secret_value).me()
     except ChatSourceError:
         logger.warning("fanvue connect failed", exc_info=True)
         return False

@@ -333,6 +333,6 @@ layers = [
     "integrations | media",
     "log",
     "db | cache | monitoring | config",
-    "redact | acting",
+    "redact | acting | utils",
 ]
 exhaustive = true

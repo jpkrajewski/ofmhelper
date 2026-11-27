@@ -19,7 +19,7 @@ def saved(user_id: int) -> SavedCookies | None:
     if found is None:
         return None
     try:
-        summary = summarize(found.cookies, cookie_sites())
+        summary = summarize(found.cookies.get_secret_value(), cookie_sites())
     except CookieFileError:
         logger.warning(
             "stored cookies of user %s are not readable",

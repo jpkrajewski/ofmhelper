@@ -5,7 +5,7 @@ import time
 from typing import Any
 lazy from collections.abc import Mapping
 
-from pydantic import RootModel, ValidationError
+from pydantic import RootModel, SecretStr, ValidationError
 from sqlalchemy.exc import DataError
 
 from ofmhelpers.cache import get_text, set_text
@@ -145,9 +145,14 @@ def cover_models(source: ChatSource, models: list[ChatModel]) -> None:
         model
         for model in models
         if (row := known.get(model.model_id)) is None
-        or (row.secret, row.url, row.model_username) != (secret, url, model.username)
+        or (row.secret.get_secret_value(), row.url, row.model_username)
+        != (secret, url, model.username)
     ]
-    made = CreatedSubscription(id=_SHARED_DESTINATION, url=url, secret=secret)
+    made = CreatedSubscription(
+        id=_SHARED_DESTINATION,
+        url=url,
+        secret=SecretStr(secret),
+    )
     _save_rows(source, stale, made)
 
 
@@ -303,7 +308,7 @@ def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
     signed = {
         w.model_id: w
         for w in chats.webhooks(platform)
-        if source.verified(w.secret, raw, headers)
+        if source.verified(w.secret.get_secret_value(), raw, headers)
     }
     shared = source.shared_secret()
     if not signed and not (shared and source.verified(shared, raw, headers)):

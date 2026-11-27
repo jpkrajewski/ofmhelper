@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from typing import Any
 lazy from collections.abc import Iterator
 
+from pydantic import SecretStr
 from sqlalchemy import SQLColumnExpression, delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, StatementError
@@ -12,8 +13,8 @@ from sqlalchemy.orm import undefer_group
 lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
-from ofmhelpers.db.devices.models import Device, DeviceLogin
-from ofmhelpers.db.devices.schema import AddedLogin, ArchivedLogin, LoginSecrets
+from ofmhelpers.db.devices.models import Device, DeviceLogin, LoginSecrets
+from ofmhelpers.db.devices.schema import AddedLogin, ArchivedLogin
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.models import DeviceLoginRow, DeviceRow, LoginRow
 from ofmhelpers.db.owner_scope import mine
@@ -178,8 +179,8 @@ class DeviceRepository(CachedRepository):
                     provider=r.provider,
                     username=r.username,
                     notes=r.notes,
-                    password=r.password,
-                    backup_codes=r.backup_codes,
+                    password=SecretStr(r.password),
+                    backup_codes=SecretStr(r.backup_codes),
                     updated_at=r.updated_at.timestamp(),
                     has_password=bool(r.password),
                     has_codes=bool(r.backup_codes),
@@ -200,7 +201,10 @@ class DeviceRepository(CachedRepository):
             row = s.get(LoginRow, login_id)
             if row is None or (owner is not None and row.user_id != owner):
                 return None
-            return LoginSecrets(password=row.password, backup_codes=row.backup_codes)
+            return LoginSecrets(
+                password=SecretStr(row.password),
+                backup_codes=SecretStr(row.backup_codes),
+            )
 
     def owner_of_login(self, login_id: int) -> int | None:
         with session_scope() as s:

@@ -14,6 +14,7 @@ from ofmhelpers.features.phones import service
 from ofmhelpers.features.phones import workbook as phones_workbook
 from ofmhelpers.features.phones.revisions import Revisions
 from ofmhelpers.features.phones.service import LoginAdded
+from ofmhelpers.utils.secrets.json_dump import model_json_dump
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import (
     Access,
@@ -135,9 +136,8 @@ def export(scope: Scope, user: CurrentUser) -> Response:
 @router.get("/logins/{login_id}/secret", dependencies=SECRET)
 def secret(login_id: int, login: Login, user: CurrentUser) -> Response:
     found = login.secret()
-    logger.info("Login %s revealed by %s", login_id, user.email)
     return Response(
-        content=found.model_dump_json(),
+        content=model_json_dump(found, f"Login {login_id} revealed by {user.email}"),
         media_type="application/json",
         headers=NO_STORE,
     )

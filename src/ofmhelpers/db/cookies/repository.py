@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from pydantic import SecretStr
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -17,7 +18,7 @@ class CookieRepository:
             if row is None:
                 return None
             return StoredCookies(
-                cookies=row.cookies,
+                cookies=SecretStr(row.cookies),
                 file_name=row.file_name,
                 uploaded_at=row.updated_at.timestamp(),
             )

@@ -6,7 +6,7 @@ from http import HTTPStatus
 from urllib.parse import urlencode
 
 import requests
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.chats.schema import ChatTokens
@@ -53,8 +53,8 @@ def _tokens(r: requests.Response) -> ChatTokens:
         msg = "Fanvue answered an unexpected token reply"
         raise FanvueError(msg) from None
     return ChatTokens(
-        access_token=reply.access_token,
-        refresh_token=reply.refresh_token,
+        access_token=SecretStr(reply.access_token),
+        refresh_token=SecretStr(reply.refresh_token),
         expires_at=time.time() + reply.expires_in,
     )
 

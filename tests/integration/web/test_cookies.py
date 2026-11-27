@@ -173,6 +173,11 @@ def test_stored_encrypted_and_never_in_redis_or_logs(ann, caplog):
     caplog.set_level(logging.DEBUG)
     _upload(client, _jar(ANN_SECRET))
     client.get("/cookies")
+    saved = cookies.stored(user_id)
+    assert saved is not None
+    assert ANN_SECRET not in repr(saved)
+    assert ANN_SECRET not in saved.model_dump_json()
+    assert saved.cookies.get_secret_value() == _jar(ANN_SECRET).decode()
     with session_scope() as s:
         raw = s.execute(
             text("SELECT cookies FROM user_cookies WHERE user_id = :u"),

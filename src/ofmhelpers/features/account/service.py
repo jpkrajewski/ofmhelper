@@ -3,7 +3,7 @@
 import logging
 lazy from collections.abc import Mapping
 
-from pydantic import BaseModel, ConfigDict, SkipValidation
+from pydantic import BaseModel, ConfigDict, SecretStr, SkipValidation
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.storage_accounts import store as storage_accounts
@@ -191,10 +191,10 @@ def change_password(
 
 def keys_form(fields: Mapping[str, object]) -> ApiKeysForm:
     known = [p.name for p in (*keyed_providers(), _stacked())]
-    form = ApiKeysForm(
-        keys={name: str(fields.get(f"key_{name}", "")) for name in known},
-        remove=str(fields.get("remove") or "") or None,
-    )
+    keys: dict[str, SecretStr] = {}
+    for name in known:
+        keys[name] = SecretStr(str(fields.get(f"key_{name}", "")))
+    form = ApiKeysForm(keys=keys, remove=str(fields.get("remove") or "") or None)
     if form.remove is not None and form.remove not in known:
         raise NotFoundError(UNKNOWN_PROVIDER)
     return form
@@ -210,10 +210,10 @@ def save_keys(user_id: int, form: ApiKeysForm, *, chats: bool) -> Notice:
     if not form.keys:
         return Notice(error="Nothing to save: paste a key first.", status_code=400)
     typed = form.keys.get(stacked_keys.SLOT)
-    if typed is not None and (refused := _stacked_refusal(typed)):
+    if typed is not None and (refused := _stacked_refusal(typed.get_secret_value())):
         return Notice(error=refused, status_code=400)
     for name, key in form.keys.items():
-        users.set_api_key(user_id, name, key)
+        users.set_api_key(user_id, name, key.get_secret_value())
     if set(form.keys) & set(link_providers().keys()):
         sync_now(user_id)
     saved = " and ".join(known[name] for name in form.keys)
