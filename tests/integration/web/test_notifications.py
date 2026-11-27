@@ -25,6 +25,13 @@ OTHER = "other@example.com"
 LOGIN = 999
 
 
+@pytest.fixture(autouse=True)
+def channel(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> str:
+    own = f"notifications-{request.node.nodeid}"
+    monkeypatch.setattr(notifications, "_CHANNEL", own)
+    return own
+
+
 def _signed_in() -> tuple[TestClient, int]:
     client = TestClient(app)
     return client, sign_in(client, OWNER).id
@@ -142,7 +149,10 @@ def _subscribers(channel: str) -> int:
     return count
 
 
-def test_open_sockets_share_one_redis_subscription_and_a_burst_is_one_read(monkeypatch):
+def test_open_sockets_share_one_redis_subscription_and_a_burst_is_one_read(
+    monkeypatch,
+    channel,
+):
     reads: list[int] = []
 
     def counted_read(reader):
@@ -150,8 +160,6 @@ def test_open_sockets_share_one_redis_subscription_and_a_burst_is_one_read(monke
         return Notifications(items=[])
 
     monkeypatch.setattr(notifications, "read", counted_read)
-    channel = f"notifications-burst-test-{time.time_ns()}"
-    monkeypatch.setattr(notifications, "_CHANNEL", channel)
     owner = make_user(OWNER)
     reader = Reader(user_id=owner.id, chats=True)
 

@@ -47,6 +47,7 @@ def test_a_failed_clone_send_is_visible_and_can_be_retried(va: Session):
     va.page.click('#viral-form button[type="submit"]')
     button = va.page.locator(".generate-gallery-col .send-to-clone").first
     expect(button).to_be_visible(timeout=RESULT_TIMEOUT_MS)
+    va.page.wait_for_load_state("domcontentloaded")
     failures = 0
 
     def fail_send(route):

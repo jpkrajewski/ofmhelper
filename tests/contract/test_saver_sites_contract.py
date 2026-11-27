@@ -2,7 +2,7 @@
 
 from ofmhelpers.integrations.downloaders import generic, savers
 
-REEL = "https://www.instagram.com/reel/Dc-i7hPgI7_/"
+REEL = "https://www.instagram.com/reel/DfiSWG3g52Q/"
 
 
 def test_a_refused_post_downloads_through_a_saver(backend, tmp_path):

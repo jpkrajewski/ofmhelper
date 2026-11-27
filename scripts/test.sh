@@ -3,7 +3,7 @@
 #
 #   scripts/test.sh              unit + integration + contract (fast, offline, parallel)
 #   scripts/test.sh e2e          e2e only (its own app, every outside service faked)
-#   scripts/test.sh all          unit + integration + contract + e2e (no heavy)
+#   scripts/test.sh all          unit + integration + contract, then e2e in a pytest run of its own (no heavy)
 #   scripts/test.sh push         default + heavy (ffmpeg): what CI runs on push
 #   scripts/test.sh live         live only: REAL Drive sandbox / providers / proxies (free)
 #   scripts/test.sh deploy       all + heavy + live: the gate before a deploy (free)
@@ -16,7 +16,7 @@
 #
 # Every run writes:
 #   reports/<timestamp>/output.log   the full output (also shown live)
-#   reports/<timestamp>/report.json  pytest-json-report
+#   reports/<timestamp>/report.json  pytest-json-report (all / deploy: + report-e2e.json)
 #   reports/latest/                  a copy of the newest run's folder
 #   volume test_allure               raw Allure results (previous history kept);
 #                                    not the Windows bind mount, which doubled
@@ -50,13 +50,26 @@ if [[ "$preset" == push && $# -eq 1 && -z "$clean_at_start" && -f "$gate_green" 
     fi
 fi
 
+browser_args=()
+no_tests_collected=5
+
 case "${1:-}" in
     "") args=("${parallel[@]}") ;;
     e2e) shift; args=(-m e2e "$@") ;;
-    all) shift; args=(-m "not live and not snapshot and not heavy and not paid" "${parallel[@]}" "$@") ;;
+    all)
+        shift
+        selected="not live and not snapshot and not heavy and not paid"
+        args=(-m "not e2e and $selected" "${parallel[@]}" "$@")
+        browser_args=(-m "e2e and $selected" "$@")
+        ;;
     push) shift; args=(-m "not e2e and not live and not snapshot and not paid" "${parallel[@]}" "$@") ;;
     live) shift; args=(-m "live and not paid" "$@") ;;
-    deploy) shift; args=(-m "not snapshot and not paid" "${parallel[@]}" "$@") ;;
+    deploy)
+        shift
+        selected="not snapshot and not paid"
+        args=(-m "not e2e and $selected" "${parallel[@]}" "$@")
+        browser_args=(-m "e2e and $selected" "$@")
+        ;;
     paid) shift; args=(-m paid "$@") ;;
     snapshot) shift; args=(-m snapshot "$@") ;;
     durations) shift; args=(-m "not e2e and not live and not snapshot and not paid" "${parallel[@]}" "$@"); store_durations=1 ;;
@@ -95,14 +108,35 @@ rm -rf reports/allure-results
 # shellcheck disable=SC2016  # $@ is the container shell's
 prepare='find /allure-results -mindepth 1 -delete && if [ -d reports/allure-report/history ]; then cp -r reports/allure-report/history /allure-results/history; fi && exec "$@"'
 
-echo "test.sh: pytest ${args[*]} -> $run_dir"
+pytest_run() {
+    local results=$1 report=$2
+    shift 2
+    local setup=()
+    if [[ "$results" == fresh ]]; then setup=(sh -c "$prepare" sh); fi
+    echo "test.sh: pytest $* -> $run_dir"
+    "${compose[@]}" run --rm tests "${setup[@]}" uv run --frozen pytest \
+        --alluredir=/allure-results \
+        --json-report --json-report-file="$run_dir/$report" --json-report-omit=log \
+        --durations=20 \
+        "$@" 2>&1 | tee -a "$run_dir/output.log"
+    return "${PIPESTATUS[0]}"
+}
+
 start=$(date +%s)
-"${compose[@]}" run --rm tests sh -c "$prepare" sh uv run --frozen pytest \
-    --alluredir=/allure-results \
-    --json-report --json-report-file="$run_dir/report.json" --json-report-omit=log \
-    --durations=20 \
-    "${args[@]}" 2>&1 | tee "$run_dir/output.log"
-status=${PIPESTATUS[0]}
+pytest_run fresh report.json "${args[@]}"
+status=$?
+summarized=(reports/latest/report.json)
+if [[ ${#browser_args[@]} -gt 0 ]]; then
+    pytest_run kept report-e2e.json "${browser_args[@]}"
+    browser_status=$?
+    summarized+=(reports/latest/report-e2e.json)
+    if [[ "$argument_count" -eq 1 ]]; then
+        [[ "$status" -ne 0 ]] || status=$browser_status
+    elif [[ "$status" -eq "$no_tests_collected" ]] \
+        || [[ "$status" -eq 0 && "$browser_status" -ne "$no_tests_collected" ]]; then
+        status=$browser_status
+    fi
+fi
 echo "test.sh: pytest exit $status in $(( $(date +%s) - start ))s" | tee -a "$run_dir/output.log"
 
 # Generate the report now so the history moves on with every run.
@@ -121,7 +155,11 @@ if [[ -n "${store_durations:-}" && "$status" -eq 0 ]]; then
         || status=1
 fi
 
-"${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/test_summary.py reports/latest/report.json     | tee reports/latest/summary.txt "$run_dir/summary.txt"
+summary_flags=()
+if [[ ${#browser_args[@]} -gt 0 && "$argument_count" -eq 1 ]]; then
+    summary_flags=(--every-run-collects)
+fi
+"${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/test_summary.py "${summary_flags[@]}" "${summarized[@]}" | tee reports/latest/summary.txt "$run_dir/summary.txt"
 [[ ${PIPESTATUS[0]} -eq 0 ]] || status=1
 
 if [[ "$preset" == deploy && "$argument_count" -eq 1 && "$status" -eq 0&& -z "$clean_at_start" && -z "$(git status --porcelain)" ]] \
