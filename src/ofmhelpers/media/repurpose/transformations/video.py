@@ -343,11 +343,13 @@ class VideoTransformer:
         work_dir: Path,
         scaler: str = "bicubic",
         caption_input: int | None = None,
+        working_fps: float | None = None,
     ) -> str:
         d = self.draws
         w, h = d.output_size
         chain = [
             "setpts=PTS-STARTPTS",
+            *self._working_frames(working_fps, scaler),
             *self._framing(),
             *self._rotation(),
             *d.handheld.filters(self.settings.constants.handheld),
@@ -367,6 +369,19 @@ class VideoTransformer:
         return (
             f"{graph}{overlay},format=yuv420p" if overlay else f"{graph},format=yuv420p"
         )
+
+    def _working_frames(
+        self,
+        working_fps: float | None,
+        scaler: str,
+    ) -> list[str]:
+        draws = self.draws
+        chain: list[str] = []
+        if working_fps is not None:
+            chain.append(f"fps={working_fps:.4f}")
+        width = even(draws.output_size[0] * self.settings.constants.work_headroom)
+        chain.append(f"scale=w=min(iw\\,{width}):h=-2:flags={scaler}")
+        return chain
 
     def _framing(self) -> list[str]:
         d = self.draws

@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import datetime as dt
+from fractions import Fraction
 lazy import random
 lazy from pathlib import Path
 
@@ -33,6 +34,12 @@ class EncodeDraws(BaseModel, frozen=True):
     fps: str | None
     audio_kbps: int
     creation_time: dt.datetime
+
+    def working_fps(self, source: Source, speed: float) -> float | None:
+        if self.fps is None or source.fps is None:
+            return None
+        working = float(Fraction(self.fps)) / speed
+        return working if source.fps > working else None
 
 
 def draw_encode(
@@ -91,7 +98,12 @@ def build(  # noqa: PLR0913
         args += ["-i", str(caption_png)]
     if encode.fps:
         args += ["-r", encode.fps]
-    graph = video.filters(work_dir, device.video.scaler, caption_input)
+    graph = video.filters(
+        work_dir,
+        device.video.scaler,
+        caption_input,
+        encode.working_fps(source, video.timeline.speed),
+    )
     args += ["-filter_complex" if caption_input is not None else "-vf", graph]
     if source.has_audio:
         args += ["-filter:a", audio.filters(makeup_db)]

@@ -18,10 +18,10 @@ from ofmhelpers.media.repurpose.checker import check
 from ofmhelpers.media.repurpose.command import input_args
 from ofmhelpers.media.repurpose.lab.space import Part, preset
 from ofmhelpers.media.repurpose.transformations.video import (
-    VideoDraws,
     VideoSettings,
     VideoTransformer,
 )
+lazy from ofmhelpers.media.repurpose.probe import Source
 lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep, RunResult
 
 logger = logging.getLogger(__name__)
@@ -79,12 +79,15 @@ class Measurement(BaseModel):
 
 
 def reference(
-    draws: VideoDraws,
-    fps: str | None,
+    step: EncodeStep,
+    source: Source,
     sample: Path,
     dst: Path,
     work: Path,
 ) -> None:
+    draws = step.video
+    fps = step.encode.fps
+    working_fps = step.encode.working_fps(source, draws.timeline.speed)
     ref = VideoTransformer.from_draws(
         VideoSettings(),
         draws.model_copy(update=_NO_LOOK),
@@ -98,7 +101,7 @@ def reference(
             *input_args(sample, ref.timeline),
             *(["-r", fps] if fps else []),
             "-vf",
-            ref.filters(work),
+            ref.filters(work, working_fps=working_fps),
             "-an",
             "-c:v",
             "libx264",
@@ -260,7 +263,7 @@ def measure(  # noqa: PLR0913
             step = _require_step(result)
             if full or part is Part.VIDEO:
                 ref = work / "ref.mp4"
-                reference(step.video, step.encode.fps, sample, ref, work)
+                reference(step, result.source, sample, ref, work)
                 out.vmaf = vmaf(copy, ref, work)
             if (full or part is Part.AUDIO) and report.audio:
                 t = step.video.timeline

@@ -27,6 +27,7 @@ from ofmhelpers.media.repurpose.transformations.audio import (
     AudioSettings,
     AudioTransformer,
 )
+from ofmhelpers.media.repurpose.transformations.constants import VideoConstants
 from ofmhelpers.media.repurpose.transformations.video import (
     VideoDraws,
     VideoSettings,
@@ -36,7 +37,6 @@ from ofmhelpers.media.repurpose.transformations.video import (
 _DEFAULT_DEVICE = "strip"
 _MASTER_DEVICE = "master"
 _DEFAULT_TIMEOUT_S = 600
-_MASTER_HEADROOM = 1.5
 _FPS_TOLERANCE = 0.01
 
 
@@ -48,13 +48,17 @@ class EncodeStep(BaseModel):
     makeup_db: float
 
 
-def master_for(profile: DeviceProfile, source: Source) -> Device:
+def master_for(
+    profile: DeviceProfile,
+    source: Source,
+    headroom: float = VideoConstants().work_headroom,
+) -> Device:
     master = load_device(_MASTER_DEVICE)
     shown = source.display_size
     frame_w, frame_h = profile.video.width, profile.video.height
     if shown.width > shown.height:
         frame_w, frame_h = frame_h, frame_w
-    cover = max(frame_w / shown.width, frame_h / shown.height) * _MASTER_HEADROOM
+    cover = max(frame_w / shown.width, frame_h / shown.height) * headroom
     update: dict[str, float | int | None] = {}
     if cover < 1:
         update["max_width"] = math.ceil(shown.width * cover / 2) * 2
@@ -216,7 +220,11 @@ class Repurpose:
             recorder_input = self.src
             if edited:
                 recorder_input = Path(work) / "master.mp4"
-                master = master_for(profile, source)
+                master = master_for(
+                    profile,
+                    source,
+                    self.video.constants.work_headroom,
+                )
                 with logfire.span("repurpose master encode"):
                     step = self._encode(source, master, recorder_input, rng)
             with logfire.span("repurpose record {profile}", profile=recorder.profile):
