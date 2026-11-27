@@ -172,7 +172,9 @@ Commit sha, what shipped (one line per feature/fix), test counts, CI and
 deploy run links, /health, Logfire errors since release (or "none"), Sentry
 issues new since release (or "none", or why it could not be read), anything
 not run. Then delete the shipped items' lines from `backlog.txt` (CLAUDE.md ONE
-ITEM, SHIP, NEXT), also when the batch stopped at the commit.
+ITEM, SHIP, NEXT) and their entries from `backlog_processed.txt` (the owner's
+sorted copy, untracked: an item shipped but still listed there was called
+"not checked" 2026-11-27), also when the batch stopped at the commit.
 
 ## 10. Reflect
 After the report (CLAUDE.md "SELF-LEARNING"), also when the owner's word covered only

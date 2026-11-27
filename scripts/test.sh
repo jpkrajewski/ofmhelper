@@ -75,7 +75,7 @@ case "${1:-}" in
         fi
         echo "test.sh: affected: ${#picked[@]} test files:"
         printf '  %s\n' "${picked[@]}"
-        args=("${parallel[@]}" "${picked[@]}" "$@")
+        args=(-m "not e2e and not live and not snapshot and not paid" "${parallel[@]}" "${picked[@]}" "$@")
         ;;
     *) preset=files; args=("${parallel[@]}" "$@") ;;
 esac

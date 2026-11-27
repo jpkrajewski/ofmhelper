@@ -146,6 +146,14 @@ def test_affected_runs_what_the_selector_names_paths_with_spaces_included(projec
     assert "tests/unit/with space/test_b.py" in result.stdout
 
 
+def test_affected_runs_the_heavy_tests_of_the_files_it_picks(project):
+    (project.root / "app.py").write_text("v2", encoding="utf-8")
+    result = project.run("affected")
+    assert result.returncode == 0, result.stderr
+    assert "-m not e2e and not live and not snapshot and not paid" in result.stdout
+    assert "not heavy" not in result.stdout
+
+
 def test_affected_fails_when_the_selector_crashes(project):
     project.selector_fails.touch()
     result = project.run("affected")
