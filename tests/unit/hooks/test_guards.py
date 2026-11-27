@@ -675,6 +675,7 @@ def test_only_the_canonical_merge_spelling_is_let_through(
         "gh pr view 7 --json mergeable,mergedAt",
         "gh pr list --state merged --search 'merge queue'",
         "gh run list --workflow merge",
+        "gh api 'repos/o/r/code-scanning/alerts?ref=refs/pull/7/merge'",
     ],
 )
 def test_only_the_pr_merge_subcommand_pair_counts_as_a_merge(

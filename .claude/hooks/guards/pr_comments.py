@@ -32,6 +32,7 @@ COUNT = (
     " more: ($pr.reviewThreads.pageInfo.hasNextPage"
     " or $pr.latestReviews.pageInfo.hasNextPage)}"
 )
+MERGE_ENDPOINT = re.compile(r"pulls/\d+/merge/?$")
 CANONICAL = re.compile(r"(?:rtk\s+)?gh\s+pr\s+merge\s+(\d+)\s+--merge")
 HAS_COMMENTS = (
     "PR #{number} has {count} open review comment(s): an unresolved review thread or a "
@@ -98,8 +99,7 @@ def merges(words: list[str]) -> bool:
     if positional(rest)[:2] == ["pr", "merge"]:
         return True
     return "api" in rest and any(
-        word.rstrip("/").endswith("/merge") or "mergepullrequest" in word
-        for word in rest
+        MERGE_ENDPOINT.search(word) or "mergepullrequest" in word for word in rest
     )
 
 

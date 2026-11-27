@@ -128,6 +128,9 @@ comment. List them with `gh pr view <n> --comments` and
      (`gh api -X PATCH .../code-scanning/alerts/<id> -f state=dismissed ...`).
 3. A review whose only text is its summary has no thread to resolve: answer
    it in a PR comment.
+4. A `CHANGES_REQUESTED` review stays open after all its threads are
+   resolved and still blocks the merge: dismiss it with the reason
+   (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/reviews/<id>/dismissals -f message=... -f event=DISMISS`).
 
 The `pr_comments` guard denies `gh pr merge` while a review thread is
 unresolved or a reviewer's latest review requests changes. Name every comment
