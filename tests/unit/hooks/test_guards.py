@@ -782,6 +782,7 @@ def test_an_edit_waits_for_the_skills_its_area_needs(hooks: Hooks) -> None:
     denied = hooks.edit(router, new=new_route)
     assert denied.decision == "deny"
     assert "senior-python-rules, fastapi, rest-api, failure-modes" in denied.reason
+    assert "every area this task will touch" in denied.reason
 
     for name in (
         "anthropic-skills:senior-python-rules",

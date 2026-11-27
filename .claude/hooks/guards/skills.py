@@ -20,7 +20,11 @@ PYDANTIC = re.compile(
 LOAD_FIRST = (
     "CLAUDE.md STANDARDS: load the {skills} skill(s) "
     "with the Skill tool before editing {path}, "
-    "then say in two lines where the new thing goes and which existing file it follows."
+    "then say in two lines where the new thing goes "
+    "and which existing file it follows. "
+    "Each area asks for its own skills (CLAUDE.md STANDARDS table): load the skills of "
+    "every area this task will touch now, in one go, so a later batch of edits is not "
+    "refused half way."
 )
 
 
