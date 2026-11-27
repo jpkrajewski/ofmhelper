@@ -59,9 +59,6 @@ x-env-runtime: &env-runtime
   OFM_ENV:
   LOGFIRE_TOKEN:
   SENTRY_DSN:
-  OFM_LOG_LEVEL:
-  OFM_LOG_FORMAT:
-  OFM_LOG_ACCESS:
   OFM_TELEMETRY_FLUSH_S:
   OFM_RQ_ASYNC:
   OFM_RQ_JOB_TIMEOUT_S:
@@ -73,8 +70,6 @@ x-env-runtime: &env-runtime
   OFM_EDIT_WORKERS:
   OFM_UPLOADS_ROOT:
   OFM_MAX_UPLOAD_MB:
-  OFM_MAX_IMAGE_FRAMES:
-  OFM_MAX_IMAGE_TOTAL_PIXELS:
   OFM_CACHE_TTL_S:
   APP_BASE_URL:
   SESSION_MAX_AGE_S:
@@ -215,6 +210,12 @@ x-env-reachable: &env-reachable
 # image). Anything else (dev, a manual `up`) builds and runs `:dev`.
 x-app-image: &app-image ofmhelpers-app:${OFM_RELEASE:-dev}
 
+x-app-logging: &app-logging
+  driver: json-file
+  options:
+    max-size: 25m
+    max-file: "3"
+
 x-app-volumes: &app-volumes
   # No ./src mount here -- production runs the code baked into the image, so a
   # checkout on the server changes nothing until the image is rebuilt. The dev
@@ -230,6 +231,7 @@ services:
     image: *app-image
     container_name: ofmhelpers
     restart: unless-stopped
+    logging: *app-logging
     ports:
       # Loopback only: nginx on the host terminates :80 and proxies here, so
       # the app itself is never reachable from the internet. Docker publishes
@@ -270,6 +272,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
+    logging: *app-logging
     # Runs RQ via ofmhelpers.background.worker so the pool starts with the app's logging
     # configured (see ofmhelpers/log.py); it reads OFM_RQ_WORKERS/OFM_REDIS_URL
     # from settings itself, so no shell is needed to expand them -- exec form
@@ -326,6 +329,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
+    logging: *app-logging
     command: ["python", "-m", "ofmhelpers.background.sweeps"]
     # A stop waits for the sweeps' threads: the Telegram read (`telegram asks`)
     # waits up to OFM_TELEGRAM_ASK_WAIT_S (10 s) for a message. Docker's 10 s
@@ -362,6 +366,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
+    logging: *app-logging
     command: ["python", "-m", "ofmhelpers.background.worker", "media"]
     cpus: 3.0
     stop_grace_period: 120s
@@ -395,6 +400,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
+    logging: *app-logging
     command: ["python", "-m", "ofmhelpers.background.worker", "edit"]
     cpus: 3.0
     mem_limit: 2g
@@ -427,6 +433,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
+    logging: *app-logging
     command: ["python", "-m", "ofmhelpers.background.worker", "previews"]
     cpus: 2.0
     # As the other workers: the encode it runs finishes on `compose stop`.

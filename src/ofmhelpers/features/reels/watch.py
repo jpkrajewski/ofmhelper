@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import random
 import time
 
@@ -28,9 +29,8 @@ from ofmhelpers.integrations.instagram import (
     scan_profile,
 )
 from ofmhelpers.integrations.outbound import ProxyPool
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _RETRYABLE = (
     InstagramRateLimitedError,

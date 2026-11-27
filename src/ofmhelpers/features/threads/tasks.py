@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from pathlib import Path
 
 import logfire
@@ -11,13 +12,12 @@ from ofmhelpers.db.drive_folders.schema import folder_url
 from ofmhelpers.db.jobs.store import merge_params
 from ofmhelpers.features.storage.client import storage_of
 from ofmhelpers.integrations.storage import FolderGoneError
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.photos import write_photos
 from ofmhelpers.media.repurpose.photos.models import load_photo_preset
 lazy from ofmhelpers.features.storage.models import ReviewPlace
 lazy from ofmhelpers.features.storage.service import StorageServiceReview
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "threads"
 

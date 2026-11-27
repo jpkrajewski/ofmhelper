@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import mimetypes
 from http import HTTPStatus
 from pathlib import Path
@@ -13,9 +14,8 @@ from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.downloads import again as downloads
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _IMMUTABLE = "private, max-age=31536000, immutable"
 

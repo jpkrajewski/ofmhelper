@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
@@ -7,10 +9,9 @@ from ofmhelpers.db.devices import store as device_store
 from ofmhelpers.db.phone_revisions import store
 from ofmhelpers.features.accounts.tracker import track_login
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.phone_revisions.schema import PhoneRevision, Restored
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Revisions(BaseModel, frozen=True):

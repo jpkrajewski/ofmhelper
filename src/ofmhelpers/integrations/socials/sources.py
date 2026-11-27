@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from abc import ABC, abstractmethod
 from typing import ClassVar
 lazy from collections.abc import Callable
@@ -7,9 +8,8 @@ lazy from collections.abc import Callable
 from pydantic import BaseModel, Field
 
 from ofmhelpers.integrations.socials.models import AccountStats
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class ScanTarget(BaseModel):

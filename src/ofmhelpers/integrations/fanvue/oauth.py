@@ -1,20 +1,20 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from http import HTTPStatus
 from urllib.parse import urlencode
 
 import requests
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.chats.schema import ChatTokens
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.fanvue.errors import FanvueError
 from ofmhelpers.integrations.fanvue.models import TokenReply
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:
@@ -53,8 +53,8 @@ def _tokens(r: requests.Response) -> ChatTokens:
         msg = "Fanvue answered an unexpected token reply"
         raise FanvueError(msg) from None
     return ChatTokens(
-        access_token=reply.access_token,
-        refresh_token=reply.refresh_token,
+        access_token=SecretStr(reply.access_token),
+        refresh_token=SecretStr(reply.refresh_token),
         expires_at=time.time() + reply.expires_in,
     )
 

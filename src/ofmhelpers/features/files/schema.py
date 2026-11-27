@@ -9,11 +9,6 @@ class DirEntry(BaseModel):
     mtime: float = 0
 
 
-class FileEntry(DirEntry):
-    size: str
-    kind: str = "other"
-
-
 class FileTile(BaseModel):
     name: str
     label: str

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 
 from pydantic import BaseModel
@@ -17,10 +18,9 @@ from ofmhelpers.features.signin.state import (
 from ofmhelpers.integrations.pkce import pkce_pair
 from ofmhelpers.integrations.signin import SignInError, configured, providers
 from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.signin import Provider
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class ConsentStart(BaseModel):

@@ -186,16 +186,6 @@ class WebSettings(BaseSettings):
         ge=1,
         validation_alias="OFM_MAX_UPLOAD_MB",
     )
-    max_image_frames: int = Field(
-        default=1000,
-        ge=1,
-        validation_alias="OFM_MAX_IMAGE_FRAMES",
-    )
-    max_image_total_pixels: int = Field(
-        default=200_000_000,
-        ge=1,
-        validation_alias="OFM_MAX_IMAGE_TOTAL_PIXELS",
-    )
     handmade_max_upload_mb: int = Field(
         default=1024,
         ge=1,
@@ -1381,14 +1371,6 @@ class VaultSettings(BaseSettings):
         if self.keys is None:
             return []
         return [k.strip() for k in self.keys.get_secret_value().split(",") if k.strip()]
-
-
-class LoggingSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    level: str = Field(default="INFO", validation_alias="OFM_LOG_LEVEL")
-    format: str = Field(default="text", validation_alias="OFM_LOG_FORMAT")
-    access_log: bool = Field(default=True, validation_alias="OFM_LOG_ACCESS")
 
 
 class ExportSettings(BaseSettings):

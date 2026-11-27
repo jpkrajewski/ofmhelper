@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from itertools import islice
 from types import MappingProxyType
@@ -18,9 +19,8 @@ from ofmhelpers.integrations.instagram.models import (
     ReelStat,
     ReelSummary,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _OLD_IN_A_ROW = 7
 

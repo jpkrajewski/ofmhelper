@@ -1,15 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 from pathlib import Path
 lazy from collections.abc import Collection
 
 from PIL import Image
 from pydantic import BaseModel
 
-from ofmhelpers.log import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 SUPPORTED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff")
 MANIFEST_NAME = ".clean_manifest.json"
 

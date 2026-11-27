@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from pathlib import Path
 from urllib.parse import urlencode
 lazy from collections.abc import Sequence
@@ -20,11 +21,10 @@ from ofmhelpers.features.files.schema import FileTile, UserFiles
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.assets.models import MediaUpload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 UPLOADS = "uploads"
 TILES_PER_PAGE = 60

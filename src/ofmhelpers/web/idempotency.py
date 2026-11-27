@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
 from typing import Annotated, Any, cast
@@ -18,11 +19,10 @@ lazy from starlette.datastructures import UploadFile
 from ofmhelpers.db.idempotency_keys.schema import Asked, Held, Outcome
 from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.log import get_logger
 from ofmhelpers.web.exceptions import REFUSALS
 from ofmhelpers.web.middleware import AuthMiddleware
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 HEADER = "Idempotency-Key"
 REPLAYED = "Idempotent-Replayed"

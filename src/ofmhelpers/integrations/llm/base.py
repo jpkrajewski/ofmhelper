@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import importlib
+import logging
 import pkgutil
 import subprocess
 import tempfile
@@ -32,9 +33,8 @@ from ofmhelpers.integrations.llm.models import (
     TextPart,
     Usage,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MIN_REQUEST_S = 1.0
 

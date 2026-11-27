@@ -1,4 +1,5 @@
 # Copyright (C) 2026 jpkrajewski
+import logging
 import pathlib
 from typing import Any, NoReturn
 lazy from collections.abc import Mapping
@@ -25,11 +26,10 @@ from ofmhelpers.integrations.ai_providers.uploads import (
     remote_file_exists,
     upload_cache_key,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import fitted
 lazy from ofmhelpers.integrations.ai_providers.spec import Payload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _session() -> requests.Session:

@@ -31,7 +31,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderGenerationError,
     ProviderNoCreditsError,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.sentry import (
     HEARTBEAT_S,
     configure_sentry,
@@ -234,7 +233,7 @@ def test_an_event_holds_no_variables_body_or_cookies(sent):
 
 
 def test_a_logged_error_is_an_event(sent):
-    get_logger("ofmhelpers.test_sentry").error("sweep failed for %s", API_KEY)
+    logging.getLogger("ofmhelpers.test_sentry").error("sweep failed for %s", API_KEY)
 
     assert len(sent) == 1
     assert API_KEY not in str(sent[0])
@@ -307,7 +306,7 @@ def test_a_jobs_event_names_its_person_by_id_only(sent):
 def test_a_named_request_names_its_person_by_id_only(sent):
     with sentry_sdk.isolation_scope():
         name_user(42)
-        get_logger("ofmhelpers.test_sentry").error("page failed")
+        logging.getLogger("ofmhelpers.test_sentry").error("page failed")
 
     assert sent[0]["user"] == {"id": "42"}
 

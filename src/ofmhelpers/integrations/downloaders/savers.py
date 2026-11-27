@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -11,9 +12,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.integrations.downloaders.sites import saver_supported
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _BROWSER = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

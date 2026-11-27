@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
@@ -18,7 +20,6 @@ from ofmhelpers.cache.rate_limit import (
 from ofmhelpers.cache.rate_limit import counter_key as _key
 from ofmhelpers.cache.rate_limit import hit as _hit
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
 __all__ = [
     "WRITE_METHODS",
@@ -33,7 +34,7 @@ __all__ = [
     "webhook_blocked",
 ]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 

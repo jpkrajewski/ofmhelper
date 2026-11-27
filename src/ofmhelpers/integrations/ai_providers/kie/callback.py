@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 import time
 lazy from collections.abc import Mapping
 
@@ -10,9 +11,8 @@ from pydantic import Field, ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.http import Lenient
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class KieCallbackTask(Lenient):

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -9,10 +10,9 @@ from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.events import Event, emit
 from ofmhelpers.features.vas.service import REEL_TASKS
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import Job, UserDay
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PAGE = "/vas"
 

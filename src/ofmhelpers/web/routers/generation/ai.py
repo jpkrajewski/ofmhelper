@@ -1,10 +1,10 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.features.assets.models import (
@@ -32,6 +32,8 @@ from ofmhelpers.web.templates_config import render_polled
 
 __all__ = ["TASK", "describe", "router", "run_ai"]
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/ai",
     tags=["ai"],
@@ -44,7 +46,8 @@ async def _form(request: Request) -> service.AiInput:
     data = await request.form()
     try:
         spec = service.model_spec(str(data.get("model") or ""))
-    except NotFoundError:  # silent: prepare_run returns the unknown-model refusal
+    except NotFoundError:
+        logger.debug("ai form: unknown model, no uploads read", exc_info=True)
         return service.AiInput(data=data, uploads={})
     validators = {
         FileKind.IMAGE: validate_image_upload,
@@ -54,7 +57,7 @@ async def _form(request: Request) -> service.AiInput:
     uploads: dict[str, list[MediaUpload]] = {}
     for field in spec.media_fields:
         uploads[field.name] = [
-            await run_in_threadpool(validators[FileKind(field.kind)], value)
+            validators[FileKind(field.kind)](value)
             for value in data.getlist(field.name)
             if isinstance(value, UploadFile)
         ]

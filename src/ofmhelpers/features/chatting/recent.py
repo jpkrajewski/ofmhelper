@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from typing import Any
 
@@ -8,9 +9,8 @@ from redis.exceptions import RedisError
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.chats.schema import ChatPlatform, RecentModel
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _KEY_PREFIX = "chatting:recent:"
 

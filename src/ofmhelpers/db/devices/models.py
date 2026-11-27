@@ -6,6 +6,7 @@ from typing import Annotated
 from pydantic import (
     BaseModel,
     Field,
+    SecretStr,
     StringConstraints,
     field_validator,
     model_validator,
@@ -24,6 +25,10 @@ from ofmhelpers.db.devices.catalog import (
     services,
 )
 from ofmhelpers.db.devices.schema import PhoneSort, drawing_url, followers_text
+from ofmhelpers.utils.secrets.schemas import Secret
+
+LoginPassword = Annotated[Secret, Field(max_length=1000)]
+LoginBackupCodes = Annotated[Secret, Field(max_length=5000)]
 
 _Text = Annotated[str, StringConstraints(max_length=5000)]
 _Label = Annotated[
@@ -67,12 +72,17 @@ class DeviceFields(BaseModel):
         return self
 
 
+class LoginSecrets(BaseModel):
+    password: LoginPassword
+    backup_codes: LoginBackupCodes
+
+
 class LoginFields(BaseModel):
     service: str
     provider: _Name = ""
     username: Annotated[str, StringConstraints(min_length=1, max_length=255)]
-    password: Annotated[str, StringConstraints(max_length=1000)] = ""
-    backup_codes: _Text = ""
+    password: LoginPassword = SecretStr("")
+    backup_codes: LoginBackupCodes = SecretStr("")
     notes: _Text = ""
 
     @model_validator(mode="after")
@@ -84,7 +94,7 @@ class LoginFields(BaseModel):
         if not service.custom:
             self.provider = ""
         self.username = login_username(service, self.username)
-        self.backup_codes = self.backup_codes.strip()
+        self.backup_codes = SecretStr(self.backup_codes.get_secret_value().strip())
         return self
 
 
@@ -98,8 +108,8 @@ class DeviceLogin(BaseModel):
     has_codes: bool
     updated_at: float
     on: list[str] = Field(default_factory=list)
-    password: str = ""
-    backup_codes: str = ""
+    password: LoginPassword = SecretStr("")
+    backup_codes: LoginBackupCodes = SecretStr("")
     tracked_account_id: int | None = None
     tracked_followers: int | None = None
 

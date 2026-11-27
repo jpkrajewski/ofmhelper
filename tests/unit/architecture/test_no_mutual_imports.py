@@ -40,7 +40,7 @@ def test_the_check_sees_two_packages_that_import_each_other():
 
 
 BOTTOM_UP = (
-    {"config", "redact", "acting"},
+    {"config", "redact", "acting", "utils"},
     {"log"},
     {"cache", "monitoring"},
     {"db", "media"},

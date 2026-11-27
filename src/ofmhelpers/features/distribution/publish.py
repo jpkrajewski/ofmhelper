@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import shutil
 import time
 from pathlib import Path
@@ -24,11 +25,10 @@ from ofmhelpers.integrations.pinterest import (
     PinterestRateLimitedError,
     session_expires_at,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim, video_probe
 lazy from ofmhelpers.features.storage.service import StorageServiceReview
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "pinterest"
 NO_POST = "No such post"

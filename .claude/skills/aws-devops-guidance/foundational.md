@@ -86,7 +86,7 @@ Auditing
 ## Observability (O)
 - `O.SI.1` Telemetry answers business questions first: what a job cost, how long it took, whose it was.
 - `O.SI.2` One tool: Logfire, one project, dev and prod split by `deployment_environment`.
-- `O.SI.3` Everything is instrumented: a new job, route or outside call shows up as a span; logging through `get_logger`; no silent failure.
+- `O.SI.3` Everything is instrumented: a new job, route or outside call shows up as a span; stdlib `logging.getLogger(__name__)` with JSON configured from `logging.json`; no silent failure.
 - `O.DIP.1` Web and worker logs, SQL and outbound calls land in the same `records` table, joined by `trace_id`.
 - `O.DIP.2` Sign-in activity is in the same store, so a security question is one query.
 - `O.CM.2` The big-incident plan is the runbook: `README.md` "Moving to a new server", "Backups", "Troubleshooting".

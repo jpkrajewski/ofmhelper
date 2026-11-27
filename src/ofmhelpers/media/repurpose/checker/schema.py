@@ -3,7 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AudioScore(BaseModel, frozen=True):
@@ -56,7 +56,9 @@ class DescriptorScore(BaseModel, frozen=True):
     sequence: SequenceMatch
 
 
-class CheckReport(BaseModel, frozen=True):
+class CheckReport(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     source_file: Path
     copy_file: Path
     source_frames: int

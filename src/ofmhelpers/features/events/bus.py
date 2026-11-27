@@ -1,12 +1,13 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.features.events.dispatch import dispatch
 from ofmhelpers.integrations.senders.schema import Event
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _absolute(event: Event) -> Event:

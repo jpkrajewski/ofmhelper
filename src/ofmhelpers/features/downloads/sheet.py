@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -19,10 +20,9 @@ from ofmhelpers.features.refusals import (
     UnavailableError,
 )
 from ofmhelpers.features.storage.service import StorageServiceSheet
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.storage.models import SheetColumn
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 BUSY = "Could not start the download. Try again."
 

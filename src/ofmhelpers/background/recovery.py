@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from types import MappingProxyType
 lazy from collections.abc import Callable
@@ -20,9 +21,8 @@ from ofmhelpers.features.trials import folder as trials_folder
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 INTERRUPTED = "Interrupted by a restart: run it again."
 RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(

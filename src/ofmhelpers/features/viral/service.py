@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 lazy from pathlib import Path
 
@@ -22,10 +23,9 @@ from ofmhelpers.integrations.apify import (
     richest,
 )
 from ofmhelpers.integrations.apify.instagram import ReelScraperInput
-from ofmhelpers.log import get_logger
 from ofmhelpers.monitoring.telemetry import in_this_trace
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _NOT_FOUND = "not_found"
 _RESTRICTED = "restricted profile"

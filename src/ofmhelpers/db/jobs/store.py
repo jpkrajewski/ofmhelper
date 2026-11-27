@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from collections.abc import Callable, Collection
 from functools import lru_cache
@@ -30,10 +31,9 @@ from ofmhelpers.db.jobs.schema import (
     UserDay,
 )
 from ofmhelpers.db.users.store import agency_id, get_user
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import JobCost, JobMeta
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -117,10 +117,14 @@ def record_failure(job_id: str, error: str) -> None:
     _repository().update_status(job_id, "failed", error=error)
 
 
+def keep_execution(job_id: str, execution: JsonValue) -> None:
+    _repository().add_execution(job_id, execution)
+
+
 def keep_cost(job_id: str, meta: JobMeta, cost: JobCost) -> None:
     _repository().set_cost(
         job_id,
-        meta.model_dump(mode="json"),
+        meta.model_dump(mode="json", include={"generations"}),
         cost.usd,
         cost.estimated,
     )
@@ -279,6 +283,27 @@ def list_jobs_page(  # noqa: PLR0913, PLR0917
             span.since,
             span.until,
         )
+    return JobPage(jobs=_visible(page.jobs), total=page.total)
+
+
+def set_job_creator(job_id: str, creator_id: int) -> None:
+    _repository().set_creator(job_id, creator_id)
+
+
+def list_creator_jobs_page(
+    task: str,
+    creator_id: int,
+    offset: int,
+    limit: int,
+    actor: Readers,
+) -> JobPage:
+    page = _repository().page_of_creator(
+        task,
+        _user_ids(actor) or [],
+        creator_id,
+        offset,
+        limit,
+    )
     return JobPage(jobs=_visible(page.jobs), total=page.total)
 
 

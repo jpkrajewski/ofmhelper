@@ -365,6 +365,21 @@ $C --profile test run --rm tests uv run --frozen pytest -m e2e   # browser suite
 `CLAUDE.md` lists the lint and type checks. Worker code changes need
 `$C restart worker`: the worker has no reloader.
 
+Run every code-quality metric with one command:
+
+```bash
+bash scripts/quality.sh
+```
+
+Stdout is one JSON object, also saved as `reports/quality/results.json`. It contains
+Radon complexity/raw/maintainability metrics, Xenon and Import Linter results,
+Pylint duplicate-code findings, and the custom nesting, complexity-density, and
+dependency-entropy metrics. The command exits nonzero when a tool or quality gate
+fails; Pylint duplicate findings alone do not fail it.
+
+See `CLAUDE.md` → **Code quality metrics** for the JSON schema, metric meanings,
+known caveats, and the order for choosing and verifying fixes.
+
 ---
 
 ## Troubleshooting

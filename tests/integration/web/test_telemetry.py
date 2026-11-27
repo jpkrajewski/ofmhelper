@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import json
 import logging
 
 import pytest
@@ -38,6 +39,26 @@ def test_a_job_is_one_span_with_its_task_id_and_who(capfire: CaptureLogfire):
     assert attrs["actor"] == who
     assert "logfire.level_num" not in attrs
     assert get_job(job_id).status == "done"
+
+
+def test_job_logs_carry_job_task_actor_and_trace(capsys):
+    log.configure_logging(force=True)
+    who = str(make_user().id)
+    job_id = create_job("download_images", {}, actor=who)
+
+    def write_log() -> None:
+        logging.getLogger("ofmhelpers.test.job").info("inside job")
+
+    run_job(job_id, write_log, {})
+
+    payloads = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    record = next(payload for payload in payloads if payload["msg"] == "inside job")
+    assert record["context"]["job_id"] == job_id
+    assert record["context"]["task"] == "download_images"
+    assert record["context"]["actor_id"] == int(who)
+    assert record["context"]["via"] == "job"
+    assert len(record["context"]["trace_id"]) == 32
+    assert len(record["context"]["span_id"]) == 16
 
 
 def test_a_failed_job_is_an_error_span_with_its_exception(capfire: CaptureLogfire):
@@ -87,6 +108,25 @@ def test_with_a_token_log_records_go_to_logfire_too(monkeypatch):
         log.configure_logging(force=True)
         kinds = {type(h).__name__ for h in logging.getLogger().handlers}
         assert "LogfireLoggingHandler" in kinds
+    finally:
+        monkeypatch.delenv("LOGFIRE_TOKEN")
+        log.configure_logging(force=True)
+
+
+def test_structured_context_reaches_logfire(capfire: CaptureLogfire, monkeypatch):
+    monkeypatch.setenv("LOGFIRE_TOKEN", "pylf_v1_eu_test")
+    try:
+        log.configure_logging(force=True)
+        logging.getLogger("ofmhelpers.test").info(
+            "structured event",
+            extra={"context": {"job_id": "job-123", "attempt": 2}},
+        )
+
+        (span,) = [s for s in _spans(capfire) if s["name"] == "structured event"]
+        assert json.loads(span["attributes"]["context"]) == {
+            "job_id": "job-123",
+            "attempt": 2,
+        }
     finally:
         monkeypatch.delenv("LOGFIRE_TOKEN")
         log.configure_logging(force=True)

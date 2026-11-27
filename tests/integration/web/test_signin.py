@@ -700,7 +700,8 @@ def test_a_users_saved_key_prefills_their_forms_and_nobody_elses(client, monkeyp
 
 
 def _saved_keys(user_id: int) -> dict[str, str]:
-    return {k.provider: k.api_key for k in users.api_keys(user_id).keys}
+    saved = users.api_keys(user_id)
+    return {key.provider: saved.get(key.provider) for key in saved.keys}
 
 
 def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):

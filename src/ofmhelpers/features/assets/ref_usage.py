@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from typing import Any
 lazy from pathlib import Path
@@ -10,9 +11,8 @@ from redis.exceptions import RedisError
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.users.store import get_user
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _KEY_PREFIX = "refs:used:"
 

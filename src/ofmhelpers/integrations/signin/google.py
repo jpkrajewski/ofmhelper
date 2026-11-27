@@ -2,7 +2,7 @@
 
 from urllib.parse import urlencode
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.users.schema import Identity
@@ -108,5 +108,7 @@ class Google:
             email=found.email,
             email_verified=found.email_verified,
             name=found.name,
-            refresh_token=reply.refresh_token,
+            refresh_token=SecretStr(reply.refresh_token)
+            if reply.refresh_token
+            else None,
         )

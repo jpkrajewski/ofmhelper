@@ -1,6 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 
 class CookieSite(BaseModel):
@@ -49,6 +49,6 @@ class SavedCookies(BaseModel):
 
 
 class StoredCookies(BaseModel):
-    cookies: str
+    cookies: SecretStr
     file_name: str
     uploaded_at: float

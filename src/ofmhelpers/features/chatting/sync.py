@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 lazy from collections.abc import Collection
@@ -22,11 +23,10 @@ from ofmhelpers.features.chatting.webhooks import (
 )
 from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.integrations.chat_source import ChatSourceError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.chats.schema import ChatModel, ChatPlatform
 lazy from ofmhelpers.integrations.chat_source import ChatSource
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def enabled(platform: ChatPlatform) -> bool:

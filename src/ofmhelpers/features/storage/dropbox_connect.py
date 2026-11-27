@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 
 from redis.exceptions import RedisError
@@ -11,9 +12,8 @@ from ofmhelpers.db.users.schema import StorageProvider
 from ofmhelpers.features.storage import storage_choice
 from ofmhelpers.integrations.pkce import pkce_pair
 from ofmhelpers.integrations.storage.dropbox import oauth
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _state_key(state: str) -> str:

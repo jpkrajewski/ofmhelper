@@ -1,9 +1,15 @@
 {
   "device": "iphone16_h264",
   "return_on_unique": true,
+  "keep_first_sound": true,
   "stages": [
-    {"preset": "spoof", "max_attempts": 3, "tries_per_attempt": 3, "strength_increase": 0.02},
-    {"preset": "spoof_fallback", "max_attempts": 2, "tries_per_attempt": 2, "strength_increase": 0.01},
-    {"preset": "hard", "max_attempts": 1, "tries_per_attempt": 2}
+    {"preset": "spoof", "max_attempts": 2, "tries_per_attempt": 2, "strength_increase": 0.02},
+    {"preset": "spoof_fallback", "max_attempts": 1, "tries_per_attempt": 2},
+    {"preset": "hard", "max_attempts": 1, "tries_per_attempt": 1}
+  ],
+  "audio_retries": [
+    {"audio": {"highpass_hz": [110, 130]}, "tries": 1},
+    {"audio": {"highpass_hz": [150, 170], "pitch": [1.2, 1.3]}, "tries": 1},
+    {"audio": {"highpass_hz": [190, 210], "pitch": [1.7, 1.8]}, "tries": 1}
   ]
 }

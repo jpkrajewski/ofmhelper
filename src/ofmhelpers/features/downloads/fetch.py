@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 lazy from collections.abc import Callable
@@ -14,10 +15,9 @@ from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.features.users.viewing import viewer_for
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import Job
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _on_disk(result: DownloadResult | None) -> bool:

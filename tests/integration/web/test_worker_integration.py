@@ -1,12 +1,17 @@
 # Copyright (C) 2026 jpkrajewski
 
+import json
+import logging
+
 import pytest
 import worker_tasks
 from rq import SimpleWorker, Worker
 from rq.job import Job
 
 from ofmhelpers.background import recovery
+from ofmhelpers.background.worker import ConfiguredWorker
 from ofmhelpers.cache import (
+    JobQueue,
     QueueName,
     active_job_ids,
     enqueue,
@@ -16,6 +21,8 @@ from ofmhelpers.cache import (
 )
 from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.log import configure_logging
+from ofmhelpers.monitoring.log_records import ContextFilter, JsonFormatter, RedactFilter
 
 
 @pytest.fixture(autouse=True)
@@ -99,6 +106,60 @@ def test_worker_log_description_never_carries_the_job_arguments():
     assert rq_job.description == "ofmhelpers.features.jobs.runner.run_job"
     _drain_queue()
     assert get_job(job_id).status == "done"
+
+
+def test_put_once_description_never_carries_the_job_arguments():
+    key = "logging-description-test"
+
+    assert JobQueue(name=QueueName.DEFAULT).put_once(
+        key,
+        worker_tasks.note_down,
+        ("secret-api-key",),
+    )
+
+    rq_job = get_queue().fetch_job(key)
+    assert rq_job.description == "worker_tasks.note_down"
+    assert "secret-api-key" not in rq_job.description
+
+
+def test_worker_log_has_queue_and_rq_job_id(capsys):
+    configure_logging(force=True)
+    rq_job = enqueue(worker_tasks.log_context)
+
+    _drain_queue()
+
+    payloads = [
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("{")
+    ]
+    record = next(payload for payload in payloads if payload["msg"] == "worker context")
+    assert record["context"]["queue"] == "default"
+    assert record["context"]["rq_job_id"] == rq_job.id
+
+
+def test_configured_worker_emits_one_json_record_after_a_real_fork(tmp_path):
+    configure_logging(force=True)
+    rq_job = enqueue(worker_tasks.log_context)
+    log_path = tmp_path / "worker.jsonl"
+    root = logging.getLogger()
+    with log_path.open("w", encoding="utf-8") as stream:
+        handler = logging.StreamHandler(stream)
+        handler.setFormatter(JsonFormatter())
+        handler.addFilter(ContextFilter())
+        handler.addFilter(RedactFilter())
+        root.addHandler(handler)
+        try:
+            ConfiguredWorker([get_queue()], connection=get_redis()).work(burst=True)
+        finally:
+            root.removeHandler(handler)
+            handler.close()
+
+    payloads = [json.loads(line) for line in log_path.read_text().splitlines()]
+    records = [payload for payload in payloads if payload["msg"] == "worker context"]
+    assert len(records) == 1
+    assert records[0]["context"]["queue"] == "default"
+    assert records[0]["context"]["rq_job_id"] == rq_job.id
 
 
 def _queue_run(queue: str) -> tuple[str, str]:

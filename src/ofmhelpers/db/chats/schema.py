@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class ChatPlatform(StrEnum):
@@ -116,7 +116,7 @@ class Subscription(BaseModel):
 
 
 class CreatedSubscription(Subscription):
-    secret: str = Field(repr=False)
+    secret: SecretStr = Field(repr=False)
 
 
 class FanMessage(BaseModel):
@@ -172,7 +172,7 @@ class ChatWebhook(BaseModel):
     model_username: str
     webhook_id: str
     url: str
-    secret: str = Field(repr=False)
+    secret: SecretStr = Field(repr=False)
 
 
 class WebhookTarget(BaseModel):
@@ -190,8 +190,8 @@ class ChatAccount(BaseModel):
 
 
 class ChatTokens(BaseModel):
-    access_token: str = Field(repr=False)
-    refresh_token: str = Field(repr=False)
+    access_token: SecretStr = Field(repr=False)
+    refresh_token: SecretStr = Field(repr=False)
     expires_at: float
 
 

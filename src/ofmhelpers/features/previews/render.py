@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import subprocess
 import tempfile
 import time
@@ -12,10 +13,9 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.kinds import FileKind
-from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def previews_dir() -> Path:

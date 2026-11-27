@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 from contextlib import contextmanager
 from types import MappingProxyType
@@ -36,9 +37,8 @@ from ofmhelpers.integrations.socials.sources import (
     Answers,
     ScanTarget,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MEDIA_URL: TypeAdapter[str] = TypeAdapter(MediaUrl)
 DAY_S = 86400

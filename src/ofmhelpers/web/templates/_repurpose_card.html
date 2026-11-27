@@ -1,8 +1,21 @@
 {% extends "_gallery_card.html" %}
 {% import "components/ui.html" as ui %}
-{% block meta %}Spoof · iPhone 16 Pro Max
-{%- if job.mirrored is not none %} · {{ "mirrored" if job.mirrored else "not&nbsp;mirrored"|safe }}{% endif %}
-{%- if job.turn %} · turned&nbsp;{{ "%.1f"|format(job.turn|abs) }}°&nbsp;{{ "right" if job.turn > 0 else "left" }}{% endif %}{% endblock %}
+{% block lead %}{% if job.creator_id %}<span data-creator-id="{{ job.creator_id }}" hidden></span>{% endif %}{% endblock %}
+{% block meta %}Spoof · iPhone 16 Pro Max{% endblock %}
 {% block pending_label %}spoofing…{% endblock %}
-{% block below %}{% include "_drive_states.html" %}{% endblock %}
+{% block below %}{% include "_drive_states.html" %}
+{% if job.status == "done" and (job.mirrored is not none or job.preset or job.creator_name) %}
+{% call ui.menu_button("See spoof settings", "eye", "spoof-settings", block=true) %}
+{% if job.creator_name %}{{ ui.menu_text("Model", job.creator_name) }}{% endif %}
+{% if job.mirrored is not none %}{{ ui.menu_text("Mirror", ("mirrored" if job.mirrored else "not mirrored") ~ (" (random)" if job.mirror_choice == "random" else " (chosen)")) }}{% endif %}
+{% if job.turn %}{{ ui.menu_text("Turn", "%.1f"|format(job.turn|abs) ~ "° " ~ ("right" if job.turn > 0 else "left")) }}{% endif %}
+{% if job.preset %}
+{{ ui.menu_text("Preset", job.preset) }}
+{{ ui.menu_text("Strength", job.strength) }}
+{{ ui.menu_text("Picture try", job.picture_tries) }}
+{{ ui.menu_text("Audio retries", job.audio_tries) }}
+{{ ui.menu_text("Sound", "still matches the source: first sound kept" if job.kept_first_sound else "unique") }}
+{% endif %}
+{% endcall %}
+{% endif %}{% endblock %}
 {% block menu_items %}{% if drive_targets %}{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}{% endif %}{% endblock %}

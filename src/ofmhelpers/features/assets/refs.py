@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import heapq
+import logging
 import os
 import re
 import threading
@@ -32,9 +33,8 @@ from ofmhelpers.features.previews.render import (
     write_video_thumb,
 )
 from ofmhelpers.features.refusals import ForbiddenError, NotFoundError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class StoredFile(BaseModel):

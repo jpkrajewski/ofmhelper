@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 from collections.abc import Callable
 from functools import partial
 from types import MappingProxyType
@@ -25,9 +26,8 @@ from ofmhelpers.integrations.storage.gdrive import (
     connect_as,
     service_account_email,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class _Connect(Protocol):

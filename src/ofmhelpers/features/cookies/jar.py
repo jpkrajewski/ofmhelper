@@ -1,14 +1,15 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from ofmhelpers.config import settings
 from ofmhelpers.db.cookies import store as cookies
 from ofmhelpers.db.cookies.schema import SavedCookies
 from ofmhelpers.db.devices.catalog import cookie_sites
 from ofmhelpers.integrations.cookie_jar import CookieFileError
 from ofmhelpers.integrations.downloaders.cookies import summarize
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["CookieFileError", "check_size", "save", "saved"]
 
@@ -18,7 +19,7 @@ def saved(user_id: int) -> SavedCookies | None:
     if found is None:
         return None
     try:
-        summary = summarize(found.cookies, cookie_sites())
+        summary = summarize(found.cookies.get_secret_value(), cookie_sites())
     except CookieFileError:
         logger.warning(
             "stored cookies of user %s are not readable",

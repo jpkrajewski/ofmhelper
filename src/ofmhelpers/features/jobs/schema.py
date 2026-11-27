@@ -239,22 +239,6 @@ def download_reason(error: str | None) -> str:
     return said if len(said) <= _DOWNLOAD_SAID_MAX else capped
 
 
-class AssetCard(BaseModel):
-    name: str
-    index: int
-    kind: str
-    view_url: str
-    download_url: str
-    download_name: str
-    local_fallback_url: str | None = None
-    preview_url: str | None = None
-    poster_url: str | None = None
-    source: str | None = None
-    removed: bool = False
-    removed_reason: str | None = None
-    removed_error: str | None = None
-
-
 class FailedSource(BaseModel):
     source: str
     error: str
@@ -297,26 +281,9 @@ class CloneQueued(BaseModel):
     batch: str | None = None
 
 
-class ReferenceAsset(BaseModel):
-    name: str
-    kind: str
-    view_url: str
-
-
 class InputSetting(BaseModel):
     label: str
     value: Any
-
-
-class InputFileGroup(BaseModel):
-    label: str
-    assets: list[ReferenceAsset]
-
-
-class JobInputs(BaseModel):
-    settings: list[InputSetting]
-    long_text: list[InputSetting]
-    file_groups: list[InputFileGroup]
 
 
 class ActionLogEntry(BaseModel):

@@ -27,6 +27,7 @@ from ofmhelpers.features.pictures import service as pictures
 from ofmhelpers.features.reels.watch import unlock_gated
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.repurpose import service as repurpose
+from ofmhelpers.features.repurpose.constants import MirrorChoice
 from ofmhelpers.features.storage import jobs as storage
 from ofmhelpers.features.storage.constants import StorageTask
 from ofmhelpers.features.storage.models import BinMove
@@ -78,6 +79,18 @@ def _handmade(job: Job) -> RunArgs:
     )
 
 
+def _spoofed(job: Job) -> RunArgs:
+    return RunArgs.model_validate(
+        {
+            "job_dir": job.params["dir"],
+            "source": job.params["source"],
+            "seed": job.params.get("seed"),
+            "mirror": job.params.get("mirror", MirrorChoice.RANDOM.value),
+            "job_id": job.id,
+        },
+    )
+
+
 def _sheet(job: Job) -> RunArgs:
     return RunArgs.model_validate(
         {
@@ -120,7 +133,7 @@ RESTARTS = frozendict(
         uniqify.TASK: Restart(run=uniqify.run_uniqify, kwargs=_in_its_folder),
         repurpose.TASK: Restart(
             run=repurpose.run_repurpose,
-            kwargs=_in_its_folder,
+            kwargs=_spoofed,
             queue=QueueName.MEDIA,
             job_timeout=lambda _params: settings.repurpose.job_timeout_s,
         ),

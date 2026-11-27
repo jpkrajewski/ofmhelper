@@ -45,13 +45,8 @@ class ProfileHandle(BaseModel):
     def _bare(cls, value: str) -> str:
         text = str(value).strip()
         if "instagram.com" in text:
-            has_scheme = text.lower().startswith(("http://", "https://", "//"))
-            parts = urlsplit(text if has_scheme else f"https://{text}")
-            host = (parts.hostname or "").lower().rstrip(".")
-            if host != "instagram.com" and not host.endswith(".instagram.com"):
-                msg = f"Not an Instagram username: {value!r}"
-                raise ValueError(msg)
-            text = next((part for part in parts.path.split("/") if part), "")
+            text = urlsplit(text if "//" in text else f"https://{text}").path
+            text = next((part for part in text.split("/") if part), "")
         text = text.lstrip("@").strip("/")
         if not _USERNAME.fullmatch(text):
             msg = f"Not an Instagram username: {value!r}"

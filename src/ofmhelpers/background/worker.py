@@ -2,6 +2,7 @@
 
 import argparse
 import importlib
+import logging
 import multiprocessing
 import os
 import signal
@@ -23,13 +24,13 @@ from ofmhelpers.acting import Acting, Via, acting
 from ofmhelpers.cache import QueueJob, QueueName, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.features.fakes import install_fakes
-from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.log import configure_logging
 from ofmhelpers.monitoring.sentry import configure_sentry
 from ofmhelpers.monitoring.telemetry import configure_telemetry, flush_telemetry
 lazy from ofmhelpers.integrations.ai_providers.base import provider_classes
 lazy from ofmhelpers.integrations.llm.base import llm_classes
 
-logger = get_logger("ofmhelpers.background.worker")
+logger = logging.getLogger("ofmhelpers.background.worker")
 
 
 class ConfiguredWorker(Worker):

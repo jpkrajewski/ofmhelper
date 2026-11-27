@@ -65,6 +65,7 @@ def _job(row: JobRow) -> Job:
             "meta": row.meta or {},
             "cost_usd": row.cost_usd,
             "cost_estimated": row.cost_estimated,
+            "creator_id": row.creator_id,
         },
     )
 
@@ -263,6 +264,29 @@ class JobRepository(CachedRepository):
             s.execute(
                 update(JobRow).where(JobRow.id == job_id).values(hidden_at=hidden_at),
             )
+
+    @invalidates_cache
+    def set_creator(self, job_id: str, creator_id: int) -> None:
+        with session_scope() as s:
+            s.execute(
+                update(JobRow).where(JobRow.id == job_id).values(creator_id=creator_id),
+            )
+
+    @cached
+    def page_of_creator(
+        self,
+        task: str,
+        user_ids: Sequence[int],
+        creator_id: int,
+        offset: int,
+        limit: int,
+    ) -> JobPage:
+        where: list[ColumnElement[bool]] = [
+            JobRow.task == task,
+            JobRow.user_id.in_(user_ids),
+            JobRow.creator_id == creator_id,
+        ]
+        return _page(where, [JobRow.created_at.desc()], offset, limit)
 
     @invalidates_cache
     def delete(self, job_id: str) -> None:
@@ -502,6 +526,23 @@ class JobRepository(CachedRepository):
             )
 
     @invalidates_cache
+    def add_execution(self, job_id: str, execution: JsonValue) -> None:
+        kept = func.coalesce(
+            JobRow.meta["executions"],
+            type_coerce([], JSONB),
+        ).op("||")(type_coerce([execution], JSONB))
+        with session_scope() as s:
+            s.execute(
+                update(JobRow)
+                .where(JobRow.id == job_id)
+                .values(
+                    meta=JobRow.meta.op("||")(
+                        func.jsonb_build_object("executions", kept),
+                    ),
+                ),
+            )
+
+    @invalidates_cache
     def set_cost(
         self,
         job_id: str,
@@ -513,7 +554,11 @@ class JobRepository(CachedRepository):
             s.execute(
                 update(JobRow)
                 .where(JobRow.id == job_id)
-                .values(meta=meta, cost_usd=cost_usd, cost_estimated=cost_estimated),
+                .values(
+                    meta=JobRow.meta.op("||")(type_coerce(meta, JSONB)),
+                    cost_usd=cost_usd,
+                    cost_estimated=cost_estimated,
+                ),
             )
 
     def days(

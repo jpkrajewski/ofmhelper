@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 from functools import lru_cache
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import urlsplit
@@ -14,10 +15,9 @@ from requests.structures import CaseInsensitiveDict
 from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.config.settings import ProfilePageSettings
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FakeReply(BaseModel):

@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from pydantic import BaseModel, SkipValidation, ValidationError
 
 from ofmhelpers.cache import delete_text, get_text, set_text
@@ -17,9 +19,8 @@ from ofmhelpers.integrations.storage import (
     FolderGoneError,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _key(user_id: int, session: str) -> str:

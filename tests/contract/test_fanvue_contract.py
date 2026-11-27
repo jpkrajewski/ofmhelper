@@ -76,7 +76,8 @@ def test_a_refresh_token_works_once(backend, monkeypatch):
 
     fresh = refresh(spent)
     assert fresh is not None
-    assert fresh.refresh_token != spent
+    renewed = fresh.refresh_token.get_secret_value()
+    assert renewed != spent
 
     assert refresh(spent) is None
-    assert refresh(fresh.refresh_token) is None
+    assert refresh(renewed) is None

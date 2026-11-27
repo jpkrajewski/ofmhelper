@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import argparse
+import logging
 import shutil
 from pathlib import Path
 
@@ -10,10 +11,10 @@ from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.assets.store import uploads_root
 from ofmhelpers.features.previews.render import write_video_thumb
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.log import configure_logging
 from ofmhelpers.media.side_by_side import side_by_side
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "clone"
 FRAME_PX = 480

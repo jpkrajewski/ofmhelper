@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import os
 from functools import lru_cache
 from http import HTTPStatus
@@ -19,9 +20,8 @@ from ofmhelpers.integrations.senders.telegram.models import (
     Reply,
     Update,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class TelegramError(SendError): ...

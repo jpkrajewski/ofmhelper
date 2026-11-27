@@ -3,7 +3,6 @@
 import io
 import json
 import re
-import threading
 from pathlib import Path
 
 import pytest
@@ -27,7 +26,6 @@ from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldP
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.media.video_probe import duration_s, video_size
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.generation import ai as ai_router
 from ofmhelpers.web.routers.task_helpers import job_status_payload
 
 NEW = json.dumps([{"kind": "new"}])
@@ -380,31 +378,6 @@ def test_a_kie_run_sends_the_catalog_body_and_keeps_the_hosted_copy(client, kie)
     job = get_job(r.json()["job_id"])
     assert job.status == "done"
     assert job.result_files()[0].remote_url == "https://cdn.kie/out.mp4"
-
-
-def test_image_validation_runs_off_the_dependency_event_loop(client, monkeypatch):
-    dependency_threads = []
-    validation_threads = []
-    model_spec = ai_router.service.model_spec
-    validate_image = ai_router.validate_image_upload
-
-    def observed_model_spec(key):
-        dependency_threads.append(threading.get_ident())
-        return model_spec(key)
-
-    def observed_validation(upload):
-        validation_threads.append(threading.get_ident())
-        return validate_image(upload)
-
-    monkeypatch.setattr(ai_router.service, "model_spec", observed_model_spec)
-    monkeypatch.setattr(ai_router, "validate_image_upload", observed_validation)
-    files = {"reference_image_urls": ("ref.png", io.BytesIO(_png()), "image/png")}
-
-    response = _fake(client, files=files, reference_image_urls_manifest=NEW)
-
-    assert response.status_code == 202
-    assert len(validation_threads) == 1
-    assert validation_threads[0] != dependency_threads[0]
 
 
 def test_invalid_reference_image_is_rejected_before_a_job_is_created(client, kie):

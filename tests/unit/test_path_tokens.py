@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from ofmhelpers.log import _HideLoginCodes
+from ofmhelpers.monitoring.log_records import RedactFilter
 from ofmhelpers.monitoring.telemetry import _masked_attributes
 from ofmhelpers.redact import MASK, redact
 
@@ -52,6 +52,6 @@ def test_access_log_hides_path_tokens():
         ("1.2.3.4", "GET", f"/password/{TOKEN}", "1.1", 200),
         None,
     )
-    _HideLoginCodes().filter(record)
+    RedactFilter().filter(record)
     assert TOKEN not in record.getMessage()
     assert MASK in record.getMessage()

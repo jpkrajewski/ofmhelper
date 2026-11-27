@@ -3,7 +3,7 @@
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class Role(StrEnum):
@@ -135,29 +135,39 @@ class LinkedAccount(BaseModel):
 
 class SavedKey(BaseModel):
     provider: str
-    api_key: str
+    api_key: SecretStr
 
 
 class SavedKeys(BaseModel):
     keys: list[SavedKey] = []
 
     def get(self, provider: str) -> str:
-        return next((k.api_key for k in self.keys if k.provider == provider), "")
+        return next(
+            (k.api_key.get_secret_value() for k in self.keys if k.provider == provider),
+            "",
+        )
 
 
 class PasswordForm(BaseModel):
-    password: str = Field(min_length=1, max_length=256)
-    confirm: str = Field(min_length=1, max_length=256)
+    password: Annotated[SecretStr, Field(min_length=1, max_length=256)]
+    confirm: Annotated[SecretStr, Field(min_length=1, max_length=256)]
 
 
 class ApiKeysForm(BaseModel):
-    keys: dict[str, Annotated[str, Field(max_length=512)]] = Field(default_factory=dict)
+    keys: dict[str, Annotated[SecretStr, Field(max_length=512)]] = Field(
+        default_factory=dict,
+    )
     remove: str | None = Field(default=None, max_length=32)
 
     @field_validator("keys")
     @classmethod
-    def _typed(cls, value: dict[str, str]) -> dict[str, str]:
-        return {name: key.strip() for name, key in value.items() if key.strip()}
+    def _typed(cls, value: dict[str, SecretStr]) -> dict[str, SecretStr]:
+        typed: dict[str, SecretStr] = {}
+        for name, key in value.items():
+            stripped = key.get_secret_value().strip()
+            if stripped:
+                typed[name] = SecretStr(stripped)
+        return typed
 
 
 def normalized_email(value: str) -> str:
@@ -170,4 +180,7 @@ class Identity(BaseModel):
     email: str = ""
     email_verified: bool = False
     name: str = ""
-    refresh_token: str | None = None
+    refresh_token: SecretStr | None = None
+
+    def refresh_token_value(self) -> str | None:
+        return self.refresh_token.get_secret_value() if self.refresh_token else None

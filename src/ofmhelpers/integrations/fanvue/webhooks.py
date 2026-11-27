@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import time
 lazy from collections.abc import Mapping
 
@@ -18,9 +19,8 @@ from ofmhelpers.integrations.fanvue.models import (
     SubscriptionEvent,
     WebhookEnvelope,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _PROBE = "fanvue.webhook.verification"
 _SIGNATURE = "x-fanvue-signature"

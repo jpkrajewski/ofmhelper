@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from typing import Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -7,10 +8,9 @@ from pydantic import BaseModel, ConfigDict, create_model
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PRESET_ASPECTS = ("1:1", "3:4", "4:5", "2:3", "9:16", "4:3", "3:2", "16:9")
 

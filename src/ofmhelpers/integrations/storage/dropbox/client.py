@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import mimetypes
 import zipfile
 from contextlib import contextmanager
@@ -47,9 +48,8 @@ from ofmhelpers.integrations.storage.models import (
     DriveThumb,
     FolderItems,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _failure(exc: Exception, what: str) -> DriveError:

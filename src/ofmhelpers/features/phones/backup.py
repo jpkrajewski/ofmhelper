@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import argparse
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,9 +10,9 @@ from ofmhelpers.db.encrypted import decrypt, encrypt
 from ofmhelpers.db.phone_revisions import store
 from ofmhelpers.db.phone_revisions.schema import DumpLoaded, DumpWritten, PhoneDump
 from ofmhelpers.features.assets.store import uploads_root
-from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.log import configure_logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _PREFIX = "phones-"
 _SUFFIX = ".json.enc"

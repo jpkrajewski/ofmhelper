@@ -15,6 +15,7 @@ class AudioSettings(Knobs, frozen=True):
     phaser_shift: Value | None = None
     treble_db: Value | None = None
     bass_cut_db: Value | None = None
+    highpass_hz: Value | None = None
     mid_db: Value | None = None
     echo: list[str] | str | None = None
     reverb_ms: Value | None = None
@@ -49,6 +50,7 @@ class AudioDraws(BaseModel, frozen=True):
     compress_db: float | None
     deess_db: float | None
     limit: float | None
+    highpass_hz: float | None = None
 
 
 def _draw(s: AudioSettings, rng: random.Random) -> AudioDraws:
@@ -81,6 +83,7 @@ def _draw(s: AudioSettings, rng: random.Random) -> AudioDraws:
         compress_db=draw(s.compress_db, rng),
         deess_db=draw(s.deess_db, rng),
         limit=draw(s.limit, rng),
+        highpass_hz=draw(s.highpass_hz, rng),
     )
 
 
@@ -104,10 +107,7 @@ class AudioTransformer:
             chain.append(f"volume={d.volume:.4f}")
         if d.phaser_ms:
             chain.append(f"aphaser=delay={d.phaser_ms:.3f}:decay=0.15:speed=0.3")
-        if d.treble_db:
-            chain.append(f"equalizer=f=8000:t=h:w=2000:g={d.treble_db:.2f}")
-        if d.bass_cut_db:
-            chain.append(f"equalizer=f=150:t=h:w=100:g={-d.bass_cut_db:.2f}")
+        chain += self._tone()
         chain += self._echo()
         if d.mid_db:
             chain.append(f"equalizer=f=1000:t=q:w=1:g={d.mid_db:.2f}")
@@ -125,6 +125,17 @@ class AudioTransformer:
                 f"alimiter=limit={d.limit:.3f}:attack=5:release=50:level=false",
             )
         return ",".join(chain)
+
+    def _tone(self) -> list[str]:
+        draws = self.draws
+        chain: list[str] = []
+        if draws.treble_db:
+            chain.append(f"equalizer=f=8000:t=h:w=2000:g={draws.treble_db:.2f}")
+        if draws.bass_cut_db:
+            chain.append(f"equalizer=f=150:t=h:w=100:g={-draws.bass_cut_db:.2f}")
+        if draws.highpass_hz:
+            chain.append(f"highpass=f={draws.highpass_hz:.0f}")
+        return chain
 
     def _pitch_and_tempo(self) -> list[str]:
         chain = []

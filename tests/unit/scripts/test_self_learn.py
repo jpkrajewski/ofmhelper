@@ -505,3 +505,75 @@ def test_a_queued_record_of_a_wrong_shape_is_skipped(tmp_path):
     d = self_learn.digest(logs, tmp_path / "none.jsonl", NOW)
 
     assert [p.text for p in d.prompts] == ["go"]
+
+
+def test_done_refuses_an_empty_digest_during_an_open_ship(monkeypatch, tmp_path):
+    marker = tmp_path / "last.txt"
+    monkeypatch.setattr(self_learn, "MARKER", marker)
+    monkeypatch.setattr(self_learn, "OUT", tmp_path)
+    monkeypatch.setattr(self_learn, "SHIP_OPEN", tmp_path / "ship.open")
+    (tmp_path / "ship.open").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(self_learn, "last_pass", lambda: NOW)
+    monkeypatch.setattr(
+        self_learn,
+        "digest",
+        lambda *_: self_learn.Digest(
+            since="",
+            until="",
+            prompts=[],
+            failures=[],
+            blocks=[],
+            test_runs=[],
+            reviews=[],
+            costs=[],
+            task_stops=0,
+            interrupted=0,
+            rejected=0,
+            refused_pushes=0,
+        ),
+    )
+
+    assert self_learn.main(["--done"]) == 1
+    assert not marker.exists()
+
+
+def test_done_accepts_an_explicit_empty_digest_acknowledgement(
+    monkeypatch,
+    tmp_path,
+):
+    marker = tmp_path / "last.txt"
+    monkeypatch.setattr(self_learn, "MARKER", marker)
+    monkeypatch.setattr(self_learn, "OUT", tmp_path)
+    monkeypatch.setattr(self_learn, "SHIP_OPEN", tmp_path / "ship.open")
+    (tmp_path / "ship.open").write_text("x", encoding="utf-8")
+
+    assert self_learn.main(["--done", "--allow-empty"]) == 0
+    assert marker.exists()
+
+
+def test_the_digest_warns_when_session_and_audit_evidence_is_missing(tmp_path):
+    logs = tmp_path / "logs"
+    audit = tmp_path / "audit.jsonl"
+    local = NOW.astimezone().replace(tzinfo=None)
+    audit.write_text(
+        json.dumps(
+            {
+                "at": (local - timedelta(minutes=1)).isoformat(timespec="seconds"),
+                "event": "Stop",
+                "tool": "",
+                "verdicts": [],
+            },
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = self_learn.render(self_learn.digest(logs, audit, NOW))
+
+    assert "Transcript files: 0 recent of 0 discovered" in report
+    assert (
+        f"Newest audit entry: "
+        f"{(local - timedelta(minutes=1)).isoformat(timespec='seconds')}" in report
+    )
+    assert "WARNING: no session transcripts parsed" in report
+    assert "WARNING: newest audit entry predates the digest window" in report

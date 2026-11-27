@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -10,9 +11,8 @@ from ofmhelpers.db.chats import store as chats
 from ofmhelpers.db.chats.schema import ChatPlatform, DeliveryKind
 from ofmhelpers.features.account.stacked_keys import StackedKeys
 from ofmhelpers.integrations.stacked import StackedClient, StackedError, reachable
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FanStats(BaseModel):

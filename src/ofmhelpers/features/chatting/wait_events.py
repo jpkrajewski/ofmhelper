@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import time
 
 from pydantic import BaseModel
@@ -15,9 +16,8 @@ from ofmhelpers.features.chatting.sync import read_now
 from ofmhelpers.features.events import Event, emit, listening
 from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.integrations.chat_source import ChatSourceError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _NO_NAME = "(no name)"
 _MAX_FANS = 10

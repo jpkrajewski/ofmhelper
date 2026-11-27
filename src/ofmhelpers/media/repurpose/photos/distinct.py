@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 lazy import random
 
 from PIL import Image, ImageEnhance
@@ -7,12 +8,11 @@ from pydantic import BaseModel
 lazy import numpy as np
 lazy import pdqhash
 
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.media.repurpose.checker.schema import HashKind
 lazy from ofmhelpers.media.repurpose.checker.visual import SAME_PICTURE
 lazy from ofmhelpers.media.repurpose.photos.models import Retouch
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Pdq(BaseModel, frozen=True):

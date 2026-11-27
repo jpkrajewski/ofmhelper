@@ -4,7 +4,8 @@ from pydantic import BaseModel
 
 from ofmhelpers.db.downloads import store as downloads
 from ofmhelpers.features.assets.names import download_name
-from ofmhelpers.features.jobs.schema import AssetCard, FailedSource, error_reason
+from ofmhelpers.features.jobs.models import AssetCard
+from ofmhelpers.features.jobs.schema import FailedSource, error_reason
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews import render as previews
 lazy from ofmhelpers.db.jobs.schema import Job

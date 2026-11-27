@@ -85,9 +85,15 @@ def _phones_sheet(book: Workbook, devices: list[Device]) -> None:
         for service in listed:
             logins = [x for x in device.logins if x.service == service.key]
             values.append("\n".join(_name(login) for login in logins))
-            values.append("\n".join(login.password for login in logins))
+            values.append(
+                "\n".join(login.password.get_secret_value() for login in logins),
+            )
             if service.kind is ServiceKind.SOCIAL:
-                values.append("\n\n".join(login.backup_codes for login in logins))
+                values.append(
+                    "\n\n".join(
+                        login.backup_codes.get_secret_value() for login in logins
+                    ),
+                )
         values.append(device.notes)
         _row(sheet, values)
 
@@ -113,8 +119,8 @@ def _logins_sheet(book: Workbook, devices: list[Device]) -> None:
                     *_phone_cells(device),
                     login.label,
                     login.username,
-                    login.password,
-                    login.backup_codes,
+                    login.password.get_secret_value(),
+                    login.backup_codes.get_secret_value(),
                     login.notes,
                 ],
             )

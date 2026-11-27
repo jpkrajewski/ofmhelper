@@ -2,6 +2,7 @@
 
 import itertools
 import json
+import logging
 import subprocess
 import tempfile
 import time
@@ -11,7 +12,6 @@ import numpy as np
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.repurpose import Repurpose
 from ofmhelpers.media.repurpose.checker import check
@@ -24,7 +24,7 @@ from ofmhelpers.media.repurpose.transformations.video import (
 )
 lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep, RunResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 DEVICE = "strip"
 _TIMEOUT_S = 900
@@ -95,7 +95,7 @@ def reference(
             "-y",
             "-loglevel",
             "error",
-            *input_args(sample, ref),
+            *input_args(sample, ref.timeline),
             *(["-r", fps] if fps else []),
             "-vf",
             ref.filters(work),

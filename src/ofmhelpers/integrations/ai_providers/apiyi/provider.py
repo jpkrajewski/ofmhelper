@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, datetime
 lazy from pathlib import Path
 
@@ -25,11 +26,10 @@ from ofmhelpers.integrations.ai_providers.base import (
     register_provider,
 )
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.schema import KeySlot
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @register_provider

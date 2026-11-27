@@ -5,7 +5,7 @@ lazy from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run_log
 from ofmhelpers.media.repurpose.command import input_args
-lazy from ofmhelpers.media.repurpose.transformations.video import VideoTransformer
+lazy from ofmhelpers.media.repurpose.transformations.video import Timeline
 
 _MEAN_VOLUME = re.compile(r"mean_volume: (-?[\d.]+) dB")
 _MAKEUP_MAX_DB = 30.0
@@ -13,7 +13,7 @@ _MAKEUP_MAX_DB = 30.0
 
 def mean_volume_db(
     src: Path,
-    video: VideoTransformer,
+    timeline: Timeline,
     af: str,
     timeout_s: int,
 ) -> float:
@@ -23,7 +23,7 @@ def mean_volume_db(
             "-nostats",
             "-loglevel",
             "info",
-            *input_args(src, video),
+            *input_args(src, timeline),
             "-vn",
             "-af",
             f"{af},volumedetect",
@@ -40,7 +40,7 @@ def mean_volume_db(
     return float(match.group(1))
 
 
-def makeup_db(src: Path, video: VideoTransformer, af: str, timeout_s: int) -> float:
-    source = mean_volume_db(src, video, "anull", timeout_s)
-    processed = mean_volume_db(src, video, af, timeout_s)
+def makeup_db(src: Path, timeline: Timeline, af: str, timeout_s: int) -> float:
+    source = mean_volume_db(src, timeline, "anull", timeout_s)
+    processed = mean_volume_db(src, timeline, af, timeout_s)
     return round(min(_MAKEUP_MAX_DB, max(0.0, source - processed)), 2)

@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from pydantic import (
     AfterValidator,
     BaseModel,
+    ConfigDict,
     Field,
     JsonValue,
     computed_field,
@@ -442,6 +443,13 @@ class AccountPage(BaseModel):
             pages=pages,
             per_page=per_page,
         )
+
+
+class Creator(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    name: str
 
 
 class Snapshot(BaseModel):

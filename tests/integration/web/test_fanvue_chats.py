@@ -221,7 +221,9 @@ def test_the_sync_covers_every_creator_with_the_app_secret(side):
         fanvue_fake.CREATOR_HANDLE,
         fanvue_fake.OTHER_HANDLE,
     ]
-    assert {w.secret for w in chats.webhooks(PLATFORM)} == {side.secret}
+    assert {w.secret.get_secret_value() for w in chats.webhooks(PLATFORM)} == {
+        side.secret,
+    }
 
 
 def test_a_new_secret_reaches_the_rows_at_the_next_round(side, monkeypatch):
@@ -229,7 +231,9 @@ def test_a_new_secret_reaches_the_rows_at_the_next_round(side, monkeypatch):
 
     cover_models(side.source, side.source.models().found)
 
-    assert {w.secret for w in chats.webhooks(PLATFORM)} == {"whsec_rotated"}
+    assert {w.secret.get_secret_value() for w in chats.webhooks(PLATFORM)} == {
+        "whsec_rotated",
+    }
 
 
 def test_an_expired_token_is_renewed_and_the_new_pair_kept(side):

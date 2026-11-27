@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -27,10 +28,9 @@ from ofmhelpers.integrations.short_links.providers.base import (
     RequestHeaders,
     listed,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.short_links.catalog.schema import NewLink
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _FORBIDDEN = 403
 _NOT_FOUND = 404

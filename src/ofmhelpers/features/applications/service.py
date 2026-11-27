@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer
@@ -8,9 +9,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.applications import store
 from ofmhelpers.db.applications.schema import Application, ApplicationForm
 from ofmhelpers.features.refusals import NotFoundError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Submitted(ApplicationForm):

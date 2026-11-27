@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 
 from ofmhelpers.config import settings
@@ -14,10 +15,9 @@ from ofmhelpers.db.users.schema import (
     UserForm,
     normalized_email,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.users.schema import Identity, SavedKeys
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -115,6 +115,7 @@ def env_admin(email: str, name: str) -> User | None:
 
 
 def sign_in_identity(identity: Identity) -> User | None:
+    refresh_token = identity.refresh_token_value()
     repo = _repository()
     if identity.provider == settings.signin.owner_provider:
         return admit(password_admin())
@@ -127,7 +128,7 @@ def sign_in_identity(identity: Identity) -> User | None:
                 identity.subject,
                 identity.email,
             )
-        return admit(user, identity.name, identity.refresh_token)
+        return admit(user, identity.name, refresh_token)
     linked = repo.user_for_identity(identity.provider, identity.subject)
     user = get_user(linked) if linked is not None else None
     if user is None and identity.email_verified and identity.email:
@@ -141,7 +142,7 @@ def sign_in_identity(identity: Identity) -> User | None:
             )
     elif user is not None and is_env_admin(user.email):
         user = env_admin(user.email, identity.name)
-    return admit(user, identity.name, identity.refresh_token)
+    return admit(user, identity.name, refresh_token)
 
 
 def link_identity(user_id: int, identity: Identity) -> bool:
@@ -154,7 +155,7 @@ def link_identity(user_id: int, identity: Identity) -> bool:
         identity.email,
     ):
         return False
-    _repository().signed_in(user_id, "", identity.refresh_token)
+    _repository().signed_in(user_id, "", identity.refresh_token_value())
     return True
 
 

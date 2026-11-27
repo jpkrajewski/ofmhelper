@@ -21,6 +21,11 @@ DEPLOYS = [
 WORKERS = {"worker", "media-worker", "edit-worker", "preview-worker"}
 
 
+class LogRetention(BaseModel):
+    driver: str
+    options: dict[str, str]
+
+
 class Service(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -29,6 +34,7 @@ class Service(BaseModel):
     container_name: str | None = None
     command: list[str] = []
     stop_grace_period: str | None = None
+    logging: LogRetention | None = None
 
 
 class Compose(BaseModel):
@@ -127,6 +133,24 @@ def test_a_worker_service_can_be_scaled():
 def test_every_app_service_runs_the_release_image():
     images = {_compose().services[name].image for name in _app_services()}
     assert images == {"ofmhelpers-app:${OFM_RELEASE:-dev}"}
+
+
+def test_web_sweeps_and_workers_have_bounded_docker_logs():
+    services = _compose().services
+    for name in ("ofmhelpers", "sweeps", *WORKERS):
+        retention = services[name].logging
+        assert retention is not None, name
+        assert retention.driver == "json-file", name
+        assert retention.options == {"max-size": "25m", "max-file": "3"}, name
+
+
+def test_uvicorn_loads_json_logging_before_its_first_startup_record():
+    config = ["--log-config", "/app/src/ofmhelpers/logging.json"]
+    dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
+    dev = yaml.safe_load((REPO / "docker-compose.dev.yml").read_text(encoding="utf-8"))
+
+    assert '"--log-config", "/app/src/ofmhelpers/logging.json"' in dockerfile
+    assert dev["services"]["ofmhelpers"]["command"][-2:] == config
 
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
@@ -427,7 +451,7 @@ MIGRATIONS = [
     REPO / "alembic" / "env.py",
     *(REPO / "alembic" / "versions").glob("*.py"),
 ]
-WITHHELD_FROM_MIGRATE = {"OFM_VAULT_KEY", "LOGFIRE_TOKEN"}
+WITHHELD_FROM_MIGRATE = {"OFM_VAULT_KEY"}
 
 
 def _env_names_read_by_migrations() -> set[str]:

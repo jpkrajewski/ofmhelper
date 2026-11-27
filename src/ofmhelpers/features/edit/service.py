@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import hashlib
+import logging
 import os
 import re
 import subprocess
@@ -31,7 +32,6 @@ from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.features.refusals import EditRefusedError
-from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim
 from ofmhelpers.media.uniqify import has_audio
 from ofmhelpers.media.video_probe import (
@@ -44,7 +44,7 @@ lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.assets.models import VideoUpload
 lazy from ofmhelpers.media.size import Size
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PREFIX = "/edit"
 TASK = "edit_cut"

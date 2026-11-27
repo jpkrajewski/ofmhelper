@@ -282,6 +282,8 @@ _LOCAL_JOBS = {
             "job_dir": "/u/repurpose/cd34",
             "source": "/a/in.mp4",
             "seed": 12345,
+            "mirror": "random",
+            "job_id": "JOB",
         },
     ),
     "character_sheet": (

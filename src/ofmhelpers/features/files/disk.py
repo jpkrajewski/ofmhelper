@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import shutil
 from pathlib import Path
 from types import MappingProxyType
@@ -10,13 +11,13 @@ lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets.store import safe_filename
-from ofmhelpers.features.files.schema import DirEntry, FileEntry
+from ofmhelpers.features.files.models import FileEntry
+from ofmhelpers.features.files.schema import DirEntry
 from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.refusals import ConflictError, NotFoundError, RefusedError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.assets.models import MediaUpload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 DEFAULT_ROOT = "uploads"
 KEPT_OUT_OF_UPLOADS = ("backups",)

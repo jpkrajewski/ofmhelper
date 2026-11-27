@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from ofmhelpers.config import settings
@@ -9,9 +10,8 @@ from ofmhelpers.features.events import Event, emit
 from ofmhelpers.features.jobs.schema import error_line
 from ofmhelpers.integrations.ai_providers.errors import ProviderNoCreditsError
 from ofmhelpers.integrations.apify import ApifyCreditError
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PAGE = "/account"
 

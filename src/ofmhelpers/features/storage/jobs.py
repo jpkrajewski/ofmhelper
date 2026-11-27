@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from collections import defaultdict
 lazy from collections.abc import Callable
 
@@ -17,13 +18,12 @@ from ofmhelpers.features.storage.models import (
     VaTarget,
     _OwnerTargets,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.drive_folders.models import DriveTarget
 lazy from ofmhelpers.features.storage.uploads import Folder
 
 __all__ = ["enabled", "queue_sync", "run_bin", "run_scan", "sync", "upload_files"]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _by_owner(targets: list[DriveTarget]) -> list[_OwnerTargets]:

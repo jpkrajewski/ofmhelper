@@ -15,13 +15,13 @@ from ofmhelpers.db.devices.catalog import (
     tracked_services,
 )
 from ofmhelpers.db.devices.catalog.schema import Catalog, LoginService
-from ofmhelpers.db.devices.models import Device, LoginFields, PhoneQuery
-from ofmhelpers.db.devices.schema import (
-    ArchivedLogin,
-    AssignAccount,
+from ofmhelpers.db.devices.models import (
+    Device,
+    LoginFields,
     LoginSecrets,
-    PhoneSort,
+    PhoneQuery,
 )
+from ofmhelpers.db.devices.schema import ArchivedLogin, AssignAccount, PhoneSort
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 from ofmhelpers.db.tracked_accounts.store import get_account

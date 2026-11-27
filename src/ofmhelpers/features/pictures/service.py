@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from pathlib import Path
 from typing import Any, Protocol
 lazy from collections.abc import Callable
@@ -17,7 +18,6 @@ from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.features.generate.service import run_ai
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.jobs.schema import JobsQueued
-from ofmhelpers.features.kinds import FileKind
 from ofmhelpers.features.pictures.targets import (
     PICTURE_TARGETS,
     PRESET_ASPECTS,
@@ -35,11 +35,10 @@ from ofmhelpers.features.refusals import (
     input_refused,
 )
 from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.jobs.schema import ResultFile
 lazy from ofmhelpers.features.assets.models import ImageUpload
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TASK = "pictures"
 LABEL = "Pictures"
@@ -209,9 +208,6 @@ def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
         assets_root,
         user_id=owner_id,
     )
-    if any(FileKind.from_ext(path) != FileKind.IMAGE for path in paths):
-        msg = "Pictures only"
-        raise RefusedError(msg)
     most = settings.pictures.max_pictures
     if not 1 <= len(paths) <= most:
         msg = f"Add 1 to {most} pictures to recreate"

@@ -7,7 +7,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, select, table, text
 from statements import counting
@@ -240,6 +240,60 @@ def test_custom_service_needs_its_provider_name():
     assert LoginFields(service="gmail", provider="x", username="a@b.c").provider == ""
 
 
+def _assert_masked(model: BaseModel, *secrets: str) -> None:
+    for secret in secrets:
+        assert secret not in repr(model)
+        assert secret not in model.model_dump_json()
+
+
+def test_login_fields_mask_secrets_but_return_their_secret_values():
+    fields = LoginFields(
+        service="gmail",
+        username="a@b.c",
+        password="login-fields-password",
+        backup_codes="  login-fields-codes \n",
+    )
+
+    _assert_masked(fields, "login-fields-password", "login-fields-codes")
+    assert fields.password.get_secret_value() == "login-fields-password"
+    assert fields.backup_codes.get_secret_value() == "login-fields-codes"
+
+
+def test_login_secrets_mask_secrets_but_return_their_secret_values():
+    login_id = _add_login(
+        _phone(),
+        "gmail",
+        "a@b.c",
+        password="login-secrets-password",
+        backup_codes="login-secrets-codes",
+    )
+
+    secrets = store.secrets(login_id)
+
+    assert secrets is not None
+    _assert_masked(secrets, "login-secrets-password", "login-secrets-codes")
+    assert secrets.password.get_secret_value() == "login-secrets-password"
+    assert secrets.backup_codes.get_secret_value() == "login-secrets-codes"
+
+
+def test_exported_device_login_masks_secrets_but_returns_their_secret_values():
+    login_id = _add_login(
+        _phone(),
+        "gmail",
+        "a@b.c",
+        password="device-login-password",
+        backup_codes="device-login-codes",
+    )
+
+    [exported] = store.export_devices()
+    [login] = exported.logins
+
+    assert login.id == login_id
+    _assert_masked(login, "device-login-password", "device-login-codes")
+    assert login.password.get_secret_value() == "device-login-password"
+    assert login.backup_codes.get_secret_value() == "device-login-codes"
+
+
 def test_secrets_are_ciphertext_in_the_database_and_absent_from_lists():
     login_id = _add_login(
         _phone(),
@@ -256,10 +310,16 @@ def test_secrets_are_ciphertext_in_the_database_and_absent_from_lists():
 
     listed = store.list_devices()[0].logins[0]
     assert (listed.has_password, listed.has_codes) == (True, True)
-    assert (listed.password, listed.backup_codes) == ("", "")
+    assert (
+        listed.password.get_secret_value(),
+        listed.backup_codes.get_secret_value(),
+    ) == ("", "")
     secrets = store.secrets(login_id)
     assert secrets is not None
-    assert (secrets.password, secrets.backup_codes) == ("hunter2", "111\n222")
+    assert (
+        secrets.password.get_secret_value(),
+        secrets.backup_codes.get_secret_value(),
+    ) == ("hunter2", "111\n222")
 
 
 def test_an_empty_secret_is_stored_empty_and_listed_as_none():
@@ -275,7 +335,7 @@ def test_a_rotated_key_still_reads_old_logins(monkeypatch):
     monkeypatch.setenv("OFM_VAULT_KEY", f"{Fernet.generate_key().decode()},{old}")
     secrets = store.secrets(login_id)
     assert secrets is not None
-    assert secrets.password == "secret"
+    assert secrets.password.get_secret_value() == "secret"
 
 
 def test_a_changed_key_fails_loudly_where_secrets_are_read(monkeypatch, admin):
@@ -386,7 +446,7 @@ def test_one_account_on_two_phones_is_stored_once():
     )
     secrets = store.secrets(login_id)
     assert secrets is not None
-    assert secrets.password == "new"
+    assert secrets.password.get_secret_value() == "new"
 
 
 def test_linking_never_overwrites_a_different_password():
@@ -404,7 +464,7 @@ def test_linking_never_overwrites_a_different_password():
     store.add_login(second, LoginFields(service="x", username="brand", password="pw"))
     secrets = store.secrets(nopw)
     assert secrets is not None
-    assert secrets.password == "pw"
+    assert secrets.password.get_secret_value() == "pw"
 
 
 def test_custom_logins_are_told_apart_by_provider():
@@ -557,7 +617,7 @@ def test_empty_page(va):
 
 def test_secret_route_is_for_everyone_and_logged(va, caplog):
     login_id = _add_login(_phone(), "gmail", "a@b.c", password="pw", backup_codes="c1")
-    with caplog.at_level("INFO", logger="ofmhelpers.web.routers.inventory.phones"):
+    with caplog.at_level("INFO", logger="ofmhelpers.utils.secrets.json_dump"):
         r = va.get(f"/phones/logins/{login_id}/secret")
     assert r.status_code == 200
     assert r.json() == {"password": "pw", "backup_codes": "c1"}

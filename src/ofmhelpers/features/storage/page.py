@@ -1,5 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
+
 from pydantic import BaseModel
 
 from ofmhelpers.db.drive_folders.schema import UploadPick
@@ -12,10 +14,9 @@ from ofmhelpers.features.storage.folders import StorageServiceFolders
 from ofmhelpers.features.storage.models import PageView
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.storage import DriveError, DriveThumb
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.storage.schema import Source
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _upload_pick(

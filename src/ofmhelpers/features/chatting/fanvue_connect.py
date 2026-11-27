@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 
 from redis.exceptions import RedisError
@@ -12,9 +13,8 @@ from ofmhelpers.features.chatting.webhooks import sync_done_key
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.integrations.fanvue import FanvueClient, oauth
 from ofmhelpers.integrations.pkce import pkce_pair
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _PLATFORM = ChatPlatform.FANVUE
 _AGENCY_ROLES = frozenset({"agency", "agency_admin"})
@@ -77,7 +77,7 @@ def finish(user_id: int, session_id: str, code: str, state: str) -> bool:
         return False
     try:
         tokens = oauth.exchange(code, _redirect_uri(), verifier)
-        me = FanvueClient(lambda: tokens.access_token).me()
+        me = FanvueClient(tokens.access_token.get_secret_value).me()
     except ChatSourceError:
         logger.warning("fanvue connect failed", exc_info=True)
         return False

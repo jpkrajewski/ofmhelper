@@ -4,6 +4,7 @@ import hashlib
 import time
 from datetime import UTC, datetime
 
+from pydantic import SecretStr
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
@@ -274,7 +275,10 @@ class UserRepository(CachedRepository):
                 select(UserApiKeyRow).where(UserApiKeyRow.user_id == user_id),
             ).scalars()
             return SavedKeys(
-                keys=[SavedKey(provider=r.provider, api_key=r.api_key) for r in rows],
+                keys=[
+                    SavedKey(provider=r.provider, api_key=SecretStr(r.api_key))
+                    for r in rows
+                ],
             )
 
     def keys_in_slot(self, slot: str) -> list[str]:

@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from datetime import timedelta
 lazy from collections.abc import Callable
 
@@ -20,11 +21,10 @@ from ofmhelpers.integrations.short_links import (
     provider_infos,
 )
 from ofmhelpers.integrations.short_links.providers import link_providers
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.short_links.models import ShortLink
 lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _SLUG_TRIES = 5
 _STOPS = (AuthError, QuotaError, RateLimitedError)

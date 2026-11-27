@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from pydantic import BaseModel, SkipValidation
@@ -31,10 +32,9 @@ from ofmhelpers.features.storage.models import (
 )
 from ofmhelpers.features.storage.schema import MoveStarted
 from ofmhelpers.integrations.storage import FolderGoneError, StorageClient
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.storage.jobs import run_bin, run_scan
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _running(job: Job | None) -> bool:

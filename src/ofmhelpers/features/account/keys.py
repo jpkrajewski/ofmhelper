@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from types import MappingProxyType
 from typing import Self
 
@@ -12,10 +13,9 @@ from ofmhelpers.integrations.ai_providers.base import (
     provider_class,
     provider_classes,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.tasks import ProviderTask
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 KEY_TAIL = 4
 SAVED_KEY = "use-saved-key"

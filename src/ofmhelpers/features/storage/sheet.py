@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import io
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -19,10 +20,9 @@ from ofmhelpers.integrations.storage import (
     DriveError,
     StorageClient,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.drive_folders.schema import DriveFile
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class StorageServiceSheet(BaseModel, frozen=True, arbitrary_types_allowed=True):

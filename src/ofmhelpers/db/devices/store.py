@@ -8,12 +8,14 @@ from ofmhelpers.db.devices.repository import DeviceRepository
 from ofmhelpers.db.tracked_accounts.models import names_of
 from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.db.users.store import agency_id
-lazy from ofmhelpers.db.devices.models import Device, DeviceFields, LoginFields
-lazy from ofmhelpers.db.devices.schema import (
-    AddedLogin,
-    ArchivedLogin,
+from ofmhelpers.utils.secrets.schemas import Revealed
+lazy from ofmhelpers.db.devices.models import (
+    Device,
+    DeviceFields,
+    LoginFields,
     LoginSecrets,
 )
+lazy from ofmhelpers.db.devices.schema import AddedLogin, ArchivedLogin
 lazy from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
 
 
@@ -125,11 +127,19 @@ def add_login(
     fields: LoginFields,
     owner: int | None = None,
 ) -> AddedLogin | None:
-    return _repository().add_login(device_id, fields.model_dump(), owner)
+    return _repository().add_login(
+        device_id,
+        fields.model_dump(context=Revealed(reason="login added to a phone")),
+        owner,
+    )
 
 
 def update_login(login_id: int, fields: LoginFields, owner: int | None = None) -> bool:
-    return _repository().update_login(login_id, fields.model_dump(), owner)
+    return _repository().update_login(
+        login_id,
+        fields.model_dump(context=Revealed(reason="login edited")),
+        owner,
+    )
 
 
 def archive_logins(login_ids: list[int], owner: int | None = None) -> int:

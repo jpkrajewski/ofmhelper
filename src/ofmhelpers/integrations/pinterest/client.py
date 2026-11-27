@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import json
+import logging
 import mimetypes
 import random
 import tempfile
@@ -31,9 +32,8 @@ from ofmhelpers.integrations.pinterest.models import (
     UploadSlot,
     UploadState,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 SOURCE_URL = "/pin-creation-tool/"
 _PWS_HANDLER = "www/pin-creation-tool.js"

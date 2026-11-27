@@ -1,14 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from ofmhelpers.db.jobs.store import log_event
 from ofmhelpers.db.users import store as users
 from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.users.presence import idle_limit_s
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 IDLE_LOGOUT = "idle_logout"
 

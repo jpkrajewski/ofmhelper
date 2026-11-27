@@ -1,14 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import lru_cache
 
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.storage_accounts.repository import StorageAccountRepository
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.storage_accounts.models import StorageAccount
 lazy from ofmhelpers.db.users.schema import StorageProvider
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)

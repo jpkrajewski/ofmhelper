@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import secrets
 from pathlib import Path
 from urllib.parse import quote
@@ -13,9 +14,8 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.integrations.ai_providers.uploads import memoized
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 HOSTED_PATH = "/files/ai"
 _PREFIX = "aigen:hosted:"

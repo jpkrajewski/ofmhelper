@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 import re
 import threading
 import zipfile
@@ -55,14 +56,13 @@ from ofmhelpers.integrations.storage.models import (
     DriveThumb,
     FolderItems,
 )
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.storage.gdrive.fake import (
     FAKE_BOT_EMAIL,
     fake_drive,
     fake_person,
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105

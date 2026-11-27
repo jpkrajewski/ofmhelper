@@ -1,16 +1,16 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 lazy from collections.abc import Collection, Iterator, Mapping
 lazy from datetime import datetime
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.chats.schema import ChatEvent, ChatRead
 from ofmhelpers.integrations.stacked.errors import StackedError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.stacked.client import StackedClient
 lazy from ofmhelpers.integrations.stacked.models import Message
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MS_PER_S = 1000
 

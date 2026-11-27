@@ -9,15 +9,49 @@ from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink, ReviewReason
 from ofmhelpers.db.drive_folders.schema import DriveUpload
 from ofmhelpers.db.jobs.schema import JobPreview
 from ofmhelpers.features.jobs.schema import (
-    AssetCard,
     CloneSource,
     ErrorText,
     FailedSource,
+    InputSetting,
     error_line,
     error_reason,
     error_text,
 )
+from ofmhelpers.features.kinds import FileKind
 lazy from ofmhelpers.db.jobs.schema import Job
+
+
+class AssetCard(BaseModel):
+    name: str
+    index: int
+    kind: FileKind
+    view_url: str
+    download_url: str
+    download_name: str
+    local_fallback_url: str | None = None
+    preview_url: str | None = None
+    poster_url: str | None = None
+    source: str | None = None
+    removed: bool = False
+    removed_reason: str | None = None
+    removed_error: str | None = None
+
+
+class ReferenceAsset(BaseModel):
+    name: str
+    kind: FileKind
+    view_url: str
+
+
+class InputFileGroup(BaseModel):
+    label: str
+    assets: list[ReferenceAsset]
+
+
+class JobInputs(BaseModel):
+    settings: list[InputSetting]
+    long_text: list[InputSetting]
+    file_groups: list[InputFileGroup]
 
 
 class JobStatusPayload(BaseModel):

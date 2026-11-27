@@ -1,6 +1,7 @@
 # Copyright (C) 2026 jpkrajewski
 
 import base64
+import logging
 import mimetypes
 from pathlib import Path
 from typing import Any, NoReturn
@@ -34,10 +35,9 @@ from ofmhelpers.integrations.ai_providers.uploads import (
     reference_copy,
     upload_cache_key,
 )
-from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import fitted
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 MODELS_PATH = "/v1/models"
 

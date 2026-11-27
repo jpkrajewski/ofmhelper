@@ -2,12 +2,12 @@
 
 import contextvars
 import gc
+import logging
 import os
 import threading
 import weakref
 from datetime import date
 from typing import Any, cast
-lazy import logging
 lazy from collections.abc import Callable, Mapping
 
 import logfire
@@ -22,10 +22,9 @@ lazy from opentelemetry.sdk.trace import ReadableSpan, Span
 lazy from sqlalchemy.engine import Engine
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 from ofmhelpers.redact import redact
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LoggedFields(BaseModel): ...
@@ -273,4 +272,6 @@ class _Redactor(SpanProcessor):
 
 
 def logfire_handler() -> logging.Handler:
+    if not enabled() or not _configured:
+        return logging.NullHandler()
     return logfire.LogfireLoggingHandler()

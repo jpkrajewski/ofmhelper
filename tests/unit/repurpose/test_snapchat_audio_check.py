@@ -4,7 +4,11 @@ import subprocess
 
 import pytest
 
-from ofmhelpers.media.repurpose.audio_check import verify_audio as _verify_audio
+from ofmhelpers.media.repurpose.audio_check import levels, verify_audio
+
+
+def _verify_audio(source, copy) -> None:
+    verify_audio(levels(source), copy)
 
 
 def _tone(path, volume_db: float, *, audio: bool = True):

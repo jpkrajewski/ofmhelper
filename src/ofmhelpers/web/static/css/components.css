@@ -833,10 +833,20 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface-3); }
 .menu-item .icon { width: 20px; height: 20px; }
 .menu-item-danger { color: var(--fail); }
+.menu-text {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding: var(--s-2) var(--s-4);
+    color: var(--text);
+    font-size: var(--step--1);
+}
+.menu-text-label { color: var(--text-muted); white-space: nowrap; }
 
 .menu-button > summary { min-width: var(--control-w-action); cursor: pointer; }
 .menu-button > summary .icon { width: 1em; height: 1em; }
 .menu-button > .menu-list { left: 0; right: auto; }
+.menu-button-block > .menu-list { right: 0; min-width: 0; }
 .menu-choice { text-decoration: none; }
 .menu-choice .icon { visibility: hidden; }
 .menu-choice[aria-current="true"] .icon { visibility: visible; }

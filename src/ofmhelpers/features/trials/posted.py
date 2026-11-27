@@ -1,14 +1,14 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.features.storage.client import saved_storage
 from ofmhelpers.features.trials import cleanup, folder
 from ofmhelpers.features.trials.state import stored_folders
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def read_all() -> None:

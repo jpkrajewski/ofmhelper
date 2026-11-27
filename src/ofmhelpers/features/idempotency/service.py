@@ -2,16 +2,16 @@
 
 import hashlib
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 
 lazy from pydantic import JsonValue
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.idempotency_keys import store
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.db.idempotency_keys.schema import Asked, Claimed, Held
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def fingerprint(fields: list[str]) -> str:

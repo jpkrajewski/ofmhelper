@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,12 +15,11 @@ from redis.exceptions import LockError, RedisError
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.drive_folders.schema import folder_url
-from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _LOCK_S = 30
 

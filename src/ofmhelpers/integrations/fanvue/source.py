@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 from functools import partial
 from typing import NamedTuple, Protocol
 lazy from collections.abc import Iterator, Mapping
@@ -21,10 +22,9 @@ from ofmhelpers.db.chats.schema import (
 from ofmhelpers.integrations.fanvue import webhooks
 from ofmhelpers.integrations.fanvue.client import FanvueClient
 from ofmhelpers.integrations.fanvue.errors import FanvueError, FanvueRefusedError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.fanvue.models import FanvueChat, FanvueMessage
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _MASS_TYPES = frozenset({"BROADCAST", "GHOST_PROMOTION"})
 _SENT = "SENT"

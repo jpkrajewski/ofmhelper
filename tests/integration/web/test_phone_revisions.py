@@ -165,7 +165,10 @@ def test_a_deleted_phone_comes_back_with_its_accounts_and_passwords(owner):
     assert _labels(owner) == ["Phone 01"]
     assert _usernames(owner) == ["danewalker"]
     secrets = devices.secrets(login, owner)
-    assert (secrets.password, secrets.backup_codes) == (PASSWORD, CODES)
+    assert (
+        secrets.password.get_secret_value(),
+        secrets.backup_codes.get_secret_value(),
+    ) == (PASSWORD, CODES)
 
 
 def test_a_restore_shows_the_accounts_back_in_the_drive_targets_at_once(owner):
@@ -292,7 +295,7 @@ def test_the_backup_file_holds_the_whole_history_and_brings_it_back(owner, uploa
     store.restore(back.id, owner)
 
     assert _labels(owner) == ["Phone 01"]
-    assert devices.secrets(login, owner).password == PASSWORD
+    assert devices.secrets(login, owner).password.get_secret_value() == PASSWORD
     assert _labels(other) == []
 
 

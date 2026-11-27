@@ -1,5 +1,6 @@
 # Copyright (C) 2026 jpkrajewski
 
+import logging
 import time
 lazy from collections.abc import Callable
 
@@ -34,9 +35,8 @@ from ofmhelpers.integrations.socials.sources import (
     Landed,
     ScanTarget,
 )
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _SMALL_AVATAR = "_normal."
 _BIG_AVATAR = "_400x400."

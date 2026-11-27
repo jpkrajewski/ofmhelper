@@ -2,26 +2,25 @@
 
 import hashlib
 import io
+import logging
 import os
 import secrets
 import shutil
 import tempfile
 from pathlib import Path
-from typing import BinaryIO, Protocol, cast
+from typing import BinaryIO
 
 import pillow_heif
 from PIL import Image
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.users.store import get_user
-from ofmhelpers.features.constants import file_kind_constants
+from ofmhelpers.features.kinds import HEIC_EXTENSIONS, FileKind
 from ofmhelpers.features.refusals import AssetRefusedError
-from ofmhelpers.log import get_logger
 lazy from ofmhelpers.features.assets.models import MediaUpload
-lazy from ofmhelpers.features.kinds import FileKind
 lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 EDIT_STAGING = ".edit"
 
@@ -82,73 +81,22 @@ def require_upload_kind(kind: FileKind, allowed: frozenset[FileKind]) -> None:
         raise AssetRefusedError(msg)
 
 
-class _MultiFrameImage(Protocol):
-    format: str
-    n_frames: int
-    width: int
-    height: int
-
-    def seek(self, frame: int) -> None: ...
-
-    def load(self) -> None: ...
-
-
-def _load_multi_frame(image: _MultiFrameImage) -> None:
-    frame_limit = settings.web.max_image_frames
-    if image.format in file_kind_constants().sequential_frame_formats:
-        frame_count = frame_limit + 1
-    else:
-        frame_count = image.n_frames
-        if frame_count > frame_limit:
-            msg = "Too many image frames"
-            raise AssetRefusedError(msg)
-    total_pixels = 0
-    for frame_index in range(frame_count):
-        try:
-            image.seek(frame_index)
-        except EOFError:
-            if image.format in file_kind_constants().sequential_frame_formats:
-                break
-            raise
-        if frame_index == frame_limit:
-            msg = "Too many image frames"
-            raise AssetRefusedError(msg)
-        total_pixels += image.width * image.height
-        if total_pixels > settings.web.max_image_total_pixels:
-            msg = "Image exceeds the pixel limit"
-            raise AssetRefusedError(msg)
-        image.load()
-
-
-def _require_gif_trailer(file: BinaryIO) -> None:
-    file.seek(-1, 2)
-    if file.read(1) != b";":
-        raise OSError
-
-
 def validate_image(file: BinaryIO) -> BinaryIO:
     try:
         Image.open(file).verify()
-        file.seek(0)
-        with Image.open(file) as image:
-            if image.format in file_kind_constants().multi_frame_formats:
-                _load_multi_frame(cast("_MultiFrameImage", image))
-            else:
-                image.load()
-            if image.format == "GIF":
-                _require_gif_trailer(file)
-    except AssetRefusedError:
-        raise
-    except OSError, SyntaxError, ValueError, Image.DecompressionBombError, EOFError:
+    except OSError, SyntaxError, ValueError, Image.DecompressionBombError:
         msg = "Unreadable image"
         raise AssetRefusedError(msg) from None
-    finally:
-        file.seek(0)
+    file.seek(0)
     return file
 
 
-def jpeg_from_heic_or_current(src: BinaryIO, path: Path) -> BinaryIO:
-    if path.suffix.lower() not in file_kind_constants().heic_extensions:
+def jpeg_from_heic_or_current(
+    src: BinaryIO,
+    path: Path,
+    heic_ext: frozenset[str] = HEIC_EXTENSIONS,
+) -> BinaryIO:
+    if path.suffix.lower() not in heic_ext:
         return src
     try:
         img = pillow_heif.open_heif(src, convert_hdr_to_8bit=True).to_pillow()
