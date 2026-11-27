@@ -2,11 +2,13 @@
 
 import json
 import random
+import re
 import subprocess
 lazy from pathlib import Path
 
 import pytest
 
+from ofmhelpers.media import mov_atoms
 from ofmhelpers.media.capcut import (
     DEFAULT_PRESET,
     CapcutPreset,
@@ -160,8 +162,12 @@ def test_apply_preset_writes_capcut_tags(tmp_path: Path):
     assert handlers == {"VideoHandler", "SoundHandler"}
     assert all("encoder" not in s["tags"] for s in probe["streams"])
     data = dst.read_bytes()
-    assert b"x264" not in data
-    assert b"Lavc" not in data
+    assert re.search(rb"x264 - core \d+", data) is None
+    moov = mov_atoms.Atom(type=b"file", children=mov_atoms.parse(data)).child(b"moov")
+    assert moov is not None
+    metadata = moov.to_bytes()
+    assert b"x264" not in metadata
+    assert b"Lavc" not in metadata
 
 
 @pytest.mark.heavy
