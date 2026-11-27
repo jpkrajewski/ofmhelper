@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 class DownloadResult(BaseModel):
@@ -14,7 +14,7 @@ class DownloadResult(BaseModel):
 
     url: str
     success: bool
-    output_paths: list[Path] = []
+    output_paths: list[Path] = Field(default_factory=list)
     error: str | None = None
     again_error: str | None = None
 
@@ -53,7 +53,8 @@ class GenerationRecord(BaseModel):
 
 
 class JobMeta(BaseModel):
-    generations: list[GenerationRecord] = []
+    generations: list[GenerationRecord] = Field(default_factory=list)
+    executions: list[JsonValue] = Field(default_factory=list)
 
 
 class JobCost(BaseModel):
@@ -68,7 +69,7 @@ class Job(BaseModel):
 
     id: str
     task: str
-    params: dict[str, Any] = {}
+    params: dict[str, Any] = Field(default_factory=dict)
     user_id: int | None = None
     status: JobStatus = JobStatus.running
     result: list[Any] | dict[str, Any] | str | None = None
@@ -77,9 +78,10 @@ class Job(BaseModel):
     finished_at: float | None = None
     preview: JobPreview | None = None
     hidden_at: float | None = None
-    meta: JobMeta = JobMeta()
+    meta: JobMeta = Field(default_factory=JobMeta)
     cost_usd: Decimal | None = None
     cost_estimated: bool = False
+    creator_id: int | None = None
     made_by: str | None = None
 
     @property
@@ -193,10 +195,10 @@ class RecordedJob(BaseModel):
     status: str = "done"
     created_at: float
     finished_at: float | None = None
-    params: dict[str, Any] = {}
+    params: dict[str, Any] = Field(default_factory=dict)
     result: list[Any] | dict[str, Any] | str | None = None
     error: str | None = None
-    meta: JobMeta = JobMeta()
+    meta: JobMeta = Field(default_factory=JobMeta)
     cost_usd: Decimal | None = None
     cost_estimated: bool = False
 
@@ -204,7 +206,7 @@ class RecordedJob(BaseModel):
 class JobParams(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    params: dict[str, Any] = {}
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class Named(BaseModel):

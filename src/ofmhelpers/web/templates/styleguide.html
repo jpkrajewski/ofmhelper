@@ -58,6 +58,10 @@
         {{ ui.menu_choice("Everyone", "#", current=true) }}
         {{ ui.menu_choice("noelyn", "#") }}
     {% endcall %}
+    {% call ui.menu_button("Details, full width", "eye", block=true) %}
+        {{ ui.menu_text("Preset", "spoof") }}
+        {{ ui.menu_text("Picture try", 1) }}
+    {% endcall %}
     <div class="toolbar-actions">{{ ui.button("A switch, on", icon="folder", attrs={"aria-pressed": "true"}) }}</div>
     {% call ui.chip_row() %}
         {{ ui.chip("Off chip") }}

@@ -9,7 +9,11 @@ lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker import audio, frames, sscd, tmk, visual
 from ofmhelpers.media.repurpose.checker.normalize import is_flat, normalize
-from ofmhelpers.media.repurpose.checker.schema import CheckReport, HashKind
+from ofmhelpers.media.repurpose.checker.schema import (
+    AudioScore,
+    CheckReport,
+    HashKind,
+)
 from ofmhelpers.media.repurpose.probe import probe
 
 _DEFAULT_FPS = 1.0
@@ -84,12 +88,7 @@ def check(
         else []
     )
     whole = tmk.compare(source, copy, timeout_s) if tmk.available() else None
-    sound = None
-    if probe(source, timeout_s).has_audio and probe(copy, timeout_s).has_audio:
-        sound = audio.compare(
-            audio.fingerprint(source, timeout_s),
-            audio.fingerprint(copy, timeout_s),
-        )
+    sound = _sound(source, copy, timeout_s)
     return CheckReport(
         source_file=source,
         copy_file=copy,
@@ -103,5 +102,47 @@ def check(
         looks_like_source=any(h.sequence.share >= CAUGHT_SHARE for h in hashes)
         or any(d.sequence.share >= CAUGHT_SHARE for d in found)
         or bool(whole and whole.matched),
-        sounds_like_source=sound.matched_share >= CAUGHT_SHARE if sound else None,
+        sounds_like_source=_sounds_like_source(sound),
+    )
+
+
+def _sound(source: Path, copy: Path, timeout_s: int) -> AudioScore | None:
+    if not probe(source, timeout_s).has_audio:
+        return None
+    if not probe(copy, timeout_s).has_audio:
+        return None
+    return audio.compare(
+        _source_sound(str(source), source.stat().st_mtime, timeout_s),
+        audio.fingerprint(copy, timeout_s),
+    )
+
+
+@lru_cache(maxsize=32)
+def _source_sound(path: str, mtime: float, timeout_s: int) -> list[int]:
+    del mtime
+    return audio.fingerprint(Path(path), timeout_s)
+
+
+def _sounds_like_source(sound: AudioScore | None) -> bool | None:
+    return sound.matched_share >= CAUGHT_SHARE if sound else None
+
+
+def check_sound_again(
+    picture: CheckReport,
+    *,
+    timeout_s: int = _DEFAULT_TIMEOUT_S,
+) -> CheckReport:
+    sound = _sound(picture.source_file, picture.copy_file, timeout_s)
+    return CheckReport(
+        source_file=picture.source_file,
+        copy_file=picture.copy_file,
+        source_frames=picture.source_frames,
+        copy_frames=picture.copy_frames,
+        flat_copy_frames=picture.flat_copy_frames,
+        hashes=picture.hashes,
+        descriptors=picture.descriptors,
+        tmk=picture.tmk,
+        audio=sound,
+        looks_like_source=picture.looks_like_source,
+        sounds_like_source=_sounds_like_source(sound),
     )

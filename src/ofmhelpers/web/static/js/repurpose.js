@@ -44,6 +44,11 @@
             if (!card) return;
             const params = JSON.parse(card.dataset.params);
             window.FilePicker.setExisting("video", params.source ? [params.source] : []);
+            const mirror = form.querySelector('[name="mirror"]');
+            if (mirror) mirror.value = params.mirror || "random";
+            const creator = form.querySelector('[name="creator"]');
+            const picked = card.querySelector("[data-creator-id]");
+            if (creator) creator.value = picked ? picked.dataset.creatorId : "";
             form.scrollIntoView({ behavior: "smooth" });
         });
     }

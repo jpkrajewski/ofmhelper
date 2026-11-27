@@ -8,7 +8,7 @@ from ofmhelpers.db.tracked_accounts.models import platform_names
 from ofmhelpers.db.tracked_accounts.repository import TrackedAccountRepository
 from ofmhelpers.db.tracked_accounts.schema import AccountHistory, TrackedAccount
 from ofmhelpers.db.users.store import agency_id
-lazy from ofmhelpers.db.tracked_accounts.schema import AccountStats
+lazy from ofmhelpers.db.tracked_accounts.schema import AccountStats, Creator
 
 
 @lru_cache(maxsize=1)
@@ -44,6 +44,10 @@ def get_history(account_id: int) -> AccountHistory:
 
 def list_creators(owner: int | None = None) -> list[str]:
     return _repository().list_creators(owner)
+
+
+def creators_of(owner: int) -> list[Creator]:
+    return _repository().creators(owner)
 
 
 def track(

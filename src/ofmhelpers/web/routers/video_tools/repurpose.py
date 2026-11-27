@@ -4,11 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import Response
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.repurpose import service
+from ofmhelpers.features.repurpose.constants import MirrorChoice
 from ofmhelpers.features.repurpose.service import (
     DEFAULT_COPIES,
     FILES_PREFIX,
@@ -20,6 +21,7 @@ from ofmhelpers.web.dependencies import (
     Access,
     Actor,
     AssetsRoot,
+    CurrentUser,
     OwnerId,
     Storage,
 )
@@ -42,6 +44,8 @@ class RepurposeForm(FormModel):
     video: VideoFiles
     video_manifest: str = "[]"
     copies: int = Field(DEFAULT_COPIES, ge=1)
+    mirror: MirrorChoice = MirrorChoice.RANDOM
+    creator: int | None = Field(None, ge=1)
 
     @field_validator("copies")
     @classmethod
@@ -49,24 +53,34 @@ class RepurposeForm(FormModel):
         return at_most(copies, settings.repurpose.max_copies)
 
 
+class SpoofQuery(BaseModel):
+    video: list[str] = Field(default_factory=list)
+    creator: int | None = Field(None, ge=1)
+
+
 @router.get("")
 def form(
     request: Request,
-    actor: Actor,
+    query: Annotated[SpoofQuery, Query()],
+    user: CurrentUser,
     storage: Storage,
     assets_root: AssetsRoot,
-    video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
-    view = service.page_view(actor, storage.uploads, assets_root, video or [])
+    view = service.page_view(query, user, storage.uploads, assets_root)
     return render(request, "repurpose.html", dict(view))
 
 
 @router.get("/cards/{job_id}")
-def cards(request: Request, job_id: str, actor: Actor, storage: Storage) -> Response:
+def cards(
+    request: Request,
+    job_id: str,
+    user: CurrentUser,
+    storage: Storage,
+) -> Response:
     return render(
         request,
         "_repurpose_cards.html",
-        dict(service.cards_view(job_id, actor, storage.uploads)),
+        dict(service.cards_view(job_id, user, storage.uploads)),
     )
 
 

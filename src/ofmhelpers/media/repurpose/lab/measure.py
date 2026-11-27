@@ -95,7 +95,7 @@ def reference(
             "-y",
             "-loglevel",
             "error",
-            *input_args(sample, ref),
+            *input_args(sample, ref.timeline),
             *(["-r", fps] if fps else []),
             "-vf",
             ref.filters(work),

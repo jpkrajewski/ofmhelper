@@ -35,6 +35,7 @@ from ofmhelpers.db.tracked_accounts.schema import (
     AccountMetrics,
     AccountProfile,
     Baseline,
+    Creator,
     PostStat,
     PostViews,
     Snapshot,
@@ -439,6 +440,19 @@ class TrackedAccountRepository(CachedRepository):
                     ).scalars(),
                 ),
             )
+
+    @cached
+    def creators(self, owner: int) -> list[Creator]:
+        with session_scope() as s:
+            rows = s.execute(
+                select(CreatorRow.id, CreatorRow.name)
+                .where(CreatorRow.user_id == owner)
+                .order_by(CreatorRow.name, CreatorRow.id),
+            ).all()
+            found: list[Creator] = []
+            for creator_id, name in rows:
+                found.append(Creator(id=creator_id, name=name))
+            return found
 
     @invalidates_cache
     def set_creator(

@@ -53,8 +53,8 @@ class SkillRule(BaseModel):
 
 RULES = (
     SkillRule(
-        path=re.compile(r"^(src|tests|scripts|\.claude/hooks)/.*\.py$"),
-        skills=("senior-python-rules",),
+        path=re.compile(r"^(src|tests|scripts|alembic|\.claude/hooks)/.*\.py$"),
+        skills=("code-rules",),
     ),
     SkillRule(
         path=re.compile(r"^src/ofmhelpers/web/(routers/|main\.py$)"),

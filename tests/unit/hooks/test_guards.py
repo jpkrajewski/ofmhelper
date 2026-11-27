@@ -771,6 +771,23 @@ def test_the_architecture_baseline_only_shrinks(hooks: Hooks) -> None:
     )
 
 
+def test_a_migration_waits_for_the_code_rules_like_any_python_file(
+    hooks: Hooks,
+) -> None:
+    migration = "alembic/versions/a1b2c3d4e5f6_new_column.py"
+    (hooks.root / migration).parent.mkdir(parents=True)
+    (hooks.root / migration).write_text("a = 1\n")
+    researched(hooks)
+    write_note(hooks)
+
+    denied = hooks.edit(migration, new="def upgrade():\n    pass")
+    assert denied.decision == "deny"
+    assert "code-rules" in denied.reason
+
+    hooks.skill("code-rules")
+    assert hooks.edit(migration, new="def upgrade():\n    pass").decision != "deny"
+
+
 def test_an_edit_waits_for_the_skills_its_area_needs(hooks: Hooks) -> None:
     router = "src/ofmhelpers/web/routers/downloads/media.py"
     (hooks.root / router).parent.mkdir(parents=True)
@@ -781,11 +798,11 @@ def test_an_edit_waits_for_the_skills_its_area_needs(hooks: Hooks) -> None:
 
     denied = hooks.edit(router, new=new_route)
     assert denied.decision == "deny"
-    assert "senior-python-rules, fastapi, rest-api, failure-modes" in denied.reason
+    assert "code-rules, fastapi, rest-api, failure-modes" in denied.reason
     assert "every area this task will touch" in denied.reason
 
     for name in (
-        "anthropic-skills:senior-python-rules",
+        "anthropic-skills:code-rules",
         "fastapi",
         "rest-api",
         "failure-modes",
@@ -797,7 +814,7 @@ def test_an_edit_waits_for_the_skills_its_area_needs(hooks: Hooks) -> None:
 def test_architecture_is_needed_for_a_new_feature_file_not_an_existing_one(
     hooks: Hooks,
 ) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     hooks.skill("failure-modes")
 
     assert "architecture" in hooks.edit("src/ofmhelpers/features/new/service.py").reason
@@ -810,7 +827,7 @@ def test_failure_modes_is_needed_for_new_code_in_a_route_page_job_or_integration
     script = hooks.root / "src" / "ofmhelpers" / "web" / "static" / "js" / "spoof.js"
     script.parent.mkdir(parents=True)
     script.write_text("function load() {}\n")
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     researched(hooks)
     write_note(hooks)
     service = "src/ofmhelpers/features/old/service.py"
@@ -835,7 +852,7 @@ def test_failure_modes_is_needed_for_new_code_in_a_route_page_job_or_integration
 
 def test_a_changed_signature_is_not_new_code_but_a_new_name_is(hooks: Hooks) -> None:
     hooks.prompt("fix the bug")
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     service = "src/ofmhelpers/features/old/service.py"
     (hooks.root / service).write_text("def run(a):\n    return a\n")
 
@@ -864,7 +881,7 @@ def test_a_changed_signature_is_not_new_code_but_a_new_name_is(hooks: Hooks) -> 
 
 
 def test_a_pydantic_class_waits_for_the_pydantic_docs(hooks: Hooks) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     researched(hooks)
     write_note(hooks)
     path = "tests/unit/test_x.py"
@@ -890,7 +907,7 @@ def test_a_pydantic_class_waits_for_the_pydantic_docs(hooks: Hooks) -> None:
 
 
 def test_an_edit_that_adds_getattr_is_refused(hooks: Hooks) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     path = "tests/unit/test_x.py"
 
     for new in (
@@ -928,13 +945,13 @@ def test_a_subagent_uses_the_main_sessions_skills_but_not_another_agents(
     hooks: Hooks,
 ) -> None:
     Hooks(hooks.root, session=hooks.session, agent="agent-2").skill(
-        "senior-python-rules",
+        "code-rules",
     )
     third = Hooks(hooks.root, session=hooks.session, agent="agent-3")
 
     assert third.edit("tests/unit/test_x.py").decision == "deny"
 
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     assert third.edit("tests/unit/test_x.py").decision == "allow"
 
 
@@ -972,7 +989,7 @@ def test_a_source_file_written_from_the_shell_gets_the_edit_checks(
     assert answer.decision == "block"
     assert "CRLF written into src/ofmhelpers/shell_made.py" in answer.reason
     assert "src/ofmhelpers/shell_made.py:1" in answer.reason
-    assert "senior-python-rules" in answer.reason
+    assert "code-rules" in answer.reason
 
 
 def shell_wrote(hooks: Hooks, command: str) -> Answer:
@@ -987,7 +1004,7 @@ def shell_wrote(hooks: Hooks, command: str) -> Answer:
 def test_an_existing_python_file_rewritten_from_the_shell_is_sent_back(
     hooks: Hooks,
 ) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     service = "src/ofmhelpers/features/old/service.py"
     subprocess.run(["git", "-C", str(hooks.root), "add", service], check=True)
 
@@ -1028,7 +1045,7 @@ def committed(hooks: Hooks, path: str) -> None:
 def test_a_name_added_from_the_shell_to_existing_code_needs_failure_modes(
     hooks: Hooks,
 ) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     service = "src/ofmhelpers/features/old/service.py"
     committed(hooks, service)
     append = f"python -c \"open('{service}', 'a').write('def run(): pass')\""
@@ -1054,7 +1071,7 @@ def test_new_code_written_from_the_shell_is_sent_back_at_stop_until_researched(
     hooks: Hooks,
 ) -> None:
     hooks.prompt("build the guard")
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     (hooks.root / "scripts" / "made_in_shell.py").write_text(
         "def run():\n    return 1\n",
     )
@@ -1141,7 +1158,7 @@ def test_only_the_cavecrew_reviewer_counts_as_the_review(hooks: Hooks) -> None:
 
 
 def test_source_edited_from_the_shell_also_needs_a_review(hooks: Hooks) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     (hooks.root / "src" / "ofmhelpers" / "made_by_python.py").write_text("x = 1\n")
     write = {
         "command": "python - "
@@ -1337,7 +1354,7 @@ def test_a_subagent_worker_edit_is_asked_of_the_main_session_not_the_subagent(
 def test_one_call_that_restarts_and_edits_worker_code_still_asks_for_a_restart(
     hooks: Hooks,
 ) -> None:
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     (hooks.root / "src" / "ofmhelpers" / "made_by_python.py").write_text("x = 1\n")
     both = (
         f"{DEV_COMPOSE} restart worker media-worker preview-worker edit-worker sweeps"
@@ -1605,7 +1622,7 @@ def test_a_name_appended_from_the_shell_to_an_existing_script_needs_research(
     hooks: Hooks,
 ) -> None:
     hooks.prompt("build the guard")
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     tool = hooks.root / "scripts" / "old_tool.py"
     tool.write_text("x = 1\n")
     committed(hooks, "scripts/old_tool.py")
@@ -2031,7 +2048,7 @@ NOTE = (
     "# hooks\n"
     "Pattern in repo: .claude/hooks/guards/review.py Markers\n"
     "Web: https://code.claude.com/docs/en/hooks\n"
-    "Skills: senior-python-rules\n"
+    "Skills: code-rules\n"
     "Breaks when: service down or slow: timeout "
     "| backend 5xx/HTML/non-JSON: refused |\n"
     "crash after a side effect: replayed | 50 clicks, two tabs: one key |\n"
@@ -2214,7 +2231,7 @@ def test_tests_docs_reports_and_edits_inside_a_function_are_never_blocked(
     hooks: Hooks,
 ) -> None:
     hooks.prompt("fix the bug")
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     hooks.skill("failure-modes")
     service = "src/ofmhelpers/features/old/service.py"
 
@@ -2674,7 +2691,7 @@ def test_moving_a_class_to_a_new_module_needs_no_research(hooks: Hooks) -> None:
     (hooks.root / old).write_text("class Moved:\n    pass\n")
     committed(hooks, old)
     hooks.prompt("move the class")
-    hooks.skill("senior-python-rules")
+    hooks.skill("code-rules")
     hooks.skill("architecture")
     hooks.skill("failure-modes")
     new = "src/ofmhelpers/features/old/moved.py"

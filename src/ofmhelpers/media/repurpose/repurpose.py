@@ -130,9 +130,12 @@ class Repurpose:
         self.device_name = name
         return self
 
+    def seeded_random(self) -> random.Random:
+        return random.Random(self.seed)  # noqa: S311 - jitter, not cryptography
+
     def run(self) -> RunResult:
         started = time.monotonic()
-        rng = random.Random(self.seed)  # noqa: S311 - jitter, not cryptography
+        rng = self.seeded_random()
         source = probe(self.src, self.timeout_s)
         self.dst.parent.mkdir(parents=True, exist_ok=True)
         recorder = self.device.recorder
@@ -169,7 +172,7 @@ class Repurpose:
         )
         encode = command.draw_encode(device, source, rng, self.recorded_at)
         makeup = (
-            makeup_db(self.src, video, audio.filters(), self.timeout_s)
+            makeup_db(self.src, video.timeline, audio.filters(), self.timeout_s)
             if self.audio.match_level and source.has_audio
             else 0.0
         )

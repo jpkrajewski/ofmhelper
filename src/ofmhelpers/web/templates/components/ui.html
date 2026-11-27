@@ -48,9 +48,13 @@
 <button type="button" class="menu-item{{ ' menu-item-danger' if danger else '' }}{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}>{{ ic.icon(icon) }} {{ label }}</button>
 {%- endmacro %}
 
-{% macro menu_button(label, icon=None, hook="") -%}
-<details class="menu menu-button{{ ' ' ~ hook if hook else '' }}">
-    <summary class="btn">{% if icon %}{{ ic.icon(icon) }} {% endif %}{{ label }}</summary>
+{% macro menu_text(label, value) -%}
+<div class="menu-text"><span class="menu-text-label">{{ label }}</span><span>{{ value }}</span></div>
+{%- endmacro %}
+
+{% macro menu_button(label, icon=None, hook="", block=false) -%}
+<details class="menu menu-button{{ ' menu-button-block' if block else '' }}{{ ' ' ~ hook if hook else '' }}">
+    <summary class="btn{{ ' btn-block' if block else '' }}">{% if icon %}{{ ic.icon(icon) }} {% endif %}{{ label }}</summary>
     <div class="menu-list">{{ caller() }}</div>
 </details>
 {%- endmacro %}

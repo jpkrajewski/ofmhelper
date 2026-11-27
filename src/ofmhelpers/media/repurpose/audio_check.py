@@ -38,12 +38,11 @@ def levels(path: Path) -> AudioLevels | None:
     return AudioLevels(mean_db=float(mean.group(1)), max_db=float(peak.group(1)))
 
 
-def verify_audio(src: Path, dst: Path) -> None:
+def verify_audio(source: AudioLevels | None, dst: Path) -> None:
     copy = levels(dst)
     if copy is None:
         msg = f"{dst.name}: no audio stream"
         raise BrokenAudioError(msg)
-    source = levels(src)
     if source is not None and copy.mean_db < source.mean_db - _MAX_DROP_DB:
         msg = (
             f"{dst.name}: audio mean {copy.mean_db:.1f} "

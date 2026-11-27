@@ -346,10 +346,24 @@ class JobRow(Base):
         default=False,
         server_default=false(),
     )
+    creator_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "creators.id",
+            name="fk_jobs_creator_id_creators",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
 
     __table_args__ = (
         Index("ix_jobs_created_at", "created_at"),
         Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
+        Index(
+            "ix_jobs_creator_id_created_at",
+            "creator_id",
+            "created_at",
+            postgresql_where=text("creator_id IS NOT NULL"),
+        ),
         Index(
             "ix_jobs_running_user_id",
             "user_id",

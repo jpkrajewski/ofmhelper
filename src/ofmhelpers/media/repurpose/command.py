@@ -14,7 +14,10 @@ from ofmhelpers.media.repurpose.transformations.audio import (
 from ofmhelpers.media.repurpose.values import draw, draw_int, pick
 lazy from ofmhelpers.media.repurpose.devices import Device
 lazy from ofmhelpers.media.repurpose.probe import Source
-lazy from ofmhelpers.media.repurpose.transformations.video import VideoTransformer
+lazy from ofmhelpers.media.repurpose.transformations.video import (
+    Timeline,
+    VideoTransformer,
+)
 
 _SEI_STRIP = "filter_units=remove_types=6"
 _ISO = "%Y-%m-%dT%H:%M:%S.000000Z"
@@ -58,10 +61,9 @@ def draw_encode(
     )
 
 
-def input_args(src: Path, video: VideoTransformer) -> list[str]:
-    t = video.timeline
-    args = ["-ss", f"{t.start_s:.3f}"] if t.start_s > 0 else []
-    return [*args, "-t", f"{t.duration_s:.3f}", "-i", str(src)]
+def input_args(src: Path, timeline: Timeline) -> list[str]:
+    args = ["-ss", f"{timeline.start_s:.3f}"] if timeline.start_s > 0 else []
+    return [*args, "-t", f"{timeline.duration_s:.3f}", "-i", str(src)]
 
 
 def build(  # noqa: PLR0913
@@ -78,7 +80,8 @@ def build(  # noqa: PLR0913
 ) -> list[str]:
     room_tone = audio.settings.room_tone and not source.has_audio
     caption_png = video.write_caption(work_dir)
-    args = [binary("ffmpeg"), "-y", "-loglevel", "error", *input_args(src, video)]
+    args = [binary("ffmpeg"), "-y", "-loglevel", "error"]
+    args += input_args(src, video.timeline)
     if room_tone:
         seconds = video.timeline.duration_s / video.timeline.speed + _ROOM_TONE_SLACK_S
         args += room_tone_input(seconds, device.audio.sample_rate)
@@ -91,17 +94,18 @@ def build(  # noqa: PLR0913
     graph = video.filters(work_dir, device.video.scaler, caption_input)
     args += ["-filter_complex" if caption_input is not None else "-vf", graph]
     if source.has_audio:
-        args += ["-filter:a", audio.filters(makeup_db), *_audio_encode(device, encode)]
+        args += ["-filter:a", audio.filters(makeup_db)]
+        args += audio_encode_args(device, encode)
     elif room_tone:
-        args += ["-shortest", *_audio_encode(device, encode)]
+        args += ["-shortest", *audio_encode_args(device, encode)]
     else:
         args += ["-an"]
     args += _video_encode(device, encode)
-    args += _container(device, encode, has_audio=source.has_audio or room_tone)
+    args += container_args(device, encode, has_audio=source.has_audio or room_tone)
     return [*args, str(dst)]
 
 
-def _audio_encode(device: Device, encode: EncodeDraws) -> list[str]:
+def audio_encode_args(device: Device, encode: EncodeDraws) -> list[str]:
     a = device.audio
     args = [
         "-c:a",
@@ -158,7 +162,12 @@ def _video_encode(device: Device, encode: EncodeDraws) -> list[str]:  # noqa: C9
     return args
 
 
-def _container(device: Device, encode: EncodeDraws, *, has_audio: bool) -> list[str]:
+def container_args(
+    device: Device,
+    encode: EncodeDraws,
+    *,
+    has_audio: bool,
+) -> list[str]:
     c, tags = device.container, device.tags
     args = ["-map_metadata", "-1"]
     if c.bitexact:

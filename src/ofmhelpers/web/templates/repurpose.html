@@ -3,6 +3,14 @@
 {% import "_file_picker.html" as fp %}
 {% block content %}
 {{ ui.page_header("Spoof") }}
+{% if creators %}
+<div class="ph-toolbar">
+    {% call ui.menu_button(picked_creator.name if picked_creator else "Models", "users", hook="spoof-models") %}
+        {{ ui.menu_choice("All models", "/spoof", current=not picked_creator) }}
+        {% for creator in creators %}{{ ui.menu_choice(creator.name, "/spoof?creator=" ~ creator.id, current=picked_creator is not none and creator.id == picked_creator.id) }}{% endfor %}
+    {% endcall %}
+</div>
+{% endif %}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -13,6 +21,21 @@
     {% call ui.field("Copies", "rp-copies") %}
     <input type="number" id="rp-copies" name="copies" min="1" max="{{ max_copies }}" value="{{ default_copies }}">
     {% endcall %}
+    {% call ui.field("Mirror", "rp-mirror") %}
+    <select id="rp-mirror" name="mirror">
+        <option value="random" selected>Random</option>
+        <option value="mirrored">Mirrored</option>
+        <option value="not_mirrored">Not mirrored</option>
+    </select>
+    {% endcall %}
+    {% if creators %}
+    {% call ui.field("Model", "rp-creator") %}
+    <select id="rp-creator" name="creator">
+        <option value="" selected>No model</option>
+        {% for creator in creators %}<option value="{{ creator.id }}">{{ creator.name }}</option>{% endfor %}
+    </select>
+    {% endcall %}
+    {% endif %}
     <div class="rp-actions">
         {{ ui.button("Spoof as " ~ device_label, "primary", type="submit") }}
     </div>
